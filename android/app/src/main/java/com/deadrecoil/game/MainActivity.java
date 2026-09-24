@@ -59,7 +59,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onResume() { super.onResume(); immersive(); if (webView != null) webView.onResume(); if (updateManager != null) updateManager.resumeInstall(); }
-    @Override protected void onPause() { if (webView != null) webView.onPause(); super.onPause(); }
+    @Override protected void onPause() { if (webView != null) { webView.evaluateJavascript("document.dispatchEvent(new Event('deadrecoil-native-pause'));", null); webView.onPause(); } super.onPause(); }
     @Override public void onBackPressed() {
         if (webView != null) webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Escape',key:'Escape'}));", null);
         else super.onBackPressed();

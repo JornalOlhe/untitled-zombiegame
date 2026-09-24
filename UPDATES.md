@@ -1,15 +1,17 @@
-# Atualizações no Android
+# Atualizações do Dead Recoil
 
-A versão 0.7.0 (versionCode 7) consulta, na abertura, a versão pública mais recente em:
-https://api.github.com/repos/JornalOlhe/untitled-zombiegame/releases/latest
+O aplicativo consulta a última release estável de `JornalOlhe/untitled-zombiegame` ao abrir e, no retorno ao app, no máximo uma vez a cada 15 minutos. A tag `v8` corresponde ao `versionCode 8`. O anexo deve se chamar `DeadRecoil.apk`.
 
-Para ativar uma atualização futura:
-1. Mantenha o mesmo `applicationId` (`com.deadrecoil.game`) e aumente o `versionCode`.
-2. Assine o novo APK com **a mesma chave usada nos APKs 0.5, 0.6 e 0.7**. Ela é entregue separadamente e não faz parte deste ZIP. Não coloque o arquivo `.keystore` no repositório público.
-3. Publique uma GitHub Release estável com a tag `v8` para `versionCode 8`, `v9` para 9 etc. Anexe nela um APK com o nome exato `DeadRecoil.apk`. Uma release draft ou prerelease não aparece em `/releases/latest`.
-4. No próximo início conectado à internet, o jogo oferece o download e verifica versão, identidade do app, certificado e digest SHA-256 (quando fornecido pelo GitHub).
-5. O Android pode pedir autorização para o app instalar APKs e sempre apresenta a tela de confirmação da instalação.
+Na versão 0.8.0, uma versão mais recente inicia o download automaticamente e apresenta nome, novidades e progresso. O jogador pode adiar, tentar novamente ou instalar. O APK já verificado é reaproveitado se ainda estiver no cache. Sem internet, a versão instalada continua disponível. A confirmação de instalação é feita pelo Android.
 
-A versão 0.7.0 é a primeira que contém o atualizador. APKs anteriores precisam ser atualizados uma vez pelo link. A assinatura atual vem de uma chave de desenvolvimento; antes de distribuir amplamente, defina uma política de custódia e migração para uma chave de publicação. Trocar a chave sem rotação válida impede a atualização sobre instalações existentes.
+## Publicação
 
-Nota: o workflow incluído no ZIP ainda é um build de teste. Ele gera um APK com uma chave de debug diferente em cada runner e não deve ser publicado como atualização. Configure a assinatura com uma chave permanente antes de automatizar releases.
+Cada push na main executa testes da interface e compila o projeto. Depois, valida `release/DeadRecoil.apk` contra `release/manifest.json`: hash, versão, identidade, assinatura e todos os assets empacotados. Só publica após os dois jobs passarem. Uma versão já publicada nunca é sobrescrita.
+
+Para uma nova atualização:
+1. Aumente `versionCode` e `versionName` em `android/app/build.gradle`.
+2. Compile o APK com a mesma chave privada usada nas versões anteriores.
+3. Atualize `release/DeadRecoil.apk`, os campos de `release/manifest.json` e `release/notes.md`.
+4. Envie para main. O workflow cria a release com o APK validado.
+
+Alterar só o código não atualiza o APK já instalado. O pacote assinado precisa ser recompilado. A chave privada nunca deve entrar no repositório. O APK de teste gerado com a chave temporária do runner não é distribuído.

@@ -25,10 +25,18 @@ final class UpdateManager {
     private static final long MAX_APK_BYTES = 200L * 1024 * 1024;
     private final Activity activity;
     private boolean awaitingInstallPermission;
+    private volatile boolean busy;
+    private volatile boolean cancelled;
+    private long lastCheck;
+    private String releaseNotes = "";
+    private String releaseName = "";
 
     UpdateManager(Activity activity) { this.activity = activity; }
 
-    void check() {
+    synchronized void check() {
+        if (busy || System.currentTimeMillis() - lastCheck < 15 * 60 * 1000) return;
+        busy = true;
+        lastCheck = System.currentTimeMillis();
         new Thread(() -> {
             try {
                 HttpURLConnection connection = open(RELEASE);
@@ -36,7 +44,11 @@ final class UpdateManager {
                     if (connection.getResponseCode() != 200) return; // No release yet, or offline.
                     byte[] body = readLimited(connection.getInputStream(), 1024 * 1024);
                     JSONObject release = new JSONObject(new String(body, "UTF-8"));
+                    if (release.optBoolean("draft") || release.optBoolean("prerelease")) return;
                     String tag = release.optString("tag_name");
+                    releaseName = release.optString("name", tag);
+                    releaseNotes = release.optString("body", "Melhorias e correções.");
+                    if (releaseNotes.length() > 1200) releaseNotes = releaseNotes.substring(0, 1200) + "…";
                     if (!tag.matches("v[0-9]+")) return;
                     int version = Integer.parseInt(tag.substring(1));
                     if (version <= installedVersion()) return;
@@ -48,29 +60,40 @@ final class UpdateManager {
                         String url = asset.optString("browser_download_url");
                         if (!url.startsWith(ASSET_PREFIX) || !url.endsWith("/DeadRecoil.apk")) return;
                         String digest = asset.optString("digest");
-                        activity.runOnUiThread(() -> prompt(version, url, digest));
+                        activity.runOnUiThread(() -> {
+                            if (activity.isFinishing() || activity.isDestroyed()) return;
+                            File cached = new File(activity.getCacheDir(), "verified-update.apk");
+                            try {
+                                verifyPackage(cached, version);
+                                ready();
+                            } catch (Exception missing) { download(version, url, digest); }
+                        });
                         return;
                     }
                 } finally { connection.disconnect(); }
-            } catch (Exception ignored) { /* No network: the installed game stays playable. */ }
+            } catch (Exception ignored) { /* Offline play remains available. */ }
+            finally { busy = false; }
         }, "DeadRecoil-update-check").start();
     }
 
-    private void prompt(int version, String url, String digest) {
+    private void ready() {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         new AlertDialog.Builder(activity)
-                .setTitle("Atualização necessária")
-                .setMessage("Há uma nova versão do Dead Recoil. Toque em Atualizar para baixar dentro do jogo.")
-                .setCancelable(false)
-                .setPositiveButton("Atualizar", (dialog, which) -> download(version, url, digest))
-                .setNegativeButton("Sair", (dialog, which) -> activity.finish())
-                .show();
+            .setTitle(releaseName + " · pronta para instalar")
+            .setMessage(releaseNotes + "\n\nSeu progresso será mantido. Confirme a instalação para atualizar.")
+            .setPositiveButton("Instalar atualização", (d, w) -> install())
+            .setNegativeButton("Jogar agora", null)
+            .show();
     }
 
     private void download(int version, String url, String digest) {
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        busy = true;
+        cancelled = false;
         AlertDialog progress = new AlertDialog.Builder(activity)
-                .setTitle("Baixando atualização")
-                .setMessage("Preparando o download…")
+                .setTitle(releaseName + " · atualização disponível")
+                .setMessage("Baixando automaticamente…\n\n" + releaseNotes)
+                .setNegativeButton("Baixar depois", (d, w) -> cancelled = true)
                 .setCancelable(false)
                 .create();
         progress.show();
@@ -89,6 +112,7 @@ final class UpdateManager {
                         byte[] buffer = new byte[32768];
                         int count;
                         while ((count = input.read(buffer)) != -1) {
+                            if (cancelled) throw new Exception("Download adiado");
                             received += count;
                             if (received > MAX_APK_BYTES) throw new Exception("Arquivo muito grande");
                             sha.update(buffer, 0, count);
@@ -97,7 +121,10 @@ final class UpdateManager {
                             if (percent >= lastPercent + 5) {
                                 lastPercent = percent;
                                 String label = percent >= 0 ? "Baixando: " + percent + "%" : "Baixando…";
-                                activity.runOnUiThread(() -> progress.setMessage(label));
+                                activity.runOnUiThread(() -> {
+                                    if (!activity.isFinishing() && !activity.isDestroyed())
+                                        progress.setMessage(label + "\n\n" + releaseNotes);
+                                });
                             }
                         }
                     }
@@ -108,20 +135,24 @@ final class UpdateManager {
                     File verified = new File(activity.getCacheDir(), "verified-update.apk");
                     if (verified.exists() && !verified.delete()) throw new Exception("Falha ao substituir atualização");
                     if (!temp.renameTo(verified)) throw new Exception("Falha ao preparar atualização");
-                    activity.runOnUiThread(() -> { progress.dismiss(); install(); });
+                    activity.runOnUiThread(() -> {
+                        if (!activity.isFinishing() && !activity.isDestroyed()) { progress.dismiss(); ready(); }
+                    });
                 } finally { connection.disconnect(); }
             } catch (Exception e) {
                 temp.delete();
                 activity.runOnUiThread(() -> {
+                    if (activity.isFinishing() || activity.isDestroyed()) return;
                     progress.dismiss();
-                    if (!activity.isFinishing()) new AlertDialog.Builder(activity)
+                    if (cancelled) return;
+                    new AlertDialog.Builder(activity)
                         .setTitle("Não foi possível atualizar")
                         .setMessage(e.getMessage() == null ? "Verifique sua conexão e tente novamente." : e.getMessage())
                         .setPositiveButton("Tentar novamente", (d, w) -> download(version, url, digest))
                         .setNegativeButton("Voltar ao jogo", null)
                         .show();
                 });
-            }
+            } finally { busy = false; }
         }, "DeadRecoil-update-download").start();
     }
 
@@ -167,6 +198,7 @@ final class UpdateManager {
 
     void resumeInstall() {
         if (awaitingInstallPermission && activity.getPackageManager().canRequestPackageInstalls()) install();
+        else if (!awaitingInstallPermission) check();
     }
 
     private int installedVersion() throws Exception {

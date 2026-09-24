@@ -87,7 +87,7 @@
         html.native-android #classcontinue { min-height:42px; }
 
         html.native-android #mapscreen .container, html.native-android .modal .dialog, html.native-android #settingsscreen .container { max-width:100%; width:100%; }
-        html.native-android #mapcards.selection { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+        html.native-android #mapcards.selection { grid-template-columns:none; gap:8px; }
         html.native-android #mapcards .card { min-height:118px; padding:10px; }
         html.native-android #mapscreen .row { gap:8px; }
         html.native-android #mapscreen .footer-actions { gap:8px; }
@@ -2141,6 +2141,44 @@
         html.native-android #slotshud .slot { display:none; }
         html.native-android #slotshud .slot.active { display:block; min-width:96px; max-width:108px; padding:4px 6px; font-size:9px; }
       }
+      /* Two concise steps; maps remain in one horizontal row on every viewport. */
+      #mapscreen, #rulescreen { overflow:auto; }
+      #mapscreen .container, #rulescreen .container { width:100%; }
+      #mapscreen .topline, #rulescreen .topline { margin-bottom:12px; }
+      .step-label { color:var(--gold);font-size:11px;letter-spacing:.19em;font-weight:800;margin:0 0 10px; }
+      #mapcards.selection { display:grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(152px,1fr);gap:10px;overflow-x:auto;overflow-y:hidden;max-width:100%;margin:14px 0 18px;padding:3px 3px 13px;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch; }
+      #mapcards .card { scroll-snap-align:start;min-width:0;transition:border-color .18s ease,background .18s ease; }
+      #mapcards .card.selected { background:#20272a;box-shadow:inset 0 -4px var(--gold),0 0 0 1px var(--gold); }
+      #mapcards .mapart { height:clamp(88px,20vh,150px);background:radial-gradient(circle at 65% 25%,#f4c58544,transparent 27%),linear-gradient(170deg,var(--mapcolor),#07111a 85%); }
+      #mapcards .mapart::before { opacity:.88;filter:drop-shadow(4px 4px 5px #020508); }
+      #mapcards .mapart::after { background:linear-gradient(transparent 5%,#050a10c9);opacity:.8; }
+      #mapcards .card:nth-child(2) .mapart::before { transform:scaleX(.7) skew(-5deg); }
+      #mapcards .card:nth-child(3) .mapart::before { transform:scaleY(.78);transform-origin:bottom; }
+      #mapcards .card:nth-child(4) .mapart::before { transform:skew(12deg); }
+      #mapcards .card:nth-child(5) .mapart::before { transform:scaleX(.86) skew(-9deg); }
+      #mapcards .card .info { padding:11px; }
+      #mapcards .card h3 { font-size:clamp(13px,1.8vw,18px);margin-bottom:4px; }
+      #mapcards .card p { font-size:11px;line-height:1.35;margin-bottom:5px; }
+      #mapcards .card .tag { font-size:9px; }
+      .rules-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2vw,22px); }
+      .rule-group { min-width:0;margin:0;padding:10px;border:1px solid #ffffff24;background:#0d171dcf; }
+      .rule-group legend { color:var(--gold);padding:0 8px;font-size:13px;font-weight:800; }
+      .rule-options { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px; }
+      .rule-options button { text-align:left;min-width:0;min-height:74px;padding:10px;background:#172229;border:1px solid #ffffff30; }
+      .rule-options button[aria-pressed="true"] { border-color:var(--gold);background:#293027;box-shadow:inset 0 -3px var(--gold); }
+      .rule-options strong,.rule-options small { display:block; }
+      .rule-options small { font-size:10px;color:var(--muted);margin-top:5px;line-height:1.25; }
+      .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+      #mapscreen .footer-actions,#rulescreen .footer-actions { margin-top:12px; }
+      @media(max-width:850px) { .rules-grid { grid-template-columns:1fr;gap:9px; } .rule-options button { min-height:58px; } #mapscreen,#rulescreen { padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left)); } #mapscreen .topline h2,#rulescreen .topline h2 { font-size:clamp(19px,4vw,28px); } #mapscreen .topline p,#rulescreen .topline p { margin:4px 0; } }
+      @media(max-height:420px) { #mapcards .mapart { height:68px; } #mapcards .card p { display:none; } .rule-options button { min-height:48px;padding:7px; } .rules-grid { gap:6px; } }
+      .screen:not(.hidden) > .container { animation:screen-in .2s ease-out; }
+      @keyframes screen-in { from { opacity:0;transform:translateY(7px); } to { opacity:1;transform:translateY(0); } }
+      button:focus-visible { outline:2px solid #f0c777;outline-offset:3px; }
+      .rule-options button { transition:background .16s ease,border-color .16s ease; }
+      #mapscreen .footer-actions,#rulescreen .footer-actions { position:sticky;bottom:0;padding:9px 0;background:#09131bf2;z-index:3; }
+      @media(pointer:coarse) { button { touch-action:manipulation; } #mapcards { touch-action:pan-x; } .rule-options button { min-height:48px; } }
+      @media(prefers-reduced-motion:reduce) { .screen:not(.hidden) > .container { animation:none; } .rule-options button,#mapcards .card { transition:none; } }
 </style>
 </head>
   <body>
@@ -2279,38 +2317,39 @@
           </div>
           <button id="backclass">Voltar</button>
         </div>
-        <div id="mapcards" class="selection"></div>
-        <div class="row">
-          <div class="field">
-            <label for="mode">Modo de sobrevivência</label
-            ><select id="mode">
-              <option value="classic">
-                Clássico — até onde você consegue ir?
-              </option>
-              <option value="infinite">
-                Infinito — crescimento exponencial
-              </option>
-              <option value="timed">Contra o tempo — 5 minutos</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="difficulty">Dificuldade</label
-            ><select id="difficulty">
-              <option value="easy">Fácil — 150 HP / moedas ×1</option>
-              <option value="medium" selected>
-                Médio — 100 HP / moedas ×1,5
-              </option>
-              <option value="hard">Difícil — 75 HP / moedas ×2</option>
-            </select>
-          </div>
-        </div>
+        <p class="step-label">01 / ESCOLHA O MAPA</p>
+        <div id="mapcards" class="selection" aria-label="Mapas disponíveis"></div>
         <div class="footer-actions">
-          <span class="hint"
-            ><kbd>WASD</kbd> Mover &nbsp; <kbd>Mouse</kbd> Mirar e atirar &nbsp;
-            <kbd>R</kbd> Recarregar &nbsp; <kbd>Esc</kbd> Pausar<br />
-            <small>Celular: joystick à esquerda · arraste à direita para olhar · pinça para 1ª/3ª pessoa</small></span
-          ><button id="deploy" class="primary">Entrar na zona</button>
+          <span class="hint">Deslize para o lado para ver os cinco mapas.</span>
+          <button id="nextmode" class="primary">Continuar · modo e dificuldade</button>
         </div>
+      </div>
+    </section>
+    <section id="rulescreen" class="screen hidden">
+      <div class="container">
+        <div class="topline">
+          <div><p class="step-label">02 / PREPARE A MISSÃO</p><h2>Defina a sobrevivência.</h2><p id="chosenmap"></p></div>
+          <button id="backmaps">Voltar aos mapas</button>
+        </div>
+        <div class="rules-grid">
+          <fieldset class="rule-group"><legend>Modo de jogo</legend>
+            <div class="rule-options" id="mode-options">
+              <button type="button" data-choice="mode" data-value="classic"><strong>Clássico</strong><small>Sobreviva às ondas</small></button>
+              <button type="button" data-choice="mode" data-value="infinite"><strong>Infinito</strong><small>Horda crescente</small></button>
+              <button type="button" data-choice="mode" data-value="timed"><strong>Contra o tempo</strong><small>5 minutos de combate</small></button>
+            </div>
+            <select id="mode" class="sr-only" aria-label="Modo de jogo"><option value="classic">Clássico</option><option value="infinite">Infinito</option><option value="timed">Contra o tempo</option></select>
+          </fieldset>
+          <fieldset class="rule-group"><legend>Dificuldade</legend>
+            <div class="rule-options" id="difficulty-options">
+              <button type="button" data-choice="difficulty" data-value="easy"><strong>Fácil</strong><small>150 HP · moedas ×1</small></button>
+              <button type="button" data-choice="difficulty" data-value="medium"><strong>Médio</strong><small>100 HP · moedas ×1,5</small></button>
+              <button type="button" data-choice="difficulty" data-value="hard"><strong>Difícil</strong><small>75 HP · moedas ×2</small></button>
+            </div>
+            <select id="difficulty" class="sr-only" aria-label="Dificuldade"><option value="easy">Fácil</option><option value="medium" selected>Médio</option><option value="hard">Difícil</option></select>
+          </fieldset>
+        </div>
+        <div class="footer-actions"><span class="hint">Celular: joystick à esquerda · arraste à direita para mirar.</span><button id="deploy" class="primary">Entrar na zona</button></div>
       </div>
     </section>
     <section id="pausescreen" class="screen modal hidden">
@@ -3487,7 +3526,8 @@
             r.head.rotation.z =
               -r.chest.rotation.z * 0.6 + Math.sin(t * 0.47 + r.base) * 0.06;
             r.head.rotation.x = -0.09 + Math.sin(t * 0.6) * 0.055;
-            r.head.rotation.y = Math.sin(t * 0.35 + r.base) * 0.065;
+            r.head.rotation.y = Math.sin(t * 0.35 + r.base) * 0.065 + Math.sin(t * 1.9 + r.base) * 0.012;
+            r.chest.rotation.y = Math.sin(t + r.base) * 0.025 * z.moveBlend;
             r.jaw.rotation.x =
               (z.type === 4 ? 0.45 : 0.1) + Math.sin(t * 0.65) * 0.04;
             for (let i = 0; i < 2; i++) {
@@ -3531,7 +3571,7 @@
               const attack = (simulationTime - z.swingStart) / 0.65;
               if (attack >= 0 && attack < 1) {
                 const swipe = Math.sin(attack * Math.PI);
-                r.chest.rotation.y = swipe * 0.24;
+                r.chest.rotation.y += swipe * 0.24;
                 r.arms[0].rotation.x = -0.8 - swipe * 1.55;
                 r.arms[1].rotation.x = -0.85 - swipe * 0.9;
                 r.elbows[0].rotation.x = -0.1;
@@ -4840,6 +4880,10 @@
             const m = maps[index];
             scene.background = new THREE.Color(m.fog);
             scene.fog = new THREE.FogExp2(m.fog, m.density);
+            ambient.color.setHex([0xb0c8dd, 0xbecbb1, 0xa8b8bb, 0xa8bed8, 0xd2e7f0][index]);
+            ambient.groundColor.setHex([0x303a36, 0x36392b, 0x272f25, 0x282c3b, 0x505d65][index]);
+            sun.color.setHex([0xc4daf1, 0xe9d4a0, 0xa8c6d1, 0xa9bde4, 0xe1efff][index]);
+            renderer.toneMappingExposure = index === 2 ? 1.08 : index === 4 ? 0.96 : 1.04;
             ambient.intensity = index === 4 ? 0.65 : 0.4;
             sun.intensity = index === 4 ? 0.6 : index === 2 ? 0.26 : 0.42;
             box(this.group, 0, -0.3, 0, 72, 0.6, 72, m.ground);
@@ -5451,8 +5495,11 @@
             this.kickVelocity +=
               (-this.kick * 170 - this.kickVelocity * 23) * dt;
             this.kick += this.kickVelocity * dt;
-            const swayX = clamp((yaw - this.lastYaw) * 2, -0.065, 0.065),
-              swayY = clamp((pitch - this.lastPitch) * 2, -0.045, 0.045);
+            const response = 1 - Math.exp(-dt * 18);
+            this.swayX = (this.swayX || 0) + (clamp((yaw - this.lastYaw) / Math.max(dt * 60, .1) * 2, -0.065, 0.065) - (this.swayX || 0)) * response;
+            this.swayY = (this.swayY || 0) + (clamp((pitch - this.lastPitch) / Math.max(dt * 60, .1) * 2, -0.045, 0.045) - (this.swayY || 0)) * response;
+            const swayX = this.swayX, swayY = this.swayY;
+            this.sprintRoll = (this.sprintRoll || 0) + ((sprinting ? -.26 : 0) - (this.sprintRoll || 0)) * response;
             this.lastYaw = yaw;
             this.lastPitch = pitch;
             target.x += aiming
@@ -5464,9 +5511,7 @@
             this.model.rotation.set(
               this.kick * 0.075 + swayY * 0.3,
               swayX * 0.3,
-              sprinting
-                ? -0.26
-                : Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
+              this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
             this.parts.leftHand.position.copy(this.parts.leftBase);
             this.parts.leftHand.rotation.set(0, 0, 0);
@@ -6242,6 +6287,7 @@
               AudioManager.tone(rand(90, 170), 0.3, "sawtooth", 0.1, 35);
           },
           update(dt) {
+            this.animationFrame = (this.animationFrame || 0) + 1;
             this.flowClock -= dt;
             if (this.flowClock <= 0) {
               MapManager.updateFlow();
@@ -6283,10 +6329,17 @@
               )
                 speed *= 2.5;
               if (z.type === 0) speed *= 0.97 + Math.sin(z.anim * 0.5) * 0.03;
-              CreatureRig.animate(z, dt, walking);
-              for (const detail of z.rig.detail)
-                detail.visible =
-                  dist < (SettingsManager.data.graphics === "low" ? 10 : 18);
+              z.animationTime = Math.min(0.12, (z.animationTime || 0) + dt);
+              const animationInterval = touchMode && dist > 30 && !z.boss && z.stagger <= 0 ? 3 : 1;
+              if (animationInterval === 1 || (this.animationFrame + (z.animationOffset ||= Math.floor(Math.random() * 3) + 1)) % animationInterval === 0) {
+                CreatureRig.animate(z, z.animationTime, walking);
+                z.animationTime = 0;
+              }
+              const showDetail = dist < (SettingsManager.data.graphics === "low" ? 10 : 18);
+              if (z.detailVisible !== showDetail) {
+                z.detailVisible = showDetail;
+                for (const detail of z.rig.detail) detail.visible = showDetail;
+              }
               if (walking) {
                 let dir = z.canSee ? to.clone().normalize() : MapManager.direction(pos);
                 if (z.boss?.kind === "necro" && dist < 11)
@@ -7538,8 +7591,11 @@
                 (b) =>
                   (b.onclick = () => {
                     selectedMap = Number(b.dataset.map);
-                    this.mapCards();
-                    MapManager.build(selectedMap);
+                    $("mapcards").querySelectorAll("[data-map]").forEach((card) => {
+                      const selected = Number(card.dataset.map) === selectedMap;
+                      card.classList.toggle("selected", selected);
+                      card.setAttribute("aria-pressed", String(selected));
+                    });
                   }),
               );
           },
@@ -9199,6 +9255,23 @@
           UIManager.screen("mapscreen");
         };
         $("backclass").onclick = () => Armory.open();
+        $("nextmode").onclick = () => {
+          $("chosenmap").textContent = `Zona selecionada: ${maps[selectedMap].name}`;
+          document.querySelectorAll("[data-choice]").forEach((button) => {
+            button.setAttribute("aria-pressed", String(button.dataset.value === $(button.dataset.choice).value));
+          });
+          UIManager.screen("rulescreen");
+        };
+        $("backmaps").onclick = () => UIManager.screen("mapscreen");
+        document.querySelectorAll("[data-choice]").forEach((button) => {
+          button.onclick = () => {
+            const group = button.dataset.choice;
+            $(group).value = button.dataset.value;
+            document.querySelectorAll(`[data-choice="${group}"]`).forEach((option) =>
+              option.setAttribute("aria-pressed", String(option === button)));
+          };
+        });
+
         $("deploy").onclick = async () => {
           if ($("deploy").disabled) return;
           $("deploy").disabled = true;
@@ -9320,6 +9393,7 @@
           mouse.down = false;
           if (!lockPending) pause();
         });
+        document.addEventListener("deadrecoil-native-pause", () => { pause(); if (touchMode) resetTouchControls(); });
         document.addEventListener("visibilitychange", () => {
           if (document.hidden) pause();
         });
@@ -9608,12 +9682,14 @@
           fastWindows = 0;
         function frame(now) {
           requestAnimationFrame(frame);
-          if (nativeAndroid && now - lastFrame < 1000 / 58) return;
-          const dt = Math.min(0.05, (now - lastFrame) / 1000);
+          // Never cap 60 Hz gameplay at 58: that drops alternate vsync frames.
+          if (nativeAndroid && state !== GameState.PLAYING && now - lastFrame < 1000 / 30 - 1) return;
+          const wallDt = Math.max(0.001, (now - lastFrame) / 1000);
+          const dt = Math.min(0.05, wallDt);
           lastFrame = now;
           menuTime += dt;
           fpsFrames++;
-          fpsTime += dt;
+          fpsTime += wallDt;
           if (fpsTime > 0.5) {
             $("fps").textContent = Math.round(fpsFrames / fpsTime) + " FPS";
             fpsFrames = 0;
@@ -9621,7 +9697,7 @@
           }
           if (nativeAndroid && state === GameState.PLAYING) {
             adaptiveFrames++;
-            adaptiveSeconds += dt;
+            adaptiveSeconds += wallDt;
             if (adaptiveSeconds >= 2) {
               const fps = adaptiveFrames / adaptiveSeconds;
               slowWindows = fps < 32 ? slowWindows + 1 : 0;
