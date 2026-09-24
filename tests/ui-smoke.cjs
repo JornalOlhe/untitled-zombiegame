@@ -39,6 +39,10 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('[data-map="4"]').getAttribute('aria-pressed'),'true');
       await page.locator('#nextmode').click();
       assert.equal(await page.locator('#difficulty').inputValue(),'easy');
+      await page.locator('#rulescreen:not(.hidden)').waitFor({state:'visible'});
+      await page.waitForTimeout(220);
+      assert.equal(await page.locator('#chosenmap').textContent(),'Zona selecionada: Arctic Base');
+      assert.ok(await page.locator('#rulescreen .rules-grid').isVisible(), 'Rules UI must be visible after its entrance animation');
       await page.screenshot({path:`test-results/rules-${width}.png`});
       await page.locator('#deploy').click();
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PLAYING);
