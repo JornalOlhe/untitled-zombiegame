@@ -1,0 +1,86 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package.json
+
+      - name: Validate desktop version
+        shell: pwsh
+        run: |
+          $manifest = Get-Content release/manifest.json | ConvertFrom-Json
+          $package = Get-Content desktop/package.json | ConvertFrom-Json
+          if ($package.version -ne $manifest.version_name) {
+            throw "desktop/package.json version must match release/manifest.json"
+          }
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Smoke test desktop runtime
+        working-directory: desktop
+        run: npm run smoke
+
+      - name: Build portable Windows executable
+        working-directory: desktop
+        run: npm run dist
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          $exe = "desktop/dist/DeadRecoil-Windows.exe"
+          if (!(Test-Path $exe)) { throw "DeadRecoil-Windows.exe was not generated" }
+          $size = (Get-Item $exe).Length
+          if ($size -lt 50000000) { throw "Generated executable is unexpectedly small: $size bytes" }
+          Get-FileHash $exe -Algorithm SHA256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-Windows
+          path: desktop/dist/DeadRecoil-Windows.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach EXE to current release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manifest = Get-Content release/manifest.json | ConvertFrom-Json
+          $tag = "v$($manifest.version_code)"
+          $found = $false
+
+          for ($attempt = 1; $attempt -le 18; $attempt++) {
+            gh release view $tag *> $null
+            if ($LASTEXITCODE -eq 0) {
+              $found = $true
+              break
+            }
+            Write-Host "Release $tag not available yet; retry $attempt/18"
+            Start-Sleep -Seconds 10
+          }
+
+          if (!$found) { throw "Release $tag was not found" }
+
+          gh release upload $tag "desktop/dist/DeadRecoil-Windows.exe" --clobber
