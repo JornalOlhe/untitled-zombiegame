@@ -55,14 +55,32 @@ jobs:
           if ($size -lt 50000000) { throw "Generated executable is unexpectedly small: $size bytes" }
           Get-FileHash $exe -Algorithm SHA256
 
+      - name: Check stable release source alignment
+        id: release_alignment
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          @'
+          import sys, zipfile
+          from pathlib import Path
+          source = Path("android/app/src/main/assets/index.html").read_bytes()
+          with zipfile.ZipFile("release/DeadRecoil.apk") as apk:
+              packaged = apk.read("assets/index.html")
+          if source != packaged:
+              print("Main contains QA changes newer than the stable signed APK.")
+              sys.exit(1)
+          print("Stable APK source matches current main.")
+          '@ | python -
+
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-Windows
+          name: DeadRecoil-Windows-QA
           path: desktop/dist/DeadRecoil-Windows.exe
           if-no-files-found: error
           retention-days: 30
 
       - name: Attach EXE to current release
+        if: steps.release_alignment.outcome == 'success'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

@@ -25,6 +25,38 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(`http://127.0.0.1:${server.address().port}/?native=1&platform=android&test=1`);
       await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
+      assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,59,37,4]);
+      await page.locator('#classesbtn').click();
+      await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
+      await page.locator('[data-odds-mode="lucky"]').click();
+      const luckyRarities = await page.locator('#rarity-board [data-rarity-tier]').evaluateAll(items => items.map(el => el.textContent.trim().replace(/[+−]/g,'').replace(/\s+/g,' ')));
+      assert.ok(luckyRarities.length === 3 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO/.test(text)), 'Lucky Spin must expose only Epic+ tiers');
+      await page.locator('[data-rarity-tier="4"]').click();
+      assert.ok(await page.locator('#rarity-board .rarity-items .rarity-item').count() > 0, 'Clicking a rarity must reveal its items');
+      const armoryCopy = await page.locator('#classscreen').innerText();
+      assert.ok(!/sacrificar|descartar resultado|eliminar resultado/i.test(armoryCopy), 'Old result/sacrifice flow must not be visible');
+      await page.screenshot({path:`test-results/armory-${width}.png`});
+      if (width === 1280) {
+        const previousWeapon = await page.evaluate(() => {
+          const p = DeadRecoilTest.Progression;
+          p.data.lucky = 1;
+          p.economy.random = () => 0.70;
+          p.economy.save();
+          p.render();
+          return p.data.weaponId;
+        });
+        await page.locator('.spin-btn.lucky').click();
+        await page.locator('#spin-confirm:not(.hidden)').waitFor({state:'visible',timeout:10000});
+        assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'LENDÁRIO');
+        await page.screenshot({path:'test-results/armory-confirm-1280.png'});
+        await page.locator('#spin-confirm-accept').click();
+        await page.locator('#spin-confirm').waitFor({state:'hidden',timeout:5000});
+        assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), previousWeapon, 'Legendary confirmation must replace/equip the rolled weapon');
+        await page.evaluate(() => { DeadRecoilTest.Progression.economy.random = Math.random; });
+        await page.screenshot({path:'test-results/armory-equipped-1280.png'});
+      }
+      await page.locator('#armory-back').click();
+      await page.locator('#menu:not(.hidden)').waitFor({state:'visible'});
       await page.locator('#play').click();
       const cards = await page.locator('#mapcards > button').evaluateAll(items => items.map(el => ({top:el.getBoundingClientRect().top,width:el.getBoundingClientRect().width})));
       assert.equal(cards.length,5);

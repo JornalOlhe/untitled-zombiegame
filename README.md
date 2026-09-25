@@ -14,6 +14,14 @@ Baixe `DeadRecoil-Windows.exe` na última release e execute diretamente. É uma 
 
 Controles principais: `WASD` para mover, mouse para mirar e atirar, `R` para recarregar, `Esc` para pausar e `F11` ou `Alt+Enter` para alternar tela cheia.
 
+## Armory
+
+O Armory usa dois tipos de spin. O Lucky Spin entrega somente Épico, Lendário ou Mítico. As raridades podem ser abertas para visualizar os itens disponíveis. Itens até Épico entram diretamente no loadout; Lendário e Mítico mostram uma única confirmação antes da troca.
+
+## Builds
+
+A release pública continua sendo a versão estável assinada. Mudanças mais novas da `main` são geradas como artifacts de QA para Android e Windows; a release estável só é atualizada quando o APK assinado corresponde exatamente ao código atual.
+
 ## Desenvolvimento
 
 O jogo está em `android/app/src/main/assets/index.html`. O wrapper Android e o atualizador ficam em `android/app/src/main/java/com/deadrecoil/game/`. O runtime Windows fica em `desktop/`.
