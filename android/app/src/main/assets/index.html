@@ -2203,10 +2203,76 @@
       .rarity-items{display:grid;gap:5px;margin:-1px 0 9px 7px;padding:5px 0 4px 9px;border-left:1px solid color-mix(in srgb,var(--rarity) 45%,transparent);animation:rarity-items-in .16s ease-out}.rarity-item{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;width:100%;padding:8px 9px!important;border:1px solid #ffffff10!important;border-radius:7px!important;background:#0a1118!important;text-align:left!important;min-height:48px!important}.rarity-item:hover{background:#101b24!important}.rarity-item.equipped{box-shadow:inset 0 0 0 1px var(--rarity)}.rarity-item span{min-width:0}.rarity-item strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#e9eff3}.rarity-item small{display:block;margin-top:2px;font-size:7px;color:#778794;letter-spacing:.05em}.rarity-item b{font-size:10px;color:var(--rarity)}@keyframes rarity-items-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
       .rarity-pity{padding:9px 2px 2px!important;color:#7f8d99!important;font-size:9px!important}.rarity-pity b{font-size:11px!important;color:#dce6ed!important}.armory-details #armory-info{border-radius:8px!important;border:1px solid #ffffff12!important;background:#0a1118cc!important;box-shadow:none!important}.weapon-stats div{background:#ffffff05!important;border-radius:6px;padding:6px!important}
       #roll-overlay{background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--roll-rarity,#7d92a6) 18%,#0b1219),#03060bec 66%)!important;backdrop-filter:blur(10px)!important}.reel-window{border:1px solid #ffffff28!important;border-radius:12px!important;background:#080e14f2!important;box-shadow:0 25px 80px #000b!important}.reel-card{border:1px solid color-mix(in srgb,var(--rarity) 50%,#ffffff1c)!important;border-bottom:3px solid var(--rarity)!important;border-radius:9px!important;background:linear-gradient(180deg,#141e28,#0b1118)!important}.reel-card.winner{box-shadow:0 0 0 1px var(--rarity),0 0 38px color-mix(in srgb,var(--rarity) 32%,transparent)!important}
-      .spin-confirm{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#020407d9;backdrop-filter:blur(12px)}.spin-confirm.hidden{display:none!important}.spin-confirm-card{width:min(560px,94vw);border:1px solid color-mix(in srgb,var(--confirm-rarity) 68%,#ffffff22);border-top:4px solid var(--confirm-rarity);border-radius:14px;background:linear-gradient(160deg,#111922f8,#070b10fa);padding:24px;box-shadow:0 34px 100px #000d,0 0 45px color-mix(in srgb,var(--confirm-rarity) 18%,transparent);animation:confirm-in .18s ease-out}.spin-confirm-rarity{display:block;color:var(--confirm-rarity);font-size:10px;font-weight:1000;letter-spacing:.22em;margin-bottom:8px}.spin-confirm-card h2{margin:0 0 8px;font-size:27px}.spin-confirm-card>p{margin:0;color:#aebbc5;line-height:1.5}.spin-confirm-compare{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin:20px 0;padding:14px;border:1px solid #ffffff12;border-radius:10px;background:#05090e}.spin-confirm-compare div{min-width:0}.spin-confirm-compare small{display:block;color:#687785;font-size:8px;letter-spacing:.16em}.spin-confirm-compare strong{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.spin-confirm-compare div:last-child strong{color:var(--confirm-rarity)}.spin-confirm-arrow{color:#61717e;font-size:22px}.spin-confirm-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px}.spin-confirm-actions button{min-height:46px;border-radius:8px!important}.spin-confirm-actions .primary{background:linear-gradient(135deg,color-mix(in srgb,var(--confirm-rarity) 46%,#17212a),color-mix(in srgb,var(--confirm-rarity) 22%,#111820))!important;border-color:var(--confirm-rarity)!important}@keyframes confirm-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+      .spin-confirm{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#020407d9;backdrop-filter:blur(12px)}.spin-confirm.hidden{display:none!important}.spin-confirm-card{width:min(560px,94vw);border:1px solid color-mix(in srgb,var(--confirm-rarity) 68%,#ffffff22);border-top:4px solid var(--confirm-rarity);border-radius:14px;background:linear-gradient(160deg,#111922f8,#070b10fa);padding:24px;box-shadow:0 34px 100px #000d,0 0 45px color-mix(in srgb,var(--confirm-rarity) 18%,transparent);animation:confirm-in .18s ease-out}.spin-confirm-rarity{display:block;color:var(--confirm-rarity);font-size:10px;font-weight:1000;letter-spacing:.22em;margin-bottom:8px}.spin-confirm-card h2{margin:0 0 8px;font-size:27px}.spin-confirm-card>p{margin:0;color:#aebbc5;line-height:1.5}.spin-confirm-compare{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin:20px 0;padding:14px;border:1px solid #ffffff12;border-radius:10px;background:#05090e}.spin-confirm-compare div{min-width:0}.spin-confirm-compare small{display:block;color:#687785;font-size:8px;letter-spacing:.16em}.spin-confirm-compare strong{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.spin-confirm-compare div:last-child strong{color:var(--confirm-rarity)}.spin-confirm-arrow{color:#61717e;font-size:22px}.spin-confirm-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px}.spin-confirm-actions button{min-height:46px;border-radius:8px!important}.spin-confirm-actions .primary{background:linear-gradient(135deg,color-mix(in srgb,var(--confirm-rarity) 46%,#17212a),color-mix(in srgb,var(--confirm-rarity) 22%,#111820))!important;border-color:var(--confirm-rarity)!important}@keyframes confirm-in{from{transform:translateY(8px) scale(.985)}to{transform:none}}
       .armory-footer{backdrop-filter:blur(16px);background:#060a0ee8!important}
-      @media(max-width:1050px){.armory-layout{grid-template-columns:190px minmax(390px,1fr) 235px!important;gap:10px!important;padding-inline:12px!important}.armory-inventory,.armory-details{padding:10px!important}.slot-card{min-height:102px!important}.rarity-line{min-height:38px!important}.rarity-line span{font-size:11px!important}.rarity-items{margin-left:3px;padding-left:6px}}
-      @media(max-width:900px) and (orientation:landscape){#classscreen.armory-screen{overflow:hidden!important}.armory-header{min-height:48px!important;padding:6px 10px!important;grid-template-columns:74px 1fr 180px!important}.armory-section-label h1{font-size:15px!important}.armory-section-label p{display:none!important}.armory-layout{height:calc(100dvh - 96px)!important;min-height:0!important;grid-template-columns:145px minmax(330px,1fr) 190px!important;grid-template-rows:1fr!important;padding:6px 8px 52px!important;gap:7px!important}.armory-inventory,.armory-details{grid-column:auto!important;padding:7px!important;overflow:auto!important}.survivor-stage{grid-column:auto!important;grid-row:auto!important;min-height:0!important}.slot-card{min-height:84px!important;padding:7px!important}.slot-name{font-size:11px!important}.slot-meta{font-size:7px!important}.slot-actions button{font-size:7px!important;padding:5px!important}.armory-tabs button{font-size:8px!important;padding:6px!important}#armory-identity{top:6px!important}#armory-identity h2{font-size:21px!important}#armory-identity p{display:none!important}#classscreen #classpreview{inset:64px 0 92px!important;height:calc(100% - 156px)!important;min-height:0!important}.stage-caption{display:none!important}#roll-controls{bottom:5px!important;width:94%!important}.spin-btn{min-height:42px!important;padding:5px 7px!important}.spin-btn .label{font-size:9px!important}.spin-btn .cost{font-size:7px!important}.spin-btn .ico{font-size:17px!important}.slot-limit-note{display:none!important}.odds-title{display:none!important}.item-chance{padding:6px!important;font-size:7px!important}.item-chance b{font-size:9px!important}.rarity-line{min-height:31px!important;margin-bottom:4px!important;padding:0 6px!important}.rarity-line span{font-size:9px!important}.rarity-line b{font-size:8px!important}.rarity-items{gap:3px;margin-bottom:5px}.rarity-item{min-height:34px!important;padding:5px!important}.rarity-item strong{font-size:8px}.rarity-item small{font-size:6px}.rarity-pity{font-size:7px!important}.armory-details #armory-info{display:none!important}.armory-footer{height:46px!important;padding:5px 10px!important}.spin-confirm-card{padding:16px;width:min(500px,92vw)}.spin-confirm-card h2{font-size:20px}.spin-confirm-compare{margin:12px 0;padding:9px}.spin-confirm-actions button{min-height:38px!important;font-size:9px!important}}
+      @media(max-width:1050px){
+        .armory-layout{grid-template-columns:190px minmax(390px,1fr) 235px!important;gap:10px!important;padding-inline:12px!important}
+        .armory-inventory,.armory-details{padding:10px!important}.slot-card{min-height:102px!important}.rarity-line{min-height:38px!important}.rarity-line span{font-size:11px!important}.rarity-items{margin-left:3px;padding-left:6px}
+      }
+      @media(max-width:1050px) and (orientation:landscape){
+        html.native-android #classscreen.armory-screen{overflow:hidden!important}
+        html.native-android .armory-header{min-height:48px!important;padding:6px 10px!important}
+        html.native-android .armory-section-label h1{font-size:15px!important}
+        html.native-android .armory-section-label p{display:none!important}
+        html.native-android .armory-layout{
+          display:grid!important;
+          grid-template-columns:minmax(150px,20vw) minmax(0,1fr) minmax(190px,24vw)!important;
+          grid-template-rows:minmax(0,1fr)!important;
+          height:calc(100dvh - 102px)!important;
+          min-height:0!important;
+          padding:6px 10px 56px!important;
+          gap:8px!important;
+        }
+        html.native-android .armory-inventory{
+          grid-column:1!important;grid-row:1!important;display:flex!important;
+          height:auto!important;min-height:0!important;min-width:0!important;overflow:auto!important;padding:8px!important
+        }
+        html.native-android .survivor-stage{
+          grid-column:2!important;grid-row:1!important;
+          height:auto!important;min-height:0!important;min-width:0!important
+        }
+        html.native-android .armory-details{
+          grid-column:3!important;grid-row:1!important;display:block!important;
+          height:auto!important;min-height:0!important;min-width:0!important;overflow:auto!important;padding:8px!important
+        }
+        html.native-android #classscreen #classpreview{
+          inset:58px 0 98px!important;height:calc(100% - 156px)!important;min-height:0!important
+        }
+        html.native-android #armory-identity{top:6px!important}
+        html.native-android #armory-identity h2{font-size:clamp(20px,3vw,28px)!important}
+        html.native-android #armory-identity p{display:none!important}
+        html.native-android .stage-caption{display:none!important}
+        html.native-android #roll-controls{bottom:50px!important;width:94%!important}
+        html.native-android .slot-card{min-height:84px!important;padding:7px!important}
+        html.native-android .slot-name{font-size:11px!important}
+        html.native-android .slot-meta{font-size:7px!important}
+        html.native-android .slot-actions button{font-size:7px!important;padding:5px!important}
+        html.native-android .armory-tabs button{font-size:8px!important;padding:6px!important}
+        html.native-android .odds-title{display:none!important}
+        html.native-android .item-chance{padding:6px!important;font-size:7px!important}
+        html.native-android .item-chance b{font-size:9px!important}
+        html.native-android .rarity-line{min-height:31px!important;margin-bottom:4px!important;padding:0 6px!important}
+        html.native-android .rarity-line span{font-size:9px!important}
+        html.native-android .rarity-line b{font-size:8px!important}
+        html.native-android .rarity-items{gap:3px;margin-bottom:5px}
+        html.native-android .rarity-item{min-height:34px!important;padding:5px!important}
+        html.native-android .rarity-item strong{font-size:8px}
+        html.native-android .rarity-item small{font-size:6px}
+        html.native-android .rarity-pity{font-size:7px!important}
+        html.native-android .armory-details #armory-info{display:none!important}
+      }
+      @media(max-width:900px) and (orientation:landscape){
+        #classscreen.armory-screen{overflow:hidden!important}
+        .armory-header{min-height:48px!important;padding:6px 10px!important;grid-template-columns:74px 1fr 180px!important}
+        .armory-layout{grid-template-columns:145px minmax(0,1fr) 190px!important;padding:6px 8px 52px!important;gap:7px!important}
+        .armory-inventory,.armory-details{padding:7px!important}
+        #roll-controls{bottom:48px!important;width:96%!important}
+        .spin-btn{min-height:40px!important;padding:4px 6px!important}
+        .spin-btn .label{font-size:9px!important}.spin-btn .cost{font-size:7px!important}.spin-btn .ico{font-size:17px!important}
+        .slot-limit-note{display:none!important}.armory-footer{height:46px!important;padding:5px 10px!important}
+        .spin-confirm-card{padding:16px;width:min(500px,92vw)}.spin-confirm-card h2{font-size:20px!important}
+        .spin-confirm-compare{margin:12px 0;padding:9px}.spin-confirm-actions button{min-height:38px!important;font-size:9px!important}
+      }
       @media(max-width:650px) and (orientation:portrait){#classscreen.armory-screen{overflow:auto!important}.armory-layout{height:auto!important;min-height:0!important;grid-template-columns:1fr!important;grid-template-rows:420px auto auto!important;padding:8px 10px 70px!important}.survivor-stage{grid-column:1!important;grid-row:1!important}.armory-inventory{grid-column:1!important;grid-row:2!important}.armory-details{grid-column:1!important;grid-row:3!important}.spin-buttons{grid-template-columns:1fr!important}.armory-footer{position:fixed!important;left:0;right:0;bottom:0}.spin-confirm-actions{grid-template-columns:1fr!important}}
       @media(prefers-reduced-motion:reduce){.rarity-items,.spin-confirm-card{animation:none!important}.slot-card,.spin-btn,.rarity-line{transition:none!important}}
     </style>

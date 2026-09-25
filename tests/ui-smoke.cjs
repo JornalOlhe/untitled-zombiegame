@@ -49,6 +49,7 @@ const server = http.createServer((req, res) => {
         await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 4, {timeout:3000});
         await page.locator('#spin-confirm:not(.hidden)').waitFor({state:'visible',timeout:10000});
         assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'LENDÁRIO');
+        await page.waitForTimeout(220);
         await page.screenshot({path:'test-results/armory-confirm-1280.png'});
         await page.locator('#spin-confirm-accept').click();
         await page.locator('#spin-confirm').waitFor({state:'hidden',timeout:5000});
