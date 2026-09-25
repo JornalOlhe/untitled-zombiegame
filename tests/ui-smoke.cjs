@@ -28,6 +28,26 @@ const server = http.createServer((req, res) => {
       assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,59,37,4]);
       await page.locator('#classesbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
+      const armoryLayout = await page.evaluate(() => {
+        const box = (selector) => {
+          const r = document.querySelector(selector).getBoundingClientRect();
+          return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};
+        };
+        return {
+          inventory: box('.armory-inventory'),
+          stage: box('.survivor-stage'),
+          details: box('.armory-details'),
+          footer: box('.armory-footer'),
+          controls: box('#roll-controls'),
+          width: innerWidth,
+          height: innerHeight,
+        };
+      });
+      assert.ok(armoryLayout.inventory.width > 100 && armoryLayout.stage.width > 180 && armoryLayout.details.width > 140, 'All three Armory columns must remain usable');
+      assert.ok(armoryLayout.inventory.left < armoryLayout.stage.left && armoryLayout.stage.left < armoryLayout.details.left, 'Armory columns must stay ordered left-to-right');
+      assert.ok(Math.abs(armoryLayout.inventory.top - armoryLayout.stage.top) < 30 && Math.abs(armoryLayout.stage.top - armoryLayout.details.top) < 30, 'Armory columns must remain on the same row');
+      assert.ok(armoryLayout.details.right <= armoryLayout.width + 2 && armoryLayout.inventory.left >= -2, 'Armory columns must stay inside the viewport');
+      assert.ok(armoryLayout.controls.bottom <= armoryLayout.footer.top + 2, 'Spin controls must not be covered by the footer');
       await page.locator('[data-odds-mode="lucky"]').click();
       const luckyRarities = await page.locator('#rarity-board [data-rarity-tier]').evaluateAll(items => items.map(el => el.textContent.trim().replace(/[+−]/g,'').replace(/\s+/g,' ')));
       assert.ok(luckyRarities.length === 3 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO/.test(text)), 'Lucky Spin must expose only Epic+ tiers');
