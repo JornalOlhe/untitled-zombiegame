@@ -2574,7 +2574,7 @@
           <div id="armory-info"></div>
           <details class="armory-odds hidden">
             <summary>Como funcionam os spins</summary>
-            <p>Armas e classes são obtidas por giro. Épico e Divino entram direto no loadout. Só Lendário e Mítico pedem uma confirmação antes de substituir o item equipado.</p>
+            <p>Armas e classes são obtidas por giro e entram direto no loadout. O aviso aparece somente antes de girar novamente quando o item equipado é Mítico ou Divino.</p>
           </details>
         </aside>
       </div>
@@ -2890,7 +2890,7 @@
             "#FF7A1A",
           ],
           rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5];
-        const requiresSpinConfirm = (tier) => tier === 4 || tier === 5;
+        const requiresRerollConfirm = (tier) => tier === 5 || tier === 6;
         const classes = [
           {
             name: "Berserker",
@@ -9052,7 +9052,7 @@
             const costNormal = Progression.economy.cost(false), costLucky = Progression.economy.cost(true);
             const normalLabel = d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
             const luckyLabel = d.lucky > 0 ? `1 ticket · ${d.lucky} restante${d.lucky === 1 ? "" : "s"}` : `◈ ${costLucky}`;
-            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Troca direta · só Lendário e Mítico pedem uma confirmação.</p>`;
+            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Resultado direto · aviso antes de girar novamente só com Mítico ou Divino equipado.</p>`;
             $("armory-list").innerHTML = this.slotCards(kind);
             $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => Progression.slotEquip(kind, +b.dataset.slotEquip));
             $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => Progression.roll(kind, b.dataset.reroll === "true", b.dataset.pay));
@@ -9086,8 +9086,12 @@
             const rates = Progression.economy.rates[lucky ? "lucky" : "normal"];
             const cardStep = 164;
             const targetIndex = 38 + Math.floor(Math.random() * 11);
-            const targetJitter = reduced ? 0 : Math.round((Math.random() * 2 - 1) * 38);
-            const targetOffset = targetIndex * cardStep + targetJitter;
+            // O prêmio sempre termina perfeitamente centralizado na seta.
+            // A variação visual acontece na aproximação: ele pode quase parar no canto
+            // da carta e então "arredondar" suavemente para o meio no fim.
+            const targetOffset = targetIndex * cardStep;
+            const edgeDirection = Math.random() < 0.5 ? -1 : 1;
+            const edgeOffset = targetOffset + (reduced ? 0 : edgeDirection * (46 + Math.random() * 20));
             const duration = reduced ? 0.35 : 4.15 + Math.random() * 1.45;
             const totalCards = targetIndex + 24 + Math.floor(Math.random() * 9);
 
@@ -9129,8 +9133,8 @@
               nearOffset = targetOffset + nearSide * cardStep * (0.60 + Math.random() * 0.08) + (Math.random() * 12 - 6);
             }
 
-            const softOvershoot = !reduced && !nearMiss && Math.random() < 0.58
-              ? (Math.random() < 0.5 ? -1 : 1) * (12 + Math.random() * 24)
+            const softOvershoot = !reduced && Math.random() < 0.58
+              ? (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 16)
               : 0;
 
             this.previewSpin = { kind, id: result.id };
@@ -9138,7 +9142,7 @@
             this.rarityFilter = result.item.tier;
             this.roll = {
               kind, result, lucky, start: menuTime, startWall: performance.now(), duration, tick: -1,
-              cardStep, targetIndex, targetOffset, nearMiss, nearSide, nearIndex, nearOffset,
+              cardStep, targetIndex, targetOffset, edgeOffset, nearMiss, nearSide, nearIndex, nearOffset,
               softOvershoot, reduced, hold: result.item.tier === 6 ? 2.05 : 0.88
             };
 
@@ -9173,25 +9177,27 @@
             overlay.classList.add("hidden");
             overlay.classList.remove("result-reveal", "divine-win", "near-miss");
             overlay.setAttribute("aria-busy", "false");
-            if (requiresSpinConfirm(r.result.item.tier)) {
-              this.confirmSpin(r.kind, r.result);
-              return;
-            }
             try { await Progression.applySpin(r.kind, r.result.id); }
             finally { this.previewSpin = null; Progression.busy = false; this.render(); }
           },
-          confirmSpin(kind, result) {
-            this.awaitingConfirm = { kind, result };
+          confirmReroll(kind, lucky, payment) {
             const current = Progression.economy.catalogs[kind][Progression.data[kind + "Id"]];
-            const color = rarityColors[result.item.tier];
+            if (!current || !requiresRerollConfirm(current.tier)) return false;
+            this.awaitingConfirm = { type: "reroll", kind, lucky, payment };
+            const color = rarityColors[current.tier];
             $("spin-confirm").style.setProperty("--confirm-rarity", color);
-            $("spin-confirm-rarity").textContent = rarityNames[result.item.tier].toUpperCase();
-            $("spin-confirm-title").textContent = `${rarityNames[result.item.tier]} encontrado`;
-            $("spin-confirm-copy").textContent = `Substituir ${current.name} por ${result.item.name}? A troca é aplicada imediatamente ao loadout.`;
+            $("spin-confirm-rarity").textContent = rarityNames[current.tier].toUpperCase();
+            $("spin-confirm-title").textContent = "Você deseja prosseguir?";
+            $("spin-confirm-copy").textContent = `Você está com ${current.name} ${rarityNames[current.tier]} equipado. Se girar novamente, o próximo resultado pode substituir esse item.`;
             $("spin-confirm-old").textContent = current.name;
-            $("spin-confirm-new").textContent = result.item.name;
+            $("spin-confirm-new").textContent = "PRÓXIMO GIRO";
+            const compare = document.querySelector(".spin-confirm-compare");
+            if (compare) compare.style.display = "none";
+            $("spin-confirm-cancel").textContent = "CANCELAR";
+            $("spin-confirm-accept").textContent = "PROSSEGUIR";
             $("spin-confirm").classList.remove("hidden");
             requestAnimationFrame(() => $("spin-confirm-accept").focus());
+            return true;
           },
           update(dt) {
             if (!this.roll) return;
@@ -9204,30 +9210,30 @@
 
             if (r.reduced) {
               offset = r.targetOffset;
-            } else if (r.nearMiss && r.nearSide > 0) {
-              // Passa pelo resultado, encosta no Divino e volta: "quase".
-              if (t < 0.82) {
-                offset = r.nearOffset * easeOut(t / 0.82, 5);
+            } else if (r.nearMiss) {
+              // Suspense em três atos: chega perto do Divino, freia no canto
+              // do prêmio real e só então encaixa exatamente no centro.
+              const nearEnd = r.nearSide > 0 ? 0.74 : 0.70;
+              const edgeEnd = 0.94;
+              if (t < nearEnd) {
+                offset = r.nearOffset * easeOut(t / nearEnd, 5);
+              } else if (t < edgeEnd) {
+                const settleEdge = easeOut((t - nearEnd) / (edgeEnd - nearEnd), 3);
+                offset = r.nearOffset + (r.edgeOffset + r.softOvershoot - r.nearOffset) * settleEdge;
               } else {
-                const settle = easeOut((t - 0.82) / 0.18, 3);
-                offset = r.nearOffset + (r.targetOffset - r.nearOffset) * settle;
-              }
-            } else if (r.nearMiss && r.nearSide < 0) {
-              // Freia perto do Divino à esquerda e continua devagar até o prêmio real.
-              if (t < 0.74) {
-                offset = r.nearOffset * easeOut(t / 0.74, 5);
-              } else {
-                const settle = easeOut((t - 0.74) / 0.26, 3);
-                offset = r.nearOffset + (r.targetOffset - r.nearOffset) * settle;
+                const center = easeOut((t - edgeEnd) / (1 - edgeEnd), 3);
+                offset = r.edgeOffset + r.softOvershoot + (r.targetOffset - r.edgeOffset - r.softOvershoot) * center;
               }
             } else {
-              const settleAt = 0.88;
-              const overshootTarget = r.targetOffset + r.softOvershoot;
-              if (t < settleAt) {
-                offset = overshootTarget * easeOut(t / settleAt, 5);
+              // Todo giro pode parecer que parou no finalzinho da carta,
+              // mas os últimos instantes sempre arredondam para o centro exato.
+              const edgeEnd = 0.94;
+              const approach = r.edgeOffset + r.softOvershoot;
+              if (t < edgeEnd) {
+                offset = approach * easeOut(t / edgeEnd, 5);
               } else {
-                const settle = easeOut((t - settleAt) / (1 - settleAt), 3);
-                offset = overshootTarget + (r.targetOffset - overshootTarget) * settle;
+                const center = easeOut((t - edgeEnd) / (1 - edgeEnd), 3);
+                offset = approach + (r.targetOffset - approach) * center;
               }
             }
 
@@ -9285,11 +9291,9 @@
                 AudioManager.tone(r.result.item.tier >= 4 ? 160 : 300, .48, "triangle", .18, 60);
               }
 
-              $("reveal-message").textContent = requiresSpinConfirm(r.result.item.tier)
-                ? `${r.result.item.name} · confirmação única antes da troca`
-                : r.result.item.tier === 6
-                  ? `${r.result.item.name} · DIVINO obtido e equipado`
-                  : `${r.result.item.name} · equipando automaticamente`;
+              $("reveal-message").textContent = r.result.item.tier === 6
+                ? `${r.result.item.name} · DIVINO obtido e equipado`
+                : `${r.result.item.name} · equipado automaticamente`;
               $("reveal-message").style.color = color;
               $("classscreen").style.setProperty("--reveal", color);
               $("classscreen").classList.remove("rarity-reveal");
@@ -9332,8 +9336,13 @@
         // Legacy buy() is now equip-only and cannot acquire new weapons/classes.
         LoadoutEconomy.prototype.buy = function (kind, id) { normalizeLoadoutState(this.data); if (!this.data[loadoutSlotKey(kind)].includes(id)) return false; this.data[kind + "Id"] = id; this.save(); return true; };
         Progression.render = () => Armory.render();
-        Progression.roll = async function (kind, lucky, payment) {
+        Progression.roll = async function (kind, lucky, payment, confirmed = false) {
           if (state !== GameState.CLASS_SELECT || this.busy) return;
+          const current = this.economy.catalogs[kind]?.[this.data[kind + "Id"]];
+          if (!confirmed && current && requiresRerollConfirm(current.tier)) {
+            Armory.confirmReroll(kind, lucky, payment);
+            return;
+          }
           const resolvedPayment = payment === "auto" ? (this.data[lucky ? "lucky" : "normal"] > 0 ? "ticket" : "coins") : payment;
           this.busy = true; Armory.selection = null; Armory.render();
           try {
@@ -9400,16 +9409,23 @@
         $("spin-confirm-accept").onclick = async () => {
           const pending = Armory.awaitingConfirm; if (!pending) return;
           $("spin-confirm-accept").disabled = $("spin-confirm-cancel").disabled = true;
-          try { await Progression.applySpin(pending.kind, pending.result.id); }
-          catch (e) { UIManager.toast(e.message); }
-          finally { Armory.awaitingConfirm = null; Armory.previewSpin = null; $("spin-confirm").classList.add("hidden"); $("spin-confirm-accept").disabled = $("spin-confirm-cancel").disabled = false; Progression.busy = false; Armory.render(); }
+          Armory.awaitingConfirm = null;
+          $("spin-confirm").classList.add("hidden");
+          const compare = document.querySelector(".spin-confirm-compare");
+          if (compare) compare.style.removeProperty("display");
+          $("spin-confirm-accept").disabled = $("spin-confirm-cancel").disabled = false;
+          if (pending.type === "reroll") await Progression.roll(pending.kind, pending.lucky, pending.payment, true);
         };
-        $("spin-confirm-cancel").onclick = async () => {
-          const pending = Armory.awaitingConfirm; if (!pending) return;
-          $("spin-confirm-accept").disabled = $("spin-confirm-cancel").disabled = true;
-          try { await Progression.cancelSpin(pending.kind); UIManager.toast(`${Progression.economy.catalogs[pending.kind][Progression.data[pending.kind + "Id"]].name} continua equipado.`); }
-          catch (e) { UIManager.toast(e.message); }
-          finally { Armory.awaitingConfirm = null; Armory.previewSpin = null; $("spin-confirm").classList.add("hidden"); $("spin-confirm-accept").disabled = $("spin-confirm-cancel").disabled = false; Progression.busy = false; Armory.render(); }
+        $("spin-confirm-cancel").onclick = () => {
+          if (!Armory.awaitingConfirm) return;
+          Armory.awaitingConfirm = null;
+          $("spin-confirm").classList.add("hidden");
+          const compare = document.querySelector(".spin-confirm-compare");
+          if (compare) compare.style.removeProperty("display");
+          $("spin-confirm-accept").textContent = "PROSSEGUIR";
+          $("spin-confirm-cancel").textContent = "CANCELAR";
+          UIManager.toast("Giro cancelado.");
+          Armory.render();
         };
         const oldReward = Progression.reward.bind(Progression);
         Progression.reward = function (...args) {
