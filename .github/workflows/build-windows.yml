@@ -28,10 +28,13 @@ jobs:
       - name: Validate desktop version
         shell: pwsh
         run: |
-          $manifest = Get-Content release/manifest.json | ConvertFrom-Json
           $package = Get-Content desktop/package.json | ConvertFrom-Json
-          if ($package.version -ne $manifest.version_name) {
-            throw "desktop/package.json version must match release/manifest.json"
+          $gradle = Get-Content android/app/build.gradle -Raw
+          $match = [regex]::Match($gradle, "versionName\s+'([^']+)'")
+          if (!$match.Success) { throw "Could not read Android versionName" }
+          $androidVersion = $match.Groups[1].Value
+          if ($package.version -ne $androidVersion) {
+            throw "desktop/package.json version must match Android source version ($androidVersion)"
           }
 
       - name: Install desktop dependencies
