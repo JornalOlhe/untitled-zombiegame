@@ -8,8 +8,9 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 - v10: build QA que introduziu o fluxo de atualização na inicialização para Android e Windows.
 - v11: build QA com a nova roleta de suspense, near-miss visual e animação Divina.
 - v12: build QA com parada centralizada da roleta e aviso somente antes de girar novamente com Mítico/Divino equipado; Android usa `versionCode 12` / `0.12.0` e Windows usa `0.12.0`.
+- v13: build QA com zumbis/bosses em estilo cúbico, Mítica sem perseguição cega (só persegue alvo visível na câmera no disparo), Divina virando lança corpo a corpo, arsenal expandido para 21 armas (3 por raridade, com tipos fogo/gelo/arco/faca e habilidades), rebalanceamento de dano por raridade, lança-granadas trocado pela Bazooka (agora Lendária) e roleta Lucky Spin mais rápida e com celebração Divina em tela cheia; Android usa `versionCode 13` / `0.13.0` e Windows usa `0.13.0`.
 
-No Windows, a v10 compara a versão do executável com as tags `vN` publicadas. Quando uma tag mais nova como `v12` estiver disponível, o jogo informa que a versão instalada está desatualizada e oferece o download do asset `DeadRecoil-Windows.exe`.
+No Windows, a v10 compara a versão do executável com as tags `vN` publicadas. Quando uma tag mais nova como `v13` estiver disponível, o jogo informa que a versão instalada está desatualizada e oferece o download do asset `DeadRecoil-Windows.exe`.
 
 No Android, uma atualização por cima só pode ser instalada quando o APK novo usa a mesma assinatura do aplicativo instalado. Releases QA/prerelease podem abrir o asset oficial no GitHub quando a assinatura não permite instalação automática.
 
@@ -26,4 +27,4 @@ A chave privada nunca deve ser adicionada ao repositório.
 
 ## QA
 
-Cada push na `main` executa testes de interface e gera builds de validação. A v12 possui um workflow dedicado que testa a UI, compila Android/Windows e publica a prerelease somente quando todos os jobs passam.
+Cada push na `main` executa testes de interface e gera builds de validação. A v13 possui um workflow dedicado que testa a UI, compila Android/Windows e publica a prerelease somente quando todos os jobs passam.
