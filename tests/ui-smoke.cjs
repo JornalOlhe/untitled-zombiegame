@@ -80,19 +80,17 @@ const server = http.createServer((req, res) => {
         const reelMeta = await page.evaluate(() => ({
           targetIndex: DeadRecoilTest.Armory.roll.targetIndex,
           targetOffset: DeadRecoilTest.Armory.roll.targetOffset,
+          edgeOffset: DeadRecoilTest.Armory.roll.edgeOffset,
           cardStep: DeadRecoilTest.Armory.roll.cardStep,
           cards: document.querySelectorAll('#roll-strip .reel-card').length
         }));
         assert.ok(reelMeta.targetIndex >= 38 && reelMeta.targetIndex <= 48, 'Spin target index must vary inside the long reel');
         assert.ok(reelMeta.cards >= reelMeta.targetIndex + 24, 'Spin reel must keep a long visual buffer after the winner');
-        assert.ok(Math.abs(reelMeta.targetOffset - reelMeta.targetIndex * reelMeta.cardStep) <= 38, 'Winner stop must stay inside a safe randomized card zone');
-        await page.locator('#spin-confirm:not(.hidden)').waitFor({state:'visible',timeout:10000});
-        assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'LENDÁRIO');
-        await page.waitForTimeout(220);
-        await page.screenshot({path:'test-results/armory-confirm-1280.png'});
-        await page.locator('#spin-confirm-accept').click();
-        await page.locator('#spin-confirm').waitFor({state:'hidden',timeout:5000});
-        assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), previousWeapon, 'Legendary confirmation must replace/equip the rolled weapon');
+        assert.equal(reelMeta.targetOffset, reelMeta.targetIndex * reelMeta.cardStep, 'Every result must finish exactly centered under the marker');
+        assert.ok(Math.abs(reelMeta.edgeOffset - reelMeta.targetOffset) >= 45, 'Spin must be able to brake near a card edge before centering');
+        await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
+        assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Legendary result must equip directly with no confirmation');
+        assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), previousWeapon, 'Legendary result must replace/equip automatically');
         const legendaryWeapon = await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId);
         await page.evaluate(() => {
           const p = DeadRecoilTest.Progression;
@@ -106,8 +104,23 @@ const server = http.createServer((req, res) => {
         await page.waitForFunction(() => document.querySelector('#roll-overlay')?.classList.contains('divine-win'), null, {timeout:8000});
         assert.ok(await page.locator('#roll-overlay').evaluate(el => el.classList.contains('divine-win')), 'Divine result must trigger the dedicated celebration');
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
-        assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Divine must auto-equip without the Legendary/Mythic confirmation');
-        assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine spin must replace/equip automatically');
+        assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Winning Divine must not show a confirmation');
+        assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine result must replace/equip automatically');
+        await page.evaluate(() => {
+          const p = DeadRecoilTest.Progression;
+          p.data.lucky = 1;
+          p.economy.random = () => 0.20;
+          p.economy.save();
+          p.render();
+        });
+        await page.locator('.spin-btn.lucky').click();
+        await page.locator('#spin-confirm:not(.hidden)').waitFor({state:'visible',timeout:3000});
+        assert.equal(await page.locator('#spin-confirm-title').textContent(),'Você deseja prosseguir?');
+        assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'DIVINO');
+        assert.equal(await page.evaluate(() => DeadRecoilTest.Armory.roll), null, 'Protected Divine reroll must not start before confirmation');
+        await page.screenshot({path:'test-results/armory-confirm-1280.png'});
+        await page.locator('#spin-confirm-cancel').click();
+        await page.locator('#spin-confirm').waitFor({state:'hidden',timeout:3000});
         await page.evaluate(() => { DeadRecoilTest.Progression.economy.random = Math.random; });
         await page.screenshot({path:'test-results/armory-equipped-1280.png'});
       }
