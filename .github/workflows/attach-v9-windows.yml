@@ -1,0 +1,38 @@
+name: Attach v9 Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/attach-v9-windows.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download tested v9 Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-Windows-QA
+          path: v9-windows
+          repository: ${{ github.repository }}
+          run-id: 36089377907
+          github-token: ${{ github.token }}
+
+      - name: Verify executable
+        run: |
+          test -f v9-windows/DeadRecoil-Windows.exe
+          test "$(stat -c%s v9-windows/DeadRecoil-Windows.exe)" -gt 50000000
+          sha256sum v9-windows/DeadRecoil-Windows.exe
+
+      - name: Attach EXE to v9
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v9 --repo "$GITHUB_REPOSITORY"
+          gh release upload v9 v9-windows/DeadRecoil-Windows.exe --clobber --repo "$GITHUB_REPOSITORY"
