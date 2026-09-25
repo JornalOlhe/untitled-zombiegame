@@ -11,7 +11,6 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   ui-test:
@@ -50,18 +49,6 @@ jobs:
       - name: Compile source
         working-directory: android
         run: gradle assembleDebug --stacktrace
-      - name: Download exact unsigned v9 release APK
-        uses: actions/download-artifact@v4
-        with:
-          name: DeadRecoil-v9-unsigned
-          path: unsigned-v9
-          repository: ${{ github.repository }}
-          run-id: 36088577470
-          github-token: ${{ github.token }}
-
-      - name: Reconstruct signed v9 APK
-        run: python3 tests/reconstruct-v9-apk.py unsigned-v9/app-release-unsigned.apk
-
       - name: Validate signed release package
         id: signed_release
         continue-on-error: true
@@ -88,7 +75,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
