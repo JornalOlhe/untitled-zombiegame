@@ -1,10 +1,19 @@
-name: Publish Dead Recoil v11
+name: Publish Dead Recoil v12
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/app/src/main/assets/index.html'
+      - 'android/app/build.gradle'
+      - 'desktop/package.json'
+      - 'tests/ui-smoke.cjs'
+      - 'release/v12-notes.md'
+      - '.github/workflows/publish-v12.yml'
 
 concurrency:
-  group: publish-v11
+  group: publish-v12
   cancel-in-progress: true
 
 permissions:
@@ -24,7 +33,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: DeadRecoil-v11-UI
+          name: DeadRecoil-v12-UI
           path: test-results/
           retention-days: 14
 
@@ -58,8 +67,8 @@ jobs:
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
           BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
-          echo "$BADGING" | grep -q "versionCode='11'"
-          echo "$BADGING" | grep -q "versionName='0.11.0'"
+          echo "$BADGING" | grep -q "versionCode='12'"
+          echo "$BADGING" | grep -q "versionName='0.12.0'"
           python3 - <<'PY'
           import zipfile
           from pathlib import Path
@@ -69,15 +78,15 @@ jobs:
               packaged = apk.read("assets/index.html")
           if source != packaged:
               raise SystemExit("Packaged game assets do not match current main.")
-          print("Android v11 QA verified.")
+          print("Android v12 QA verified.")
           PY
           mkdir -p dist
-          cp "$APK" dist/DeadRecoil-v11-QA.apk
+          cp "$APK" dist/DeadRecoil-v12-QA.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v11-Android-QA
-          path: dist/DeadRecoil-v11-QA.apk
+          name: DeadRecoil-v12-Android-QA
+          path: dist/DeadRecoil-v12-QA.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -94,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $package = Get-Content desktop/package.json | ConvertFrom-Json
-          if ($package.version -ne "0.11.0") { throw "Expected desktop 0.11.0" }
+          if ($package.version -ne "0.12.0") { throw "Expected desktop 0.12.0" }
 
       - name: Install dependencies
         working-directory: desktop
@@ -117,7 +126,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v11-Windows
+          name: DeadRecoil-v12-Windows
           path: desktop/dist/DeadRecoil-Windows.exe
           if-no-files-found: error
           retention-days: 30
@@ -130,36 +139,36 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v11-Android-QA
+          name: DeadRecoil-v12-Android-QA
           path: dist
 
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v11-Windows
+          name: DeadRecoil-v12-Windows
           path: dist
 
-      - name: Publish GitHub pre-release v11
+      - name: Publish GitHub pre-release v12
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/DeadRecoil-v11-QA.apk
+          test -f dist/DeadRecoil-v12-QA.apk
           test -f dist/DeadRecoil-Windows.exe
 
-          if gh release view v11 >/dev/null 2>&1; then
-            gh release upload v11 dist/DeadRecoil-v11-QA.apk dist/DeadRecoil-Windows.exe --clobber
-            gh release edit v11 \
-              --title "Dead Recoil 0.11.0 QA" \
-              --notes-file release/v11-notes.md \
+          if gh release view v12 >/dev/null 2>&1; then
+            gh release upload v12 dist/DeadRecoil-v12-QA.apk dist/DeadRecoil-Windows.exe --clobber
+            gh release edit v12 \
+              --title "Dead Recoil 0.12.0 QA" \
+              --notes-file release/v12-notes.md \
               --prerelease
           else
-            gh release create v11 \
-              dist/DeadRecoil-v11-QA.apk \
+            gh release create v12 \
+              dist/DeadRecoil-v12-QA.apk \
               dist/DeadRecoil-Windows.exe \
               --target "$GITHUB_SHA" \
-              --title "Dead Recoil 0.11.0 QA" \
-              --notes-file release/v11-notes.md \
+              --title "Dead Recoil 0.12.0 QA" \
+              --notes-file release/v12-notes.md \
               --prerelease
           fi
 
@@ -167,4 +176,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: gh release view v11 --json tagName,name,isDraft,isPrerelease,assets
+        run: gh release view v12 --json tagName,name,isDraft,isPrerelease,assets
