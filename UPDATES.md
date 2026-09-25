@@ -1,30 +1,28 @@
 # Atualizações do Dead Recoil
 
-O aplicativo Android consulta a última release estável de `JornalOlhe/untitled-zombiegame` ao abrir e, no retorno ao app, no máximo uma vez a cada 15 minutos.
+Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quando o jogo abre. Uma tag numericamente maior que a versão instalada é tratada como atualização disponível.
 
-A versão 0.8.0 usa `versionCode 8` e já contém o atualizador automático. Quando a release `v9` existir com um anexo chamado exatamente `DeadRecoil.apk`, a v0.8.0 detectará `versionCode 9`, baixará o APK e validará pacote, versão e assinatura antes de permitir a instalação.
+## Estado atual
 
-A atualização só é aceita quando o APK novo usa a mesma assinatura da versão instalada. Isso permite instalar por cima da v8 mantendo os dados locais e impede que um APK assinado por outra chave seja aceito.
+- v9: última release Android estável assinada com `DeadRecoil.apk`.
+- v10: build QA que introduziu o fluxo de atualização na inicialização para Android e Windows.
+- v11: build QA com a nova roleta de suspense, near-miss visual e animação Divina; Android usa `versionCode 11` / `0.11.0` e Windows usa `0.11.0`.
 
-## Estado da v9
+No Windows, a v10 compara a versão do executável com as tags `vN` publicadas. Quando `v11` estiver disponível, o jogo informa que a versão instalada está desatualizada e oferece o download do asset `DeadRecoil-Windows.exe`.
 
-A `main` usa `versionCode 9` e `versionName 0.9.0`.
-
-A release `v9` só deve ser criada depois que o APK 0.9.0 for assinado com a mesma chave privada usada na v8. O workflow `Publish signed Android release` faz essa verificação antes de publicar.
+No Android, uma atualização por cima só pode ser instalada quando o APK novo usa a mesma assinatura do aplicativo instalado. Releases QA/prerelease podem abrir o asset oficial no GitHub quando a assinatura não permite instalação automática.
 
 ## Publicação assinada
 
-O workflow manual de release espera estes GitHub Actions secrets:
+O workflow de release Android estável utiliza estes GitHub Actions secrets:
 
 - `ANDROID_RELEASE_KEYSTORE_BASE64`
 - `ANDROID_RELEASE_KEYSTORE_PASSWORD`
 - `ANDROID_RELEASE_KEY_ALIAS`
 - `ANDROID_RELEASE_KEY_PASSWORD`
 
-Ele compila o APK de release, assina com a chave fornecida, valida o certificado contra a assinatura conhecida da release estável, confere versão/pacote/assets e só então cria a release `v9` com `DeadRecoil.apk`.
-
 A chave privada nunca deve ser adicionada ao repositório.
 
 ## QA
 
-Cada push na `main` continua executando os testes de interface e gerando APK/EXE de QA. Builds de QA não substituem uma release assinada e não devem ser distribuídas como atualização para instalações existentes.
+Cada push na `main` executa testes de interface e gera builds de validação. A v11 também possui um workflow dedicado que testa a UI, compila Android/Windows e publica a prerelease somente quando todos os jobs passam.
