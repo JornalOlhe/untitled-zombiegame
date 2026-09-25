@@ -2275,7 +2275,121 @@
       }
       @media(max-width:650px) and (orientation:portrait){#classscreen.armory-screen{overflow:auto!important}.armory-layout{height:auto!important;min-height:0!important;grid-template-columns:1fr!important;grid-template-rows:420px auto auto!important;padding:8px 10px 70px!important}.survivor-stage{grid-column:1!important;grid-row:1!important}.armory-inventory{grid-column:1!important;grid-row:2!important}.armory-details{grid-column:1!important;grid-row:3!important}.spin-buttons{grid-template-columns:1fr!important}.armory-footer{position:fixed!important;left:0;right:0;bottom:0}.spin-confirm-actions{grid-template-columns:1fr!important}}
       @media(prefers-reduced-motion:reduce){.rarity-items,.spin-confirm-card{animation:none!important}.slot-card,.spin-btn,.rarity-line{transition:none!important}}
-    </style>
+    
+      /* Armory v0.10 polish: clearer hierarchy, responsive controls and bounded effects. */
+      #classscreen.armory-screen{
+        --armory-panel:#091017e8;--armory-line:#ffffff16;
+        background:
+          radial-gradient(circle at 50% 42%,#17324a55 0,transparent 34%),
+          radial-gradient(circle at 50% 95%,#0f38523d 0,transparent 35%),
+          linear-gradient(145deg,#05090d,#08121a 48%,#04070a)!important;
+      }
+      #classscreen .armory-layout{gap:clamp(10px,1.35vw,20px)!important}
+      #classscreen .armory-inventory,#classscreen .armory-details{
+        border:1px solid var(--armory-line);border-radius:12px;
+        background:linear-gradient(180deg,#0c151de6,#070d12dc);
+        box-shadow:0 18px 50px #0006;
+        contain:layout paint style;
+      }
+      #classscreen .survivor-stage{
+        border:1px solid #ffffff12;border-radius:14px;overflow:hidden;
+        background:
+          radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--rarity,#89a6b8) 13%,transparent),transparent 34%),
+          linear-gradient(180deg,#09141d99,#03070ba8);
+        box-shadow:inset 0 0 70px #0008,0 18px 60px #0006;
+        contain:layout paint style;
+      }
+      #armory-identity{filter:drop-shadow(0 9px 20px #0008)}
+      #armory-identity h2{letter-spacing:.035em!important}
+      .spin-mode{
+        padding:4px!important;border:1px solid #ffffff14!important;border-radius:10px!important;
+        background:#050a0f!important;box-shadow:inset 0 1px #ffffff08!important
+      }
+      .spin-mode button{
+        min-height:35px!important;border:0!important;border-radius:7px!important;
+        background:transparent!important;color:#8d9ba6!important;box-shadow:none!important;
+        transition:transform .14s ease,background .14s ease,color .14s ease,opacity .14s ease!important
+      }
+      .spin-mode button.active:first-child{
+        color:#061411!important;background:linear-gradient(135deg,#c4fff0,#60eeb5)!important;
+        box-shadow:0 5px 18px #32e5ae1f!important
+      }
+      .spin-mode button.active:last-child{
+        color:white!important;background:linear-gradient(135deg,#e73f25,#f4a828 42%,#a950ef 100%)!important;
+        box-shadow:0 5px 18px #de5f3d2b!important
+      }
+      .spin-mode button:not(.active){opacity:.72!important;filter:none!important}
+      .odds-title{display:flex;align-items:end;justify-content:space-between;gap:8px;margin:5px 2px 10px}
+      .odds-title span{font-size:10px;font-weight:1000;letter-spacing:.16em;color:#e7eff5}
+      .odds-title small{font-size:7px;color:#71808b;text-align:right}
+      .item-chance{
+        border-radius:8px!important;border-color:#ffffff14!important;background:#0a1219!important;
+        box-shadow:inset 0 1px #ffffff08!important
+      }
+      .rarity-line{
+        position:relative;overflow:hidden;min-height:44px!important;border-width:1px!important;
+        border-color:color-mix(in srgb,var(--rarity) 55%,#ffffff22)!important;border-radius:9px!important;
+        background:linear-gradient(105deg,color-mix(in srgb,var(--rarity) 30%,#111b23),#0a1117 72%)!important;
+        box-shadow:inset 3px 0 var(--rarity),0 7px 20px #0003!important;
+        transition:transform .14s ease,border-color .14s ease,background .14s ease!important;
+        contain:layout paint style;
+      }
+      .rarity-line::after{
+        content:"";position:absolute;inset:0;pointer-events:none;
+        background:linear-gradient(105deg,transparent 38%,#ffffff0a 50%,transparent 62%);
+        transform:translateX(-120%);transition:transform .35s ease;
+      }
+      .rarity-line:hover::after{transform:translateX(120%)}
+      .rarity-line:hover{transform:translateY(-1px);border-color:var(--rarity)!important}
+      .rarity-line.active{background:linear-gradient(105deg,color-mix(in srgb,var(--rarity) 42%,#111b23),#0b1218 76%)!important}
+      .rarity-line span{font-size:13px!important}.rarity-line b{font-size:13px!important}.rarity-line i{font-style:normal;margin-left:8px;color:#d5dee5}
+      .rarity-items{
+        margin:0 0 10px 7px!important;padding:5px 0 0 8px!important;border-left:1px solid color-mix(in srgb,var(--rarity) 42%,#ffffff10);
+        contain:layout paint style;content-visibility:auto;contain-intrinsic-size:1px 180px
+      }
+      .rarity-item{
+        transition:transform .12s ease,background .12s ease,border-color .12s ease!important;
+        contain:layout paint style
+      }
+      .rarity-item:hover{transform:translateX(2px);border-color:color-mix(in srgb,var(--rarity) 55%,#ffffff18)!important}
+      .spin-btn{
+        min-height:51px!important;border-width:1px!important;border-color:#ffffff8f!important;border-radius:10px!important;
+        box-shadow:0 8px 26px #0005,inset 0 1px #ffffff55!important;
+        transform:translateZ(0);transition:transform .12s ease,filter .12s ease,box-shadow .12s ease!important;
+        contain:layout paint style
+      }
+      .spin-btn:not(:disabled):hover{transform:translateY(-1px) translateZ(0);filter:saturate(1.08) brightness(1.04);box-shadow:0 11px 28px #0006,inset 0 1px #ffffff77!important}
+      .spin-btn:not(:disabled):active{transform:translateY(1px) scale(.995) translateZ(0)}
+      .spin-btn .ico{font-size:24px!important;background:#72e81e!important}
+      .spin-btn.lucky{background:linear-gradient(100deg,#b51e20,#ef6924 26%,#e8c941 48%,#5fcf7d 67%,#8f4fdc)!important}
+      .spin-btn.normal{background:linear-gradient(100deg,#5fcee3,#dff8ef 43%,#67d6aa 72%,#4daee1)!important;color:#071316!important;text-shadow:none!important}
+      .slot-limit-note{letter-spacing:.02em}
+      #roll-overlay{contain:layout paint style}
+      #roll-strip{will-change:transform;transform:translateZ(0)}
+      .reel-card{contain:layout paint style}
+      .spin-confirm-card{isolation:isolate;overflow:hidden}
+      .spin-confirm-card::before{
+        content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+        background:radial-gradient(circle at 82% 8%,color-mix(in srgb,var(--confirm-rarity) 18%,transparent),transparent 34%)
+      }
+      .spin-confirm-compare>div{padding:10px;border-radius:8px;background:#ffffff04}
+      .spin-confirm-actions button{transition:transform .12s ease,filter .12s ease!important}
+      .spin-confirm-actions button:hover{transform:translateY(-1px);filter:brightness(1.08)}
+      @media(max-width:1050px) and (orientation:landscape){
+        html.native-android #classscreen .armory-inventory,html.native-android #classscreen .armory-details{box-shadow:none!important}
+        html.native-android #roll-overlay,html.native-android .spin-confirm{backdrop-filter:none!important}
+        html.native-android .rarity-line::after{display:none}
+        html.native-android .spin-btn{box-shadow:0 4px 12px #0005!important}
+      }
+      @media(max-width:760px){
+        .spin-confirm{padding:10px!important}.spin-confirm-card{padding:16px!important}
+        .spin-confirm-card h2{font-size:21px!important}.spin-confirm-compare{margin:13px 0!important;padding:9px!important}
+        .spin-confirm-actions{grid-template-columns:1fr!important}
+      }
+      @media(prefers-reduced-motion:reduce){
+        .rarity-line,.rarity-line::after,.rarity-item,.spin-btn,.spin-mode button,.spin-confirm-actions button{transition:none!important}
+      }
+</style>
 
 </head>
   <body>
@@ -2347,7 +2461,7 @@
           <div id="armory-info"></div>
           <details class="armory-odds hidden">
             <summary>Como funcionam os spins</summary>
-            <p>Armas e classes são obtidas por giro. Itens comuns até Épicos entram no loadout automaticamente. Lendário e Mítico pedem uma confirmação única antes de substituir o item equipado.</p>
+            <p>Armas e classes são obtidas por giro. Épico e Divino entram direto no loadout. Só Lendário e Mítico pedem uma confirmação antes de substituir o item equipado.</p>
           </details>
         </aside>
       </div>
@@ -2651,16 +2765,19 @@
             "Épico",
             "Lendário",
             "Mítico",
+            "Divino",
           ],
           rarityColors = [
             "#9E9E9E",
             "#4CAF50",
             "#2196F3",
-            "#9C27B0",
-            "#FF9800",
-            "#F44336",
+            "#A855F7",
+            "#F5B942",
+            "#F02F8A",
+            "#FF7A1A",
           ],
-          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8];
+          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5];
+        const requiresSpinConfirm = (tier) => tier === 4 || tier === 5;
         const classes = [
           {
             name: "Berserker",
@@ -2750,9 +2867,19 @@
             color: "#c44459",
             ability: "Eclipse",
             cd: 45,
-            desc: "Única classe mítica: +60% de dano e 3 HP por eliminação.",
+            desc: "Classe mítica: +60% de dano e 3 HP por eliminação.",
             active:
               "8 segundos com dano dobrado, +35% de velocidade e 70% de resistência.",
+          },
+          {
+            name: "Arconte",
+            tier: 6,
+            color: "#f28a35",
+            ability: "Última Aurora",
+            cd: 55,
+            desc: "Classe divina: +75% de dano, +15% de velocidade e recuperação de 4 HP por eliminação.",
+            active:
+              "9 segundos de sobrecarga: dano ×2,5, resistência de 75% e recarga instantânea.",
           },
         ];
         const maps = [
@@ -5545,6 +5672,21 @@
               reload: 2.2,
               range: 70,
             },
+            {
+              modelId: 12,
+              name: "Helios Lance",
+              cat: 2,
+              tier: 6,
+              kind: "rail",
+              damage: 92,
+              rate: 0.82,
+              mag: 7,
+              reload: 2.45,
+              range: 120,
+              pierce: 999,
+              armor: true,
+              walls: true,
+            },
           ],
           model: new THREE.Group(),
           flash: null,
@@ -5728,10 +5870,10 @@
             this.storage = storage;
             this.random = random;
             this.rates = {
-              normal: [65, 23, 8, 3, 0.9, 0.1],
-              lucky: [0, 0, 0, 59, 37, 4],
+              normal: [64.95, 23, 8, 3, 0.9, 0.1, 0.05],
+              lucky: [0, 0, 0, 59, 37, 3, 1],
             };
-            this.prices = [100, 350, 1200, 3500, 9000, 30000];
+            this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000];
             this.key = "deadrecoil.loadout.v2";
             this.data = {
               coins: 0,
@@ -8793,11 +8935,11 @@
             const identityState = spinPreview != null ? "NOVO SPIN" : displayId === currentId ? "EQUIPADO" : "PRÉVIA";
             $("armory-identity").innerHTML = `<span class="item-index">#${String(displayId + 1).padStart(3, "0")} · ${identityState}</span><h2>${displayItem.name}</h2><b>${rarityNames[displayItem.tier].toUpperCase()}</b><p>${kind === "class" ? displayItem.desc : (displayItem.kind === "melee" ? "Arma corpo a corpo. Ataques rápidos e silenciosos." : `${["Curto", "Médio", "Longo"][displayItem.cat] || "Médio"} alcance · ${Math.round(displayItem.damage * rarityMult[displayItem.tier])} de dano base.`)}</p>`;
             $("armory-info").innerHTML = kind === "class" ? `<h3>${displayItem.ability}</h3><p>${displayItem.active}</p><span class="armory-note">Q · recarga ${displayItem.cd}s</span>` : `<h3>${displayItem.kind === "melee" ? "CORPO A CORPO" : "ARMA PRINCIPAL"}</h3><dl class="weapon-stats"><div><dt>Dano</dt><dd>${Math.round(displayItem.damage * rarityMult[displayItem.tier])}</dd></div><div><dt>Cadência</dt><dd>${displayItem.kind === "melee" ? "—" : Math.round(60 / displayItem.rate) + "/min"}</dd></div><div><dt>Pente</dt><dd>${displayItem.mag === Infinity ? "—" : displayItem.mag}</dd></div><div><dt>Recarga</dt><dd>${displayItem.reload ? displayItem.reload + "s" : "—"}</dd></div></dl>`;
-            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${this.chance(kind, displayId, mode === "lucky")}%</b></div>${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity">${kind === "weapon" ? "Weapon" : "Class"} pity: <b>${d[kind + "Pity"]}/20</b><br>Lucky Spin: somente Épico, Lendário e Mítico.</div>`;
+            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${this.chance(kind, displayId, mode === "lucky")}%</b></div>${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity">${kind === "weapon" ? "Weapon" : "Class"} pity: <b>${d[kind + "Pity"]}/20</b><br>Lucky Spin: Épico 59% · Lendário 37% · Mítico 3% · Divino 1%.</div>`;
             const costNormal = Progression.economy.cost(false), costLucky = Progression.economy.cost(true);
             const normalLabel = d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
             const luckyLabel = d.lucky > 0 ? `1 ticket · ${d.lucky} restante${d.lucky === 1 ? "" : "s"}` : `◈ ${costLucky}`;
-            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Troca direta · Lendário e Mítico pedem uma confirmação única.</p>`;
+            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Troca direta · só Lendário e Mítico pedem uma confirmação.</p>`;
             $("armory-list").innerHTML = this.slotCards(kind);
             $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => Progression.slotEquip(kind, +b.dataset.slotEquip));
             $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => Progression.roll(kind, b.dataset.reroll === "true", b.dataset.pay));
@@ -8847,7 +8989,7 @@
             this.rollFallback = null;
             this.roll = null;
             $("roll-overlay").classList.add("hidden"); $("roll-overlay").classList.remove("result-reveal"); $("roll-overlay").setAttribute("aria-busy", "false");
-            if (r.result.item.tier >= 4) {
+            if (requiresSpinConfirm(r.result.item.tier)) {
               this.confirmSpin(r.kind, r.result);
               return;
             }
@@ -8870,11 +9012,14 @@
           update(dt) {
             if (!this.roll) return;
             const r = this.roll, t = clamp((menuTime - r.start) / r.duration, 0, 1), ease = 1 - Math.pow(1 - t, 4), offset = 22 * 164 * ease;
-            $("roll-strip").style.transform = `translateX(calc(50% - 82px - ${offset}px))`;
+            if (r.lastOffset == null || Math.abs(offset - r.lastOffset) >= 0.5 || t >= 1) {
+              $("roll-strip").style.transform = `translate3d(calc(50% - 82px - ${offset}px),0,0)`;
+              r.lastOffset = offset;
+            }
             const tick = Math.floor(offset / 164); if (tick !== r.tick) { r.tick = tick; AudioManager.tone(180 + tick * 12, .035, "triangle", .045, 100); }
             if (t >= 1 && !r.revealed) {
               r.revealed = true; r.revealAt = menuTime; const color = rarityColors[r.result.item.tier]; $("roll-overlay").style.setProperty("--roll-rarity", color); $("roll-overlay").classList.add("result-reveal"); $("roll-status").textContent = `${rarityNames[r.result.item.tier]} · ${r.result.item.name}`; const cards = $("roll-strip").children; if (cards[22]) cards[22].classList.add("winner");
-              $("reveal-message").textContent = r.result.item.tier >= 4 ? `${r.result.item.name} · confirmação rápida antes da troca` : `${r.result.item.name} · equipando automaticamente`;
+              $("reveal-message").textContent = requiresSpinConfirm(r.result.item.tier) ? `${r.result.item.name} · confirmação única antes da troca` : `${r.result.item.name} · equipando automaticamente`;
               $("reveal-message").style.color = color; $("classscreen").style.setProperty("--reveal", color); $("classscreen").classList.remove("rarity-reveal"); void $("classscreen").offsetWidth; $("classscreen").classList.add("rarity-reveal"); if (this.light) { this.light.color.set(color); this.light.intensity = 2.6 + r.result.item.tier * .55; } updatePreview(); AudioManager.tone(r.result.item.tier >= 4 ? 120 : 300, .48, "triangle", .18, 60); return;
             }
             if (r.revealed && menuTime - r.revealAt >= .75) this.finishSpin(r);

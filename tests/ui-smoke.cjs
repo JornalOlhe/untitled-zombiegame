@@ -25,7 +25,10 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(`http://127.0.0.1:${server.address().port}/?native=1&platform=android&test=1`);
       await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
-      assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,59,37,4]);
+      assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,59,37,3,1]);
+      assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky.reduce((a,b)=>a+b,0)),100);
+      assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.weapon.some(item => item.tier === 6)), 'Divine weapon must exist');
+      assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.class.some(item => item.tier === 6)), 'Divine class must exist');
       await page.locator('#classesbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
       const armoryLayout = await page.evaluate(() => {
@@ -50,7 +53,8 @@ const server = http.createServer((req, res) => {
       assert.ok(armoryLayout.controls.bottom <= armoryLayout.footer.top + 2, 'Spin controls must not be covered by the footer');
       await page.locator('[data-odds-mode="lucky"]').click();
       const luckyRarities = await page.locator('#rarity-board [data-rarity-tier]').evaluateAll(items => items.map(el => el.textContent.trim().replace(/[+−]/g,'').replace(/\s+/g,' ')));
-      assert.ok(luckyRarities.length === 3 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO/.test(text)), 'Lucky Spin must expose only Epic+ tiers');
+      assert.ok(luckyRarities.length === 4 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO|DIVINO/.test(text)), 'Lucky Spin must expose only Epic+ tiers including Divine');
+      assert.ok(luckyRarities.some(text => /DIVINO.*1%/.test(text)), 'Lucky Spin Divine chance must be 1%');
       await page.locator('[data-rarity-tier="4"]').click();
       assert.ok(await page.locator('#rarity-board .rarity-items .rarity-item').count() > 0, 'Clicking a rarity must reveal its items');
       const armoryCopy = await page.locator('#classscreen').innerText();
@@ -74,6 +78,19 @@ const server = http.createServer((req, res) => {
         await page.locator('#spin-confirm-accept').click();
         await page.locator('#spin-confirm').waitFor({state:'hidden',timeout:5000});
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), previousWeapon, 'Legendary confirmation must replace/equip the rolled weapon');
+        const legendaryWeapon = await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId);
+        await page.evaluate(() => {
+          const p = DeadRecoilTest.Progression;
+          p.data.lucky = 1;
+          p.economy.random = () => 0.995;
+          p.economy.save();
+          p.render();
+        });
+        await page.locator('.spin-btn.lucky').click();
+        await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, {timeout:3000});
+        await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, {timeout:7000});
+        assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Divine must auto-equip without the Legendary/Mythic confirmation');
+        assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine spin must replace/equip automatically');
         await page.evaluate(() => { DeadRecoilTest.Progression.economy.random = Math.random; });
         await page.screenshot({path:'test-results/armory-equipped-1280.png'});
       }
