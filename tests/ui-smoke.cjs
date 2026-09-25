@@ -51,6 +51,12 @@ const server = http.createServer((req, res) => {
       assert.ok(Math.abs(armoryLayout.inventory.top - armoryLayout.stage.top) < 30 && Math.abs(armoryLayout.stage.top - armoryLayout.details.top) < 30, 'Armory columns must remain on the same row');
       assert.ok(armoryLayout.details.right <= armoryLayout.width + 2 && armoryLayout.inventory.left >= -2, 'Armory columns must stay inside the viewport');
       assert.ok(armoryLayout.controls.bottom <= armoryLayout.footer.top + 2, 'Spin controls must not be covered by the footer');
+      const previewRatio = await page.evaluate(() => {
+        const preview = document.querySelector('#classpreview').getBoundingClientRect();
+        const stage = document.querySelector('.survivor-stage').getBoundingClientRect();
+        return {height:preview.height, stageHeight:stage.height, ratio:preview.height / Math.max(1, stage.height)};
+      });
+      assert.ok(previewRatio.height >= 100 && previewRatio.ratio >= 0.48, 'Armory preview must remain visually dominant on compact landscape screens');
       await page.locator('[data-odds-mode="lucky"]').click();
       const luckyRarities = await page.locator('#rarity-board [data-rarity-tier]').evaluateAll(items => items.map(el => el.textContent.trim().replace(/[+−]/g,'').replace(/\s+/g,' ')));
       assert.ok(luckyRarities.length === 4 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO|DIVINO/.test(text)), 'Lucky Spin must expose only Epic+ tiers including Divine');

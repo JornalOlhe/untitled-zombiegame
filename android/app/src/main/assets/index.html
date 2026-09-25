@@ -2236,7 +2236,7 @@
           height:auto!important;min-height:0!important;min-width:0!important;overflow:auto!important;padding:8px!important
         }
         html.native-android #classscreen #classpreview{
-          inset:46px 0 92px!important;height:calc(100% - 138px)!important;min-height:64px!important
+          inset:36px 0 40px!important;height:calc(100% - 76px)!important;min-height:112px!important
         }
         html.native-android #armory-identity{top:6px!important}
         html.native-android #armory-identity h2{font-size:clamp(20px,3vw,28px)!important}
@@ -2380,6 +2380,14 @@
         html.native-android #roll-overlay,html.native-android .spin-confirm{backdrop-filter:none!important}
         html.native-android .rarity-line::after{display:none}
         html.native-android .spin-btn{box-shadow:0 4px 12px #0005!important}
+      }
+      @media(max-height:430px) and (orientation:landscape){
+        #classscreen #roll-controls{bottom:48px!important;width:min(440px,94%)!important}
+        #classscreen .spin-buttons{grid-template-columns:1fr 1fr!important;gap:6px!important}
+        #classscreen .spin-btn{min-height:39px!important;grid-template-columns:34px 1fr!important;padding-right:6px!important}
+        #classscreen .spin-btn .cost{display:none!important}
+        #classscreen .spin-btn .ico{font-size:17px!important}
+        #classscreen .spin-btn .label{font-size:9px!important}
       }
       @media(max-width:760px){
         .spin-confirm{padding:10px!important}.spin-confirm-card{padding:16px!important}
@@ -9431,8 +9439,9 @@
             previewScene.add(previewModel);
             previewModelKey = nextKey;
           }
-          previewCamera.position.set(0, 1.25, 3.9);
-          previewCamera.lookAt(0, 1, 0);
+          const compactPreview = touchMode && innerHeight <= 500;
+          previewCamera.position.set(0, compactPreview ? 1.18 : 1.25, compactPreview ? 3.15 : 3.9);
+          previewCamera.lookAt(0, compactPreview ? 0.96 : 1, 0);
           previewRenderer.outputEncoding = THREE.sRGBEncoding;
           previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
           previewRenderer.toneMappingExposure = 0.98;
