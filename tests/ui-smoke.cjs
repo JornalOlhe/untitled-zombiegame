@@ -77,6 +77,15 @@ const server = http.createServer((req, res) => {
         });
         await page.locator('.spin-btn.lucky').click();
         await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 4, {timeout:3000});
+        const reelMeta = await page.evaluate(() => ({
+          targetIndex: DeadRecoilTest.Armory.roll.targetIndex,
+          targetOffset: DeadRecoilTest.Armory.roll.targetOffset,
+          cardStep: DeadRecoilTest.Armory.roll.cardStep,
+          cards: document.querySelectorAll('#roll-strip .reel-card').length
+        }));
+        assert.ok(reelMeta.targetIndex >= 38 && reelMeta.targetIndex <= 48, 'Spin target index must vary inside the long reel');
+        assert.ok(reelMeta.cards >= reelMeta.targetIndex + 24, 'Spin reel must keep a long visual buffer after the winner');
+        assert.ok(Math.abs(reelMeta.targetOffset - reelMeta.targetIndex * reelMeta.cardStep) <= 38, 'Winner stop must stay inside a safe randomized card zone');
         await page.locator('#spin-confirm:not(.hidden)').waitFor({state:'visible',timeout:10000});
         assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'LENDÁRIO');
         await page.waitForTimeout(220);
@@ -94,7 +103,9 @@ const server = http.createServer((req, res) => {
         });
         await page.locator('.spin-btn.lucky').click();
         await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, {timeout:3000});
-        await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, {timeout:7000});
+        await page.waitForFunction(() => document.querySelector('#roll-overlay')?.classList.contains('divine-win'), {timeout:8000});
+        assert.ok(await page.locator('#roll-overlay').evaluate(el => el.classList.contains('divine-win')), 'Divine result must trigger the dedicated celebration');
+        await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Divine must auto-equip without the Legendary/Mythic confirmation');
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine spin must replace/equip automatically');
         await page.evaluate(() => { DeadRecoilTest.Progression.economy.random = Math.random; });
