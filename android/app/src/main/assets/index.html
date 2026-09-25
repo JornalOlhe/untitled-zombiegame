@@ -9137,7 +9137,7 @@
             this.selection = null;
             this.rarityFilter = result.item.tier;
             this.roll = {
-              kind, result, lucky, start: menuTime, duration, tick: -1,
+              kind, result, lucky, start: menuTime, startWall: performance.now(), duration, tick: -1,
               cardStep, targetIndex, targetOffset, nearMiss, nearSide, nearIndex, nearOffset,
               softOvershoot, reduced, hold: result.item.tier === 6 ? 2.05 : 0.88
             };
@@ -9196,7 +9196,9 @@
           update(dt) {
             if (!this.roll) return;
             const r = this.roll;
-            const t = clamp((menuTime - r.start) / r.duration, 0, 1);
+            // Spin presentation uses wall-clock time so low FPS cannot make the
+            // fallback finish a roll before the visual result is revealed.
+            const t = clamp((performance.now() - r.startWall) / (r.duration * 1000), 0, 1);
             const easeOut = (value, power = 5) => 1 - Math.pow(1 - clamp(value, 0, 1), power);
             let offset;
 
@@ -9250,6 +9252,7 @@
             if (t >= 1 && !r.revealed) {
               r.revealed = true;
               r.revealAt = menuTime;
+              r.revealAtWall = performance.now();
               const color = rarityColors[r.result.item.tier];
               const overlay = $("roll-overlay");
               overlay.classList.remove("near-miss");
@@ -9300,7 +9303,7 @@
               return;
             }
 
-            if (r.revealed && menuTime - r.revealAt >= r.hold) this.finishSpin(r);
+            if (r.revealed && performance.now() - r.revealAtWall >= r.hold * 1000) this.finishSpin(r);
           },
         };
         // Slot-based Armory. A spin never silently overwrites a full slot.

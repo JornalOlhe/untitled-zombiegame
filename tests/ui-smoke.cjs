@@ -102,10 +102,10 @@ const server = http.createServer((req, res) => {
           p.render();
         });
         await page.locator('.spin-btn.lucky').click();
-        await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, {timeout:3000});
-        await page.waitForFunction(() => document.querySelector('#roll-overlay')?.classList.contains('divine-win'), {timeout:8000});
+        await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, null, {timeout:3000});
+        await page.waitForFunction(() => document.querySelector('#roll-overlay')?.classList.contains('divine-win'), null, {timeout:8000});
         assert.ok(await page.locator('#roll-overlay').evaluate(el => el.classList.contains('divine-win')), 'Divine result must trigger the dedicated celebration');
-        await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, {timeout:11000});
+        await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Divine must auto-equip without the Legendary/Mythic confirmation');
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine spin must replace/equip automatically');
         await page.evaluate(() => { DeadRecoilTest.Progression.economy.random = Math.random; });
