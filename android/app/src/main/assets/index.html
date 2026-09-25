@@ -4102,7 +4102,7 @@
                 b([0, -0.025, 0.25], [0.09, 0.14, 0.36], wood, "polymer");
                 muzzle = -0.96;
                 parts.magazine.visible = false;
-              } else if (w.kind === "grenade") {
+              } else if (w.kind === "grenade" || w.kind === "missile") {
                 parts.magazine.position.set(0, -0.08, -0.24);
                 A.tube(parts.magazine, [0, 0, 0], 0.14, 0.24, dark);
                 for (let i = 0; i < 6; i++) {
@@ -5950,7 +5950,7 @@
               name: "Bazooka",
               cat: 2,
               tier: 4,
-              kind: "grenade",
+              kind: "missile",
               damage: 120,
               rate: 1.1,
               mag: 3,
@@ -6045,7 +6045,7 @@
               name: "Bazooka Celestial",
               cat: 2,
               tier: 6,
-              kind: "grenade",
+              kind: "missile",
               damage: 150,
               rate: 1,
               mag: 3,
@@ -6273,6 +6273,8 @@
               lucky: [0, 0, 0, 59, 37, 3, 1],
             };
             this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000];
+            // Price to own N weapon inventory slots, indexed by N (index 0 unused, slot 1 is free).
+            this.weaponSlotPrices = [null, 0, 6000, 18000, 45000, 90000];
             this.key = "deadrecoil.loadout.v2";
             this.data = {
               coins: 0,
@@ -6282,6 +6284,7 @@
               weaponId: 1,
               classPity: 0,
               weaponPity: 0,
+              weaponSlotsOwned: 1,
             };
           }
           load() {
@@ -6395,7 +6398,7 @@
           busy: false,
           messages: {
             class: "Sua classe fica fixa durante a partida.",
-            weapon: "Sua arma fica fixa durante a partida.",
+            weapon: "Leve até 5 armas pra partida e troque com 1-5 durante o jogo.",
           },
           get data() {
             return this.economy.data;
@@ -6478,7 +6481,7 @@
             $("classdetail").innerHTML =
               `${badge(c)}<h3>${c.name}</h3><p>${c.desc}<br><strong>Q · ${c.ability} (${c.cd}s)</strong><br>${c.active}</p>`;
             $("weapondetail").innerHTML =
-              `${badge(w)}<h3>${w.name}</h3><p>${["Curto alcance", "Médio alcance", "Longo alcance"][w.cat]} · Dano base ${w.damage} × ${rarityMult[w.tier]}<br>${w.mag !== Infinity ? `Pente ${w.mag} · recarga ${w.reload}s` : w.kind === "melee" ? "Corpo a corpo · sem munição" : "Munição infinita"}${w.ability ? `<br><strong>${w.ability}</strong>` : ""}<br>Esta arma acompanha você até o fim da partida.</p>`;
+              `${badge(w)}<h3>${w.name}</h3><p>${["Curto alcance", "Médio alcance", "Longo alcance"][w.cat]} · Dano base ${w.damage} × ${rarityMult[w.tier]}<br>${w.mag !== Infinity ? `Pente ${w.mag} · recarga ${w.reload}s` : w.kind === "melee" ? "Corpo a corpo · sem munição" : "Munição infinita"}${w.ability ? `<br><strong>${w.ability}</strong>` : ""}<br>Troque para esta arma durante a partida com as teclas 1-5, se ela estiver num slot que você possui.</p>`;
             for (const kind of ["class", "weapon"]) {
               $(kind + "-rolls").innerHTML = [false, true]
                 .map((lucky) => {
@@ -7618,14 +7621,21 @@
               activeUntil: 0,
               lastDamage: -99,
               slot: 0,
-              inventory: [null],
+              inventory: [],
               waveKills: 0,
               jump: 0,
               vy: 0,
             };
-            player.inventory[0] = WeaponSystem.create(
-              Progression.data.weaponId,
+            // Bring every weapon in an owned slot into the run, not just the one
+            // last equipped in the Armory — number keys switch between them mid-match.
+            normalizeLoadoutState(Progression.data);
+            player.inventory = Progression.data.weaponSlots
+              .slice(0, Progression.data.weaponSlotsOwned)
+              .map((id) => (id != null ? WeaponSystem.create(id) : null));
+            const startSlot = player.inventory.indexOf(
+              player.inventory.find((w) => w && w.id === Progression.data.weaponId),
             );
+            player.slot = startSlot >= 0 ? startSlot : 0;
             yaw = 0;
             pitch = 0;
             lastShot = -100;
@@ -8553,7 +8563,7 @@
             $("slotshud").innerHTML = player.inventory
               .map(
                 (w, i) =>
-                  `<div class="slot ${i === player.slot ? "active" : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small>${i + 1} ${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra"][i]}</small><b>${w ? w.name : "Sem arma"}</b><span>${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small>${w && w.ammo !== Infinity ? "/ " + w.mag : ""}</small></div>`,
+                  `<div class="slot ${i === player.slot ? "active" : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small>${i + 1} ${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</small><b>${w ? w.name : "Sem arma"}</b><span>${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small>${w && w.ammo !== Infinity ? "/ " + w.mag : ""}</small></div>`,
               )
               .join("");
             const cd = Math.max(0, player.cooldown - simulationTime);
@@ -9407,15 +9417,20 @@
         Viewmodel.scene.add(viewLight);
         function loadoutSlotKey(kind) { return kind + "Slots"; }
         function loadoutOwnedKey(kind) { return kind === "class" ? "ownedClasses" : "ownedWeapons"; }
+        const WEAPON_SLOT_MAX = 5;
         function normalizeLoadoutState(data) {
           if (!data) return;
           data.pendingLoadout ||= {};
+          data.weaponSlotsOwned = Number.isInteger(data.weaponSlotsOwned)
+            ? clamp(data.weaponSlotsOwned, 1, WEAPON_SLOT_MAX)
+            : 1;
           for (const kind of ["class", "weapon"]) {
             const catalog = Progression?.economy?.catalogs?.[kind] || (kind === "class" ? classes : WeaponSystem.weapons);
             const slotKey = loadoutSlotKey(kind), ownedKey = loadoutOwnedKey(kind);
+            const maxSlots = kind === "weapon" ? WEAPON_SLOT_MAX : 2;
             let source = Array.isArray(data[slotKey]) ? data[slotKey] : Array.isArray(data[ownedKey]) ? data[ownedKey] : [];
-            let slots = source.slice(0, 2).map((id) => Number.isInteger(id) && catalog[id] ? id : null);
-            while (slots.length < 2) slots.push(null);
+            let slots = source.slice(0, maxSlots).map((id) => Number.isInteger(id) && catalog[id] ? id : null);
+            while (slots.length < maxSlots) slots.push(null);
             let current = Number.isInteger(data[kind + "Id"]) && catalog[data[kind + "Id"]] ? data[kind + "Id"] : null;
             // Migration only: make sure a legacy save has at least one stored item. Never overwrite a full slot because of a pending spin.
             if (!slots.some((id) => id !== null)) slots[0] = current !== null ? current : 0;
@@ -9486,6 +9501,7 @@
             $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Resultado direto · aviso antes de girar novamente só com Mítico ou Divino equipado.</p>`;
             $("armory-list").innerHTML = this.slotCards(kind);
             $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => Progression.slotEquip(kind, +b.dataset.slotEquip));
+            $("armory-list").querySelectorAll("[data-buy-slot]").forEach((b) => b.onclick = () => Progression.buyWeaponSlot());
             $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => Progression.roll(kind, b.dataset.reroll === "true", b.dataset.pay));
             $("rarity-board").querySelectorAll("[data-odds-mode]").forEach((b) => b.onclick = () => { this.oddsMode = b.dataset.oddsMode; this.rarityFilter = null; this.selection = null; this.render(); });
             $("rarity-board").querySelectorAll("[data-rarity-tier]").forEach((b) => b.onclick = () => { const tier = +b.dataset.rarityTier; this.rarityFilter = this.rarityFilter === tier ? null : tier; if (this.rarityFilter != null) { const first = Progression.economy.catalogs[kind].findIndex((item) => item.tier === tier); if (first >= 0) this.selection = first; } this.render(); });
@@ -9494,12 +9510,20 @@
             $("classcontinue").disabled = Progression.busy; $("armory-back").disabled = Progression.busy; updatePreview(); Account.badge();
           },
           slotCards(kind) {
-            const d = Progression.data, slots = d[loadoutSlotKey(kind)], current = d[kind + "Id"];
-            return slots.map((id, slot) => {
+            const d = Progression.data, current = d[kind + "Id"];
+            const owned = kind === "weapon" ? d.weaponSlotsOwned : 2;
+            const slots = d[loadoutSlotKey(kind)].slice(0, owned);
+            const cards = slots.map((id, slot) => {
               if (id === null) return `<article class="slot-card empty"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span>RESERVA</span></div><h3 class="slot-name">VAZIO</h3><div class="slot-meta">O próximo spin pode ocupar este espaço.</div></article>`;
               const item = Progression.economy.catalogs[kind][id], selected = current === id;
               return `<article class="slot-card ${selected ? "selected" : ""}" style="--rarity:${rarityColors[item.tier]}"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span style="color:${rarityColors[item.tier]}">${rarityNames[item.tier].toUpperCase()}</span></div><h3 class="slot-name">${item.name}</h3><div class="slot-meta">${selected ? "EQUIPADO AGORA" : "RESERVA DO LOADOUT"}</div><div class="slot-actions"><button data-slot-equip="${slot}" ${selected ? "disabled" : ""}>${selected ? "EM USO" : "EQUIPAR"}</button></div></article>`;
             }).join("");
+            if (kind !== "weapon" || owned >= WEAPON_SLOT_MAX) return cards;
+            const price = Progression.economy.weaponSlotPrices[owned + 1];
+            const locked = Account.user
+              ? `<div class="slot-meta">Disponível apenas offline por enquanto.</div>`
+              : `<div class="slot-actions"><button data-buy-slot="1" ${Progression.busy || d.coins < price ? "disabled" : ""}>COMPRAR · ◈ ${price.toLocaleString("pt-BR")}</button></div>`;
+            return cards + `<article class="slot-card locked"><div class="slot-head"><span class="slot-badge">${owned + 1}</span><span>BLOQUEADO</span></div><h3 class="slot-name">NOVO SLOT DE ARMA</h3><div class="slot-meta">Leve mais uma arma pra partida e troque com as teclas 1-${WEAPON_SLOT_MAX} durante o jogo.</div>${locked}</article>`;
           },
           chance(kind, id, lucky) { const list = Progression.economy.catalogs[kind], tier = list[id].tier; return +(Progression.economy.rates[lucky ? "lucky" : "normal"][tier] / list.filter((i) => i.tier === tier).length).toFixed(3); },
           customization() {
@@ -9751,6 +9775,12 @@
           economyLoad.call(this);
           this.data.classSlots = Array.isArray(saved.classSlots) ? saved.classSlots : Array.isArray(saved.ownedClasses) ? saved.ownedClasses : [this.data.classId, null];
           this.data.weaponSlots = Array.isArray(saved.weaponSlots) ? saved.weaponSlots : Array.isArray(saved.ownedWeapons) ? saved.ownedWeapons : [this.data.weaponId, null];
+          // Grandfather in anyone who already had a second weapon slot filled under the old
+          // fixed-2-slots system, so they don't lose access to a weapon they already stored.
+          const legacyFilled = this.data.weaponSlots.filter((id) => id != null).length;
+          this.data.weaponSlotsOwned = Number.isInteger(saved.weaponSlotsOwned)
+            ? clamp(saved.weaponSlotsOwned, 1, 5)
+            : clamp(Math.max(1, legacyFilled), 1, 5);
           this.data.pendingLoadout = saved.pendingLoadout && typeof saved.pendingLoadout === "object" ? saved.pendingLoadout : {};
           normalizeLoadoutState(this.data); this.data.pendingLoadout = {}; this.save();
         };
@@ -9792,7 +9822,10 @@
         };
         Progression.spinTargetSlot = function (kind, id) {
           normalizeLoadoutState(this.data);
-          const slots = this.data[loadoutSlotKey(kind)], existing = slots.indexOf(id);
+          // A spin can only land in an owned slot — never auto-fill a slot the player
+          // hasn't bought yet.
+          const owned = kind === "weapon" ? this.data.weaponSlotsOwned : 2;
+          const slots = this.data[loadoutSlotKey(kind)].slice(0, owned), existing = slots.indexOf(id);
           if (existing >= 0) return existing;
           const empty = slots.indexOf(null);
           if (empty >= 0) return empty;
@@ -9803,7 +9836,8 @@
           normalizeLoadoutState(this.data);
           const item = this.economy.catalogs[kind][id];
           if (!item) throw Error("Item inválido.");
-          const slots = this.data[loadoutSlotKey(kind)], existing = slots.indexOf(id);
+          const owned = kind === "weapon" ? this.data.weaponSlotsOwned : 2;
+          const slots = this.data[loadoutSlotKey(kind)].slice(0, owned), existing = slots.indexOf(id);
           if (Account.user) {
             const pending = this.data.pendingLoadout?.[kind];
             if (pending != null) {
@@ -9839,6 +9873,24 @@
           if (state !== GameState.CLASS_SELECT || this.busy) return; this.busy = true;
           try { if (Account.user) { const r = await Account.queue("equip", { kind, slot, action: "equip" }); Account.apply(r.profile); } else { normalizeLoadoutState(this.data); const id = this.data[loadoutSlotKey(kind)][slot]; if (id == null) throw Error("Slot vazio."); this.economy.buy(kind, id); } selectedClass = this.data.classId; AudioManager.coin(); }
           catch (e) { UIManager.toast(e.message); } finally { this.busy = false; Armory.selection = null; Armory.render(); }
+        };
+        // Extra weapon inventory slots let the player carry more than one weapon into a
+        // run and switch between them with number keys. Offline only for now — logged-in
+        // accounts sync their loadout from the server, which doesn't know this field yet.
+        Progression.buyWeaponSlot = function () {
+          if (state !== GameState.CLASS_SELECT || this.busy) return;
+          if (Account.user) { UIManager.toast("Slots extras estão disponíveis apenas offline por enquanto."); return; }
+          normalizeLoadoutState(this.data);
+          const owned = this.data.weaponSlotsOwned;
+          if (owned >= WEAPON_SLOT_MAX) return;
+          const price = this.economy.weaponSlotPrices[owned + 1];
+          if (this.data.coins < price) { UIManager.toast("Moedas insuficientes."); return; }
+          this.data.coins -= price;
+          this.data.weaponSlotsOwned = owned + 1;
+          this.economy.save();
+          player.coins = this.data.coins;
+          AudioManager.coin();
+          Armory.render();
         };
         $("spin-confirm-accept").onclick = async () => {
           const pending = Armory.awaitingConfirm; if (!pending) return;
@@ -10482,6 +10534,7 @@
               "Digit2",
               "Digit3",
               "Digit4",
+              "Digit5",
             ].includes(e.code)
           )
             e.preventDefault();
@@ -10490,7 +10543,7 @@
           if (e.code === "KeyR") PlayerController.reload();
           if (e.code === "KeyQ") PlayerController.ability();
           if (e.code === "KeyG") PlayerController.grenade();
-          if (/^Digit[1-4]$/.test(e.code))
+          if (/^Digit[1-5]$/.test(e.code))
             PlayerController.switch(Number(e.code.slice(-1)) - 1);
           if (e.code === "Space" && player.jump === 0) player.vy = 6;
         });
