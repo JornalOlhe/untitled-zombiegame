@@ -1,0 +1,119 @@
+name: Publish signed Android release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: android-signed-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+      EXPECTED_CERT_SHA256: 549ed3110e7ecd6cbf4c1eeb8b06a7e038d5f9f0c5dc657fc03f97f8d987f1ea
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Require release signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_B64" || { echo "Missing ANDROID_RELEASE_KEYSTORE_BASE64"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "Missing ANDROID_RELEASE_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "Missing ANDROID_RELEASE_KEY_ALIAS"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Missing ANDROID_RELEASE_KEY_PASSWORD"; exit 1; }
+
+      - name: Restore release keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/deadrecoil-release.keystore"
+          keytool -list -keystore "$RUNNER_TEMP/deadrecoil-release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+      - name: Build unsigned release
+        working-directory: android
+        run: gradle assembleRelease --stacktrace
+
+      - name: Sign APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "$UNSIGNED"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign             --ks "$RUNNER_TEMP/deadrecoil-release.keystore"             --ks-key-alias "$KEY_ALIAS"             --ks-pass "pass:$KEYSTORE_PASSWORD"             --key-pass "pass:$KEY_PASSWORD"             --out dist/DeadRecoil.apk             "$UNSIGNED"
+
+      - name: Verify package, version, certificate and bundled game
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="dist/DeadRecoil.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
+
+          CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/apksigner.txt | head -n1 | tr 'A-F' 'a-f' | tr -d ':[:space:]')
+          test "$CERT" = "$EXPECTED_CERT_SHA256" || {
+            echo "Signing certificate does not match the v8 certificate."
+            echo "Expected: $EXPECTED_CERT_SHA256"
+            echo "Actual:   $CERT"
+            exit 1
+          }
+
+          BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
+          echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
+          VERSION_CODE=$(printf '%s\n' "$BADGING" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" | head -n1)
+          VERSION_NAME=$(printf '%s\n' "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -n1)
+          test "$VERSION_CODE" = "9"
+          test "$VERSION_NAME" = "0.9.0"
+
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          apk = Path("dist/DeadRecoil.apk")
+          source = Path("android/app/src/main/assets/index.html").read_bytes()
+          with zipfile.ZipFile(apk) as z:
+              packaged = z.read("assets/index.html")
+          if packaged != source:
+              raise SystemExit("Packaged game assets do not match current main.")
+          print("Packaged game assets match current main.")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v9-signed
+          path: dist/DeadRecoil.apk
+          retention-days: 30
+
+      - name: Publish v9
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v9 >/dev/null 2>&1; then
+            echo "Release v9 already exists; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create v9 dist/DeadRecoil.apk             --target "$GITHUB_SHA"             --title "Dead Recoil 0.9.0"             --notes-file release/v9-notes.md             --latest

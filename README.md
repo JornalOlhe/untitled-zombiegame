@@ -6,7 +6,7 @@ Jogo de sobrevivência em primeira pessoa para Android e Windows, com ondas, map
 
 ### Android
 
-Baixe `DeadRecoil.apk` na última release. A partir da versão 0.7.0 o app consulta novas releases. A versão 0.8.0 mostra as novidades e baixa automaticamente; a instalação é confirmada no Android.
+Baixe `DeadRecoil.apk` na última release. A v0.8.0 já consulta novas releases automaticamente; quando a v9 assinada estiver publicada, ela detecta a nova versão, baixa o APK e pede apenas a confirmação do Android para instalar.
 
 ### Windows
 
@@ -20,12 +20,12 @@ O Armory usa dois tipos de spin. O Lucky Spin entrega somente Épico, Lendário 
 
 ## Builds
 
-A release pública continua sendo a versão estável assinada. Mudanças mais novas da `main` são geradas como artifacts de QA para Android e Windows; a release estável só é atualizada quando o APK assinado corresponde exatamente ao código atual.
+A `main` está preparada como v0.9.0. APKs/EXEs de QA são gerados para validação, mas a release Android só é publicada quando o APK usa a mesma assinatura da instalação estável anterior.
 
 ## Desenvolvimento
 
 O jogo está em `android/app/src/main/assets/index.html`. O wrapper Android e o atualizador ficam em `android/app/src/main/java/com/deadrecoil/game/`. O runtime Windows fica em `desktop/`.
 
-O workflow Android compila, testa os fluxos em três tamanhos de tela e verifica o APK assinado antes de publicar. O workflow Windows testa o runtime Electron, gera um executável portátil x64 e anexa `DeadRecoil-Windows.exe` à release da mesma versão.
+O workflow Android compila, testa os fluxos em vários tamanhos de tela e gera QA. A publicação assinada usa um workflow separado que valida versão, pacote, certificado e assets antes de criar a release.
 
-Consulte `UPDATES.md` para preparar uma próxima versão.
+Consulte `UPDATES.md` para o fluxo de atualização e assinatura.

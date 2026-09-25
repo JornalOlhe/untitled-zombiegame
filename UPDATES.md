@@ -1,17 +1,30 @@
 # Atualizações do Dead Recoil
 
-O aplicativo consulta a última release estável de `JornalOlhe/untitled-zombiegame` ao abrir e, no retorno ao app, no máximo uma vez a cada 15 minutos. A tag `v8` corresponde ao `versionCode 8`. O anexo deve se chamar `DeadRecoil.apk`.
+O aplicativo Android consulta a última release estável de `JornalOlhe/untitled-zombiegame` ao abrir e, no retorno ao app, no máximo uma vez a cada 15 minutos.
 
-Na versão 0.8.0, uma versão mais recente inicia o download automaticamente e apresenta nome, novidades e progresso. O jogador pode adiar, tentar novamente ou instalar. O APK já verificado é reaproveitado se ainda estiver no cache. Sem internet, a versão instalada continua disponível. A confirmação de instalação é feita pelo Android.
+A versão 0.8.0 usa `versionCode 8` e já contém o atualizador automático. Quando a release `v9` existir com um anexo chamado exatamente `DeadRecoil.apk`, a v0.8.0 detectará `versionCode 9`, baixará o APK e validará pacote, versão e assinatura antes de permitir a instalação.
 
-## Publicação
+A atualização só é aceita quando o APK novo usa a mesma assinatura da versão instalada. Isso permite instalar por cima da v8 mantendo os dados locais e impede que um APK assinado por outra chave seja aceito.
 
-Cada push na main executa testes da interface e compila o projeto. Depois, valida `release/DeadRecoil.apk` contra `release/manifest.json`: hash, versão, identidade, assinatura e todos os assets empacotados. Só publica após os dois jobs passarem. Uma versão já publicada nunca é sobrescrita.
+## Estado da v9
 
-Para uma nova atualização:
-1. Aumente `versionCode` e `versionName` em `android/app/build.gradle`.
-2. Compile o APK com a mesma chave privada usada nas versões anteriores.
-3. Atualize `release/DeadRecoil.apk`, os campos de `release/manifest.json` e `release/notes.md`.
-4. Envie para main. O workflow cria a release com o APK validado.
+A `main` usa `versionCode 9` e `versionName 0.9.0`.
 
-Alterar só o código não atualiza o APK já instalado. O pacote assinado precisa ser recompilado. A chave privada nunca deve entrar no repositório. O APK de teste gerado com a chave temporária do runner não é distribuído.
+A release `v9` só deve ser criada depois que o APK 0.9.0 for assinado com a mesma chave privada usada na v8. O workflow `Publish signed Android release` faz essa verificação antes de publicar.
+
+## Publicação assinada
+
+O workflow manual de release espera estes GitHub Actions secrets:
+
+- `ANDROID_RELEASE_KEYSTORE_BASE64`
+- `ANDROID_RELEASE_KEYSTORE_PASSWORD`
+- `ANDROID_RELEASE_KEY_ALIAS`
+- `ANDROID_RELEASE_KEY_PASSWORD`
+
+Ele compila o APK de release, assina com a chave fornecida, valida o certificado contra a assinatura conhecida da release estável, confere versão/pacote/assets e só então cria a release `v9` com `DeadRecoil.apk`.
+
+A chave privada nunca deve ser adicionada ao repositório.
+
+## QA
+
+Cada push na `main` continua executando os testes de interface e gerando APK/EXE de QA. Builds de QA não substituem uma release assinada e não devem ser distribuídas como atualização para instalações existentes.
