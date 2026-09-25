@@ -3550,10 +3550,50 @@
           },
         };
 
+        // Blocky/voxel art set: same call signatures as VisualArt but every part is a
+        // rectangular prism (unitBox) instead of a rounded ellipsoid or cylinder, giving
+        // creatures a Minecraft-style cube-built look while reusing the same materials,
+        // texture cache and rig hierarchy as the rest of the game.
+        const BlockyArt = Object.assign(Object.create(VisualArt), {
+          ellipsoid(parent, pos, scale, color, kind = "skin", glow = 0) {
+            return this.mesh(parent, unitBox, this.mat(color, kind, glow), pos, scale);
+          },
+          tube(parent, pos, r, length, color, kind = "steel", axis = "z", glow = 0) {
+            const m = this.mesh(
+              parent,
+              unitBox,
+              this.mat(color, kind, glow),
+              pos,
+              [r, length, r],
+            );
+            if (axis === "z") m.rotation.x = Math.PI / 2;
+            if (axis === "x") m.rotation.z = Math.PI / 2;
+            return m;
+          },
+          link(parent, a, b, r1, r2, color, kind = "skin") {
+            const va = new V(...a),
+              vb = new V(...b),
+              middle = va.clone().add(vb).multiplyScalar(0.5),
+              r = (r1 + r2) * 0.5,
+              m = this.mesh(
+                parent,
+                unitBox,
+                this.mat(color, kind),
+                middle.toArray(),
+                [r, va.distanceTo(vb), r],
+              );
+            m.quaternion.setFromUnitVectors(
+              new V(0, 1, 0),
+              vb.clone().sub(va).normalize(),
+            );
+            return m;
+          },
+        });
+
         // Hierarchical zombie skeleton. Hips, knees, shoulders, elbows, neck and jaw move separately.
         const CreatureRig = {
           create(group, type, boss) {
-            const A = VisualArt,
+            const A = BlockyArt,
               skin =
                 type === 2
                   ? 0x879658
@@ -3970,6 +4010,10 @@
             ) => A.tube(gun, pos, r, l, c, k, axis, glow);
             let muzzle = -0.87;
             if (w.kind === "melee") {
+              // The Divine spear (modelId 12) stretches the same blade shape into a long
+              // lance with an extended haft instead of the short machete profile.
+              const spear = w.modelId === 12,
+                stretch = spear ? 1.9 : 1;
               const shape = new THREE.Shape();
               shape.moveTo(-0.035, -0.04);
               shape.lineTo(0.07, -0.04);
@@ -3986,24 +4030,32 @@
                   bevelSegments: 1,
                   steps: 1,
                 }),
-                A.mat(0xb9c7c9),
+                A.mat(spear ? 0xffe7a8 : 0xb9c7c9, "steel", spear ? 0x6b4a12 : 0),
               );
               blade.position.set(0, 0.04, -0.24);
               blade.rotation.z = -0.12;
+              blade.scale.y = stretch;
               gun.add(blade);
-              t([0, -0.14, -0.23], 0.042, 0.28, polymer, "polymer", "y");
+              t(
+                [0, -0.14 * stretch, -0.23],
+                spear ? 0.032 : 0.042,
+                0.28 * stretch,
+                polymer,
+                "polymer",
+                "y",
+              );
               b([0, 0.01, -0.23], [0.2, 0.025, 0.075], steel);
               for (let i = 0; i < 6; i++)
                 A.tube(
                   gun,
-                  [0, -0.24 + i * 0.036, -0.23],
+                  [0, -0.24 + i * 0.036 * stretch, -0.23],
                   0.045,
                   0.008,
                   0x5f6967,
                   "polymer",
                   "y",
                 );
-              muzzle = -0.25;
+              muzzle = spear ? -0.55 : -0.25;
             } else {
               const long = w.kind === "antimaterial",
                 energy = ["laser", "rail", "quantum"].includes(w.kind);
@@ -5788,17 +5840,16 @@
             {
               modelId: 12,
               name: "Helios Lance",
-              cat: 2,
+              cat: 0,
               tier: 6,
-              kind: "rail",
+              kind: "melee",
+              spear: true,
               damage: 92,
-              rate: 0.82,
-              mag: 7,
-              reload: 2.45,
-              range: 120,
-              pierce: 999,
-              armor: true,
-              walls: true,
+              rate: 0.5,
+              mag: Infinity,
+              reload: 0,
+              range: 4.4,
+              chargeTime: 0.32,
             },
           ],
           model: new THREE.Group(),
@@ -6266,6 +6317,19 @@
             ? p
             : player.pos.clone().addScaledVector(forward(), 35).setY(0);
         }
+        // The Mythic weapon's projectile only curves toward a target when that target was
+        // actually on screen the instant it was fired — never a blind auto-lock.
+        const viewFrustumMatrix = new THREE.Matrix4(),
+          viewFrustum = new THREE.Frustum();
+        function isInCameraView(pos) {
+          camera.updateMatrixWorld();
+          viewFrustumMatrix.multiplyMatrices(
+            camera.projectionMatrix,
+            camera.matrixWorldInverse,
+          );
+          viewFrustum.setFromProjectionMatrix(viewFrustumMatrix);
+          return viewFrustum.containsPoint(pos);
+        }
         function spawnProjectile(kind, pos, dir, damage, extra = {}) {
           const mesh = sphere(
             scene,
@@ -6273,8 +6337,8 @@
             pos.y,
             pos.z,
             kind === "orbital" ? 0.1 : 0.15,
-            kind === "enemy" ? 0x887aa6 : 0xffae5f,
-            kind === "enemy" ? 0x5838b0 : 0xff733c,
+            kind === "enemy" ? 0x887aa6 : kind === "spear" ? 0xffe7a8 : 0xffae5f,
+            kind === "enemy" ? 0x5838b0 : kind === "spear" ? 0xb87f1e : 0xff733c,
           );
           const p = {
             kind,
@@ -6287,11 +6351,13 @@
                   ? 19
                   : kind === "quantum"
                     ? 25
-                    : kind === "enemy"
-                      ? 12
-                      : 16,
+                    : kind === "spear"
+                      ? 34
+                      : kind === "enemy"
+                        ? 12
+                        : 16,
               ),
-            life: kind === "orbital" ? 2 : kind === "grenade" ? 3 : 6,
+            life: kind === "orbital" ? 2 : kind === "grenade" ? 3 : kind === "spear" ? 2.2 : 6,
             damage,
             ...extra,
           };
@@ -7203,6 +7269,7 @@
           nextCurse: 0,
           motion: new GroundMotion(),
           meleeStrike: null,
+          spearHeldSince: null,
           start() {
             if (Progression.busy) return;
             selectedClass = Progression.data.classId;
@@ -7255,6 +7322,7 @@
             pitch = 0;
             lastShot = -100;
             reloadEnd = 0;
+            this.spearHeldSince = null;
             shake = 0;
             recoil = 0;
             this.curseUntil = 0;
@@ -7309,6 +7377,7 @@
             if (!player.inventory[slot] || slot === player.slot) return;
             player.slot = slot;
             reloadEnd = 0;
+            this.spearHeldSince = null;
             WeaponSystem.buildModel();
           },
           ability() {
@@ -7367,12 +7436,12 @@
               },
             );
           },
-          strike(w, damage) {
+          strike(w, damage, reach = Math.min(w.range, 2.6)) {
             scene.updateMatrixWorld(true);
             const hit = meleeTarget(
               player.pos,
               forward(),
-              Math.min(w.range, 2.6),
+              reach,
               ZombieManager.list,
               (from, to, distance) => {
                 raycaster.set(from, to.clone().sub(from).normalize());
@@ -7386,6 +7455,48 @@
               ZombieManager.hit(hit.target, damage, false, hit.point, w);
               AudioManager.meleeImpact();
             }
+          },
+          // Divine spear: a quick click is a longer-reach poke; holding the attack button
+          // charges a throw that releases a piercing spear projectile.
+          updateSpear(w, dt) {
+            if (mouse.down) {
+              if (
+                this.spearHeldSince == null &&
+                !reloadEnd &&
+                simulationTime - lastShot >= w.rate
+              )
+                this.spearHeldSince = simulationTime;
+              return;
+            }
+            if (this.spearHeldSince == null) return;
+            const held = simulationTime - this.spearHeldSince;
+            this.spearHeldSince = null;
+            lastShot = simulationTime;
+            player.shots++;
+            if (held >= (w.chargeTime || 0.32)) {
+              this.throwSpear(w);
+            } else {
+              muzzleLight.intensity = 0;
+              this.meleeStrike = {
+                at: simulationTime + Math.min(0.11, w.rate * 0.4),
+                weapon: w,
+                damage: weaponDamage(w),
+                reach: Math.min(w.range, 4.5),
+              };
+              AudioManager.meleeSwing();
+            }
+          },
+          throwSpear(w) {
+            AudioManager.meleeSwing();
+            spawnProjectile(
+              "spear",
+              player.pos.clone().addScaledVector(forward(), 0.5),
+              CameraRig.aim(),
+              weaponDamage(w) * 1.45,
+              { weapon: w },
+            );
+            recoil = Math.max(recoil, 1);
+            WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 4;
           },
           shoot() {
             const w = WeaponSystem.current();
@@ -7441,7 +7552,18 @@
                       a.group.position.distanceToSquared(origin) -
                       b.group.position.distanceToSquared(origin),
                   );
-                for (let i = 0; i < 5; i++)
+                for (let i = 0; i < 5; i++) {
+                  const candidate = targets[i % Math.max(1, targets.length)];
+                  // Not guided: it only chases a zombie that was visible on screen at the
+                  // moment of firing. Anything outside the camera's view gets no lock and
+                  // the shot just flies straight.
+                  const onScreen =
+                    candidate &&
+                    isInCameraView(
+                      candidate.group.position
+                        .clone()
+                        .add(new V(0, candidate.size || 1, 0)),
+                    );
                   spawnProjectile(
                     "quantum",
                     origin.clone(),
@@ -7451,10 +7573,11 @@
                       .normalize(),
                     damage,
                     {
-                      target: targets[i % Math.max(1, targets.length)],
+                      target: onScreen ? candidate : null,
                       weapon: w,
                     },
                   );
+                }
               } else
                 spawnProjectile(w.kind, origin, dir, damage, {
                   target: aimPoint(),
@@ -7539,11 +7662,12 @@
               reloadEnd = 0;
               AudioManager.tone(260, 0.08, "square", 0.12, 160);
             }
-            if (mouse.down) this.shoot();
+            if (w && w.spear) this.updateSpear(w, dt);
+            else if (mouse.down) this.shoot();
             if (this.meleeStrike && simulationTime >= this.meleeStrike.at) {
               const strike = this.meleeStrike;
               this.meleeStrike = null;
-              this.strike(strike.weapon, strike.damage);
+              this.strike(strike.weapon, strike.damage, strike.reach);
             }
             if (selectedClass === 2 && simulationTime - player.lastDamage > 5)
               player.hp = Math.min(player.maxhp + player.bonus, player.hp + dt);
@@ -7756,7 +7880,7 @@
             ParticleSystem.line(
               previous,
               p.pos,
-              p.kind === "enemy" ? 0xb076ff : 0xffbe67,
+              p.kind === "enemy" ? 0xb076ff : p.kind === "spear" ? 0xffe7a8 : 0xffbe67,
               0.12,
             );
             let hit = null;
@@ -7787,7 +7911,7 @@
               if (p.kind === "enemy") {
                 ParticleSystem.emit(p.pos, p.acid ? 0x71854a : 0xb076ff, 10, 2);
                 if (p.acid) HordeAI.acid(p.pos);
-              } else if (p.kind === "quantum") {
+              } else if (p.kind === "quantum" || p.kind === "spear") {
                 if (hit)
                   ZombieManager.hit(
                     hit,
@@ -7797,7 +7921,13 @@
                     p.weapon,
                     true,
                   );
-                else ParticleSystem.emit(p.pos, 0xff4833, 10, 2);
+                else
+                  ParticleSystem.emit(
+                    p.pos,
+                    p.kind === "spear" ? 0xffe7a8 : 0xff4833,
+                    10,
+                    2,
+                  );
               } else {
                 const at = p.pos.clone();
                 explosion(
