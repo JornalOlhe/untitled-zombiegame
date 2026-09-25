@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: publish-v10
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -17,12 +17,6 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
-    env:
-      KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-      KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-      EXPECTED_CERT_SHA256: 549ed3110e7ecd6cbf4c1eeb8b06a7e038d5f9f0c5dc657fc03f97f8d987f1ea
     steps:
       - uses: actions/checkout@v4
 
@@ -40,69 +34,37 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Require release signing secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$KEYSTORE_B64"
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_ALIAS"
-          test -n "$KEY_PASSWORD"
-
-      - name: Build Android release
+      - name: Build Android QA
         working-directory: android
-        run: gradle assembleRelease --stacktrace
+        run: gradle assembleDebug --stacktrace
 
-      - name: Restore release keystore
+      - name: Verify Android QA package
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/deadrecoil-release.keystore"
-          keytool -list -keystore "$RUNNER_TEMP/deadrecoil-release.keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-
-      - name: Sign Android release
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
-            --ks "$RUNNER_TEMP/deadrecoil-release.keystore" \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass "pass:$KEYSTORE_PASSWORD" \
-            --key-pass "pass:$KEY_PASSWORD" \
-            --out dist/DeadRecoil.apk \
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
-
-      - name: Verify Android package
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="dist/DeadRecoil.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
-
-          CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/apksigner.txt | head -n1 | tr 'A-F' 'a-f' | tr -d ':[:space:]')
-          test "$CERT" = "$EXPECTED_CERT_SHA256"
-
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
           BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
           echo "$BADGING" | grep -q "versionCode='10'"
           echo "$BADGING" | grep -q "versionName='0.10.0'"
-
           python3 - <<'PY'
           import zipfile
           from pathlib import Path
           source = Path("android/app/src/main/assets/index.html").read_bytes()
-          with zipfile.ZipFile("dist/DeadRecoil.apk") as apk:
+          apk_path = Path("android/app/build/outputs/apk/debug/app-debug.apk")
+          with zipfile.ZipFile(apk_path) as apk:
               packaged = apk.read("assets/index.html")
           if source != packaged:
               raise SystemExit("Packaged game assets do not match current main.")
-          print("Android v10 verified.")
+          print("Android v10 QA verified.")
           PY
+          mkdir -p dist
+          cp "$APK" dist/DeadRecoil-v10-QA.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v10-Android
-          path: dist/DeadRecoil.apk
+          name: DeadRecoil-v10-Android-QA
+          path: dist/DeadRecoil-v10-QA.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -155,7 +117,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v10-Android
+          name: DeadRecoil-v10-Android-QA
           path: dist
 
       - uses: actions/download-artifact@v4
@@ -163,35 +125,33 @@ jobs:
           name: DeadRecoil-v10-Windows
           path: dist
 
-      - name: Publish GitHub release v10
+      - name: Publish GitHub pre-release v10
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/DeadRecoil.apk
+          test -f dist/DeadRecoil-v10-QA.apk
           test -f dist/DeadRecoil-Windows.exe
 
           if gh release view v10 >/dev/null 2>&1; then
-            gh release upload v10 dist/DeadRecoil.apk dist/DeadRecoil-Windows.exe --clobber
+            gh release upload v10 dist/DeadRecoil-v10-QA.apk dist/DeadRecoil-Windows.exe --clobber
             gh release edit v10 \
-              --title "Dead Recoil 0.10.0" \
+              --title "Dead Recoil 0.10.0 QA" \
               --notes-file release/v10-notes.md \
-              --latest
+              --prerelease
           else
             gh release create v10 \
-              dist/DeadRecoil.apk \
+              dist/DeadRecoil-v10-QA.apk \
               dist/DeadRecoil-Windows.exe \
               --target "$GITHUB_SHA" \
-              --title "Dead Recoil 0.10.0" \
+              --title "Dead Recoil 0.10.0 QA" \
               --notes-file release/v10-notes.md \
-              --latest
+              --prerelease
           fi
 
       - name: Verify published release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: |
-          set -euo pipefail
-          gh release view v10 --json tagName,name,isDraft,isPrerelease,assets
+        run: gh release view v10 --json tagName,name,isDraft,isPrerelease,assets
