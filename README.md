@@ -29,3 +29,10 @@ O jogo está em `android/app/src/main/assets/index.html`. O wrapper Android e o 
 O workflow Android compila, testa os fluxos em vários tamanhos de tela e gera QA. A publicação assinada usa um workflow separado que valida versão, pacote, certificado e assets antes de criar a release.
 
 Consulte `UPDATES.md` para o fluxo de atualização e assinatura.
+
+
+## Atualizações automáticas
+
+Ao abrir o jogo, Android e Windows consultam as releases do GitHub. Se existir uma versão com tag maior que a instalada, o jogo mostra uma confirmação antes de qualquer download: **"Sua versão está desatualizada. Baixar a versão mais recente agora?"**.
+
+No Android, releases estáveis com o asset `DeadRecoil.apk` são baixadas e verificadas dentro do app antes de abrir o instalador. Releases QA/prerelease abrem o asset oficial no GitHub, pois o Android só permite atualização por cima quando a assinatura é a mesma. No Windows, o botão abre diretamente o `DeadRecoil-Windows.exe` da release mais recente.

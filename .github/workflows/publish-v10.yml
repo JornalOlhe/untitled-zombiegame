@@ -1,4 +1,4 @@
-name: Publish Dead Recoil v10
+name: Publish Dead Recoil v10\n# Rebuild trigger: launch-time update prompt
 
 on:
   workflow_dispatch:
