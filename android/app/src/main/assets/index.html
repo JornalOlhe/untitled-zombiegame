@@ -8765,6 +8765,11 @@
             this.selection = null;
             this.rarityFilter = result.item.tier;
             this.roll = { kind, result, lucky, start: menuTime, duration: reduced ? 0.35 : 3.25, tick: -1 };
+            const rollRef = this.roll;
+            clearTimeout(this.rollFallback);
+            this.rollFallback = setTimeout(() => {
+              if (this.roll === rollRef) this.finishSpin(rollRef);
+            }, reduced ? 1400 : 5000);
             $("roll-overlay").classList.remove("hidden", "result-reveal"); $("roll-overlay").style.removeProperty("--roll-rarity"); $("roll-overlay").setAttribute("aria-busy", "true");
             const catalog = Progression.economy.catalogs[kind], sequence = Array.from({ length: 25 }, (_, i) => i === 22 ? result : { id: i % catalog.length, item: catalog[i % catalog.length] });
             $("roll-strip").innerHTML = sequence.map((r) => `<div class="reel-card" style="--rarity:${rarityColors[r.item.tier]}"><small>${rarityNames[r.item.tier]}</small><b>${r.item.name}</b><span>#${String(r.id + 1).padStart(3, "0")}</span></div>`).join("");
@@ -8772,6 +8777,8 @@
             updatePreview();
           },
           async finishSpin(r) {
+            clearTimeout(this.rollFallback);
+            this.rollFallback = null;
             this.roll = null;
             $("roll-overlay").classList.add("hidden"); $("roll-overlay").classList.remove("result-reveal"); $("roll-overlay").setAttribute("aria-busy", "false");
             if (r.result.item.tier >= 4) {

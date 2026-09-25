@@ -46,6 +46,7 @@ const server = http.createServer((req, res) => {
           return p.data.weaponId;
         });
         await page.locator('.spin-btn.lucky').click();
+        await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 4, {timeout:3000});
         await page.locator('#spin-confirm:not(.hidden)').waitFor({state:'visible',timeout:10000});
         assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'LENDÁRIO');
         await page.screenshot({path:'test-results/armory-confirm-1280.png'});
