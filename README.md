@@ -16,11 +16,11 @@ Controles principais: `WASD` para mover, mouse para mirar e atirar, `R` para rec
 
 ## Armory
 
-O Armory usa dois tipos de spin. O Lucky Spin entrega somente Épico, Lendário, Mítico ou Divino: 59% / 37% / 3% / 1%. As raridades podem ser abertas para visualizar os itens disponíveis. Épico e Divino entram diretamente no loadout; somente Lendário e Mítico mostram uma única confirmação antes da troca.
+O Armory usa dois tipos de spin. O Lucky Spin entrega somente Épico, Lendário, Mítico ou Divino: 59% / 37% / 3% / 1%. Na v11 a roleta tem sequência longa e variável, near-miss visual ocasional e ponto final randomizado dentro do card; isso não altera as probabilidades reais. Resultados Divinos recebem uma celebração própria. Épico e Divino entram diretamente no loadout; somente Lendário e Mítico mostram uma única confirmação antes da troca.
 
 ## Builds
 
-A `main` está preparada como v0.10.0 QA, enquanto a v0.9.0 continua sendo a release estável assinada. APKs/EXEs de QA são gerados para validação, mas a release Android só é publicada quando o APK usa a mesma assinatura da instalação estável anterior.
+A `main` está preparada como v0.11.0 QA. A v11 publica EXE portátil para Windows e APK de QA para Android; a release Android estável continua exigindo a mesma assinatura da instalação estável anterior.
 
 ## Desenvolvimento
 
