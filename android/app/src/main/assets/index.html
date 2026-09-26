@@ -2978,6 +2978,8 @@ body.netgame #revivetouch{display:flex}
     <script src="js/auth/GoogleAuth.js"></script>
     <script src="js/data/Backend.js"></script>
     <script src="js/data/MapTextures.js"></script>
+    <script src="vendor/GLTFLoader.js"></script>
+    <script src="js/data/WeaponModels.js"></script>
     <script src="js/missions/Missions.js"></script>
     <script src="js/network/Transport.js"></script>
     <script src="js/network/LobbyManager.js"></script>
@@ -4738,6 +4740,88 @@ body.netgame #revivetouch{display:flex}
         };
 
         // Detailed first-person weapons assembled from cached geometry and PBR materials.
+        // Voxel weapon models made in Blender (tools/blender/weapons_build.py). They load once at
+        // boot; until then (or if a model is missing) the procedural weapon is used.
+        const WeaponModels = {
+          scenes: new Map(),
+          ready: false,
+          load() {
+            const src = window.DR_WEAPON_GLB;
+            if (!src || !THREE.GLTFLoader) return;
+            const loader = new THREE.GLTFLoader();
+            const names = Object.keys(src);
+            let left = names.length;
+            const done = () => {
+              if (--left > 0) return;
+              this.ready = true;
+              if (typeof WeaponSystem !== "undefined" && WeaponSystem.model?.parent) WeaponSystem.buildModel();
+            };
+            for (const name of names) {
+              try {
+                const bin = atob(src[name]);
+                const buf = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+                loader.parse(
+                  buf.buffer,
+                  "",
+                  (gltf) => {
+                    gltf.scene.traverse((o) => {
+                      if (!o.isMesh) return;
+                      for (const key of ["map", "emissiveMap"]) {
+                        const t = o.material[key];
+                        if (!t) continue;
+                        t.magFilter = THREE.NearestFilter;
+                        t.minFilter = THREE.NearestFilter;
+                        t.generateMipmaps = false;
+                        t.needsUpdate = true;
+                      }
+                      if (o.material.emissiveMap) o.material.emissiveIntensity = 1.6;
+                      o.material.metalness = Math.min(o.material.metalness, 0.35);
+                    });
+                    this.scenes.set(name, gltf.scene);
+                    done();
+                  },
+                  () => done(),
+                );
+              } catch (e) {
+                done();
+              }
+            }
+          },
+          // Replaces the procedural body with the Blender model. Hands, muzzle flash and the nocked
+          // arrow stay; magazine and pump move into the animated pivots.
+          apply(w, gun, parts) {
+            const scene = this.scenes.get(w.name);
+            if (!scene) return false;
+            const keep = new Set([parts.flash, parts.arrow, parts.magazine, parts.pump].filter(Boolean));
+            for (const child of gun.children) if (!keep.has(child)) child.visible = false;
+            for (const pivot of [parts.magazine, parts.pump]) if (pivot) for (const c of pivot.children) c.visible = false;
+            const model = scene.clone(true);
+            gun.add(model);
+            let minZ = Infinity;
+            for (const node of model.children) {
+              if (!node.isMesh) continue;
+              node.geometry.computeBoundingBox();
+              node.updateMatrix();
+              minZ = Math.min(minZ, node.geometry.boundingBox.clone().applyMatrix4(node.matrix).min.z);
+            }
+            for (const node of [...model.children]) {
+              const role = /^mag/.test(node.name) ? "magazine" : /^pump/.test(node.name) ? "pump" : null;
+              const pivot = role && parts[role];
+              if (pivot) {
+                node.position.sub(pivot.position);
+                pivot.add(node);
+              }
+            }
+            if (w.kind !== "melee" && w.kind !== "bow" && isFinite(minZ)) {
+              // Muzzle flash at the real end of the barrel.
+              parts.flash.position.z = minZ - 0.02;
+              parts.muzzle = parts.flash.position.z;
+            }
+            return true;
+          },
+        };
+        WeaponModels.load();
         const ArsenalArt = {
           build(w, g) {
             const A = VisualArt,
@@ -5227,6 +5311,7 @@ body.netgame #revivetouch{display:flex}
             flash.visible = false;
             gun.add(flash);
             parts.flash = flash;
+            WeaponModels.apply(w, gun, parts);
             g.traverse((o) => {
               if (o.isMesh || o.isSprite) {
                 o.castShadow = false;
@@ -5368,7 +5453,9 @@ body.netgame #revivetouch{display:flex}
             }
             for (const m of g.children) {
               if (!m.isMesh || m === floor) continue;
-              if (m.scale.y > 3 && m.scale.x > 3 && m.scale.z > 3) {
+              // Only real building volumes (unit boxes with collision) get the wall material; flat
+              // decals and other shapes scaled up keep their own geometry and look.
+              if (m.geometry === unitBox && m.scale.y > 3 && m.scale.x > 3 && m.scale.z > 3) {
                 m.material = A.surface(look[1][0], look[1][2], "concrete");
                 A.tileUV(m, look[1][1]);
               }
@@ -15505,6 +15592,8 @@ body.netgame #revivetouch{display:flex}
           window.DeadRecoilTest = {
             GameState,
             WeaponSystem,
+            WeaponModels,
+            ArsenalArt,
             Progression,
             Armory,
             rarityNames,
