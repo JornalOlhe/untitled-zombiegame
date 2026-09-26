@@ -4997,36 +4997,36 @@ body.netgame #revivetouch{display:flex}
                 A.link(gun, [-0.19, -0.01, -1.02], [0.19, -0.01, -1.02], 0.025, 0.018, bone, "steel");
                 for (const [x, lean] of [[-0.18,-0.04],[0,0],[0.18,0.04]]) {
                   A.link(gun, [x, -0.01, -1.01], [x + lean, 0.015, -1.39], 0.025, 0.012, obsidian, "steel");
-                  const tip=A.ellipsoid(gun,[x + lean,0.015,-1.405],[0.035,0.035,0.085],infernal,"steel",infernal);
-                  tip.rotation.x=Math.PI/2;
+                  const tip = A.ellipsoid(gun, [x + lean,0.015,-1.405], [0.035,0.035,0.085], infernal, "steel", infernal);
+                  tip.rotation.x = Math.PI / 2;
                 }
-                const core=A.ellipsoid(gun,[0,0,-0.96],[0.09,0.07,0.09],infernal,"steel",infernal);
-                for(const side of[-1,1]) {
-                  A.link(gun,[side*.07,0,-.92],[side*.17,.015,-.82],.018,.009,bone,"steel");
-                  A.link(gun,[side*.17,.015,-.82],[side*.23,0,-.94],.017,.008,obsidian,"steel");
+                const core = A.ellipsoid(gun, [0,0,-0.96], [0.09,0.07,0.09], infernal, "steel", infernal);
+                for (const side of [-1,1]) {
+                  A.link(gun, [side*.07,0,-.92], [side*.17,.015,-.82], .018,.009,bone,"steel");
+                  A.link(gun, [side*.17,.015,-.82], [side*.23,0,-.94], .017,.008,obsidian,"steel");
                 }
-                parts.core=core;
-                muzzle=-1.42;
+                parts.core = core;
+                muzzle = -1.42;
               } else if (w.specter) {
-                const gold=0xd9ae55, ivory=0xeaf6ff, holy=0x62d9ff;
-                const core=A.ellipsoid(gun,[0,0,-0.56],[0.09,0.06,0.12],holy,"steel",holy);
-                A.ring(gun,[0,0,-0.56],0.14,gold).rotation.x=Math.PI/2;
-                for(const side of[-1,1]) {
-                  A.link(gun,[0,0,-.55],[side*.16,0,-.78],.028,.013,gold,"steel");
-                  A.link(gun,[side*.16,0,-.78],[side*.12,0,-1.08],.034,.012,ivory,"steel",holy);
-                  A.link(gun,[side*.12,0,-1.08],[side*.02,0,-1.28],.028,.009,gold,"steel");
-                  for(let j=0;j<3;j++) {
-                    const feather=A.ellipsoid(gun,[side*(.19+j*.055),-.015,-.73+j*.12],[.055,.018,.14],ivory,"cloth",holy);
-                    feather.rotation.z=side*(.45+j*.08);
+                const gold = 0xd9ae55, ivory = 0xeaf6ff, holy = 0x62d9ff;
+                const core = A.ellipsoid(gun, [0,0,-0.56], [0.09,0.06,0.12], holy, "steel", holy);
+                A.ring(gun, [0,0,-0.56], 0.14, gold).rotation.x = Math.PI / 2;
+                for (const side of [-1,1]) {
+                  A.link(gun, [0,0,-.55], [side*.16,0,-.78], .028,.013,gold,"steel");
+                  A.link(gun, [side*.16,0,-.78], [side*.12,0,-1.08], .034,.012,ivory,"steel");
+                  A.link(gun, [side*.12,0,-1.08], [side*.02,0,-1.28], .028,.009,gold,"steel");
+                  for (let j=0;j<3;j++) {
+                    const feather = A.ellipsoid(gun, [side*(.19+j*.055),-.015,-.73+j*.12], [.055,.018,.14], ivory, "cloth", holy);
+                    feather.rotation.z = side * (.45 + j*.08);
                   }
                 }
-                A.link(gun,[0,0,-.44],[0,0,-.12],.032,.014,gold,"steel");
-                A.ellipsoid(gun,[0,0,-.08],[.04,.04,.11],holy,"steel",holy);
-                parts.core=core;
-                parts.specter=true;
-                muzzle=-1.3;
+                A.link(gun, [0,0,-.44], [0,0,-.12], .032,.014,gold,"steel");
+                A.ellipsoid(gun, [0,0,-.08], [.04,.04,.11], holy, "steel", holy);
+                parts.core = core;
+                parts.specter = true;
+                muzzle = -1.3;
               } else {
-// The Divine spear stretches the same blade shape into a long lance with an
+              // The Divine spear stretches the same blade shape into a long lance with an
               // extended haft; the knife shrinks it into a short, fast sidearm blade.
               const spear = !!w.spear,
                 knife = !!w.knife,
