@@ -21,6 +21,7 @@
     oauth_cancelled: "Login com Google cancelado.",
     google_disabled: "Login com Google ainda não está ativado no servidor. Use e-mail e senha por enquanto.",
     link_expired: "Este link expirou ou já foi usado. Peça um novo.",
+    invalid_code: "Código inválido ou expirado. Confira o e-mail ou peça um novo.",
     same_password: "A nova senha precisa ser diferente da atual.",
     unavailable: "Serviço de contas indisponível no momento.",
     unknown: "Algo deu errado. Tente novamente.",
@@ -184,6 +185,23 @@
         if (error) throw error;
       } catch (e) {
         throw classify(e);
+      }
+    },
+
+    // Code typed from the e-mail (works on any device, no link needed). Signs the player in for the
+    // password change that follows.
+    async verifyRecoveryCode(email, code) {
+      this.validateEmail(email);
+      const token = String(code || "").replace(/\D/g, "");
+      if (token.length < 6) throw new AuthError("invalid_code");
+      try {
+        const { data, error } = await this.client.auth.verifyOtp({ email: email.trim(), token, type: "recovery" });
+        if (error) throw error;
+        this.pendingRecovery = true;
+        return data;
+      } catch (e) {
+        const err = classify(e);
+        throw err.code === "link_expired" || err.code === "unknown" ? new AuthError("invalid_code") : err;
       }
     },
 

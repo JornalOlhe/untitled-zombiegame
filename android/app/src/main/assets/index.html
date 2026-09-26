@@ -2602,7 +2602,12 @@ body.netgame #revivetouch{display:flex}
           <form id="forgot-form" novalidate>
             <label>E-mail da conta<input id="forgot-email" type="email" autocomplete="email" inputmode="email" required /></label>
             <p class="auth-msg" role="alert"></p>
-            <button class="primary auth-submit" type="submit">ENVIAR LINK</button>
+            <button class="primary auth-submit" type="submit">ENVIAR CÓDIGO</button>
+          </form>
+          <form id="forgot-code-form" class="hidden" novalidate>
+            <label>Código do e-mail<input id="forgot-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="00000000" required /></label>
+            <p class="auth-msg" role="alert"></p>
+            <button class="primary auth-submit" type="submit">CONFIRMAR CÓDIGO</button>
           </form>
           <div class="auth-links"><button type="button" data-auth-view="login">Voltar ao login</button></div>
         </div>

@@ -22,6 +22,7 @@
       $("login-form").onsubmit = (e) => (e.preventDefault(), this.login());
       $("register-form").onsubmit = (e) => (e.preventDefault(), this.register());
       $("forgot-form").onsubmit = (e) => (e.preventDefault(), this.forgot());
+      $("forgot-code-form").onsubmit = (e) => (e.preventDefault(), this.forgotCode());
       $("reset-form").onsubmit = (e) => (e.preventDefault(), this.reset());
       $("google-btn").onclick = () => this.google();
       $("google-btn-2").onclick = () => this.google();
@@ -142,7 +143,18 @@
       const form = $("forgot-form");
       return this.run(form, async () => {
         await DR.AuthService.requestPasswordReset($("forgot-email").value);
-        this.message("Se existir uma conta com esse e-mail, enviamos o link para redefinir a senha.", "ok");
+        $("forgot-code-form").classList.remove("hidden");
+        $("forgot-code").focus?.();
+        this.message("Se existir uma conta com esse e-mail, enviamos um código e um link. Digite o código abaixo ou toque no link do e-mail.", "ok");
+      });
+    },
+    forgotCode() {
+      const form = $("forgot-code-form");
+      return this.run(form, async () => {
+        await DR.AuthService.verifyRecoveryCode($("forgot-email").value, $("forgot-code").value);
+        $("forgot-code").value = "";
+        this.open("reset");
+        this.message("Código confirmado. Defina sua nova senha.", "info");
       });
     },
     reset() {
