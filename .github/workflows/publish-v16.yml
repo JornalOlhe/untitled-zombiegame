@@ -2,17 +2,6 @@ name: Publish Dead Recoil v16
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'android/app/src/main/assets/index.html'
-      - 'android/app/build.gradle'
-      - 'desktop/package.json'
-      - 'android/app/src/main/assets/monsters/**'
-      - 'tests/ui-smoke.cjs'
-      - 'tests/monsters-smoke.cjs'
-      - 'release/v16-notes.md'
-      - '.github/workflows/publish-v16.yml'
 
 concurrency:
   group: publish-v16
