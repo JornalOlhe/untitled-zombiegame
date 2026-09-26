@@ -1,0 +1,248 @@
+name: Publish Dead Recoil v21
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v21.yml']
+
+
+concurrency:
+  group: publish-v21
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  ui-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/ui-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DeadRecoil-v21-UI
+          path: test-results/
+          retention-days: 15
+
+  monsters-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/monsters-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DeadRecoil-v21-Monsters
+          path: test-results/
+          retention-days: 15
+
+  deathkill-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/deathkill-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DeadRecoil-v21-DeathKill
+          path: test-results/
+          retention-days: 15
+
+  multiplayer-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/multiplayer-local.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DeadRecoil-v21-Multiplayer
+          path: test-results/
+          retention-days: 15
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      # Signed with the fixed release key (when the secrets exist) so every later version can
+      # update this one in place from inside the game. Falls back to a debug build otherwise.
+      - name: Build Android
+        working-directory: android
+        shell: bash
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then gradle assembleRelease --stacktrace; else gradle assembleDebug --stacktrace; fi
+
+      - name: Sign and verify Android package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+              --out dist/DeadRecoil-v21.apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+            echo "Signed with the release key."
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/DeadRecoil-v21.apk
+            echo "::warning::Release signing secrets missing: published a debug-signed APK."
+          fi
+          "$BT/apksigner" verify --print-certs dist/DeadRecoil-v21.apk | head -5
+          BADGING=$("$BT/aapt" dump badging dist/DeadRecoil-v21.apk)
+          echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
+          echo "$BADGING" | grep -q "versionCode='21'"
+          echo "$BADGING" | grep -q "versionName='0.21.0'"
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          source = Path("android/app/src/main/assets/index.html").read_bytes()
+          with zipfile.ZipFile("dist/DeadRecoil-v21.apk") as apk:
+              packaged = apk.read("assets/index.html")
+          if source != packaged:
+              raise SystemExit("Packaged game assets do not match current main.")
+          print("Android v21 verified.")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v21-Android
+          path: dist/DeadRecoil-v21.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate version
+        shell: pwsh
+        run: |
+          $package = Get-Content desktop/package.json | ConvertFrom-Json
+          if ($package.version -ne "0.21.0") { throw "Expected desktop 0.21.0" }
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Smoke test
+        working-directory: desktop
+        run: npm run smoke
+
+      - name: Build Windows installer
+        working-directory: desktop
+        run: npm run dist
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $exe = "desktop/dist/DeadRecoil-Setup-0.21.0.exe"
+          if (!(Test-Path $exe)) { throw "Installer was not generated" }
+          if ((Get-Item $exe).Length -lt 50000000) { throw "Installer is unexpectedly small" }
+          # Silent install + launch check, like the in-game updater does.
+          $p = Start-Process $exe -ArgumentList "/S" -PassThru -Wait
+          $installed = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs") -Filter "Dead Recoil.exe" -Recurse -Depth 2 | Select-Object -First 1 -ExpandProperty FullName
+          if (!$installed) { throw "Silent install did not produce Dead Recoil.exe" }
+          Write-Host "Installed at $installed"
+          $smoke = Start-Process $installed -ArgumentList "--smoke-test" -PassThru -Wait
+          if ($smoke.ExitCode -ne 0) { throw "Installed game failed the smoke test" }
+          Get-FileHash $exe -Algorithm SHA256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v21-Windows
+          path: desktop/dist/DeadRecoil-Setup-0.21.0.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [ui-test, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-v21-Android
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-v21-Windows
+          path: dist
+
+      - name: Publish GitHub release v21
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/DeadRecoil-v21.apk
+          test -f dist/DeadRecoil-Setup-0.21.0.exe
+          if gh release view v21 >/dev/null 2>&1; then
+            gh release upload v21 dist/DeadRecoil-v21.apk dist/DeadRecoil-Setup-0.21.0.exe --clobber
+            gh release edit v21 --title "Dead Recoil 0.21.0" --notes-file release/v21-notes.md --latest
+          else
+            gh release create v21 dist/DeadRecoil-v21.apk dist/DeadRecoil-Setup-0.21.0.exe \
+              --target "$GITHUB_SHA" --title "Dead Recoil 0.21.0" --notes-file release/v21-notes.md --latest
+          fi
+
+      - name: Verify published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release view v21 --json tagName,name,isDraft,isPrerelease,assets

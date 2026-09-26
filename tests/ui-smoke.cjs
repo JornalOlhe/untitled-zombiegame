@@ -241,9 +241,10 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.evaluate(() => DeadRecoilTest.player.maxhp),150);
       const before = await page.evaluate(() => DeadRecoilTest.player.pos.z);
       await page.keyboard.down('KeyW');
-      await page.waitForTimeout(800);
+      // Software GL compiles the map shaders on the first frames; give movement a few seconds.
+      const moved = await page.waitForFunction(z => DeadRecoilTest.player.pos.z !== z, before, { timeout: 8000 }).then(() => true, () => false);
       await page.keyboard.up('KeyW');
-      assert.notEqual(await page.evaluate(() => DeadRecoilTest.player.pos.z), before, 'Player must move');
+      assert.ok(moved, 'Player must move');
       await page.screenshot({path:`test-results/game-${width}.png`});
       await page.evaluate(() => document.dispatchEvent(new Event('deadrecoil-native-pause')));
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PAUSED);

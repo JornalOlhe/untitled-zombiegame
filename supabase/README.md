@@ -28,6 +28,7 @@ Abra https://supabase.com/dashboard/project/bfrewibnwclziuugypck.
 - **Site URL:** `untitledzombie://auth/callback`
 - **Redirect URLs:** adicione
   - `untitledzombie://auth/callback**`
+  - `http://127.0.0.1:*/auth/callback**` (login Google no Windows: o jogo abre um servidor local de uso único)
   - (opcional, versão web) a URL onde o jogo for hospedado
 
 Sem isso, os links dos e-mails voltam para `http://localhost:3000`, que é o padrão do Supabase.
@@ -45,7 +46,7 @@ Fluxo no jogo:
 - Depois do login, o Google redireciona para `untitledzombie://auth/callback?code=…`.
 - O sistema reabre o jogo, que troca o código (PKCE) por uma sessão.
 
-### 3. E-mails (recomendado antes de lançar para outras pessoas)
+### 3. E-mails (feito: SMTP do Brevo, 100 e-mails/hora, remetente "Dead Recoil")
 
 O remetente padrão do Supabase aceita só **cerca de 2 e-mails por hora** (confirmação e recuperação de senha somados).
 Para jogadores reais:

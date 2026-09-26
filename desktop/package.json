@@ -1,13 +1,13 @@
 {
   "name": "dead-recoil-desktop",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "description": "Dead Recoil desktop runtime for Windows",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "smoke": "electron . --smoke-test",
-    "dist": "electron-builder --win portable --x64 --publish never"
+    "dist": "electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
     "electron": "44.4.5",
@@ -17,7 +17,7 @@
     "appId": "com.deadrecoil.game.desktop",
     "productName": "Dead Recoil",
     "asar": true,
-    "artifactName": "DeadRecoil-Windows.exe",
+    "artifactName": "DeadRecoil-Setup-${version}.exe",
     "files": [
       "main.js",
       "preload.js",
@@ -35,12 +35,31 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
         }
       ]
-    }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dead Recoil",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "uninstallDisplayName": "Dead Recoil"
+    },
+    "protocols": [
+      {
+        "name": "Dead Recoil login",
+        "schemes": [
+          "untitledzombie"
+        ]
+      }
+    ]
   }
 }

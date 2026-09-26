@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("DeadRecoilDesktop", {
   isDesktop: true,
   openExternal: (url) => ipcRenderer.invoke("dr:open-external", String(url || "")),
   takePendingAuthUrl: () => ipcRenderer.invoke("dr:take-pending-auth"),
+  startAuthLoopback: () => ipcRenderer.invoke("dr:auth-loopback"),
 });
 contextBridge.exposeInMainWorld("deadRecoilNative", {
   quit: () => ipcRenderer.invoke("dr:quit"),

@@ -24,9 +24,11 @@ import org.json.JSONObject;
  * Flow:
  * 1) Detect a newer release.
  * 2) Ask the player before downloading anything.
- * 3) Stable releases named DeadRecoil.apk are downloaded and verified in-app.
- * 4) QA/prerelease builds open the official GitHub asset/release page instead,
- *    because Android only allows an in-place update when both APKs use the same signing key.
+ * 3) The APK is downloaded inside the app (cache folder, always the same file name, so nothing
+ *    piles up in Downloads as "(1)", "(2)"), checked against the GitHub SHA-256 digest and the
+ *    installed signature, then handed to the Android installer, which updates the game in place
+ *    and keeps the save data.
+ * 4) Only when the signature differs (an old test build) the player is sent to the release page.
  */
 final class UpdateManager {
     private static final String RELEASES =
@@ -127,10 +129,8 @@ final class UpdateManager {
                 .setMessage(message.toString())
                 .setPositiveButton("Baixar mais recente", (d, w) -> {
                     promptVisible = false;
-                    if (!prerelease && exactAsset != null) {
-                        startVerifiedDownload(version, exactAsset);
-                    } else if (anyApk != null) {
-                        openExternal(anyApk.optString("browser_download_url", releasePage));
+                    if (anyApk != null) {
+                        startVerifiedDownload(version, anyApk);
                     } else {
                         openExternal(releasePage);
                     }
@@ -144,7 +144,7 @@ final class UpdateManager {
 
     private void startVerifiedDownload(int version, JSONObject asset) {
         String url = asset.optString("browser_download_url", "");
-        if (!url.startsWith(ASSET_PREFIX) || !url.endsWith("/DeadRecoil.apk")) {
+        if (!url.startsWith(ASSET_PREFIX) || !url.toLowerCase().endsWith(".apk")) {
             openExternal(releasePage);
             return;
         }
@@ -336,6 +336,14 @@ final class UpdateManager {
         return value;
     }
 
+    static final class SignatureMismatch extends Exception {
+        SignatureMismatch() {
+            super("Esta atualização foi assinada com outra chave (a sua versão instalada é uma build de testes antiga). "
+                    + "Instale a nova versão uma única vez pela página do GitHub: desinstale a antiga e instale a nova. "
+                    + "Quem joga logado não perde nada, o progresso fica na conta. Depois disso as atualizações serão automáticas.");
+        }
+    }
+
     private void verifyPackage(File file, int expectedVersion) throws Exception {
         if (!file.exists() || file.length() == 0) throw new Exception("Atualização ainda não foi baixada");
 
@@ -356,7 +364,7 @@ final class UpdateManager {
                 || !Arrays.equals(
                         archive.signatures[0].toByteArray(),
                         installed.signatures[0].toByteArray())) {
-            throw new Exception("O APK não corresponde à assinatura e versão do jogo instalado");
+            throw new SignatureMismatch();
         }
     }
 

@@ -227,7 +227,13 @@
     async signInWithGoogle() {
       if ((await this.googleEnabled()) === false) throw new AuthError("google_disabled");
       try {
-        const redirectTo = this.redirectUrl("oauth");
+        // Windows app: the browser comes back to a one-shot local server run by the game
+        // (http://127.0.0.1:<port>/auth/callback), so no "open app?" prompt can get in the way.
+        let redirectTo = this.redirectUrl("oauth");
+        try {
+          const loop = await window.DeadRecoilDesktop?.startAuthLoopback?.();
+          if (loop) redirectTo = `${loop}?type=oauth`;
+        } catch {}
         const external = !!(window.DeadRecoilNative?.openAuthUrl || window.DeadRecoilDesktop?.openExternal);
         const { data, error } = await this.client.auth.signInWithOAuth({
           provider: "google",

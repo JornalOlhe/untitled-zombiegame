@@ -2956,6 +2956,17 @@ body.netgame #revivetouch{display:flex}
           'Não foi possível carregar o Three.js. Conecte-se à internet e recarregue esta página.'
       "
     ></script>
+    <div id="updatebar" aria-live="polite"><span></span><i></i></div>
+    <script>
+      // Desktop auto-update progress (sent by the Windows app while it downloads the installer).
+      window.DeadRecoilUpdateStatus = (text, progress) => {
+        const bar = document.getElementById("updatebar");
+        if (!bar) return;
+        bar.classList.toggle("show", !!text);
+        bar.querySelector("span").textContent = text || "";
+        bar.querySelector("i").style.width = progress >= 0 ? Math.round(progress * 100) + "%" : "0";
+      };
+    </script>
     <script src="vendor/supabase.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/auth/AuthService.js"></script>
@@ -2976,7 +2987,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.20.0";
+        const GAME_VERSION = "0.21.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),

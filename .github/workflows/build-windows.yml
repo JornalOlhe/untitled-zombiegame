@@ -45,15 +45,15 @@ jobs:
         working-directory: desktop
         run: npm run smoke
 
-      - name: Build portable Windows executable
+      - name: Build Windows installer
         working-directory: desktop
         run: npm run dist
 
       - name: Verify executable
         shell: pwsh
         run: |
-          $exe = "desktop/dist/DeadRecoil-Windows.exe"
-          if (!(Test-Path $exe)) { throw "DeadRecoil-Windows.exe was not generated" }
+          $exe = Get-ChildItem "desktop/dist" -Filter "DeadRecoil-Setup-*.exe" | Select-Object -First 1 -ExpandProperty FullName
+          if (!$exe) { throw "DeadRecoil-Setup installer was not generated" }
           $size = (Get-Item $exe).Length
           if ($size -lt 50000000) { throw "Generated executable is unexpectedly small: $size bytes" }
           Get-FileHash $exe -Algorithm SHA256
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: DeadRecoil-Windows-QA
-          path: desktop/dist/DeadRecoil-Windows.exe
+          path: desktop/dist/DeadRecoil-Setup-*.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -104,4 +104,5 @@ jobs:
 
           if (!$found) { throw "Release $tag was not found" }
 
-          gh release upload $tag "desktop/dist/DeadRecoil-Windows.exe" --clobber
+          $exe = Get-ChildItem "desktop/dist" -Filter "DeadRecoil-Setup-*.exe" | Select-Object -First 1 -ExpandProperty FullName
+          gh release upload $tag "$exe" --clobber
