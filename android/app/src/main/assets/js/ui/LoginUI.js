@@ -32,8 +32,22 @@
     },
     open(view = "login", message = "") {
       this.game.screen("loginscreen");
+      this.checkGoogle();
       this.show(view);
       if (message) this.message(message, view === "login" && /expirou|confirm/i.test(message) ? "warn" : "info");
+    },
+    // Tell the player up front when the Google provider is still off on the server.
+    checkGoogle() {
+      if (this.googleChecked) return;
+      this.googleChecked = true;
+      DR.AuthService.googleEnabled?.().then((on) => {
+        for (const id of ["google-btn", "google-btn-2"]) {
+          const el = $(id);
+          if (!el) continue;
+          el.classList.toggle("is-off", on === false);
+          el.title = on === false ? "Login com Google ainda não ativado" : "";
+        }
+      });
     },
     show(view) {
       this.view = view;

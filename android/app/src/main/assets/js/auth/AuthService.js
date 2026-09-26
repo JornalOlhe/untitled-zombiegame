@@ -16,8 +16,10 @@
     network: "Sem conexão com o servidor. Verifique sua internet.",
     session_expired: "Sua sessão expirou. Entre novamente.",
     rate_limit: "Muitas tentativas seguidas. Aguarde um minuto.",
+    email_limit: "O servidor atingiu o limite de e-mails por hora. Tente de novo mais tarde ou entre com Google.",
     oauth_failed: "Não foi possível concluir o login com Google.",
     oauth_cancelled: "Login com Google cancelado.",
+    google_disabled: "Login com Google ainda não está ativado no servidor. Use e-mail e senha por enquanto.",
     link_expired: "Este link expirou ou já foi usado. Peça um novo.",
     same_password: "A nova senha precisa ser diferente da atual.",
     unavailable: "Serviço de contas indisponível no momento.",
@@ -48,6 +50,7 @@
       return new AuthError("invalid_email");
     if (code === "weak_password" || /password should be|weak password/.test(msg)) return new AuthError("weak_password");
     if (code === "same_password") return new AuthError("same_password");
+    if (/over_email_send_rate_limit|email rate limit/.test(code + msg)) return new AuthError("email_limit");
     if (/rate limit|too many|over_email_send_rate_limit|over_request_rate_limit/.test(code + msg) || status === 429) return new AuthError("rate_limit");
     if (/refresh token|session.*(missing|expired|not found)|jwt expired/.test(code + msg)) return new AuthError("session_expired");
     if (/otp_expired|flow_state|code verifier|invalid.*(grant|code)|expired/.test(code + msg)) return new AuthError("link_expired");
@@ -198,7 +201,31 @@
 
     // Official Google OAuth: the provider page opens in the system browser / Custom Tab and returns
     // through the untitledzombie:// deep link (or the page URL on the web). No embedded login form.
+    // Public auth settings (which providers are on, whether e-mail must be confirmed). Cached.
+    async settings() {
+      if (this._settings) return this._settings;
+      const cfg = window.DR_CONFIG || {};
+      const url = (cfg.supabaseUrl || cfg.url || "").replace(/\/$/, "");
+      const key = cfg.supabaseKey || cfg.publishableKey || cfg.anonKey || "";
+      if (!url || !key) return null;
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 6000);
+        const r = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key }, signal: ctl.signal });
+        clearTimeout(timer);
+        if (!r.ok) return null;
+        this._settings = await r.json();
+        return this._settings;
+      } catch {
+        return null;
+      }
+    },
+    async googleEnabled() {
+      const st = await this.settings();
+      return st ? !!st.external?.google : null;
+    },
     async signInWithGoogle() {
+      if ((await this.googleEnabled()) === false) throw new AuthError("google_disabled");
       try {
         const redirectTo = this.redirectUrl("oauth");
         const external = !!(window.DeadRecoilNative?.openAuthUrl || window.DeadRecoilDesktop?.openExternal);

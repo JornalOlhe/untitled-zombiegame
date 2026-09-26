@@ -109,7 +109,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await page.keyboard.up('KeyD');
     console.log('climb: ground', await page.evaluate(() => DeadRecoilTest.player.ground));
 
-    // Medkits: one drops every 30 s and heals part of the health bar.
+    // Medkits: drop at random times (18–42 s) and heal part of the health bar.
     const kit = await page.evaluate(() => {
       const T = DeadRecoilTest;
       T.Medkits.nextAt = T.time;
@@ -124,10 +124,25 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       T.player.ground = m.pos.y; T.player.jump = 0;
       return { before: 20, next: T.Medkits.nextAt - T.time };
     });
-    assert.ok(heal && Math.abs(heal.next - 30) < 1, 'a medkit must spawn, next one 30 s later');
+    assert.ok(heal && heal.next >= 17.5 && heal.next <= 42.5, 'a medkit must spawn, next one 18–42 s later');
     await waitSim(0.3);
     const healed = await page.evaluate(() => ({ hp: DeadRecoilTest.player.hp, left: DeadRecoilTest.Medkits.items.length }));
     assert.ok(healed.hp > 20 && healed.left === 0, 'medkit must heal and disappear');
+
+    // Grenade crate: one every 60 s, +2 grenades.
+    await page.evaluate(() => { const T = DeadRecoilTest; T.Medkits.grenadeAt = T.time; });
+    await waitSim(0.2);
+    const crate = await page.evaluate(() => {
+      const T = DeadRecoilTest, m = T.Medkits.items.find((i) => i.kind === 'grenade');
+      if (!m) return null;
+      T.player.grenades = 1;
+      T.player.pos.set(m.pos.x, 1.7 + m.pos.y, m.pos.z);
+      T.player.ground = m.pos.y; T.player.jump = 0;
+      return { next: T.Medkits.grenadeAt - T.time };
+    });
+    assert.ok(crate && Math.abs(crate.next - 60) < 1, 'a grenade crate must spawn, next one 60 s later');
+    await waitSim(0.3);
+    assert.strictEqual(await page.evaluate(() => DeadRecoilTest.player.grenades), 3, 'grenade crate must give +2 grenades');
 
     // Physics: an explosion flings nearby props.
     const flung = await page.evaluate(() => {
@@ -191,8 +206,8 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     });
     assert.ok(deaths.debrisAfter >= deaths.debrisBefore + 6, 'constructor must blow apart into blocks');
     await waitSim(0.8);
-    const crawlerCorpse = await page.evaluate(() => { const c = DeadRecoilTest.ZombieManager.corpses.find(c => c.rig.style === 'crawler'); return c && { roll: c.rig.root.rotation.z, pitch: c.group.rotation.x }; });
-    assert.ok(crawlerCorpse && Math.abs(crawlerCorpse.roll) > 0.8 && Math.abs(crawlerCorpse.pitch) < 0.01, 'crawler must roll onto its side, not flip upward');
+    const crawlerCorpse = await page.evaluate(() => { const c = DeadRecoilTest.ZombieManager.corpses.find(c => c.rig.style === 'crawler'); return c && { roll: c.rig.root.rotation.z, pitch: c.group.rotation.x, stretch: c.stretch, arm: c.rig.arms[0].rotation.x, low: c.rig.body.position.y < c.baseY }; });
+    assert.ok(crawlerCorpse && Math.abs(crawlerCorpse.roll) < 0.01 && Math.abs(crawlerCorpse.pitch) < 0.01 && crawlerCorpse.stretch > 0.9 && crawlerCorpse.arm < -2.5 && crawlerCorpse.low, 'crawler must stretch out flat on the ground');
     if (shots) await page.screenshot({ path: 'test-results/monsters-deaths.png' });
     await waitSim(0.3);
     if (shots) await page.screenshot({ path: 'test-results/monsters-headpop.png' });

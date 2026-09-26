@@ -31,7 +31,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       const page = await context.newPage();
       page.errors = [];
       page.on('pageerror', e => page.errors.push(e.message));
-      await page.goto(`${base}&name=${name}`);
+      await page.goto(`${base}&name=${name}`, { timeout: 120000 });
       await page.waitForFunction(() => !!window.DeadRecoilTest && !!window.DR?.LobbyManager, null, { timeout: 90000 });
       return page;
     };

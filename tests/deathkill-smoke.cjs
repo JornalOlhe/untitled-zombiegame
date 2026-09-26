@@ -74,7 +74,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
             T.ZombieManager.hit(z, 99999, false, z.group.position.clone(), T.WeaponSystem.current());
           }, kind);
           assert.equal(await page.evaluate(() => DeadRecoilTest.BossDeath.active?.kind), kind, `${kind} death cinematic starts`);
-          for (const [t, name] of kind === 'demon' ? [[1.3, 'gate'], [2.9, 'drag'], [4.0, 'slam']] : [[1.1, 'fall'], [1.9, 'impact'], [3.0, 'crushed']]) {
+          for (const [t, name] of kind === 'demon' ? [[1.5, 'hands'], [2.45, 'fight'], [3.8, 'drag']] : [[1.0, 'flee'], [2.4, 'fall'], [3.2, 'crushed']]) {
             await page.waitForFunction(v => (DeadRecoilTest.BossDeath.active?.time ?? 99) >= v, t, { timeout: 120000 });
             if (shots) await page.screenshot({ path: `test-results/bossdeath-${kind}-${name}.png` });
           }
