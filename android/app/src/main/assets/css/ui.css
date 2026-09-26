@@ -497,10 +497,125 @@ body.bossdeath #announcement, body.bossdeath #hud, body.bossdeath #touch { opaci
 .pause-nav .pause-quit { margin-top: 6px; border-color: #b3141b66; color: #ffb4ad; background: rgba(58,3,6,.35); }
 #pausescreen .hint { margin: 0; font-family: var(--mono); font-size: 11px; }
 #fallback { justify-self: start; padding: 6px 10px; font-size: 11px; font-family: var(--mono); }
-@media (max-height: 560px) {
-  .pause-dialog { gap: 10px; }
-  .pause-head h2 { font-size: 34px; }
-  .pause-stats strong { font-size: 22px; }
+@media (max-height: 800px) {
+  .pause-dialog { gap: 12px; padding-top: 18px; padding-bottom: 18px; }
+  .pause-head h2 { font-size: clamp(32px, 6.5vh, 52px); }
+  .pause-stats div { padding: 6px; }
+  .pause-stats strong { font-size: 24px; }
+  .pause-nav { gap: 5px; }
   .pause-nav button { padding: 8px 14px; }
-  .pause-nav button b { font-size: 19px; }
+  .pause-nav button b { font-size: 20px; }
+}
+@media (max-height: 520px) {
+  .pause-dialog { width: min(760px, 100%); grid-template-columns: 1fr 1fr; align-items: start; }
+  .pause-head, .pause-stats { grid-column: 1; }
+  .pause-nav { grid-column: 2; grid-row: 1 / span 3; }
+  .pause-head h2 { font-size: 30px; }
+  #pausescreen .hint, #fallback { grid-column: 1; }
+}
+
+/* ── Missions page (daily / weekly / unique) ──────────────────────────── */
+.panel-actions { display: flex; gap: 6px; }
+.panel-actions button { padding: 9px 14px; font-family: var(--mono); font-size: 12px; letter-spacing: .12em; }
+.mission-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.mission-tabs button { position: relative; padding: 10px 18px; font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: .08em; background: rgba(19,15,13,.7); border-color: var(--edge); color: var(--dim); }
+.mission-tabs button.active { color: var(--bone); background: linear-gradient(180deg, rgba(179,20,27,.55), rgba(58,3,6,.7)); border-color: var(--blood-2); }
+.mission-tabs button i { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 10px; background: var(--toxic); color: #081000; font: 700 12px/1 var(--head); font-style: normal; }
+.mission-tabs button i:empty { display: none; }
+.mission-summary { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)) 1fr; gap: 8px 22px; align-items: end; padding: 12px 16px; background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut-s); }
+.mission-summary:empty { display: none; }
+.ms-stat { display: grid; gap: 2px; }
+.ms-stat span { font-family: var(--mono); font-size: 10px; letter-spacing: .22em; color: var(--dim); }
+.ms-stat b { font-family: var(--display); font-weight: 400; font-size: 28px; letter-spacing: .05em; line-height: 1; color: var(--bone); }
+.ms-stat.hot b { color: var(--toxic); }
+.ms-track { grid-column: 4; height: 8px; background: #ffffff12; align-self: center; }
+.ms-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--blood), var(--amber)); transition: width .4s; }
+.ms-note { grid-column: 1 / -1; margin: 0; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.panel-screen { overflow: auto; }
+#missionscreen .mission-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); }
+.mission-list .mission-card { padding: 14px 16px; gap: 8px; }
+.mission-list .mission-card h3 { font-size: clamp(16px, 1.5vw, 19px); }
+.mission-rewards { display: flex; gap: 6px; flex-wrap: wrap; }
+.mission-rewards span { padding: 2px 7px; border: 1px solid var(--edge-2); font-family: var(--mono); font-size: 11px; color: var(--bone); white-space: nowrap; }
+.mission-rewards .rw-coin { color: var(--amber); border-color: #f5b94255; }
+.mission-rewards .rw-lucky { color: #e9b7ff; border-color: #a855f766; }
+.mission-rewards .rw-ticket { color: #9fd0ff; border-color: #2f8fff55; }
+.mission-foot { display: flex; align-items: center; justify-content: space-between; min-height: 34px; }
+.mission-pct { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.claimed-note { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.mission-card.claimed { opacity: .55; }
+.mission-card.claimed .mission-progress i { background: var(--faint); box-shadow: none; }
+.mission-flag.claimed { background: var(--faint); color: var(--bone); }
+.mission-card.final { grid-column: 1 / -1; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent); border-left-width: 5px;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--rarity) 18%, rgba(19,15,13,.95)), rgba(19,15,13,.92) 55%); }
+.mission-card.final h3 { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 2.4vw, 32px); letter-spacing: .05em; }
+.mission-card.final .mission-icon { width: 30px; height: 30px; font-size: 16px; }
+.claim-btn { padding: 8px 18px; }
+#missionscreen.in-match, #indexscreen.in-match { background: rgba(6,5,4,.9); }
+
+/* ── Index (bestiary) ─────────────────────────────────────────────────── */
+.index-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; align-content: start; }
+.enemy-card { display: grid; grid-template-columns: 112px 1fr; gap: 14px; padding: 12px; background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut-s); }
+.enemy-card.boss { border-color: #b3141b66; background: linear-gradient(120deg, rgba(58,3,6,.55), var(--panel) 60%); }
+.enemy-card.ready { border-color: #9dff4588; box-shadow: inset 0 0 40px #9dff4512; }
+.enemy-portrait { position: relative; aspect-ratio: 1; align-self: start; background: radial-gradient(circle at 50% 40%, #3a2a24, #0d0a09 70%) center / cover no-repeat; border: 1px solid var(--edge-2); overflow: hidden; }
+.enemy-portrait[style*="background-image"] { background-size: cover, auto; }
+.enemy-portrait span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 54px; color: var(--faint); }
+.enemy-card.unknown .enemy-portrait { filter: brightness(0) drop-shadow(0 0 1px #ff3b3088); background-color: #000; }
+.enemy-card.unknown .enemy-portrait span { color: #b3141b; filter: none; }
+.enemy-body { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.enemy-body header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.enemy-body h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 26px; letter-spacing: .05em; line-height: 1; color: var(--bone); }
+.enemy-tag { padding: 2px 6px; background: var(--blood); font-family: var(--mono); font-size: 10px; letter-spacing: .16em; color: #fff; }
+.enemy-tier { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: var(--amber); }
+.enemy-body p { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.4; }
+.enemy-kills { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.enemy-kills b { font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--bone); letter-spacing: .04em; }
+.enemy-card .mission-progress { --rarity: var(--toxic); }
+.enemy-card.boss .mission-progress { --rarity: var(--blood-2); }
+.enemy-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 520px) { .enemy-card { grid-template-columns: 84px 1fr; } .enemy-portrait span { font-size: 40px; } }
+
+/* ── Home: page transition ────────────────────────────────────────────── */
+#menu.leaving > * { animation: homeOut .18s ease-in forwards; }
+@keyframes homeOut { to { opacity: 0; transform: translateX(-24px); } }
+.screen.entering > * { animation: pageIn .35s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes pageIn { from { opacity: 0; transform: translateX(28px); } }
+
+/* ── In-match mission tracker ─────────────────────────────────────────── */
+#missiontracker { position: absolute; right: var(--safe-r); top: 50%; transform: translateY(-50%); width: min(250px, 30vw); padding: 8px 10px 10px; background: linear-gradient(270deg, rgba(9,8,7,.78), rgba(9,8,7,.45)); border-right: 3px solid var(--blood-2); pointer-events: none; font-family: var(--mono); z-index: 3; }
+#missiontracker.empty { display: none; }
+#missiontracker header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+#missiontracker header span { font-size: 10px; letter-spacing: .26em; color: var(--blood-2); font-weight: 600; }
+#missiontracker header small { font-size: 9px; color: var(--faint); letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.mt-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; }
+.mt-list .mt-cat { grid-column: 1 / -1; font-size: 8px; letter-spacing: .22em; color: var(--rarity); text-transform: uppercase; }
+.mt-list b { font-family: var(--head); font-weight: 500; font-size: 12px; line-height: 1.2; color: var(--bone); text-shadow: 0 1px 2px #000; }
+.mt-list small { font-size: 10px; color: var(--dim); align-self: end; white-space: nowrap; }
+.mt-list i { grid-column: 1 / -1; height: 3px; background: #ffffff1a; }
+.mt-list em { display: block; height: 100%; background: var(--rarity); }
+.mt-list li.done small { color: var(--toxic); }
+body.mouse-free #missiontracker, body.touch-ui #missiontracker { pointer-events: auto; cursor: pointer; }
+body.mouse-free #missiontracker { border-right-color: var(--amber); box-shadow: 0 0 0 1px #f5b94255; }
+body.mouse-free #missiontracker:hover { background: rgba(40,20,10,.85); }
+body.mouse-free #world { cursor: default; }
+@media (max-width: 760px), (max-height: 460px) {
+  #missiontracker { top: 36%; width: 190px; padding: 6px 8px; }
+  .mt-list li:nth-child(n+3) { display: none; }
+  .mt-list b { font-size: 11px; }
+}
+@media (max-height: 520px) {
+  .settings-head { flex-wrap: nowrap; align-items: center; padding: 6px 12px 0; }
+  .settings-head .eyebrow { display: none; }
+  .settings-head h2 { font-size: 24px; margin: 0 0 4px; white-space: nowrap; }
+  .settings-tabs { width: auto; flex: 1; justify-content: flex-end; }
+  .settings-tabs button { flex: 0 1 auto; padding: 8px 12px; }
+  .settings-foot { padding: 6px 12px; flex-wrap: nowrap; }
+  .settings-foot p { flex: 1 1 auto; font-size: 11px; }
+  .settings-foot p:empty { display: none; }
+  .settings-foot button { flex: 0 0 auto; min-height: 36px; padding: 6px 16px; }
+  .set-row { min-height: 40px; padding: 5px 10px; }
+  .set-row, .set-check, .key-row { grid-template-columns: minmax(0, 1fr) minmax(120px, 46%); }
+  .set-check { grid-template-columns: 1fr auto; }
 }

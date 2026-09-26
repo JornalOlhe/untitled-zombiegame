@@ -2545,18 +2545,15 @@ body.netgame #revivetouch{display:flex}
       </header>
       <nav class="home-nav" aria-label="Menu principal">
         <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>Solo ou multiplayer online</small><i>›</i></button>
-        <button id="missionsbtn" class="home-item" type="button"><b>MISSÕES</b><small id="missionsbadge">3 ativas</small><i>›</i></button>
+        <button id="missionsbtn" class="home-item" type="button"><b>MISSÕES</b><small id="missionsbadge">Diárias, semanais e únicas</small><i>›</i></button>
+        <button id="indexbtn" class="home-item" type="button"><b>ÍNDICE</b><small id="indexbadge">Bestiário e marcos de abate</small><i>›</i></button>
         <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas, spins e slots</small><i>›</i></button>
         <button id="classesbtn" class="home-item" type="button"><b>CLASSES</b><small>Habilidades do sobrevivente</small><i>›</i></button>
         <button id="customizebtn" class="home-item" type="button"><b>LOJA</b><small>Visual e equipamentos</small><i>›</i></button>
         <button id="accountbtn" class="home-item" type="button"><b>PERFIL</b><small>Entrar ou criar conta</small><i>›</i></button>
         <button id="settingsbtn" class="home-item" type="button"><b>CONFIGURAÇÕES</b><small>Gráficos, áudio e controles</small><i>›</i></button>
-        <div class="home-minor"><button id="scoresbtn" type="button">Placar local</button><button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button></div>
+        <div class="home-minor"><button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button></div>
       </nav>
-      <aside class="home-side" aria-label="Missões ativas">
-        <div class="side-title"><span>MISSÕES ATIVAS</span><button id="home-missions-all" type="button">VER TODAS ›</button></div>
-        <div id="home-missions"></div>
-      </aside>
       <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
     <section id="loginscreen" class="screen hidden auth-screen">
@@ -2640,10 +2637,23 @@ body.netgame #revivetouch{display:flex}
       </div>
     </section>
     <section id="missionscreen" class="screen hidden panel-screen">
-      <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>MISSÕES</h2><button id="missions-refresh" class="ghost" type="button">↻ ATUALIZAR</button></header>
-      <p class="panel-sub">Missões infinitas: coletou, outra aparece. Quanto mais rara, maior o desafio e a recompensa.</p>
+      <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>MISSÕES</h2>
+        <nav class="mission-tabs" role="tablist" aria-label="Categorias de missão">
+          <button type="button" role="tab" data-mission-tab="daily">DIÁRIAS<i></i></button>
+          <button type="button" role="tab" data-mission-tab="weekly">SEMANAIS<i></i></button>
+          <button type="button" role="tab" data-mission-tab="unique">ÚNICAS<i></i></button>
+        </nav>
+        <div class="panel-actions"><button id="missions-index" class="ghost" type="button">ÍNDICE ›</button><button id="missions-refresh" class="ghost" type="button">↻</button></div>
+      </header>
       <p id="missions-offline" class="offline-banner hidden">OFFLINE · progresso será sincronizado quando a conexão voltar</p>
+      <div id="mission-summary" class="mission-summary"></div>
       <div id="mission-list" class="mission-list"></div>
+    </section>
+    <section id="indexscreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>ÍNDICE</h2><div class="panel-actions"><button id="index-refresh" class="ghost" type="button">↻</button></div></header>
+      <p class="panel-sub">Todo inimigo eliminado entra no seu bestiário. Cada marco de abate libera uma recompensa para resgatar aqui.</p>
+      <div id="index-summary" class="mission-summary"></div>
+      <div id="index-list" class="index-list"></div>
     </section>
     <section id="playscreen" class="screen hidden panel-screen">
       <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>JOGAR</h2></header>
@@ -2908,6 +2918,7 @@ body.netgame #revivetouch{display:flex}
       <div id="streakbanner" aria-live="polite"></div>
       <div id="damageveil"></div>
       <div id="statusline"></div>
+      <aside id="missiontracker" class="empty" aria-label="Missões em andamento"><header><span>MISSÕES</span><small class="mt-key"></small></header><ol class="mt-list"></ol></aside>
       <canvas
         id="minimap"
         width="180"
@@ -3485,6 +3496,7 @@ body.netgame #revivetouch{display:flex}
           runId = 0,
           fallback = false,
           touchMode = (window.DeadRecoilRuntime?.platform === "android") || matchMedia("(pointer:coarse)").matches || navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+        document.body.classList.toggle("touch-ui", touchMode);
         const keys = new Set(),
           mouse = { down: false, aim: false },
           touchMove = { x: 0, y: 0 };
@@ -9132,6 +9144,8 @@ body.netgame #revivetouch{display:flex}
               if (head) player.headshots++;
               const family = weaponFamily(w);
               if (family) RunStats.families[family] = (RunStats.families[family] || 0) + 1;
+              const enemy = !z.boss && ENEMY_KEYS[z.type];
+              if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               const reward = z.boss ? z.boss.coins : head ? 8 : 5;
               Progression.reward(Math.round(reward * diff[difficulty].coins));
               const classFx = classEffects();
@@ -13806,10 +13820,13 @@ body.netgame #revivetouch{display:flex}
         // ── Per-run statistics reported to the server (missions + stats) ─────────────────────────
         const weaponFamily = (w) =>
           !w ? null : w.kind === "melee" ? "melee" : w.kind === "bow" ? "bow" : w.kind === "shotgun" ? "shotgun" : ["antimaterial", "rail"].includes(w.kind) ? "sniper" : w.kind === "missile" ? "explosive" : "rifle";
+        // zombieTypes index → Index (bestiary) key on the server.
+        const ENEMY_KEYS = ["zombie", "skeleton", "constructor", "swat", "screamer", "crawler", "brute", "stalker", "cyborg", "parasite_host", "tank", "parasite"];
         const RunStats = {
           damage: 0,
           bosses: {},
           families: {},
+          types: {},
           noDamageWaves: 0,
           revives: 0,
           waveStartedAt: 0,
@@ -13817,6 +13834,7 @@ body.netgame #revivetouch{display:flex}
             this.damage = 0;
             this.bosses = {};
             this.families = {};
+            this.types = {};
             this.noDamageWaves = 0;
             this.revives = 0;
             this.waveStartedAt = 0;
@@ -13836,6 +13854,7 @@ body.netgame #revivetouch{display:flex}
               damage: Math.round(this.damage),
               bosses: { ...this.bosses },
               families: { ...this.families },
+              types: { ...this.types },
               noDamageWaves: this.noDamageWaves,
               revives: this.revives,
             };
@@ -16116,6 +16135,83 @@ body.netgame #revivetouch{display:flex}
           light.position.set(3, 5, 4);
           previewScene.add(light);
         } catch {}
+        // Index portraits: each enemy's real rig rendered once to an image (bust shot), cached per session.
+        const MonsterPortraits = {
+          cache: new Map(),
+          size: 160,
+          setup() {
+            this.target = new THREE.WebGLRenderTarget(this.size, this.size, { encoding: THREE.sRGBEncoding });
+            this.pixels = new Uint8Array(this.size * this.size * 4);
+            this.canvas = document.createElement("canvas");
+            this.canvas.width = this.canvas.height = this.size;
+            this.scene = new THREE.Scene();
+            this.scene.add(new THREE.HemisphereLight(0xd8e0dc, 0x1a1210, 0.9));
+            const key = new THREE.DirectionalLight(0xffe2c2, 1.3);
+            key.position.set(2, 4, 5);
+            const rim = new THREE.DirectionalLight(0xff3b30, 0.9);
+            rim.position.set(-4, 2, -3);
+            this.scene.add(key, rim);
+            this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
+          },
+          render(key) {
+            if (this.cache.has(key)) return this.cache.get(key);
+            this.cache.set(key, null);
+            const type = ENEMY_KEYS.indexOf(key),
+              boss = WaveManager.bossRoster[key] || null;
+            if (type < 0 && !boss) return null;
+            if (!this.target) this.setup();
+            const g = new THREE.Group();
+            CreatureRig.create(g, boss ? 6 : type, boss);
+            // Skins load asynchronously; render only once every atlas has arrived.
+            let pending = false;
+            g.traverse((o) => { if (o.material?.map && !o.material.map.image) pending = true; });
+            if (pending) {
+              this.cache.delete(key);
+              return undefined;
+            }
+            this.scene.add(g);
+            g.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(g),
+              h = box.max.y - box.min.y,
+              focus = new V(0, box.max.y - h * 0.27, 0),
+              dist = (h * 0.33) / Math.tan(THREE.MathUtils.degToRad(15)) + (box.max.z - box.min.z) * 0.5;
+            this.camera.position.set(dist * 0.3, focus.y + h * 0.04, dist);
+            this.camera.lookAt(focus);
+            const prevTarget = renderer.getRenderTarget(),
+              prevColor = renderer.getClearColor(new THREE.Color()),
+              prevAlpha = renderer.getClearAlpha();
+            renderer.setRenderTarget(this.target);
+            renderer.setClearColor(0x000000, 0);
+            renderer.clear();
+            renderer.render(this.scene, this.camera);
+            renderer.readRenderTargetPixels(this.target, 0, 0, this.size, this.size, this.pixels);
+            renderer.setRenderTarget(prevTarget);
+            renderer.setClearColor(prevColor, prevAlpha);
+            this.scene.remove(g);
+            const ctx = this.canvas.getContext("2d"),
+              img = ctx.createImageData(this.size, this.size),
+              row = this.size * 4;
+            for (let y = 0; y < this.size; y++)
+              img.data.set(this.pixels.subarray((this.size - 1 - y) * row, (this.size - y) * row), y * row);
+            ctx.putImageData(img, 0, 0);
+            const url = this.canvas.toDataURL("image/png");
+            this.cache.set(key, url);
+            return url;
+          },
+          fill(root, tries = 0) {
+            let waiting = false;
+            try {
+              for (const el of root.querySelectorAll("[data-portrait]")) {
+                const url = this.render(el.dataset.portrait);
+                if (url) el.style.backgroundImage = `url(${url})`;
+                else if (url === undefined) waiting = true;
+              }
+            } catch (e) {
+              console.warn("[index] portraits", e);
+            }
+            if (waiting && tries < 20) setTimeout(() => root.isConnected && this.fill(root, tries + 1), 150);
+          },
+        };
         let previewModelKey = "";
         function updatePreview() {
           if (!previewRenderer) return;
@@ -16275,10 +16371,11 @@ body.netgame #revivetouch{display:flex}
           if (!inMatch) return false;
           const open = [...document.querySelectorAll(".screen:not(.hidden)")].map((el) => el.id);
           if (open.includes("settingsscreen")) { if (DR.SettingsUI?.capturing) return true; UIManager.screen("pausescreen"); return true; }
-          if (open.includes("missionscreen") || open.includes("indexscreen") || open.includes("helpscreen")) {
-            if (DR.MissionUI.from === "game") { DR.MissionUI.from = null; resume(); } else UIManager.screen("pausescreen");
+          if (open.includes("missionscreen") || open.includes("indexscreen")) {
+            if (!DR.MissionUI.leave()) UIManager.screen("pausescreen");
             return true;
           }
+          if (open.includes("helpscreen")) { UIManager.screen("pausescreen"); return true; }
           if (open.includes("pausescreen")) { resume(); return true; }
           return false;
         }
@@ -16311,7 +16408,7 @@ body.netgame #revivetouch{display:flex}
           Armory.open();
         };
         $("missionsbtn").onclick = () => DR.MissionUI.open();
-        $("home-missions-all").onclick = () => DR.MissionUI.open();
+        $("indexbtn").onclick = () => DR.MissionUI.openIndex();
         $("mp-back").onclick = () => DR.LobbyUI.openPlay();
         $("customizebtn").onclick = () => Armory.openCustomize();
         document.querySelectorAll("[data-armory-tab]").forEach(
@@ -16415,16 +16512,14 @@ body.netgame #revivetouch{display:flex}
           UIManager.screen("helpscreen");
         };
         $("settingsback").onclick = () => UIManager.screen(settingsReturn);
-        $("scoresbtn").onclick = () => {
-          UIManager.scores();
-          UIManager.screen("scoresscreen");
-        };
         let helpReturn = null;
         $("helpbtn").onclick = () => {
           helpReturn = null;
           $("helpcontrols").innerHTML = DR.SettingsUI.helpHtml();
           UIManager.screen("helpscreen");
         };
+        // The desktop build (desktop/preload.js) really closes the app; say so on the button.
+        if (window.deadRecoilNative?.quit) $("exitbtn").textContent = "Sair para a área de trabalho";
         $("exitbtn").onclick = () => {
           if (window.DeadRecoilNative?.quit) { window.DeadRecoilNative.quit(); return; }
           if (window.deadRecoilNative?.quit) { window.deadRecoilNative.quit(); return; }
@@ -16908,6 +17003,16 @@ body.netgame #revivetouch{display:flex}
             }
           },
           localLevel: () => 1,
+          resumeGame: () => resume(),
+          openGameMissions: () => openGameMissions(),
+          // Short exit animation of the home menu before a page opens from it.
+          animateTo(id) {
+            const menu = $("menu");
+            if (menu.classList.contains("hidden") || matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+            menu.classList.add("leaving");
+            return new Promise((r) => setTimeout(() => { menu.classList.remove("leaving"); $(id).classList.add("entering"); setTimeout(() => $(id).classList.remove("entering"), 400); r(); }, 180));
+          },
+          monsterPortraits: (root) => MonsterPortraits.fill(root),
         };
         $("error-ok").onclick = () => $("errorscreen").classList.add("hidden");
         DR.SettingsUI.init({
@@ -17161,6 +17266,7 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            MonsterPortraits,
             GameState,
             WeaponSystem,
             WeaponModels,

@@ -152,6 +152,8 @@
   const MissionRepository = {
     list: () => Backend.rpc("missions_list"),
     claim: (id, requestId = uuid()) => Backend.rpc("mission_claim", { p_mission: id, p_request: requestId }),
+    bestiary: () => Backend.rpc("bestiary_list"),
+    claimBestiary: (enemy, requestId = uuid()) => Backend.rpc("bestiary_claim", { p_enemy: enemy, p_request: requestId }),
   };
 
   const LobbyRepository = {
