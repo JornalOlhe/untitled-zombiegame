@@ -3042,7 +3042,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.24.0";
+        const GAME_VERSION = "0.25.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -3066,6 +3066,7 @@ body.netgame #revivetouch{display:flex}
             "Lendário",
             "Mítico",
             "Divino",
+            "Secreta",
           ],
           rarityColors = [
             "#9E9E9E",
@@ -3075,197 +3076,151 @@ body.netgame #revivetouch{display:flex}
             "#F5B942",
             "#F02F8A",
             "#FF7A1A",
+            "#DDF6FF",
           ],
-          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5];
-        const requiresRerollConfirm = (tier) => tier === 5 || tier === 6;
+          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5, 18];
+        const requiresRerollConfirm = (tier) => tier >= 5;
         const classes = [
-          // Common
-          {
-            key: "recruit", name: "Recruit", tier: 0, color: "#7b8588",
-            ability: "Field Aid", cd: 38,
-            desc: "Treinamento básico e equipamento padrão.",
-            active: "Recupera 20 HP.",
-            effects: {},
-            burst: { heal: 20 },
-          },
-          {
-            key: "scout", name: "Scout", tier: 0, color: "#808c78",
-            ability: "Rush", cd: 34,
-            desc: "+8% de velocidade de movimento.",
-            active: "Aumenta a velocidade em 30% por 5 segundos.",
-            effects: { speed: 1.08 },
-            burst: { duration: 5, speed: 1.3 },
-          },
-          {
-            key: "medic", name: "Medic", tier: 0, color: "#4b9d78",
-            ability: "Adrenaline", cd: 32,
-            desc: "Regenera 0,6 HP/s após 6 segundos sem receber dano.",
-            active: "Cura 30 HP e aumenta a velocidade por 5 segundos.",
-            effects: { regen: 0.6, regenDelay: 6 },
-            burst: { duration: 5, speed: 1.15, heal: 30 },
-          },
-
-          // Uncommon
-          {
-            key: "guardian", name: "Guardian", tier: 1, color: "#668277",
-            ability: "Fortify", cd: 34,
-            desc: "Recebe 12% menos dano.",
-            active: "Reduz o dano recebido em 50% por 6 segundos.",
-            effects: { damageTaken: 0.88 },
-            burst: { duration: 6, damageTaken: 0.5 },
-          },
-          {
-            key: "gunslinger", name: "Gunslinger", tier: 1, color: "#9a7954",
-            ability: "Quickdraw", cd: 30,
-            desc: "+12% de dano com todas as armas.",
-            active: "Dano +40% e velocidade +15% por 6 segundos.",
-            effects: { damage: 1.12 },
-            burst: { duration: 6, damage: 1.4, speed: 1.15 },
-          },
-          {
-            key: "engineer", name: "Engineer", tier: 1, color: "#5489b4",
-            ability: "Sentry", cd: 30,
-            desc: "Lucky Spin custa 30% menos e recebe uma granada a cada duas ondas.",
-            active: "Instala uma torre automática durante 15 segundos.",
-            effects: { luckyCost: 0.7, waveGrenadeEvery: 2 },
-            burst: { turret: 15 },
-          },
-
-          // Rare
-          {
-            key: "berserker", name: "Berserker", tier: 2, color: "#b1443c",
-            ability: "Bloodlust", cd: 25,
-            desc: "+30% de dano; recebe 15% mais dano. Overkills restauram 5 HP.",
-            active: "Dano e velocidade +50% com munição infinita por 8 segundos.",
-            effects: { damage: 1.3, damageTaken: 1.15, overkillHeal: 5 },
-            burst: { duration: 8, damage: 1.5, speed: 1.5, infiniteAmmo: true },
-          },
-          {
-            key: "phantom", name: "Phantom", tier: 2, color: "#827da8",
-            ability: "Vanish", cd: 34,
-            desc: "Headshots +75%, agachado é silencioso e cada quinto tiro é crítico.",
-            active: "Fica invisível durante 7 segundos, mesmo ao atirar.",
-            effects: { headshot: 1.75, critEvery: 5, critMult: 2, silentCrouch: true },
-            burst: { duration: 7, invisible: true },
-          },
-          {
-            key: "demolitionist", name: "Demolitionist", tier: 2, color: "#aa7866",
-            ability: "Shockwave", cd: 34,
-            desc: "Granadas causam 60% mais dano e começa com quatro granadas.",
-            active: "Detona uma onda de choque e recebe uma granada.",
-            effects: { grenadeDamage: 1.6, startGrenades: 4 },
-            burst: { blast: 260, blastRadius: 9, grenades: 1 },
-          },
-
-          // Epic
-          {
-            key: "vanguard", name: "Vanguard", tier: 3, color: "#8d64c5",
-            ability: "Overrun", cd: 32,
-            desc: "+38% de dano e 18% de resistência.",
-            active: "Dano +70% e resistência de 45% por 8 segundos.",
-            effects: { damage: 1.38, damageTaken: 0.82 },
-            burst: { duration: 8, damage: 1.7, damageTaken: 0.55 },
-          },
-          {
-            key: "revenant", name: "Revenant", tier: 3, color: "#9c4c78",
-            ability: "Rebirth", cd: 36,
-            desc: "+42% de dano e recupera 2 HP por eliminação.",
-            active: "Cura 45 HP, aumenta o dano em 80% e a velocidade por 8 segundos.",
-            effects: { damage: 1.42, killHeal: 2 },
-            burst: { duration: 8, damage: 1.8, speed: 1.25, heal: 45 },
-          },
-          {
-            key: "stormcaller", name: "Stormcaller", tier: 3, color: "#507fb5",
-            ability: "Tempest", cd: 35,
-            desc: "+45% de dano e +10% de velocidade.",
-            active: "Explode uma tempestade e dobra o dano por 8 segundos.",
-            effects: { damage: 1.45, speed: 1.1 },
-            burst: { duration: 8, damage: 2, blast: 320, blastRadius: 10 },
-          },
-
-          // Legendary
-          {
-            key: "warlord", name: "Warlord", tier: 4, color: "#b57b43",
-            ability: "Suppression", cd: 40,
-            desc: "+55% de dano. Cada 25 eliminações concede um reroll normal.",
-            active: "Dano dobrado e munição infinita durante 10 segundos.",
-            effects: { damage: 1.55, ticketEvery: 25 },
-            burst: { duration: 10, damage: 2, infiniteAmmo: true },
-          },
-          {
-            key: "juggernaut", name: "Juggernaut", tier: 4, color: "#9b6e4c",
-            ability: "Unbroken", cd: 42,
-            desc: "+40% de dano e 35% de resistência permanente.",
-            active: "75% de resistência e +65% de dano por 10 segundos.",
-            effects: { damage: 1.4, damageTaken: 0.65 },
-            burst: { duration: 10, damage: 1.65, damageTaken: 0.25 },
-          },
-          {
-            key: "deadeye", name: "Deadeye", tier: 4, color: "#c59a45",
-            ability: "Killshot", cd: 38,
-            desc: "+60% de dano, headshots +100% e cada terceiro tiro é crítico.",
-            active: "Dano ×2,25 durante 9 segundos.",
-            effects: { damage: 1.6, headshot: 2, critEvery: 3, critMult: 2 },
-            burst: { duration: 9, damage: 2.25 },
-          },
-
-          // Mythic
-          {
-            key: "reaper", name: "Reaper", tier: 5, color: "#c44459",
-            ability: "Eclipse", cd: 44,
-            desc: "+75% de dano e recupera 4 HP por eliminação.",
-            active: "Dano ×2,4, velocidade +35% e 72% de resistência por 9 segundos.",
-            effects: { damage: 1.75, killHeal: 4 },
-            burst: { duration: 9, damage: 2.4, speed: 1.35, damageTaken: 0.28 },
-          },
-          {
-            key: "voidwalker", name: "Voidwalker", tier: 5, color: "#7547bd",
-            ability: "Voidshift", cd: 42,
-            desc: "+82% de dano, +15% de velocidade e 25% de resistência.",
-            active: "Fica invisível com dano ×2,3 e velocidade +45% por 9 segundos.",
-            effects: { damage: 1.82, speed: 1.15, damageTaken: 0.75 },
-            burst: { duration: 9, damage: 2.3, speed: 1.45, invisible: true },
-          },
-          {
-            key: "bloodlord", name: "Bloodlord", tier: 5, color: "#a5233f",
-            ability: "Crimson Reign", cd: 45,
-            desc: "+90% de dano e recupera 6 HP por eliminação.",
-            active: "Dano ×2,5, cura 60 HP e concede munição infinita por 9 segundos.",
-            effects: { damage: 1.9, killHeal: 6 },
-            burst: { duration: 9, damage: 2.5, heal: 60, infiniteAmmo: true },
-          },
-
-          // Divine
-          {
-            key: "archon", name: "Archon", tier: 6, color: "#f28a35",
-            ability: "Final Dawn", cd: 52,
-            desc: "+105% de dano, +18% de velocidade e recupera 6 HP por eliminação.",
-            active: "Dano ×2,8, 80% de resistência e recarga instantânea por 10 segundos.",
-            effects: { damage: 2.05, speed: 1.18, killHeal: 6 },
-            burst: { duration: 10, damage: 2.8, damageTaken: 0.2, instantReload: true },
-          },
-          {
-            key: "seraph", name: "Seraph", tier: 6, color: "#f5c45b",
-            ability: "Ascension", cd: 50,
-            desc: "+95% de dano, 45% de resistência e regeneração constante.",
-            active: "Restaura toda a vida; dano ×2,6 e 85% de resistência por 10 segundos.",
-            effects: { damage: 1.95, damageTaken: 0.55, regen: 2, regenDelay: 2 },
-            burst: { duration: 10, damage: 2.6, damageTaken: 0.15, fullHeal: true },
-          },
-          {
-            key: "deathless", name: "Deathless", tier: 6, color: "#ff5a36",
-            ability: "Extinction", cd: 55,
-            desc: "+120% de dano, 40% de resistência e recupera 8 HP por eliminação.",
-            active: "Dano triplo, 90% de resistência, velocidade +50% e munição infinita por 10 segundos.",
-            effects: { damage: 2.2, damageTaken: 0.6, killHeal: 8 },
-            burst: { duration: 10, damage: 3, damageTaken: 0.1, speed: 1.5, infiniteAmmo: true },
-          },
+          // IDs 0–20 preserve existing saves. New roster additions use 21+.
+          { key:"recruit", name:"Recruit", tier:0, color:"#7b8588",
+            ability:"Field Aid", cd:30,
+            desc:"Classe inicial, sem bônus passivo.",
+            active:"Recupera 10 HP.",
+            effects:{}, burst:{ heal:10 } },
+          { key:"scout", name:"Scout", tier:0, color:"#808c78",
+            ability:"Rush", cd:30,
+            desc:"+10% de velocidade.",
+            active:"Velocidade total passa para +30% por 5 segundos.",
+            effects:{ speed:1.10 }, burst:{ duration:5, speedTotal:1.30 } },
+          { key:"medic", name:"Medic", tier:0, color:"#4b9d78",
+            ability:null, cd:0, passiveOnly:true,
+            desc:"Após 5 s sem sofrer dano, regenera 0,5 HP/s. Receber dano reinicia a espera.",
+            active:"Passiva — não possui habilidade ativa.",
+            effects:{ regen:0.5, regenDelay:5 }, burst:{} },
+          { key:"guardian", name:"Guardian", tier:1, color:"#668277",
+            ability:"Fortify", cd:30,
+            desc:"Recebe 10% menos dano.",
+            active:"Redução total passa para 30% por 10 segundos.",
+            effects:{ damageTaken:0.90 }, burst:{ duration:10, damageTakenTotal:0.70 } },
+          { key:"gunslinger", name:"Gunslinger", tier:0, color:"#9a7954",
+            ability:"Quickdraw", cd:30,
+            desc:"+5% de dano com armas de médio/longo alcance.",
+            active:"O bônus de longo alcance passa para +10% por 10 segundos.",
+            effects:{ longRangeDamage:1.05 }, burst:{ duration:10, longRangeDamageTotal:1.10 } },
+          { key:"engineer", name:"Engineer", tier:1, color:"#5489b4",
+            ability:"Overclock", cd:30,
+            desc:"+10% de dano com armas de curto alcance e recebe 5% menos dano.",
+            active:"Por 10 s: +20% de dano de curto alcance e 10% menos dano recebido.",
+            effects:{ shortRangeDamage:1.10, damageTaken:0.95 },
+            burst:{ duration:10, shortRangeDamageTotal:1.20, damageTakenTotal:0.90 } },
+          { key:"berserker", name:"Berserker", tier:2, color:"#b1443c",
+            ability:"Endless Mag", cd:30,
+            desc:"+20% de dano com todas as armas, mas recebe 10% mais dano de qualquer fonte.",
+            active:"Munição infinita por 5 segundos, sem alterar a cadência.",
+            effects:{ damage:1.20, damageTaken:1.10 }, burst:{ duration:5, infiniteAmmo:true } },
+          { key:"phantom", name:"Phantom", tier:2, color:"#827da8",
+            ability:"Vanish", cd:30,
+            desc:"Sem passiva separada.",
+            active:"Por 10 s, fica invisível enquanto estiver agachado; zumbis ignoram e desviam do jogador.",
+            effects:{}, burst:{ duration:10, crouchInvisible:true } },
+          { key:"demolitionist", name:"Demolitionist", tier:2, color:"#aa7866",
+            ability:"High Explosive", cd:30,
+            desc:"+30% de dano com granadas e bazucas.",
+            active:"O bônus explosivo passa para +50% por 10 segundos.",
+            effects:{ explosiveDamage:1.30 }, burst:{ duration:10, explosiveDamageTotal:1.50 } },
+          { key:"vanguard", name:"Vanguard", tier:3, color:"#8d64c5",
+            ability:"Bulwark", cd:30,
+            desc:"+20% de dano e recebe 15% menos dano.",
+            active:"Por 10 s, mantém +20% de dano e passa a receber 50% menos dano.",
+            effects:{ damage:1.20, damageTaken:0.85 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+          { key:"revenant", name:"Revenant", tier:3, color:"#9c4c78",
+            ability:"Soul Feast", cd:30,
+            desc:"+30% de dano e +10% de velocidade.",
+            active:"Durante 10 s, cada eliminação recupera 1 HP.",
+            effects:{ damage:1.30, speed:1.10 }, burst:{ duration:10, killHeal:1 } },
+          { key:"stormcaller", name:"Storm Caller", tier:3, color:"#507fb5",
+            ability:"Tempest", cd:30,
+            desc:"+50% de dano, +10% de velocidade, mas recebe 20% mais dano de qualquer fonte.",
+            active:"Por 10 s: velocidade total +20%. Headshot kill tem 20% de chance de causar um raio de 50% do dano do tiro em ~5 m.",
+            effects:{ damage:1.50, speed:1.10, damageTaken:1.20 },
+            burst:{ duration:10, speedTotal:1.20, stormHeadshot:true, stormChance:0.20, stormScale:0.50, stormRadius:5 } },
+          { key:"warlord", name:"Warlord", tier:4, color:"#b57b43",
+            ability:"Iron Rule", cd:30,
+            desc:"+50% de dano. Recupera 10 HP a cada 25 eliminações.",
+            active:"Recebe 50% menos dano por 10 segundos.",
+            effects:{ damage:1.50, healEvery:25, healAmount:10 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+          { key:"juggernaut", name:"Juggernaut", tier:4, color:"#9b6e4c",
+            ability:"Unbroken", cd:30,
+            desc:"+30% de dano, recebe 30% menos dano e tem +10% de velocidade.",
+            active:"Por 10 s: dano total +60%, velocidade total +20% e mantém 30% de redução.",
+            effects:{ damage:1.30, damageTaken:0.70, speed:1.10 },
+            burst:{ duration:10, damageTotal:1.60, speedTotal:1.20 } },
+          { key:"deadeye", name:"Deadeye", tier:4, color:"#c59a45",
+            ability:"Killshot", cd:30,
+            desc:"De +0% a +50% de dano conforme a distância; headshots recebem +100% de dano adicional.",
+            active:"Por 10 s, +60% de dano adicional, somando com distância e headshot.",
+            effects:{ distanceDamageMax:0.50, headshot:2 }, burst:{ duration:10, damageTotal:1.60 } },
+          { key:"reaper", name:"Reaper", tier:6, color:"#ff7a3d",
+            ability:"Gravebound", cd:15, requiredKills:5, excludeBossKills:true, summonAllies:5,
+            desc:"+30% de dano e +30% de velocidade. Chefes/minibosses não contam para a invocação.",
+            active:"Com 5 eliminações válidas, invoca 5 zumbis aliados do chão. As 5 kills são consumidas; máximo 5 aliados.",
+            effects:{ damage:1.30, speed:1.30 }, burst:{} },
+          { key:"voidwalker", name:"Void Walker", tier:5, color:"#7547bd",
+            ability:"Voidshift", cd:30,
+            desc:"+75% de dano, +20% de velocidade e recebe 20% menos dano.",
+            active:"Por 10 s: dano total +100%, velocidade total +50% e mantém 20% de redução.",
+            effects:{ damage:1.75, speed:1.20, damageTaken:0.80 },
+            burst:{ duration:10, damageTotal:2.00, speedTotal:1.50 } },
+          { key:"vampire", name:"Vampire", tier:5, color:"#9e2447",
+            ability:null, cd:0, passiveOnly:true,
+            desc:"+30% de dano, +30% de vida máxima e recupera 3 HP por eliminação.",
+            active:"Passiva — não possui habilidade ativa.",
+            effects:{ damage:1.30, maxHp:1.30, killHeal:3 }, burst:{} },
+          { key:"archon", name:"Archon", tier:5, color:"#e66cae",
+            ability:"Ascendant Form", cd:30,
+            desc:"+50% de dano, +50% de vida máxima e recebe 50% menos dano.",
+            active:"Por 10 s: +100% dano, +100% vida máxima, +100% velocidade e 80% de redução de dano.",
+            effects:{ damage:1.50, maxHp:1.50, damageTaken:0.50 },
+            burst:{ duration:10, damageTotal:2.00, maxHpTotal:2.00, speedTotal:2.00, damageTakenTotal:0.20 } },
+          { key:"serafim", name:"Serafim", tier:6, color:"#ffd96a",
+            ability:"Ascension", cd:30, requiredKills:50,
+            desc:"+80% de dano, recebe 30% menos dano e regenera 5 HP/s após 5 s sem sofrer dano.",
+            active:"A cada 50 eliminações: por 10 s, +100% dano, +30% velocidade e 80% de redução; regeneração permanece 5 HP/s.",
+            effects:{ damage:1.80, damageTaken:0.70, regen:5, regenDelay:5 },
+            burst:{ duration:10, damageTotal:2.00, speedTotal:1.30, damageTakenTotal:0.20 } },
+          { key:"deathless", name:"Deathless", tier:6, color:"#ff5a36",
+            ability:null, cd:0, passiveOnly:true,
+            desc:"+100% de dano e +50% de vida máxima. Uma vez por partida, ressuscita com 50% da própria vida máxima.",
+            active:"Passiva — 1 ressurreição por partida.",
+            effects:{ damage:2.00, maxHp:1.50, reviveOnce:true }, burst:{} },
+          { key:"sharpshooter", name:"Sharpshooter", tier:1, color:"#5b9ac7",
+            ability:"Eagle Step", cd:30,
+            desc:"+15% de dano apenas com Bow, Stormpiercer e Wraithpiercer.",
+            active:"Por 10 s, o bônus com arcos é substituído por +20% e o salto fica 10% mais alto.",
+            effects:{ bowDamage:1.15 }, burst:{ duration:10, bowDamageTotal:1.20, jumpTotal:1.10 } },
+          { key:"archangel", name:"Archangel", tier:7, color:"#dff8ff",
+            ability:"Heavenly Flight", cd:30, requiredKills:100, secretFlight:"angel",
+            desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Auréola e duas asas exclusivas.",
+            active:"A cada 100 eliminações, libera 30 s de voo no Q. As kills são consumidas, não acumula carga e depois há 30 s de cooldown.",
+            effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
+            burst:{ duration:30, flight:"angel" } },
+          { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
+            ability:"Infernal Flight", cd:30, requiredKills:100, secretFlight:"demon",
+            desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Chifres e cauda demoníaca exclusivos.",
+            active:"A cada 100 eliminações, libera 30 s de voo no Q. A cauda gira como hélice; kills zeram, sem cargas acumuladas, e há 30 s de cooldown.",
+            effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
+            burst:{ duration:30, flight:"demon" } },
         ];
         const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
         const classOf = () => classes[selectedClass] || classes[0];
         const classEffects = () => classOf().effects || {};
         const classBurst = () =>
           player?.activeUntil > simulationTime ? classOf().burst || {} : {};
+        const classValue = (key, fallback = 1) => {
+          const burst = classBurst(), effects = classEffects();
+          const totalKey = key + "Total";
+          return burst[totalKey] ?? effects[key] ?? fallback;
+        };
 
         const maps = [
           {
@@ -6209,13 +6164,16 @@ body.netgame #revivetouch{display:flex}
             effects.critEvery && player.shots % effects.critEvery === 0
               ? effects.critMult || 2
               : 1;
-          return (
-            w.damage *
-            rarityMult[w.tier] *
-            (effects.damage || 1) *
-            (burst.damage || 1) *
-            critical
-          );
+          let multiplier = classValue("damage", 1);
+          const isBow = w.kind === "bow";
+          const isShort = w.cat === 0;
+          const isLong = w.cat === 1 || w.cat === 2;
+          const isExplosive = w.kind === "grenade" || w.kind === "missile";
+          if (isBow) multiplier *= burst.bowDamageTotal ?? effects.bowDamage ?? 1;
+          if (isShort) multiplier *= burst.shortRangeDamageTotal ?? effects.shortRangeDamage ?? 1;
+          if (isLong) multiplier *= burst.longRangeDamageTotal ?? effects.longRangeDamage ?? 1;
+          if (isExplosive) multiplier *= burst.explosiveDamageTotal ?? effects.explosiveDamage ?? 1;
+          return w.damage * rarityMult[w.tier] * multiplier * critical;
         }
         const BloodFX = {
           drops: [],
@@ -8402,13 +8360,14 @@ body.netgame #revivetouch{display:flex}
             this.catalogs = { class: classCatalog, weapon: weaponCatalog };
             this.storage = storage;
             this.random = random;
+            // Secret uses one shared tier rate for classes and weapons.
             this.rates = {
-              normal: [64.95, 23, 8, 3, 0.9, 0.1, 0.05],
-              lucky: [0, 0, 0, 59, 37, 3, 1],
+              normal: [64.94, 23, 8, 3, 0.9, 0.1, 0.05, 0.01],
+              lucky: [0, 0, 0, 58.9, 37, 3, 1, 0.1],
             };
             this.spinCosts = { normal: 50, lucky: 250 };
             this.pityCaps = { mythic: 75, divine: 150 };
-            this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000];
+            this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000, 250000];
             // Price to own N weapon inventory slots, indexed by N (index 0 unused, slot 1 is free).
             this.weaponSlotPrices = [null, 0, 6000, 18000, 45000, 90000];
             this.key = "deadrecoil.loadout.v2";
@@ -12055,7 +12014,13 @@ body.netgame #revivetouch{display:flex}
               vy: 0,
               ground: 0,
               stepOffset: 0,
+              baseMaxHp: d.hp,
+              classCharge: 0,
+              reviveUsed: false,
+              flightDescentUntil: 0,
             };
+            player.maxhp = Math.round(player.baseMaxHp * classValue("maxHp", 1));
+            player.hp = player.maxhp;
             // Bring every weapon in an owned slot into the run, not just the one
             // last equipped in the Armory — number keys switch between them mid-match.
             normalizeLoadoutState(Progression.data);
@@ -12107,15 +12072,21 @@ body.netgame #revivetouch{display:flex}
           hurt(amount, fromNet = false) {
             if (!fromNet && NetGame.hurtRemote(amount)) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
-            const resistance =
-              (classEffects().damageTaken || 1) *
-              (classBurst().damageTaken || 1);
+            const resistance = classValue("damageTaken", 1);
             player.hp -= amount * resistance;
             player.lastDamage = simulationTime;
             hurtUntil = simulationTime + 0.45;
             shake = 0.22;
             AudioManager.tone(85, 0.1, "triangle", 0.4, 35);
             if (player.hp <= 0) {
+              if (classEffects().reviveOnce && !player.reviveUsed && !NetGame.active) {
+                player.reviveUsed = true;
+                player.hp = Math.max(1, Math.round(player.maxhp * 0.5));
+                player.lastDamage = simulationTime;
+                UIManager.announce("DEATHLESS", "Você voltou com metade da vida.", 2.2);
+                ParticleSystem.emit(player.pos.clone(), 0xff5a36, 80, 5);
+                return;
+              }
               player.hp = 0;
               if (NetGame.active && NetGame.goDown()) return;
               this.end(false);
@@ -12140,12 +12111,30 @@ body.netgame #revivetouch{display:flex}
             if (simulationTime < player.cooldown || state !== GameState.PLAYING)
               return;
             const c = classOf();
+            if (!c.ability || c.passiveOnly) {
+              UIManager.toast("Esta classe funciona apenas com passivas.");
+              return;
+            }
+            if (c.requiredKills && (player.classCharge || 0) < c.requiredKills) {
+              UIManager.toast(`Habilidade: ${player.classCharge || 0}/${c.requiredKills} eliminações.`);
+              return;
+            }
             const burst = c.burst || {};
-            player.cooldown = simulationTime + c.cd;
+            if (c.requiredKills) player.classCharge = Math.max(0, (player.classCharge || 0) - c.requiredKills);
+            player.cooldown = simulationTime + (c.cd || 30);
             AudioManager.tone(400, 0.45, "sine", 0.3, 1000);
             UIManager.toast(c.ability);
             if (burst.duration)
               player.activeUntil = simulationTime + burst.duration;
+            if (burst.flight) {
+              player.jump = Math.max(player.jump || 0, 2.4);
+              player.vy = 0;
+            }
+            if (burst.maxHpTotal) {
+              const ratio = player.maxhp > 0 ? player.hp / player.maxhp : 1;
+              player.maxhp = Math.round(player.baseMaxHp * burst.maxHpTotal);
+              player.hp = Math.min(player.maxhp, Math.max(1, player.maxhp * ratio));
+            }
             if (burst.heal)
               player.hp = Math.min(player.maxhp + player.bonus, player.hp + burst.heal);
             if (burst.fullHeal)
@@ -12449,8 +12438,7 @@ body.netgame #revivetouch{display:flex}
             }
             let speed =
               5.6 *
-              (classEffects().speed || 1) *
-              (classBurst().speed || 1) *
+              classValue("speed", 1) *
               (keys.has("ShiftLeft") ? 1.4 : 1) *
               (keys.has("ControlLeft") || keys.has("ControlRight") ? 0.55 : 1) *
               (mouse.aim ? 0.65 : 1) *
