@@ -4978,7 +4978,44 @@ body.netgame #revivetouch{display:flex}
             ) => A.tube(gun, pos, r, l, c, k, axis, glow);
             let muzzle = -0.87;
             if (w.kind === "melee") {
-              // The Divine spear stretches the same blade shape into a long lance with an
+              if (w.trident) {
+                const obsidian = 0x211a20, infernal = 0xe32121, bone = 0x8e6656;
+                t([0, -0.01, -0.48], 0.026, 1.22, obsidian, "steel", "z", 0x360000);
+                for (const z of [-0.18, -0.48, -0.78])
+                  A.ring(gun, [0, -0.01, z], 0.043, bone);
+                A.link(gun, [-0.19, -0.01, -1.02], [0.19, -0.01, -1.02], 0.025, 0.018, bone, "steel");
+                for (const [x, lean] of [[-0.18,-0.04],[0,0],[0.18,0.04]]) {
+                  A.link(gun, [x, -0.01, -1.01], [x + lean, 0.015, -1.39], 0.025, 0.012, obsidian, "steel");
+                  const tip=A.ellipsoid(gun,[x + lean,0.015,-1.405],[0.035,0.035,0.085],infernal,"steel",infernal);
+                  tip.rotation.x=Math.PI/2;
+                }
+                const core=A.ellipsoid(gun,[0,0,-0.96],[0.09,0.07,0.09],infernal,"steel",infernal);
+                for(const side of[-1,1]) {
+                  A.link(gun,[side*.07,0,-.92],[side*.17,.015,-.82],.018,.009,bone,"steel");
+                  A.link(gun,[side*.17,.015,-.82],[side*.23,0,-.94],.017,.008,obsidian,"steel");
+                }
+                parts.core=core;
+                muzzle=-1.42;
+              } else if (w.specter) {
+                const gold=0xd9ae55, ivory=0xeaf6ff, holy=0x62d9ff;
+                const core=A.ellipsoid(gun,[0,0,-0.56],[0.09,0.06,0.12],holy,"steel",holy);
+                A.ring(gun,[0,0,-0.56],0.14,gold).rotation.x=Math.PI/2;
+                for(const side of[-1,1]) {
+                  A.link(gun,[0,0,-.55],[side*.16,0,-.78],.028,.013,gold,"steel");
+                  A.link(gun,[side*.16,0,-.78],[side*.12,0,-1.08],.034,.012,ivory,"steel",holy);
+                  A.link(gun,[side*.12,0,-1.08],[side*.02,0,-1.28],.028,.009,gold,"steel");
+                  for(let j=0;j<3;j++) {
+                    const feather=A.ellipsoid(gun,[side*(.19+j*.055),-.015,-.73+j*.12],[.055,.018,.14],ivory,"cloth",holy);
+                    feather.rotation.z=side*(.45+j*.08);
+                  }
+                }
+                A.link(gun,[0,0,-.44],[0,0,-.12],.032,.014,gold,"steel");
+                A.ellipsoid(gun,[0,0,-.08],[.04,.04,.11],holy,"steel",holy);
+                parts.core=core;
+                parts.specter=true;
+                muzzle=-1.3;
+              } else {
+// The Divine spear stretches the same blade shape into a long lance with an
               // extended haft; the knife shrinks it into a short, fast sidearm blade.
               const spear = !!w.spear,
                 knife = !!w.knife,
@@ -4998,37 +5035,8 @@ body.netgame #revivetouch{display:flex}
                   bevelThickness: 0.003,
                   bevelSegments: 1,
                   steps: 1,
-                }),
-                A.mat(
-                  spear ? 0xffe7a8 : knife ? 0x8f97a1 : 0xb9c7c9,
-                  "steel",
-                  spear ? 0x6b4a12 : 0,
-                ),
-              );
-              blade.position.set(0, 0.04, -0.24);
-              blade.rotation.z = -0.12;
-              blade.scale.y = stretch;
-              gun.add(blade);
-              t(
-                [0, -0.14 * stretch, -0.23],
-                spear ? 0.032 : 0.042,
-                0.28 * stretch,
-                polymer,
-                "polymer",
-                "y",
-              );
-              b([0, 0.01, -0.23], [0.2, 0.025, 0.075], steel);
-              for (let i = 0; i < 6; i++)
-                A.tube(
-                  gun,
-                  [0, -0.24 + i * 0.036 * stretch, -0.23],
-                  0.045,
-                  0.008,
-                  0x5f6967,
-                  "polymer",
-                  "y",
-                );
-              muzzle = spear ? -0.55 : knife ? -0.14 : -0.25;
+    
+              }
             } else {
               const long = w.kind === "antimaterial",
                 energy = ["laser", "rail", "quantum", "fire", "ice", "bow"].includes(
@@ -5424,8 +5432,19 @@ body.netgame #revivetouch{display:flex}
             parts.rightHand = hand(0.03, -0.19, 0.02, false);
             parts.leftHand = hand(-0.045, -0.115, -0.48, true);
             if (w.kind === "melee") {
-              parts.rightHand.position.set(0, -0.16, -0.22);
-              parts.leftHand.visible = false;
+              if (w.trident) {
+                parts.rightHand.position.set(0.075, -0.16, -0.22);
+                parts.leftHand.position.set(-0.055, -0.105, -0.62);
+                parts.leftHand.visible = true;
+                parts.rightHand.rotation.x = -0.18;
+                parts.leftHand.rotation.x = -0.28;
+              } else if (w.specter) {
+                parts.rightHand.visible = false;
+                parts.leftHand.visible = false;
+              } else {
+                parts.rightHand.position.set(0, -0.16, -0.22);
+                parts.leftHand.visible = false;
+              }
             }
             parts.leftBase = parts.leftHand.position.clone();
             parts.muzzle = muzzle;
@@ -6140,8 +6159,8 @@ body.netgame #revivetouch{display:flex}
             return traveled;
           }
         }
-        // A blade hits one nearby enemy in front of the player, never through solid cover.
-        function meleeTarget(origin, direction, range, targets, isBlocked) {
+        // A blade hits nearby enemies in front of the player, never through solid cover.
+        function meleeTargets(origin, direction, range, targets, isBlocked) {
           const candidates = [];
           for (const target of targets) {
             if (target.dead) continue;
@@ -6155,7 +6174,10 @@ body.netgame #revivetouch{display:flex}
             candidates.push({ target, point, distance });
           }
           candidates.sort((a, b) => a.distance - b.distance);
-          return candidates[0] || null;
+          return candidates;
+        }
+        function meleeTarget(origin, direction, range, targets, isBlocked) {
+          return meleeTargets(origin, direction, range, targets, isBlocked)[0] || null;
         }
         function weaponDamage(w) {
           const effects = classEffects();
@@ -8144,6 +8166,38 @@ body.netgame #revivetouch{display:flex}
               freeze: { slow: 0.85, duration: 2 },
               ability: "Congela quase por completo: o alvo mal se move.",
             },
+            // Secret — prototype geometry is generated in ArsenalArt until final Blender GLBs land.
+            {
+              modelId: 26,
+              name: "Demonic Fury",
+              cat: 0,
+              tier: 7,
+              kind: "melee",
+              spear: true,
+              trident: true,
+              damage: 70,
+              rate: 0.48,
+              mag: Infinity,
+              reload: 0,
+              range: 4.8,
+              chargeTime: 0.28,
+              ability: "Tridente de duas mãos: estocada e arremesso. O modelo final terá retorno animado e a interação secreta do Archdemon em voo.",
+            },
+            {
+              modelId: 27,
+              name: "Angelic Specter",
+              cat: 0,
+              tier: 7,
+              kind: "melee",
+              specter: true,
+              multiHit: 5,
+              damage: 58,
+              rate: 0.38,
+              mag: Infinity,
+              reload: 0,
+              range: 4.2,
+              ability: "Arma espectral flutuante: alterna cortes e pode atingir vários zumbis no arco. Habilidades especiais usam a forma orbital.",
+            },
           ],
           model: new THREE.Group(),
           flash: null,
@@ -8219,6 +8273,14 @@ body.netgame #revivetouch{display:flex}
             const target = aiming
               ? new V(0, -0.105, -0.36)
               : new V(0.255, -0.24, -0.42);
+            if (w.specter) {
+              const orbit = simulationTime * 0.7;
+              target.set(
+                0.48 + Math.sin(orbit) * 0.07,
+                0.01 + Math.sin(orbit * 1.7) * 0.055,
+                -0.66 + Math.cos(orbit) * 0.055,
+              );
+            }
             this.kickVelocity +=
               (-this.kick * 170 - this.kickVelocity * 23) * dt;
             this.kick += this.kickVelocity * dt;
@@ -8242,6 +8304,10 @@ body.netgame #revivetouch{display:flex}
               swayX * 0.3,
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
+            if (w.specter) {
+              this.model.rotation.y += Math.sin(simulationTime * 0.8) * 0.003;
+              this.model.rotation.z += Math.sin(simulationTime * 1.15) * 0.006;
+            }
             this.parts.leftHand.position.copy(this.parts.leftBase);
             this.parts.leftHand.rotation.set(0, 0, 0);
             const since = simulationTime - lastShot;
@@ -9249,10 +9315,33 @@ body.netgame #revivetouch{display:flex}
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               const reward = z.boss ? z.boss.coins : head ? 8 : 5;
               Progression.reward(Math.round(reward * diff[difficulty].coins));
-              const classFx = classEffects();
-              const heal = (overkill ? classFx.overkillHeal || 0 : 0) + (classFx.killHeal || 0);
+              const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
+              const heal =
+                (overkill ? classFx.overkillHeal || 0 : 0) +
+                (classFx.killHeal || 0) +
+                (burstFx.killHeal || 0);
               if (heal)
                 player.hp = Math.min(player.maxhp + player.bonus, player.hp + heal);
+              if (classFx.healEvery && player.kills % classFx.healEvery === 0) {
+                player.hp = Math.min(player.maxhp + player.bonus, player.hp + (classFx.healAmount || 0));
+                UIManager.toast(`${classFx.healEvery} eliminações: +${classFx.healAmount || 0} HP.`);
+              }
+              if (cls.requiredKills && !(cls.excludeBossKills && z.boss)) {
+                const wasReady = (player.classCharge || 0) >= cls.requiredKills;
+                player.classCharge = Math.min(cls.requiredKills, (player.classCharge || 0) + 1);
+                if (!wasReady && player.classCharge >= cls.requiredKills)
+                  UIManager.toast(`${cls.ability} pronta — pressione Q.`);
+              }
+              if (burstFx.stormHeadshot && head && Math.random() < (burstFx.stormChance || 0.2)) {
+                const radius = burstFx.stormRadius || 5,
+                  shock = weaponDamage(w || WeaponSystem.current()) * (burstFx.stormScale || 0.5);
+                ParticleSystem.emit(z.group.position.clone().add(new V(0, 1.1, 0)), 0x78c8ff, 45, 4);
+                for (const other of [...ZombieManager.list]) {
+                  if (other.dead || other === z) continue;
+                  if (other.group.position.distanceTo(z.group.position) <= radius)
+                    ZombieManager.hit(other, shock, false, other.group.position.clone().add(new V(0, 1, 0)), null, true);
+                }
+              }
               if (classFx.ticketEvery && player.waveKills % classFx.ticketEvery === 0) {
                 Progression.reward(0, 1);
                 UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
@@ -9294,7 +9383,11 @@ body.netgame #revivetouch{display:flex}
               this.flowClock = 0.5;
             }
             HordeAI.prepare();
-            const invisible = !!classBurst().invisible;
+            const activeBurst = classBurst();
+            const invisible =
+              !!activeBurst.invisible ||
+              (!!activeBurst.crouchInvisible &&
+                (keys.has("ControlLeft") || keys.has("ControlRight")));
 
             for (const z of [...this.list]) {
               if (z.dead) continue;
@@ -12183,7 +12276,7 @@ body.netgame #revivetouch{display:flex}
           },
           strike(w, damage, reach = Math.min(w.range, 2.6)) {
             scene.updateMatrixWorld(true);
-            const hit = meleeTarget(
+            const hits = meleeTargets(
               player.pos,
               forward(),
               reach,
@@ -12195,11 +12288,10 @@ body.netgame #revivetouch{display:flex}
                   .intersectObjects(MapManager.walls)
                   .some((h) => h.distance < distance - 0.06);
               },
-            );
-            if (hit) {
+            ).slice(0, w.multiHit || 1);
+            for (const hit of hits)
               ZombieManager.hit(hit.target, damage, false, hit.point, w);
-              AudioManager.meleeImpact();
-            }
+            if (hits.length) AudioManager.meleeImpact();
           },
           // Divine spear: a quick click is a longer-reach poke; holding the attack button
           // charges a throw that releases a piercing spear projectile.
@@ -12408,6 +12500,14 @@ body.netgame #revivetouch{display:flex}
               this.strike(strike.weapon, strike.damage, strike.reach);
             }
             const passiveClass = classEffects();
+            const desiredMaxHp = Math.round(
+              (player.baseMaxHp || player.maxhp) * classValue("maxHp", 1),
+            );
+            if (desiredMaxHp !== player.maxhp) {
+              const ratio = player.maxhp > 0 ? player.hp / player.maxhp : 1;
+              player.maxhp = desiredMaxHp;
+              player.hp = Math.min(player.maxhp + player.bonus, Math.max(1, player.maxhp * ratio));
+            }
             if (
               passiveClass.regen &&
               simulationTime - player.lastDamage > (passiveClass.regenDelay || 5)
@@ -12684,15 +12784,19 @@ body.netgame #revivetouch{display:flex}
                 ParticleSystem.emit(p.pos, p.acid ? 0x71854a : 0xb076ff, 10, 2);
                 if (p.acid) HordeAI.acid(p.pos);
               } else if (p.kind === "quantum" || p.kind === "spear") {
-                if (hit)
+                if (hit) {
+                  const tridentHead =
+                    !!p.weapon?.trident &&
+                    p.pos.y > hit.group.position.y + Math.max(1, hit.size || 1) * 1.25;
                   ZombieManager.hit(
                     hit,
-                    p.damage,
-                    false,
+                    p.damage * (tridentHead ? 2 : 1),
+                    tridentHead,
                     p.pos,
                     p.weapon,
                     true,
                   );
+                }
                 else
                   ParticleSystem.emit(
                     p.pos,
@@ -15203,6 +15307,53 @@ body.netgame #revivetouch{display:flex}
             if(s.outerwear==="ballistic_vest"){A.block(chest,[0,.24,.175],[.5,.44,.10],0x252d2a,"cloth");A.block(chest,[0,.30,.235],[.28,.22,.035],0x485047,"polymer");for(let x=-1;x<=1;x++)A.block(chest,[x*.13,.11,.235],[.10,.15,.05],0x353d36,"cloth")}
             if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.30,0],[.063,.095,.055],0x1f2422,"cloth");
             if(s.footwear==="reinforced_boots")for(const knee of knees)A.block(knee,[0,-.36,.065],[.17,.19,.31],0x191d1c,"polymer");
+            let secretAccessories = null;
+            if (cls === 22) {
+              const gold = 0xd6ad55, holy = 0x74dcff, feather = 0xf3fbff;
+              const halo = A.pivot(head, 0, 0, 0);
+              const haloRing = A.ring(halo, [0, 0.43, 0], 0.235, gold);
+              haloRing.rotation.x = Math.PI / 2;
+              A.ellipsoid(halo, [0, 0.43, 0], [0.045, 0.045, 0.045], holy, "steel", holy);
+              const wings = [];
+              for (const side of [-1, 1]) {
+                const wing = A.pivot(chest, side * 0.19, 0.39, -0.13);
+                A.link(wing, [0, 0, 0], [side * 0.56, 0.1, -0.08], 0.04, 0.024, gold, "steel");
+                A.link(wing, [side * 0.34, 0.06, -0.05], [side * 0.72, -0.18, -0.12], 0.026, 0.015, gold, "steel");
+                for (let j = 0; j < 7; j++) {
+                  const x = side * (0.2 + j * 0.075),
+                    y = 0.08 - j * 0.055,
+                    ftr = A.ellipsoid(wing, [x, y, -0.08 - j * 0.006], [0.07, 0.022, 0.23], feather, "cloth", j < 2 ? holy : 0);
+                  ftr.rotation.z = side * (0.58 + j * 0.055);
+                }
+                wings.push(wing);
+              }
+              secretAccessories = { type:"angel", halo, left:wings[0], right:wings[1] };
+            } else if (cls === 23) {
+              const obsidian = 0x211a20, infernal = 0xe32121, horn = 0x5a3732;
+              const horns = [];
+              for (const side of [-1, 1]) {
+                const h = A.pivot(head, side * 0.085, 0.245, -0.02);
+                A.link(h, [0,0,0], [side * 0.12,0.13,-0.025], 0.055, 0.036, horn, "steel");
+                A.link(h, [side*.12,.13,-.025], [side*.2,.22,.025], .045,.022,obsidian,"steel");
+                A.link(h, [side*.2,.22,.025], [side*.16,.31,.08], .031,.008,infernal,"steel",infernal);
+                horns.push(h);
+              }
+              const tail = A.pivot(hips, 0, 0.06, -0.14), tailPoints = [];
+              let prev = new V(0,0,0);
+              for (let j=0;j<7;j++) {
+                const next = new V(Math.sin(j*.55)*.08, -.04-j*.045, -.16-j*.14);
+                A.link(tail, [prev.x,prev.y,prev.z], [next.x,next.y,next.z], .052-j*.004, .034-j*.003, j%2?horn:obsidian, "steel");
+                A.ellipsoid(tail,[next.x,next.y,next.z],[.065,.05,.07],j%2?obsidian:horn,"steel",j>4?0x350000:0);
+                tailPoints.push(next); prev=next;
+              }
+              const tip=tailPoints[tailPoints.length-1], rotor=A.pivot(tail,tip.x,tip.y,tip.z);
+              for(let j=0;j<3;j++){
+                const a=j*Math.PI*2/3;
+                A.link(rotor,[0,0,0],[Math.cos(a)*.28,Math.sin(a)*.28,0],.035,.012,obsidian,"steel");
+                A.ellipsoid(rotor,[Math.cos(a)*.3,Math.sin(a)*.3,0],[.08,.035,.04],infernal,"steel",infernal);
+              }
+              secretAccessories = { type:"demon", horns, tail, rotor };
+            }
             const gun = new THREE.Group(),
               parts = ArsenalArt.build(weapon, gun);
             parts.rightHand.visible = false;
@@ -15222,6 +15373,8 @@ body.netgame #revivetouch{display:flex}
               elbows,
               gun,
               parts,
+              classId: cls,
+              secretAccessories,
               blend: 0,
             };
             return g;
@@ -15270,6 +15423,25 @@ body.netgame #revivetouch{display:flex}
               r.arms[i].rotation.z = i === 0 ? 0.5 : -0.5;
             }
             r.gun.rotation.z = Math.sin(t * 1.7) * 0.006;
+            if (r.secretAccessories) {
+              const secret = r.secretAccessories,
+                flying =
+                  state === GameState.PLAYING &&
+                  r.classId === selectedClass &&
+                  !!classBurst().flight;
+              if (secret.type === "angel") {
+                secret.halo.position.y = Math.sin(t * 1.4) * 0.018;
+                const flap = Math.sin(t * (flying ? 9 : 2.1)) * (flying ? 0.34 : 0.08);
+                secret.left.rotation.y = 0.22 + flap;
+                secret.right.rotation.y = -0.22 - flap;
+                secret.left.rotation.z = -0.08 - flap * 0.35;
+                secret.right.rotation.z = 0.08 + flap * 0.35;
+              } else if (secret.type === "demon") {
+                const targetRaise = flying ? -1.05 : 0;
+                secret.tail.rotation.x += (targetRaise - secret.tail.rotation.x) * (1 - Math.exp(-dt * 7));
+                secret.rotor.rotation.z += dt * (flying ? 26 : 1.4);
+              }
+            }
             if (reloading) {
               r.elbows[0].rotation.x = -1.1 + Math.sin(t * 6) * 0.4;
               r.gun.rotation.z = 0.18;
