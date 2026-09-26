@@ -29,6 +29,59 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky.reduce((a,b)=>a+b,0)),100);
       assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.weapon.some(item => item.tier === 6)), 'Divine weapon must exist');
       assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.class.some(item => item.tier === 6)), 'Divine class must exist');
+      assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.cost(false)), 50, 'Normal Spin must cost 50');
+      assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.cost(true)), 250, 'Lucky Spin base cost must be 250');
+      const pityMechanics = await page.evaluate(() => {
+        const p = DeadRecoilTest.Progression;
+        const e = p.economy;
+        const original = JSON.parse(JSON.stringify(e.data));
+        const originalRandom = e.random;
+        const result = {};
+        try {
+          e.data.coins = 100000;
+          e.data.classMythicPity = 33;
+          e.data.classDivinePity = 44;
+          e.data.weaponMythicPity = 74;
+          e.data.weaponDivinePity = 20;
+          e.random = () => 0;
+          let roll = e.roll("weapon", false, "coins");
+          result.normalMythic = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity,classMythic:e.data.classMythicPity,classDivine:e.data.classDivinePity};
+
+          e.data.weaponMythicPity = 10;
+          e.data.weaponDivinePity = 149;
+          e.random = () => 0;
+          roll = e.roll("weapon", false, "coins");
+          result.normalDivine = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+
+          e.data.weaponMythicPity = 73;
+          e.data.weaponDivinePity = 40;
+          e.random = () => 0;
+          roll = e.roll("weapon", true, "coins");
+          result.luckyMythic = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+
+          e.data.weaponMythicPity = 12;
+          e.data.weaponDivinePity = 52;
+          e.random = () => 0.975;
+          roll = e.roll("weapon", true, "coins");
+          result.naturalMythic = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+
+          e.data.weaponMythicPity = 25;
+          e.data.weaponDivinePity = 70;
+          e.random = () => 0.995;
+          roll = e.roll("weapon", false, "coins");
+          result.naturalDivine = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+        } finally {
+          e.data = original;
+          e.random = originalRandom;
+          e.save();
+        }
+        return result;
+      });
+      assert.deepEqual(pityMechanics.normalMythic, {tier:5,mythic:0,divine:21,classMythic:33,classDivine:44}, '74/75 + Normal must guarantee Mythic+ and leave Class pity untouched');
+      assert.deepEqual(pityMechanics.normalDivine, {tier:6,mythic:0,divine:0}, '149/150 + Normal must guarantee Divine and reset both weapon pities');
+      assert.deepEqual(pityMechanics.luckyMythic, {tier:5,mythic:0,divine:42}, '73/75 + Lucky must add 2 pity and guarantee Mythic+');
+      assert.deepEqual(pityMechanics.naturalMythic, {tier:5,mythic:0,divine:54}, 'Natural Mythic must reset only Mythic pity while Divine keeps +2');
+      assert.deepEqual(pityMechanics.naturalDivine, {tier:6,mythic:0,divine:0}, 'Natural Divine must reset Mythic and Divine pity');
       await page.locator('#classesbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
       const armoryLayout = await page.evaluate(() => {
