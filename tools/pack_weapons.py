@@ -7,7 +7,7 @@ NAMES = {"machete": "Machete", "mp5": "MP5", "bow": "Bow", "riot_breaker": "Riot
          "cerberus_laser": "Cerberus Laser", "frostbite": "Frostbite", "stormpiercer": "Stormpiercer", "thundergrave": "Thundergrave",
          "doomsday_launcher": "Doomsday Launcher", "widowmaker": "Widowmaker", "quantum_annihilator": "Quantum Annihilator",
          "hellfire_incarnate": "Hellfire Incarnate", "wraithpiercer": "Wraithpiercer", "dawn_spear": "Dawn Spear",
-         "heavenfall_bazooka": "Heavenfall Bazooka", "absolute_zero": "Absolute Zero"}
+         "heavenfall_bazooka": "Heavenfall Bazooka", "absolute_zero": "Absolute Zero", "grenade": "Grenade"}
 data = {}
 for slug, name in NAMES.items():
     p = os.path.join(SRC, slug + ".glb")

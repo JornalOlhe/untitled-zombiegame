@@ -382,6 +382,18 @@ w.box((0, 0.02, 0.16), (0.08, 0.12, 0.26), S(["panel", "glowline"], BLK, g=G_BLU
 WEAPONS.append(w)
 
 
+# Hand grenade (thrown item, not in the arsenal): segmented olive body, fuze, spoon and pin ring.
+w = W("grenade", "Grenade")
+w.ppm = 320
+w.box((0, 0, 0), (0.07, 0.085, 0.07), S(["grooves", "vents"], OLIVE))
+w.box((0, 0.05, 0), (0.05, 0.02, 0.05), S("metal", OLIVE))
+w.box((0, 0.068, 0), (0.028, 0.022, 0.028), S("metal", GRY))
+w.box((0.022, 0.03, 0), (0.012, 0.075, 0.02), S("metal", GRY), rot=(0, 0, -10))
+w.box((-0.022, 0.07, 0), (0.006, 0.02, 0.006), S("metal", STL), node="pin")
+w.box((-0.036, 0.07, 0), (0.004, 0.028, 0.026), S("metal", STL), node="pin")
+w.box((0, -0.046, 0), (0.05, 0.01, 0.05), S("metal", OLIVE))
+WEAPONS.append(w)
+
 # ---------------------------------------------------------------- painting
 def paint(W_, H_, st, face, rng):
     """Returns (rgb[H,W,3], emit[H,W,3]) with row 0 at the top (v high)."""
@@ -540,8 +552,9 @@ def build_weapon(w):
             hu = abs(u_.dot(Vector(half)))
             hv = abs(v_.dot(Vector(half)))
             hn = abs(n_.dot(Vector(half)))
-            Wp = max(1, int(round(2 * hu * PPM)))
-            Hp = max(1, int(round(2 * hv * PPM)))
+            ppm = getattr(w, "ppm", PPM)
+            Wp = max(1, int(round(2 * hu * ppm)))
+            Hp = max(1, int(round(2 * hv * ppm)))
             rgb, em = paint(Wp, Hp, part["st"], kind, rng)
             c = Vector(part["c"])
             corners = []
@@ -635,7 +648,7 @@ def build_weapon(w):
         bm.to_mesh(me)
         bm.free()
         ob = bpy.data.objects.new(node if node != "body" else w.slug, me)
-        ob.name = node if node in ("mag", "pump") else w.slug
+        ob.name = node if node in ("mag", "pump", "pin") else w.slug
         ob.data.materials.append(mat)
         ob["dr_weapon"] = w.slug
         bpy.context.scene.collection.objects.link(ob)
