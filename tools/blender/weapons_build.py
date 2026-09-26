@@ -384,8 +384,8 @@ WEAPONS.append(w)
 
 # Hand grenade (thrown item, not in the arsenal): segmented olive body, fuze, spoon and pin ring.
 w = W("grenade", "Grenade")
-w.ppm = 320
-w.box((0, 0, 0), (0.07, 0.085, 0.07), S(["grooves", "vents"], OLIVE))
+w.ppm = 150
+w.box((0, 0, 0), (0.07, 0.085, 0.07), S(["grooves", "vents"], (0.27, 0.31, 0.17)))
 w.box((0, 0.05, 0), (0.05, 0.02, 0.05), S("metal", OLIVE))
 w.box((0, 0.068, 0), (0.028, 0.022, 0.028), S("metal", GRY))
 w.box((0.022, 0.03, 0), (0.012, 0.075, 0.02), S("metal", GRY), rot=(0, 0, -10))
