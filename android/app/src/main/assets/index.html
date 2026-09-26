@@ -6974,6 +6974,7 @@ body.netgame #revivetouch{display:flex}
               classId: 0,
               classRosterVersion: 2,
               weaponId: 1,
+              weaponSlot: 0,
               classMythicPity: 0,
               classDivinePity: 0,
               weaponMythicPity: 0,
@@ -10058,10 +10059,17 @@ body.netgame #revivetouch{display:flex}
             player.inventory = Progression.data.weaponSlots
               .slice(0, Progression.data.weaponSlotsOwned)
               .map((id) => (id != null ? WeaponSystem.create(id) : null));
-            const startSlot = player.inventory.indexOf(
-              player.inventory.find((w) => w && w.id === Progression.data.weaponId),
-            );
-            player.slot = startSlot >= 0 ? startSlot : 0;
+            const preferredSlot = Number.isInteger(Progression.data.weaponSlot)
+              ? clamp(Progression.data.weaponSlot, 0, Math.max(0, player.inventory.length - 1))
+              : 0;
+            player.slot = player.inventory[preferredSlot]
+              ? preferredSlot
+              : Math.max(0, player.inventory.findIndex(Boolean));
+            if (!player.inventory[player.slot]) {
+              // Never let a corrupt or legacy save start a run unarmed.
+              player.inventory[0] = WeaponSystem.create(0);
+              player.slot = 0;
+            }
             yaw = 0;
             pitch = 0;
             lastShot = -100;
@@ -13423,12 +13431,30 @@ body.netgame #revivetouch{display:flex}
             let slots = source.slice(0, maxSlots).map((id) => Number.isInteger(id) && catalog[id] ? id : null);
             while (slots.length < maxSlots) slots.push(null);
             let current = Number.isInteger(data[kind + "Id"]) && catalog[data[kind + "Id"]] ? data[kind + "Id"] : null;
-            // Migration only: make sure a legacy save has at least one stored item. Never overwrite a full slot because of a pending spin.
-            if (!slots.some((id) => id !== null)) slots[0] = current !== null ? current : 0;
-            if (!slots.includes(current)) current = slots.find((id) => id !== null);
+            if (kind === "weapon") {
+              // Every owned weapon slot is always usable. Empty or corrupt owned slots
+              // fall back to the common Machete (weapon id 0); locked slots stay null.
+              for (let slot = 0; slot < data.weaponSlotsOwned; slot++) {
+                if (slots[slot] == null) slots[slot] = 0;
+              }
+              let equippedSlot = Number.isInteger(data.weaponSlot)
+                ? clamp(data.weaponSlot, 0, data.weaponSlotsOwned - 1)
+                : -1;
+              if (equippedSlot < 0 || slots[equippedSlot] == null ||
+                  (current != null && slots[equippedSlot] !== current)) {
+                const match = current == null ? -1 : slots.slice(0, data.weaponSlotsOwned).indexOf(current);
+                equippedSlot = match >= 0 ? match : 0;
+              }
+              data.weaponSlot = equippedSlot;
+              current = slots[equippedSlot] ?? 0;
+            } else {
+              if (!slots.some((id) => id !== null)) slots[0] = current !== null ? current : 0;
+              if (!slots.includes(current)) current = slots.find((id) => id !== null);
+            }
             data[kind + "Id"] = current;
             const pending = data.pendingLoadout[kind];
-            if (pending != null && (!Number.isInteger(pending) || !catalog[pending] || slots.includes(pending))) delete data.pendingLoadout[kind];
+            if (pending != null && (!Number.isInteger(pending) || !catalog[pending] ||
+                (kind === "class" && slots.includes(pending)))) delete data.pendingLoadout[kind];
             data[slotKey] = slots;
             data[ownedKey] = slots.filter((id) => id !== null);
           }
@@ -13506,7 +13532,8 @@ body.netgame #revivetouch{display:flex}
             const slots = d[loadoutSlotKey(kind)].slice(0, owned);
             const cards = slots.map((id, slot) => {
               if (id === null) return `<article class="slot-card empty"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span>RESERVA</span></div><h3 class="slot-name">VAZIO</h3><div class="slot-meta">O próximo spin pode ocupar este espaço.</div></article>`;
-              const item = Progression.economy.catalogs[kind][id], selected = current === id;
+              const item = Progression.economy.catalogs[kind][id],
+                selected = kind === "weapon" ? d.weaponSlot === slot : current === id;
               return `<article class="slot-card ${selected ? "selected" : ""}" style="--rarity:${rarityColors[item.tier]}"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span style="color:${rarityColors[item.tier]}">${rarityNames[item.tier].toUpperCase()}</span></div><h3 class="slot-name">${item.name}</h3><div class="slot-meta">${selected ? "EQUIPADO AGORA" : "RESERVA DO LOADOUT"}</div><div class="slot-actions"><button data-slot-equip="${slot}" ${selected ? "disabled" : ""}>${selected ? "EM USO" : "EQUIPAR"}</button></div></article>`;
             }).join("");
             if (kind !== "weapon" || owned >= WEAPON_SLOT_MAX) return cards;
@@ -13780,6 +13807,7 @@ body.netgame #revivetouch{display:flex}
           );
           this.data.classRosterVersion = 2;
           this.data.weaponSlots = Array.isArray(saved.weaponSlots) ? saved.weaponSlots : Array.isArray(saved.ownedWeapons) ? saved.ownedWeapons : [this.data.weaponId, null];
+          this.data.weaponSlot = Number.isInteger(saved.weaponSlot) ? saved.weaponSlot : 0;
           // Grandfather in anyone who already had a second weapon slot filled under the old
           // fixed-2-slots system, so they don't lose access to a weapon they already stored.
           const legacyFilled = this.data.weaponSlots.filter((id) => id != null).length;
@@ -13830,7 +13858,13 @@ body.netgame #revivetouch{display:flex}
           // A spin can only land in an owned slot — never auto-fill a slot the player
           // hasn't bought yet.
           const owned = kind === "weapon" ? this.data.weaponSlotsOwned : 2;
-          const slots = this.data[loadoutSlotKey(kind)].slice(0, owned), existing = slots.indexOf(id);
+          const slots = this.data[loadoutSlotKey(kind)].slice(0, owned);
+          if (kind === "weapon") {
+            return Number.isInteger(this.data.weaponSlot)
+              ? clamp(this.data.weaponSlot, 0, owned - 1)
+              : 0;
+          }
+          const existing = slots.indexOf(id);
           if (existing >= 0) return existing;
           const empty = slots.indexOf(null);
           if (empty >= 0) return empty;
@@ -13849,7 +13883,7 @@ body.netgame #revivetouch{display:flex}
               const slot = this.spinTargetSlot(kind, id);
               const r = await Account.queue("equip", { kind, slot, action: "replace" });
               Account.apply(r.profile);
-            } else if (existing >= 0 && this.data[kind + "Id"] !== id) {
+            } else if (kind === "class" && existing >= 0 && this.data[kind + "Id"] !== id) {
               const r = await Account.queue("equip", { kind, slot: existing, action: "equip" });
               Account.apply(r.profile);
             }
@@ -13857,6 +13891,7 @@ body.netgame #revivetouch{display:flex}
             const slot = this.spinTargetSlot(kind, id);
             this.data[loadoutSlotKey(kind)][slot] = id;
             this.data[kind + "Id"] = id;
+            if (kind === "weapon") this.data.weaponSlot = slot;
             this.data.pendingLoadout = {};
             normalizeLoadoutState(this.data);
             this.economy.save();
@@ -13876,7 +13911,25 @@ body.netgame #revivetouch{display:flex}
         };
         Progression.slotEquip = async function (kind, slot) {
           if (state !== GameState.CLASS_SELECT || this.busy) return; this.busy = true;
-          try { if (Account.user) { const r = await Account.queue("equip", { kind, slot, action: "equip" }); Account.apply(r.profile); } else { normalizeLoadoutState(this.data); const id = this.data[loadoutSlotKey(kind)][slot]; if (id == null) throw Error("Slot vazio."); this.economy.buy(kind, id); } selectedClass = this.data.classId; AudioManager.coin(); }
+          try {
+            if (Account.user) {
+              const r = await Account.queue("equip", { kind, slot, action: "equip" });
+              Account.apply(r.profile);
+            } else {
+              normalizeLoadoutState(this.data);
+              const id = this.data[loadoutSlotKey(kind)][slot];
+              if (id == null) throw Error("Slot vazio.");
+              if (kind === "weapon") {
+                this.data.weaponSlot = slot;
+                this.data.weaponId = id;
+                this.economy.save();
+              } else {
+                this.economy.buy(kind, id);
+              }
+            }
+            selectedClass = this.data.classId;
+            AudioManager.coin();
+          }
           catch (e) { UIManager.toast(e.message); } finally { this.busy = false; Armory.selection = null; Armory.render(); }
         };
         // Extra weapon inventory slots let the player carry more than one weapon into a
@@ -13896,6 +13949,9 @@ body.netgame #revivetouch{display:flex}
           if (this.data.coins < price) { UIManager.toast("Moedas insuficientes."); return; }
           this.data.coins -= price;
           this.data.weaponSlotsOwned = owned + 1;
+          this.data.weaponSlots ||= [];
+          this.data.weaponSlots[owned] = 0;
+          normalizeLoadoutState(this.data);
           this.economy.save();
           player.coins = this.data.coins;
           AudioManager.coin();
