@@ -31,3 +31,4 @@ A chave privada nunca deve ser adicionada ao repositório.
 ## QA
 
 Cada push na `main` executa testes de interface e gera builds de validação. A v16 possui um workflow dedicado que testa a UI, compila Android/Windows e publica a prerelease somente quando todos os jobs passam.
+- v17: build QA com pity separado de Mítico/Divino para armas e classes (75/150), Normal Spin somando +1, Lucky Spin somando +2, Normal por 50 moedas e Lucky com custo base de 250 moedas; Android usa `versionCode 17` / `0.17.0` e Windows usa `0.17.0`.
