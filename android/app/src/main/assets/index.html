@@ -12043,6 +12043,83 @@ body.netgame #revivetouch{display:flex}
           if (w.kind === "double" && w.ammo === 0 && first)
             explosion(end, 3.5, damage, false, 0xcb7be7, w);
         }
+        // Reaper v25 pre-model: five allied infected emerge from the ground and seek hostiles.
+        const ReaperAllies = {
+          list: [],
+          clear() {
+            for (const a of this.list) scene.remove(a.group);
+            this.list.length = 0;
+          },
+          summon(count = 5) {
+            if (this.list.length) {
+              UIManager.toast("Os 5 aliados atuais ainda estão vivos.");
+              return false;
+            }
+            for (let i = 0; i < Math.min(5, count); i++) {
+              const g = new THREE.Group(),
+                angle = (i / Math.max(1, count)) * Math.PI * 2,
+                radius = 1.7 + (i % 2) * 0.4;
+              VisualArt.ellipsoid(g,[0,1.05,0],[.23,.42,.18],0x526350,"cloth");
+              VisualArt.ellipsoid(g,[0,1.58,0],[.17,.21,.16],0x85927b,"skin");
+              for (const side of [-1,1]) {
+                VisualArt.link(g,[side*.18,1.3,0],[side*.28,.78,.02],.07,.045,0x485949,"cloth");
+                VisualArt.link(g,[side*.11,.72,0],[side*.13,.12,.02],.09,.065,0x3d4741,"cloth");
+              }
+              const x=player.pos.x+Math.cos(angle)*radius,
+                z=player.pos.z+Math.sin(angle)*radius,
+                floor=MapManager.groundAt(x,z,0.2,player.pos.y);
+              g.position.set(x,floor-1.5,z);
+              scene.add(g);
+              this.list.push({
+                group:g, hp:75, damage:18, speed:3.2,
+                floor, rise:simulationTime+0.85, nextHit:0, nextHurt:0,
+              });
+              ParticleSystem.emit(new V(x,floor+.05,z),0x6f4d38,22,2.2);
+            }
+            UIManager.toast("5 zumbis aliados emergiram do chão.");
+            return true;
+          },
+          update(dt) {
+            for (let i=this.list.length-1;i>=0;i--) {
+              const a=this.list[i], g=a.group;
+              if (simulationTime<a.rise) {
+                const p=1-clamp((a.rise-simulationTime)/.85,0,1);
+                g.position.y=a.floor-1.5+p*1.5;
+                g.rotation.y+=dt*2;
+                continue;
+              }
+              g.position.y=a.floor;
+              let target=null,best=Infinity;
+              for(const z of ZombieManager.list){
+                if(z.dead) continue;
+                const d=g.position.distanceToSquared(z.group.position);
+                if(d<best){best=d;target=z;}
+              }
+              if(target){
+                const dist=Math.sqrt(best), dir=target.group.position.clone().sub(g.position); dir.y=0;
+                if(dist>1.25 && dir.lengthSq()>0.001){
+                  dir.normalize();
+                  g.position.addScaledVector(dir,Math.min(a.speed*dt,Math.max(0,dist-1.1)));
+                  g.lookAt(target.group.position.x,g.position.y,target.group.position.z);
+                } else if(simulationTime>=a.nextHit){
+                  a.nextHit=simulationTime+.7;
+                  ZombieManager.hit(target,a.damage,false,target.group.position.clone().add(new V(0,1,0)),null,true);
+                  AudioManager.meleeImpact();
+                }
+                if(dist<1.45 && simulationTime>=a.nextHurt){
+                  a.nextHurt=simulationTime+.9;
+                  a.hp-=10;
+                }
+              }
+              if(a.hp<=0){
+                ParticleSystem.emit(g.position.clone().add(new V(0,1,0)),0x5b2c28,26,2.5);
+                scene.remove(g);
+                this.list.splice(i,1);
+              }
+            }
+          },
+        };
+
         // PlayerController: collision, combat, class abilities, health and input.
         const PlayerController = {
           curseUntil: 0,
@@ -12076,6 +12153,7 @@ body.netgame #revivetouch{display:flex}
             GrenadeThrow.cancel();
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
+            ReaperAllies.clear();
             for (const n of damageNumbers) n.el.remove();
             damageNumbers.length = 0;
 
@@ -12212,6 +12290,10 @@ body.netgame #revivetouch{display:flex}
               UIManager.toast(`Habilidade: ${player.classCharge || 0}/${c.requiredKills} eliminações.`);
               return;
             }
+            if (c.summonAllies && ReaperAllies.list.length) {
+              UIManager.toast("Você já tem 5 zumbis aliados vivos.");
+              return;
+            }
             const burst = c.burst || {};
             if (c.requiredKills) player.classCharge = Math.max(0, (player.classCharge || 0) - c.requiredKills);
             player.cooldown = simulationTime + (c.cd || 30);
@@ -12257,6 +12339,7 @@ body.netgame #revivetouch{display:flex}
                 if (weapon && weapon.mag !== Infinity) weapon.ammo = weapon.mag;
               reloadEnd = 0;
             }
+            if (c.summonAllies) ReaperAllies.summon(c.summonAllies);
           },
           grenade() {
             if (player.grenades <= 0) {
@@ -12572,9 +12655,21 @@ body.netgame #revivetouch{display:flex}
               player.vy = Math.max(player.vy, 3.4);
               player.onLadder = true;
             } else player.onLadder = false;
-            player.vy -= 16 * dt;
-            feet += player.vy * dt;
-            if (feet < ground) feet = ground;
+            const flying = !!classBurst().flight;
+            if (flying) {
+              const up =
+                (keys.has("Space") ? 1 : 0) -
+                (keys.has("ControlLeft") || keys.has("ControlRight") ? 1 : 0);
+              player.vy = up * 4.2;
+              feet += player.vy * dt;
+              feet = clamp(feet, ground + 1.8, ground + 10);
+              player.flightDescentUntil = simulationTime + 2.5;
+            } else {
+              const gravity = player.flightDescentUntil > simulationTime ? 3.2 : 16;
+              player.vy -= gravity * dt;
+              feet += player.vy * dt;
+              if (feet < ground) feet = ground;
+            }
             player.ground = ground;
             player.jump = Math.max(0, feet - ground);
             if (player.jump === 0) {
@@ -12627,6 +12722,7 @@ body.netgame #revivetouch{display:flex}
             CameraRig.update(dt);
             Account.update();
             HordeAI.update(dt);
+            ReaperAllies.update(dt);
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
           },
@@ -15375,6 +15471,8 @@ body.netgame #revivetouch{display:flex}
               parts,
               classId: cls,
               secretAccessories,
+              specterWeapon: !!weapon?.specter,
+              tridentWeapon: !!weapon?.trident,
               blend: 0,
             };
             return g;
@@ -15423,6 +15521,26 @@ body.netgame #revivetouch{display:flex}
               r.arms[i].rotation.z = i === 0 ? 0.5 : -0.5;
             }
             r.gun.rotation.z = Math.sin(t * 1.7) * 0.006;
+            if (r.specterWeapon) {
+              const orbit = t * 0.75;
+              r.gun.position.set(
+                0.48 + Math.sin(orbit) * 0.08,
+                0.28 + Math.sin(orbit * 1.6) * 0.07,
+                0.18 + Math.cos(orbit) * 0.07,
+              );
+              r.gun.rotation.y = Math.PI + Math.sin(orbit) * 0.3;
+              r.gun.rotation.z = Math.sin(t * 2.4) * 0.28;
+              r.arms[1].rotation.x = -0.25 + Math.sin(t * 2.4) * 0.22;
+              r.elbows[1].rotation.x = -0.45;
+            } else if (r.tridentWeapon) {
+              r.gun.position.set(0.02, 0.2, 0.34);
+              r.arms[0].rotation.x = -0.82;
+              r.elbows[0].rotation.x = -1.05;
+              r.arms[0].rotation.z = 0.34;
+              r.arms[1].rotation.x = -0.42;
+              r.elbows[1].rotation.x = -0.72;
+              r.arms[1].rotation.z = -0.26;
+            }
             if (r.secretAccessories) {
               const secret = r.secretAccessories,
                 flying =
@@ -15440,6 +15558,14 @@ body.netgame #revivetouch{display:flex}
                 const targetRaise = flying ? -1.05 : 0;
                 secret.tail.rotation.x += (targetRaise - secret.tail.rotation.x) * (1 - Math.exp(-dt * 7));
                 secret.rotor.rotation.z += dt * (flying ? 26 : 1.4);
+                if (flying) {
+                  r.arms[0].rotation.x = 0.08;
+                  r.elbows[0].rotation.x = -0.15;
+                  r.arms[1].rotation.x = 0.08;
+                  r.elbows[1].rotation.x = -0.15;
+                  r.arms[0].rotation.z = 0.18;
+                  r.arms[1].rotation.z = -0.18;
+                }
               }
             }
             if (reloading) {
