@@ -1962,6 +1962,13 @@
         background: linear-gradient(145deg, #6d5929c9, #1b1710e0) !important;
         border-color: #e5c56a80 !important;
       }
+      #weaponabilitytouch {
+        --size: clamp(58px, 9vw, 74px) !important;
+        right: max(calc(env(safe-area-inset-right) + 282px), 35vw);
+        bottom: max(calc(env(safe-area-inset-bottom) + 26px), 9vh);
+        background: linear-gradient(145deg, #31516cc9, #0e1821e0) !important;
+        border-color: #80d9ff70 !important;
+      }
       #grenadetouch {
         --size: clamp(58px, 9vw, 74px) !important;
         right: max(calc(env(safe-area-inset-right) + 214px), 27.5vw);
@@ -2079,11 +2086,12 @@
         html.native-android #jumptouch { right:max(23px,env(safe-area-inset-right)) !important; bottom:max(119px,calc(env(safe-area-inset-bottom) + 100px)) !important; }
         html.native-android #rtouch { right:max(105px,calc(env(safe-area-inset-right) + 86px)) !important; bottom:max(15px,env(safe-area-inset-bottom)) !important; }
         html.native-android #switchtouch { right:max(169px,calc(env(safe-area-inset-right) + 150px)) !important; bottom:max(15px,env(safe-area-inset-bottom)) !important; }
-        html.native-android #sprinttouch, html.native-android #crouchtouch, html.native-android #qtouch, html.native-android #grenadetouch { display:none !important; }
-        html.native-android #touch.more-open #crouchtouch, html.native-android #touch.more-open #qtouch, html.native-android #touch.more-open #grenadetouch { display:flex !important; }
+        html.native-android #sprinttouch, html.native-android #crouchtouch, html.native-android #qtouch, html.native-android #grenadetouch, html.native-android #weaponabilitytouch { display:none !important; }
+        html.native-android #touch.more-open #crouchtouch, html.native-android #touch.more-open #qtouch, html.native-android #touch.more-open #grenadetouch, html.native-android #touch.more-open #weaponabilitytouch { display:flex !important; }
         html.native-android #qtouch { right:max(84px,calc(env(safe-area-inset-right) + 72px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; bottom:auto !important; }
         html.native-android #grenadetouch { right:max(144px,calc(env(safe-area-inset-right) + 130px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; bottom:auto !important; }
-        html.native-android #crouchtouch { right:max(204px,calc(env(safe-area-inset-right) + 188px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; left:auto !important; bottom:auto !important; }
+        html.native-android #weaponabilitytouch { right:max(204px,calc(env(safe-area-inset-right) + 188px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; bottom:auto !important; }
+        html.native-android #crouchtouch { right:max(264px,calc(env(safe-area-inset-right) + 246px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; left:auto !important; bottom:auto !important; }
         html.native-android #moretouch { right:max(72px,calc(env(safe-area-inset-right) + 60px)); top:max(9px,env(safe-area-inset-top)); }
         html.native-android #pausetouch { --size:clamp(38px,10vh,46px) !important; }
         html.native-android #movezone { width:41%; top:26%; height:74%; }
@@ -2985,6 +2993,9 @@ body.netgame #revivetouch{display:flex}
       </button>
       <button id="qtouch" class="touch-btn touch-special" aria-label="Usar skill">
         <span class="touch-icon">✦</span><span class="touch-label">SKILL</span><small id="skilltouchcd">PRONTO</small>
+      </button>
+      <button id="weaponabilitytouch" class="touch-btn touch-special" aria-label="Habilidade da arma">
+        <span class="touch-icon">◆</span><span class="touch-label">ARMA</span>
       </button>
       <button id="grenadetouch" class="touch-btn touch-special" aria-label="Lançar granada">
         <span class="touch-icon">◉</span><span class="touch-label">GRANADA</span><small id="grenadetouchcount">0</small>
@@ -8274,11 +8285,13 @@ body.netgame #revivetouch{display:flex}
               ? new V(0, -0.105, -0.36)
               : new V(0.255, -0.24, -0.42);
             if (w.specter) {
-              const orbit = simulationTime * 0.7;
+              const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
+                orbit = simulationTime * (spinning ? 8.5 : 0.7),
+                radius = spinning ? 0.22 : 0.07;
               target.set(
-                0.48 + Math.sin(orbit) * 0.07,
-                0.01 + Math.sin(orbit * 1.7) * 0.055,
-                -0.66 + Math.cos(orbit) * 0.055,
+                0.48 + Math.sin(orbit) * radius,
+                0.01 + Math.sin(orbit * 1.7) * (spinning ? 0.12 : 0.055),
+                -0.66 + Math.cos(orbit) * radius,
               );
             }
             this.kickVelocity +=
@@ -12120,6 +12133,204 @@ body.netgame #revivetouch{display:flex}
           },
         };
 
+        // Secret weapon abilities. F on keyboard / ARMA on touch.
+        // The 5 s hellfire lifetime is a v25 prototype value; final infernal duration is intentionally tuneable.
+        const SecretWeaponSkills = {
+          cooldown: 0,
+          tridentReady: 0,
+          spinUntil: 0,
+          nextSpinHit: 0,
+          throws: [],
+          fires: [],
+          reset() {
+            this.cooldown = this.tridentReady = this.spinUntil = this.nextSpinHit = 0;
+            for (const fx of this.throws) scene.remove(fx.group);
+            for (const f of this.fires) {
+              scene.remove(f.mesh);
+              f.mesh.geometry?.dispose?.();
+              f.mesh.material?.dispose?.();
+            }
+            this.throws.length = this.fires.length = 0;
+          },
+          readyText(w = WeaponSystem.current()) {
+            if (!w?.specter && !w?.trident) return "";
+            if (w.specter && classBurst().flight === "angel") return "F · LANÇAR · SEM CD NO VOO";
+            const left = Math.max(0, this.cooldown - simulationTime);
+            return left > 0 ? `F · ARMA ${left.toFixed(1)}s` : "F · HABILIDADE DA ARMA";
+          },
+          use() {
+            if (state !== GameState.PLAYING || NetGame.down || NetGame.dead) return;
+            const w = WeaponSystem.current();
+            if (!w?.specter && !w?.trident) {
+              UIManager.toast("Esta arma não possui habilidade própria.");
+              return;
+            }
+            const flight = classBurst().flight;
+            if (w.specter) {
+              if (flight === "angel") {
+                this.throwSpecter(w);
+                return;
+              }
+              if (simulationTime < this.cooldown) {
+                UIManager.toast(`Espectro: ${Math.ceil(this.cooldown - simulationTime)}s de recarga.`);
+                return;
+              }
+              this.spinUntil = simulationTime + 5;
+              this.nextSpinHit = simulationTime;
+              this.cooldown = simulationTime + 30;
+              UIManager.toast("Angelic Specter · rotação por 5 segundos.");
+              AudioManager.tone(720,.35,"sine",.22,1250,"weapons");
+              return;
+            }
+            if (simulationTime < this.tridentReady) return;
+            this.tridentReady = simulationTime + Math.max(.48, w.rate || .48);
+            this.throwTrident(w, flight === "demon");
+          },
+          rayTarget(maxDistance = 34) {
+            const origin = player.pos.clone(),
+              dir = CameraRig.aim().normalize();
+            raycaster.set(origin, dir);
+            raycaster.far = maxDistance;
+            scene.updateMatrixWorld(true);
+            const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
+              wh = raycaster.intersectObjects(MapManager.walls)[0];
+            if (zh && (!wh || zh.distance < wh.distance)) {
+              return {
+                origin, dir, point: zh.point.clone(),
+                zombie: zh.object.userData.zombie,
+                head: !!zh.object.userData.head,
+              };
+            }
+            if (wh) return { origin, dir, point: wh.point.clone(), zombie:null, head:false };
+            const point = origin.clone().addScaledVector(dir,maxDistance);
+            const floor = MapManager.groundAt(point.x,point.z,.2,origin.y + 20);
+            point.y = Number.isFinite(floor) ? floor + .08 : Math.max(.08, point.y);
+            return { origin, dir, point, zombie:null, head:false };
+          },
+          makeThrow(from, to, style) {
+            const g = new THREE.Group(), infernal = style === "trident",
+              c = infernal ? 0xe32121 : 0x71ddff,
+              metal = infernal ? 0x211a20 : 0xd9ae55;
+            if (infernal) {
+              VisualArt.link(g,[0,0,.42],[0,0,-.42],.035,.025,metal,"steel");
+              VisualArt.link(g,[-.16,0,-.4],[.16,0,-.4],.025,.018,metal,"steel");
+              for(const x of[-.16,0,.16])
+                VisualArt.link(g,[x,0,-.4],[x,0,-.72],.025,.008,c,"steel",c);
+            } else {
+              VisualArt.ellipsoid(g,[0,0,0],[.11,.045,.18],c,"steel",c);
+              VisualArt.ring(g,[0,0,0],.18,metal).rotation.x=Math.PI/2;
+              for(const side of[-1,1]) {
+                VisualArt.link(g,[0,0,0],[side*.22,0,-.34],.027,.009,metal,"steel");
+                VisualArt.ellipsoid(g,[side*.25,0,-.4],[.06,.025,.2],0xf0fbff,"steel",c).rotation.z=side*.45;
+              }
+            }
+            g.position.copy(from);
+            scene.add(g);
+            this.throws.push({
+              group:g, from:from.clone(), to:to.clone(), start:simulationTime,
+              duration:style==="specter"?.72:.82, style,
+            });
+          },
+          throwTrident(w, infernalFlight = false) {
+            const hit = this.rayTarget(38);
+            this.makeThrow(hit.origin, hit.point, "trident");
+            AudioManager.meleeSwing();
+            if (hit.zombie && !hit.zombie.dead) {
+              if (infernalFlight) {
+                ZombieManager.hit(
+                  hit.zombie,
+                  Math.max(hit.zombie.hp + 1, weaponDamage(w) * 4),
+                  hit.head,
+                  hit.point,
+                  w,
+                  true,
+                );
+              } else {
+                const mult = hit.head ? (w.head || 2) * (classEffects().headshot || 1) : 1;
+                ZombieManager.hit(hit.zombie, weaponDamage(w) * 1.45 * mult, hit.head, hit.point, w, true);
+              }
+            } else if (infernalFlight) {
+              const damage = weaponDamage(w) * .65;
+              explosion(hit.point.clone(),5,damage,false,0xff2b18,w);
+              this.addHellfire(hit.point,damage*.18,w);
+            } else {
+              ParticleSystem.emit(hit.point,0xe32121,14,2);
+            }
+          },
+          addHellfire(point, tickDamage, weapon) {
+            const mesh = new THREE.Mesh(
+              new THREE.RingGeometry(.6,5,36),
+              new THREE.MeshBasicMaterial({
+                color:0xff2a12, transparent:true, opacity:.34,
+                side:THREE.DoubleSide, depthWrite:false,
+              }),
+            );
+            mesh.rotation.x=-Math.PI/2;
+            mesh.position.copy(point);
+            mesh.position.y+=.035;
+            scene.add(mesh);
+            this.fires.push({
+              mesh, pos:point.clone(), end:simulationTime+5,
+              next:simulationTime, damage:tickDamage, weapon,
+            });
+          },
+          throwSpecter(w) {
+            const hit = this.rayTarget(30),
+              from = hit.origin.clone(), to = hit.point.clone();
+            this.makeThrow(from,to,"specter");
+            AudioManager.tone(880,.16,"sine",.16,1320,"weapons");
+            const segment = new THREE.Line3(from,to),
+              closest = new V();
+            for(const z of [...ZombieManager.list]) {
+              if(z.dead) continue;
+              const center=z.group.position.clone().add(new V(0,Math.min(1.2,z.size||1),0));
+              segment.closestPointToPoint(center,true,closest);
+              if(center.distanceTo(closest) <= Math.max(.65,(z.size||1)*.58))
+                ZombieManager.hit(z,weaponDamage(w),false,closest.clone(),w,true);
+            }
+          },
+          update(dt) {
+            const w = WeaponSystem.current();
+            if (this.spinUntil > simulationTime && w?.specter) {
+              if (simulationTime >= this.nextSpinHit) {
+                this.nextSpinHit = simulationTime + .25;
+                const damage = weaponDamage(w) * .62;
+                for(const z of [...ZombieManager.list]) {
+                  if(z.dead) continue;
+                  if(z.group.position.distanceTo(player.pos) <= 3.6)
+                    ZombieManager.hit(z,damage,false,z.group.position.clone().add(new V(0,1,0)),w,true);
+                }
+                ParticleSystem.emit(player.pos.clone().add(new V(0,.25,0)),0x70dcff,10,3.5);
+              }
+            }
+            for(let i=this.throws.length-1;i>=0;i--) {
+              const fx=this.throws[i],
+                p=clamp((simulationTime-fx.start)/fx.duration,0,1),
+                outbound=p<.52 ? p/.52 : 1-(p-.52)/.48,
+                ease=outbound*outbound*(3-2*outbound);
+              fx.group.position.lerpVectors(fx.from,fx.to,ease);
+              fx.group.rotation.z += dt*(fx.style==="specter"?18:9);
+              fx.group.rotation.y += dt*(fx.style==="specter"?12:5);
+              if(p>=1){scene.remove(fx.group);this.throws.splice(i,1);}
+            }
+            for(let i=this.fires.length-1;i>=0;i--) {
+              const f=this.fires[i];
+              if(simulationTime>=f.end){
+                scene.remove(f.mesh);f.mesh.geometry.dispose();f.mesh.material.dispose();
+                this.fires.splice(i,1);continue;
+              }
+              f.mesh.material.opacity=.18+.18*Math.sin(simulationTime*9);
+              if(simulationTime>=f.next){
+                f.next=simulationTime+.5;
+                ParticleSystem.emit(f.pos.clone().add(new V(rand(-2.5,2.5),.15,rand(-2.5,2.5))),0xff381d,16,2.6);
+                for(const z of [...ZombieManager.list])
+                  if(!z.dead && z.group.position.distanceTo(f.pos)<=5)
+                    ZombieManager.hit(z,f.damage,false,z.group.position.clone().add(new V(0,.8,0)),f.weapon,true);
+              }
+            }
+          },
+        };
+
         // PlayerController: collision, combat, class abilities, health and input.
         const PlayerController = {
           curseUntil: 0,
@@ -12154,6 +12365,7 @@ body.netgame #revivetouch{display:flex}
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
             ReaperAllies.clear();
+            SecretWeaponSkills.reset();
             for (const n of damageNumbers) n.el.remove();
             damageNumbers.length = 0;
 
@@ -12723,6 +12935,7 @@ body.netgame #revivetouch{display:flex}
             Account.update();
             HordeAI.update(dt);
             ReaperAllies.update(dt);
+            SecretWeaponSkills.update(dt);
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
           },
@@ -17037,6 +17250,7 @@ body.netgame #revivetouch{display:flex}
           if (repeat) return true;
           if (c === "KeyR") PlayerController.reload();
           if (c === "KeyQ") PlayerController.ability();
+          if (c === "KeyF") SecretWeaponSkills.use();
           if (c === "KeyG") PlayerController.grenade();
           if (/^Digit[1-5]$/.test(c)) PlayerController.switch(Number(c.slice(-1)) - 1);
           if (c === "Space" && player.jump === 0) player.vy = 6;
@@ -17314,6 +17528,7 @@ body.netgame #revivetouch{display:flex}
           $("moretouch").setAttribute("aria-expanded", String(open));
         };
         bindTapButton("qtouch", () => PlayerController.ability());
+        bindTapButton("weaponabilitytouch", () => SecretWeaponSkills.use());
         bindTapButton("rtouch", () => PlayerController.reload());
         bindTapButton("grenadetouch", () => PlayerController.grenade());
         bindTapButton("jumptouch", () => { if (player.jump === 0) player.vy = 6; });
