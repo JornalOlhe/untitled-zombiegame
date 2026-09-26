@@ -147,14 +147,26 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     // Physics: an explosion flings nearby props.
     const flung = await page.evaluate(() => {
       const T = DeadRecoilTest, P = T.PhysicsProps;
-      const b = P.spawn('barrel', -2, 30);
+      const b = P.spawn('trash', -2, 30);
       const before = b.pos.clone();
       P.impulse(new THREE.Vector3(-3, 0, 30), 6, 11);
       return { before: [before.x, before.z], vel: b.vel.length() };
     });
     await waitSim(0.5);
     const after = await page.evaluate(() => { const b = DeadRecoilTest.PhysicsProps.items.at(-1); return [b.pos.x, b.pos.z, b.target]; });
-    assert.ok(flung.vel > 1 && after[0] > flung.before[0] + 0.3, 'barrel must be flung by the blast');
+    assert.ok(flung.vel > 1 && after[0] > flung.before[0] + 0.3, 'props must be flung by the blast');
+    // Explosive barrels: a shot arms them, they warn for ~2 s, then explode.
+    const armed = await page.evaluate(() => {
+      const P = DeadRecoilTest.PhysicsProps, b = P.spawn('barrel', 10, 30);
+      window._xb = b;
+      P.shove(b, new THREE.Vector3(0, 0, -1), b.pos.clone(), 20);
+      return b.fuse;
+    });
+    assert.ok(armed > 1.5 && armed <= 2, 'a shot arms the barrel with a ~2 s fuse');
+    await waitSim(1);
+    assert.ok(!(await page.evaluate(() => window._xb.dead)), 'the barrel waits before exploding');
+    await waitSim(1.3);
+    assert.ok(await page.evaluate(() => window._xb.dead && !DeadRecoilTest.PhysicsProps.items.includes(window._xb)), 'the barrel explodes and is removed');
 
     const setup = async () => page.evaluate(() => {
       const T = DeadRecoilTest;

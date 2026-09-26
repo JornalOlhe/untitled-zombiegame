@@ -2994,7 +2994,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.22.0";
+        const GAME_VERSION = "0.23.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -9506,8 +9506,35 @@ body.netgame #revivetouch{display:flex}
               emissiveMap: glow ? this.texture(kind) : null,
               emissiveIntensity: kind === "lamp" ? 1.4 : kind === "lava" ? 1.1 : glow ? 0.5 : 0,
             });
+            if (["leaf", "leafDark", "pine", "snowPine"].includes(kind)) this.wind(m, kind === "pine" || kind === "snowPine" ? 0.6 : 1);
             this.materials.set(kind, m);
             return m;
+          },
+          // Wind on foliage, done in the vertex shader (the canopies are merged into a few meshes):
+          // a slow gust sways whole crowns, a mid wave bends them unevenly and a fast small flutter
+          // moves the leaves. The higher above the trunk top, the more it moves.
+          windTime: { value: 0 },
+          wind(m, amount) {
+            const time = this.windTime;
+            m.onBeforeCompile = (shader) => {
+              shader.uniforms.windTime = time;
+              shader.vertexShader = shader.vertexShader
+                .replace("#include <common>", "#include <common>\nuniform float windTime;")
+                .replace(
+                  "#include <begin_vertex>",
+                  `#include <begin_vertex>
+                  vec4 wpW = modelMatrix * vec4(transformed, 1.0);
+                  float hW = clamp((wpW.y - 2.2) / 4.0, 0.0, 1.4) * ${amount.toFixed(2)};
+                  float phW = wpW.x * 0.21 + wpW.z * 0.17;
+                  float gust = 0.55 + 0.45 * sin(windTime * 0.37 + wpW.x * 0.03);
+                  float swayW = sin(windTime * 1.3 + phW) * 0.16 + sin(windTime * 2.9 + phW * 1.7) * 0.06;
+                  float flutterW = sin(windTime * 11.0 + wpW.y * 5.0 + phW * 9.0) * 0.025;
+                  transformed.x += (swayW * gust + flutterW) * hW;
+                  transformed.z += (swayW * 0.6 * gust - flutterW) * hW;
+                  transformed.y += flutterW * 0.5 * hW;`,
+                );
+            };
+            m.customProgramCacheKey = () => "wind" + amount;
           },
           batch() {
             return new Map();
@@ -9714,8 +9741,8 @@ body.netgame #revivetouch{display:flex}
         const PhysicsProps = {
           items: [],
           defs: {
-            barrel: { r: 0.32, h: 0.9, mass: 1, tex: "barrel", shape: "cyl" },
-            toxic: { r: 0.32, h: 0.9, mass: 1, tex: "toxic", shape: "cyl" },
+            barrel: { r: 0.32, h: 0.9, mass: 1, tex: "barrel", shape: "cyl", explosive: true },
+            toxic: { r: 0.32, h: 0.9, mass: 1, tex: "toxic", shape: "cyl", explosive: true },
             cone: { r: 0.2, h: 0.62, mass: 0.3, tex: "cone", shape: "cone" },
             trash: { r: 0.3, h: 0.8, mass: 0.7, tex: "trash", shape: "cyl" },
             box: { r: 0.25, h: 0.5, mass: 0.6, tex: "crate", shape: "box" },
@@ -9774,6 +9801,8 @@ body.netgame #revivetouch{display:flex}
             for (const p of this.items) {
               p.group.parent?.remove(p.group);
             }
+            for (const f of this.flashes) scene.remove(f.light);
+            this.flashes = [];
             this.items = [];
           },
           spawn(kind, x, z, y = 0) {
@@ -9837,6 +9866,7 @@ body.netgame #revivetouch{display:flex}
           // A bullet hit: push along the shot, spin, and tip light props over.
           shove(p, dir, point, damage) {
             if (!p) return;
+            if (p.d.explosive) this.arm(p, 2);
             const push = Math.min(7, 1.2 + damage * 0.05) / p.d.mass;
             p.vel.x += dir.x * push;
             p.vel.z += dir.z * push;
@@ -9861,10 +9891,108 @@ body.netgame #revivetouch{display:flex}
               p.spin += rand(-1, 1) * push * 1.5;
               p.awake = true;
               if (push > 2.2) this.knock(p, dir);
+              if (p.d.explosive && dist < radius * 0.75) this.arm(p, 0.35 + dist * 0.08);
+            }
+          },
+          // Explosive barrels: idle -> armed (hit by a shot or a blast) -> ~2 s warning (hiss,
+          // sparks, pulsing glow) -> explosion (players and zombies take falloff damage, props are
+          // thrown, nearby barrels chain) -> removed.
+          arm(p, fuse) {
+            if (!p.d.explosive || p.dead) return;
+            if (p.fuse != null) {
+              p.fuse = Math.min(p.fuse, fuse);
+              return;
+            }
+            p.fuse = fuse;
+            p.fuseMax = fuse;
+            p.warnMat = p.mesh.material.clone();
+            p.mesh.material = p.warnMat;
+            p.hiss = 0;
+            AudioManager.tone(1900, 0.5, "sawtooth", 0.05, 900);
+          },
+          updateFuses(dt) {
+            for (let i = this.items.length - 1; i >= 0; i--) {
+              const p = this.items[i];
+              if (p.fuse == null) continue;
+              p.fuse -= dt;
+              const k = 1 - Math.max(0, p.fuse) / Math.max(0.01, p.fuseMax);
+              const blink = Math.sin(simulationTime * (10 + k * 30)) > 0 ? 1 : 0.25;
+              p.warnMat.emissive.setHex(p.kind === "toxic" ? 0x66ff22 : 0xff3010);
+              p.warnMat.emissiveIntensity = (0.4 + k * 1.6) * blink;
+              p.mesh.scale.x = p.mesh.scale.z = p.d.r * (1 + Math.sin(simulationTime * 40) * 0.03 * k);
+              p.hiss -= dt;
+              if (p.hiss <= 0) {
+                p.hiss = 0.12;
+                const top = p.pos.clone().add(new V(rand(-0.1, 0.1), p.d.h, rand(-0.1, 0.1)));
+                ParticleSystem.emit(top, p.kind === "toxic" ? 0x9dff5a : 0xffc060, 3, 1.4);
+                ParticleSystem.emit(top, 0x6a6a6a, 2, 0.8);
+                AudioManager.noise(0.08, 0.05 + k * 0.08);
+              }
+              if (p.fuse <= 0) this.detonate(p, i);
+            }
+          },
+          detonate(p, index) {
+            p.dead = true;
+            this.items.splice(index, 1);
+            p.group.parent?.remove(p.group);
+            p.warnMat?.dispose();
+            const at = p.pos.clone().add(new V(0, 0.5, 0)),
+              toxic = p.kind === "toxic",
+              radius = 6.5,
+              color = toxic ? 0x8dff3a : 0xff7a26;
+            // Fire, smoke and debris.
+            ParticleSystem.emit(at, color, 70, 7);
+            ParticleSystem.emit(at, 0xffe2a0, 30, 4);
+            ParticleSystem.emit(at.clone().add(new V(0, 0.6, 0)), 0x3a3a3a, 40, 2.2);
+            ParticleSystem.emit(at.clone().add(new V(0, 1.2, 0)), 0x5a5a5a, 25, 1.4);
+            for (let j = 0; j < 6; j++) {
+              const piece = new THREE.Mesh(this.geo("box"), PropKit.mat(p.d.tex));
+              piece.scale.set(rand(0.12, 0.28), rand(0.05, 0.12), rand(0.12, 0.26));
+              piece.position.copy(at);
+              scene.add(piece);
+              this.debris.push({ mesh: piece, vel: new V(rand(-7, 7), rand(5, 10), rand(-7, 7)), spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin: rand(6, 14), life: 3.5, half: 0.05 });
+            }
+            // Momentary light.
+            const flash = new THREE.PointLight(color, 9, radius * 3.2, 2);
+            flash.position.copy(at).add(new V(0, 0.6, 0));
+            scene.add(flash);
+            this.flashes.push({ light: flash, t: 0 });
+            // Sound: crack + low boom.
+            AudioManager.noise(0.6, 1);
+            AudioManager.tone(55, 0.7, "sawtooth", 0.6, 18);
+            MonsterAudio.play("land", { volume: 1.1 });
+            // Damage: zombies take heavy damage, players take falloff damage.
+            for (const z of [...ZombieManager.list]) {
+              const d = z.group.position.distanceTo(at);
+              if (d >= radius) continue;
+              z.blastAt = simulationTime;
+              ZombieManager.hit(z, 240 * (1 - (d / radius) * 0.6), false, at, WeaponSystem.current(), true);
+            }
+            if (player && !(NetGame.active && NetGame.dead)) {
+              const d = player.pos.distanceTo(at);
+              if (d < radius) PlayerController.hurt(55 * (1 - d / radius) * (toxic ? 1.15 : 1));
+              if (d < 22) shake = Math.max(shake, 0.55 * (1 - d / 22) + 0.1);
+            }
+            HordeAI.noise?.(at, 30);
+            // Push props and chain into nearby barrels.
+            this.impulse(at, radius * 1.6, 15);
+          },
+          flashes: [],
+          updateFlashes(dt) {
+            for (let i = this.flashes.length - 1; i >= 0; i--) {
+              const f = this.flashes[i];
+              f.t += dt;
+              f.light.intensity = 9 * Math.max(0, 1 - f.t / 0.35);
+              if (f.t > 0.35) {
+                scene.remove(f.light);
+                this.flashes.splice(i, 1);
+              }
             }
           },
           update(dt) {
             this.updateDebris(dt);
+            this.updateFuses(dt);
+            this.updateFlashes(dt);
             if (!this.items.length) return;
             const feet = player ? (player.ground || 0) + (player.jump || 0) : 0,
               pv = PlayerController.motion;
@@ -15449,6 +15577,7 @@ body.netgame #revivetouch{display:flex}
               if (NetGame.active && NetGame.dead) NetGame.spectate();
               if (state === GameState.PLAYING) MonsterFX.update(sdt);
               if (state === GameState.PLAYING) PhysicsProps.update(sdt);
+              PropKit.windTime.value += dt;
               if (state === GameState.PLAYING) Medkits.update(sdt);
               if (KillCam.active) KillCam.update(dt);
               if (BossDeath.active) BossDeath.update(dt);
