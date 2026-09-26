@@ -54,7 +54,9 @@ p { color: var(--dim); }
   animation: grain 1.2s steps(6) infinite;
 }
 .screen > * { position: relative; z-index: 1; }
-@keyframes grain { 0%{transform:translate(0,0)} 20%{transform:translate(-2%,1%)} 40%{transform:translate(1%,-2%)} 60%{transform:translate(-1%,2%)} 80%{transform:translate(2%,-1%)} 100%{transform:translate(0,0)} }
+/* The grain moves its background, never its box: a translated overlay inside a backdrop-filter
+   screen (which becomes its containing block) grew the scroll area and made dialogs jump. */
+@keyframes grain { 0%{background-position:0 0,0 0} 20%{background-position:-32px 16px,0 0} 40%{background-position:16px -32px,0 0} 60%{background-position:-16px 32px,0 0} 80%{background-position:32px -16px,0 0} 100%{background-position:0 0,0 0} }
 @media (prefers-reduced-motion: reduce) { .screen::before { animation: none; } }
 
 .screen {
@@ -423,3 +425,82 @@ body.bossdeath #announcement, body.bossdeath #hud, body.bossdeath #touch { opaci
 #updatebar { position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 140%); z-index: 9999; min-width: 280px; padding: 10px 16px 14px; background: rgba(8, 10, 12, 0.92); border: 1px solid rgba(255, 255, 255, 0.14); color: #f3efe6; font: 600 13px/1.3 "Oswald", system-ui, sans-serif; letter-spacing: 0.04em; transition: transform 0.25s ease; pointer-events: none; }
 #updatebar.show { transform: translate(-50%, 0); }
 #updatebar i { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: #d9392b; transition: width 0.2s linear; }
+
+/* ── Settings (tabbed) ────────────────────────────────────────────────── */
+#settingsscreen { display: grid; place-items: center; overflow: hidden; }
+.settings-dialog {
+  width: min(880px, 100%); height: min(680px, 100%); max-height: 100%; padding: 0; display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
+}
+.settings-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; padding: 18px 22px 0; border-bottom: 1px solid var(--edge); }
+.settings-head h2 { margin: 2px 0 10px; font-size: clamp(30px, 4vw, 46px); line-height: .9; }
+.settings-head .eyebrow { font-size: 10px; }
+.settings-tabs { display: flex; gap: 2px; }
+.settings-tabs button { padding: 10px 16px; border: 0; border-bottom: 3px solid transparent; background: none; clip-path: none; color: var(--dim); font-size: 14px; }
+.settings-tabs button:hover:not(:disabled) { background: rgba(231,221,208,.06); color: var(--bone); }
+.settings-tabs button.active { color: var(--bone); border-bottom-color: var(--blood-2); background: linear-gradient(0deg, rgba(179,20,27,.25), transparent); }
+.settings-body { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 16px 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px 22px; align-content: start; scrollbar-gutter: stable; }
+.set-group { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.set-group h3 { margin: 0 0 4px; font-family: var(--mono); font-weight: 600; font-size: 11px; letter-spacing: .26em; color: var(--blood-2); text-transform: uppercase; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 48%); align-items: center; gap: 12px; padding: 8px 12px; min-height: 48px; background: rgba(0,0,0,.28); border: 1px solid var(--edge); text-transform: none; letter-spacing: 0; }
+.set-row:hover { border-color: var(--edge-2); }
+.set-name { display: grid; gap: 2px; font-family: var(--head); font-size: 15px; color: var(--bone); letter-spacing: .02em; }
+.set-name small { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .04em; }
+.set-row select { min-height: 38px; padding: 6px 10px; width: 100%; }
+.set-range { display: grid; grid-template-columns: 1fr 52px; align-items: center; gap: 10px; }
+.set-range output { font-family: var(--mono); font-size: 13px; color: var(--amber); text-align: right; }
+.set-check { grid-template-columns: 1fr auto; cursor: pointer; }
+.set-check input { width: 22px; height: 22px; min-height: 0; }
+.key-row { grid-template-columns: minmax(0, 1fr) 150px; }
+.key-btn { min-height: 36px; padding: 6px 10px; font-family: var(--mono); font-size: 13px; text-transform: none; letter-spacing: .02em; background: rgba(231,221,208,.06); }
+.key-btn.listening { border-color: var(--amber); color: var(--amber); animation: pulse 1s infinite; }
+.key-btn:disabled { opacity: .55; }
+.set-note { grid-column: 1 / -1; margin: 0; padding: 10px 12px; border: 1px dashed var(--edge-2); font-family: var(--mono); font-size: 12px; }
+.settings-foot { display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-top: 1px solid var(--edge); background: rgba(0,0,0,.25); }
+.settings-foot p { flex: 1; min-width: 0; margin: 0; font-family: var(--mono); font-size: 12px; line-height: 1.35; color: var(--dim); }
+.settings-foot p[data-tone="ok"] { color: var(--toxic); }
+.settings-foot p[data-tone="warn"] { color: var(--amber); }
+.settings-foot button { padding: 10px 18px; }
+@media (max-width: 640px), (max-height: 520px) {
+  .settings-dialog { height: 100%; }
+  .settings-head { padding: 10px 14px 0; }
+  .settings-head h2 { font-size: 28px; margin-bottom: 6px; }
+  .settings-tabs { width: 100%; overflow-x: auto; }
+  .settings-tabs button { flex: 1; padding: 8px 10px; font-size: 13px; }
+  .settings-body { padding: 10px 14px; gap: 10px; }
+  .set-row { grid-template-columns: 1fr; gap: 6px; padding: 8px 10px; }
+  .set-check, .key-row { grid-template-columns: 1fr auto; }
+  .key-row .key-btn { min-width: 110px; }
+  .settings-foot { padding: 8px 14px; flex-wrap: wrap; }
+  .settings-foot p { flex-basis: 100%; }
+  .settings-foot button { flex: 1; }
+}
+
+/* ── In-game menu (Esc) ───────────────────────────────────────────────── */
+#pausescreen { display: grid; place-items: center; overflow: auto; background: radial-gradient(ellipse at center, rgba(40,4,6,.55), rgba(4,3,3,.88) 70%); }
+.pause-dialog { width: min(560px, 100%); padding: clamp(18px, 3vw, 30px); display: grid; gap: 16px; border-top: 3px solid var(--blood-2); }
+.pause-head h2 { margin: 6px 0 6px; font-size: clamp(38px, 6vw, 62px); line-height: .88; }
+.pause-head p { margin: 0; font-family: var(--mono); font-size: 12px; letter-spacing: .08em; }
+.pause-head .eyebrow { font-size: 10px; }
+#pausescreen.online .pause-dialog { border-top-color: var(--amber); }
+#pausescreen.online .eyebrow { color: var(--amber); }
+.pause-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pause-stats div { padding: 10px 8px; background: rgba(0,0,0,.35); border: 1px solid var(--edge); display: grid; gap: 2px; text-align: center; }
+.pause-stats strong { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1; color: var(--bone); letter-spacing: .04em; }
+.pause-stats span { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+.pause-nav { display: grid; gap: 6px; }
+.pause-nav button { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; text-align: left; border-left: 3px solid transparent; }
+.pause-nav button b { font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: .06em; }
+.pause-nav button small { font-family: var(--mono); font-size: 11px; color: var(--dim); text-transform: none; letter-spacing: .04em; }
+.pause-nav button:hover:not(:disabled) { border-left-color: var(--blood-2); }
+.pause-nav button.primary small { color: #ffd8d3; }
+.pause-nav .pause-quit { margin-top: 6px; border-color: #b3141b66; color: #ffb4ad; background: rgba(58,3,6,.35); }
+#pausescreen .hint { margin: 0; font-family: var(--mono); font-size: 11px; }
+#fallback { justify-self: start; padding: 6px 10px; font-size: 11px; font-family: var(--mono); }
+@media (max-height: 560px) {
+  .pause-dialog { gap: 10px; }
+  .pause-head h2 { font-size: 34px; }
+  .pause-stats strong { font-size: 22px; }
+  .pause-nav button { padding: 8px 14px; }
+  .pause-nav button b { font-size: 19px; }
+}
