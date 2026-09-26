@@ -1,0 +1,17 @@
+const { chromium } = require('playwright');
+const http=require('http'),fs=require('fs'),path=require('path');
+const root=path.resolve('android/app/src/main/assets');
+const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent(q.url.split('?')[0]==='/'?'index.html':q.url.split('?')[0]));fs.readFile(f,(e,d)=>{if(e){r.writeHead(404).end();return;}r.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.woff2')?'font/woff2':'text/html');r.end(d)})});
+(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const b=await chromium.launch({executablePath:process.env.PW_CHROMIUM,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+const out=process.argv[2]; const size=(process.argv[3]||'1280x720').split('x').map(Number);
+const p=await b.newPage({viewport:{width:size[0],height:size[1]}});const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
+const base=`http://127.0.0.1:${server.address().port}/`;
+await p.goto(base+'?login=1');await p.waitForTimeout(4000);
+await p.screenshot({path:out+'/login.png'});
+await p.goto(base+'?test=1&net=local&name=Henrique');await p.waitForFunction(()=>!!window.DeadRecoilTest,{timeout:60000});await p.waitForTimeout(1500);
+await p.screenshot({path:out+'/home.png'});
+await p.click('#accountbtn');await p.waitForTimeout(400);await p.screenshot({path:out+'/profile.png'});
+await p.click('#profilescreen [data-menu]');await p.click('#missionsbtn');await p.waitForTimeout(400);await p.screenshot({path:out+'/missions.png'});
+await p.click('#missionscreen [data-menu]');await p.click('#play');await p.waitForTimeout(400);await p.screenshot({path:out+'/play.png'});
+console.log(JSON.stringify(errs));await b.close();server.close();})();

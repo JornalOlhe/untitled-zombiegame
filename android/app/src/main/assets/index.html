@@ -24,42 +24,13 @@
     <style id="native-app-overrides">
       html.native-app, html.native-app body { width:100%; height:100%; background:#05080b; overscroll-behavior:none; }
       html.native-app body { -webkit-tap-highlight-color: transparent; user-select:none; }
-      html.native-app #accountscreen { display:none !important; }
       html.native-app #menu .menu-bottom { opacity:.72; }
       html.native-app #menu .menu-bottom::after { content:" · APP NATIVO"; color:#e9b758; }
       html.native-app .screen { max-width:none; }
       html.native-android #exitbtn { display:block; }
-      html.native-android #accountbtn { order:4; }
-      html.native-android #accountbtn::after { content:" · LOCAL"; opacity:.65; font-size:.72em; }
 
       /* Native mobile UX: the APK is landscape-only. */
       @media (pointer: coarse) and (orientation: landscape) {
-        html.native-android #menu {
-          display:grid;
-          grid-template-columns:minmax(180px, 32vw) minmax(280px, 1fr);
-          grid-template-rows:auto auto 1fr auto;
-          column-gap:clamp(18px,4vw,54px);
-          align-content:center;
-          padding: max(16px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
-          overflow:hidden;
-        }
-        html.native-android #menu .eyebrow { grid-column:1; align-self:end; font-size:clamp(9px,1.4vw,13px); }
-        html.native-android #menu .brand { grid-column:1; font-size:clamp(46px,8vw,86px); line-height:.78; margin:8px 0 10px; }
-        html.native-android #menu .intro { grid-column:1; font-size:clamp(11px,1.55vw,16px); max-width:31vw; margin:0; }
-        html.native-android #menu .mainmenu {
-          grid-column:2;
-          grid-row:1 / span 3;
-          align-self:center;
-          width:100%;
-          display:grid;
-          grid-template-columns:repeat(2,minmax(0,1fr));
-          gap:9px;
-          max-height:80dvh;
-        }
-        html.native-android #menu .mainmenu button { min-height:50px; padding:10px 14px; font-size:clamp(11px,1.65vw,15px); }
-        html.native-android #menu .mainmenu #play { grid-column:1 / -1; min-height:58px; font-size:clamp(15px,2.1vw,20px); }
-        html.native-android #menu .menu-stamp { display:none; }
-        html.native-android #menu .menu-bottom { grid-column:1 / -1; font-size:9px; margin-top:8px; }
 
         html.native-android #classscreen.armory-screen { overflow-y:auto; overflow-x:hidden; padding:0; }
         html.native-android .armory-header { position:sticky; top:0; z-index:35; grid-template-columns:auto 1fr auto; padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); min-height:56px; }
@@ -1294,17 +1265,6 @@
       button:disabled {
         opacity: 0.43;
         cursor: not-allowed;
-      }
-      #classesbtn {
-        font-size: 23px;
-        font-weight: 750;
-        padding: 18px 24px;
-        letter-spacing: 2px;
-        border-color: #787667;
-      }
-      #accountbtn {
-        font-size: 12px;
-        color: #c1c8c1;
       }
       #menu .mainmenu {
         gap: 7px;
@@ -2541,7 +2501,27 @@ body.dying #hud{opacity:0;transition:opacity .4s}
 #deathfx h2{margin:0;font:900 clamp(40px,9vw,112px)/.9 var(--display,system-ui);letter-spacing:.08em;color:#b50f0f;text-shadow:0 0 40px #ff000055,0 5px 0 #000}
 #deathfx p{margin:14px 0 0;font:700 clamp(12px,1.6vw,17px)/1.4 var(--mono,monospace);letter-spacing:.2em;text-transform:uppercase;color:#e7ddd0}
 #deathfx small{display:block;margin-top:26px;font:600 11px/1 var(--mono,monospace);letter-spacing:.24em;color:#e7ddd088;text-transform:uppercase}
+
+/* ── Multiplayer: connection, downed, revive ─────────────────────────── */
+#netoverlay{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:#000a;backdrop-filter:blur(3px)}
+#netoverlay.hidden,#downed.hidden,#reviveprompt.hidden{display:none}
+#netoverlay .net-card{text-align:center;padding:28px 40px;border:1px solid #b3141b66;background:#0b0908ee;clip-path:polygon(0 10px,10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%)}
+#netoverlay h2{margin:10px 0 4px;font:400 42px/1 var(--display);letter-spacing:.08em;color:#ff3b30}
+#netoverlay p{margin:0;font:600 12px/1.4 var(--mono);letter-spacing:.2em;color:#e7ddd0;text-transform:uppercase}
+.net-spinner{display:inline-block;width:26px;height:26px;border:3px solid #b3141b44;border-top-color:#ff3b30;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#downed{position:fixed;left:0;right:0;top:30%;z-index:30;text-align:center;pointer-events:none}
+#downed h2{margin:0;font:400 clamp(34px,6vw,70px)/1 var(--display);letter-spacing:.1em;color:#ff3b30;text-shadow:0 0 30px #f004,0 3px 0 #000}
+#downed p{margin:8px 0 0;font:600 13px/1.4 var(--mono);letter-spacing:.18em;color:#e7ddd0;text-transform:uppercase}
+body.net-downed #world{filter:saturate(.3) brightness(.7) contrast(1.2)}
+body.net-downed #hud .crosshair{opacity:0}
+#reviveprompt{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);z-index:30;min-width:260px;padding:10px 16px 14px;text-align:center;background:#0b0908d9;border:1px solid #9dff4555;font:600 12px/1.3 var(--mono);letter-spacing:.14em;color:#e7ddd0;pointer-events:none}
+#reviveprompt b{display:block;margin-top:4px;color:#9dff45;font:400 20px/1 var(--display);letter-spacing:.1em}
+#reviveprompt i{position:absolute;left:0;bottom:0;height:4px;width:calc(var(--p,0)*100%);background:#9dff45}
+#revivetouch{display:none}
+body.netgame #revivetouch{display:flex}
 </style>
+    <link rel="stylesheet" href="css/ui.css" />
 
 </head>
   <body>
@@ -2554,32 +2534,149 @@ body.dying #hud{opacity:0;transition:opacity .4s}
       <h2>DEAD RECOIL</h2>
       <p id="loadtext">Preparando a última linha de defesa…</p>
     </div>
-    <main id="menu" class="screen hidden">
-      <div class="eyebrow">O amanhecer não é uma promessa.</div>
-      <h1 class="brand">DEAD<br />RECOIL</h1>
-      <p class="intro">
-        A cidade caiu. Você ainda não.<br />Enfrente a horda, transforme seu
-        arsenal e compre mais uma noite.
-      </p>
-      <nav class="mainmenu" aria-label="Menu principal">
-        <button id="play" class="primary">
-          Jogar <span style="float: right">↗</span></button
-        ><button id="classesbtn">ARMORY</button
-        ><button id="customizebtn">CUSTOMIZE</button
-        ><button id="accountbtn">Conta / entrar</button
-        ><button id="settingsbtn">Configurações</button
-        ><button id="scoresbtn">Placar local</button
-        ><button id="helpbtn">Como jogar</button
-        ><button id="exitbtn">Sair</button>
+    <main id="menu" class="screen hidden home">
+      <header class="home-top">
+        <div class="brand-lockup">
+          <span class="brand-kicker">UNTITLED ZOMBIE GAME</span>
+          <h1 class="brand">DEAD <br />RECOIL</h1>
+          <p class="brand-sub">A cidade caiu. Você ainda não.</p>
+        </div>
+        <button id="profilechip" class="profile-chip" type="button" aria-label="Abrir perfil"></button>
+      </header>
+      <nav class="home-nav" aria-label="Menu principal">
+        <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>Solo ou multiplayer online</small><i>›</i></button>
+        <button id="missionsbtn" class="home-item" type="button"><b>MISSÕES</b><small id="missionsbadge">3 ativas</small><i>›</i></button>
+        <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas, spins e slots</small><i>›</i></button>
+        <button id="classesbtn" class="home-item" type="button"><b>CLASSES</b><small>Habilidades do sobrevivente</small><i>›</i></button>
+        <button id="customizebtn" class="home-item" type="button"><b>LOJA</b><small>Visual e equipamentos</small><i>›</i></button>
+        <button id="accountbtn" class="home-item" type="button"><b>PERFIL</b><small>Entrar ou criar conta</small><i>›</i></button>
+        <button id="settingsbtn" class="home-item" type="button"><b>CONFIGURAÇÕES</b><small>Gráficos, áudio e controles</small><i>›</i></button>
+        <div class="home-minor"><button id="scoresbtn" type="button">Placar local</button><button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button></div>
       </nav>
-      <div class="menu-stamp">
-        Setor de quarentena<strong>Último sinal: 03:47</strong>Sem resgate. Sem
-        recuo.
-      </div>
-      <div class="menu-bottom">
-        <span class="signal"></span>Sobrevivência solo &nbsp; / &nbsp; App nativo · controles adaptados
-      </div>
+      <aside class="home-side" aria-label="Missões ativas">
+        <div class="side-title"><span>MISSÕES ATIVAS</span><button id="home-missions-all" type="button">VER TODAS ›</button></div>
+        <div id="home-missions"></div>
+      </aside>
+      <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
+    <section id="loginscreen" class="screen hidden auth-screen">
+      <div class="auth-card">
+        <div class="auth-brand"><span class="brand-kicker">UNTITLED ZOMBIE GAME</span><h1>DEAD RECOIL</h1></div>
+        <p id="login-offline-note" class="auth-note hidden">Sem internet: você pode jogar SOLO offline e entrar depois.</p>
+        <div data-view="login">
+          <button id="google-btn" class="google-btn" type="button"><span class="g-logo" aria-hidden="true"></span>CONTINUAR COM GOOGLE</button>
+          <div class="auth-or"><span>ou</span></div>
+          <form id="login-form" novalidate>
+            <label>E-mail<input id="login-email" type="email" autocomplete="email" inputmode="email" required /></label>
+            <label>Senha<input id="login-password" type="password" autocomplete="current-password" required /></label>
+            <p class="auth-msg" role="alert"></p>
+            <button class="primary auth-submit" type="submit">ENTRAR</button>
+          </form>
+          <div class="auth-links"><button type="button" data-auth-view="register">Criar conta</button><button type="button" data-auth-view="forgot">Esqueci a senha</button></div>
+        </div>
+        <div data-view="register" class="hidden">
+          <button id="google-btn-2" class="google-btn" type="button"><span class="g-logo" aria-hidden="true"></span>CRIAR COM GOOGLE</button>
+          <div class="auth-or"><span>ou</span></div>
+          <form id="register-form" novalidate>
+            <label>Nome de usuário<input id="reg-username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" required /></label>
+            <label>E-mail<input id="reg-email" type="email" autocomplete="email" inputmode="email" required /></label>
+            <label class="pw">Senha<input id="reg-password" type="password" autocomplete="new-password" minlength="8" required /><i class="pw-meter"></i></label>
+            <label>Confirmar senha<input id="reg-confirm" type="password" autocomplete="new-password" required /></label>
+            <p class="auth-msg" role="alert"></p>
+            <button class="primary auth-submit" type="submit">CRIAR CONTA</button>
+          </form>
+          <div class="auth-links"><button type="button" data-auth-view="login">Já tenho conta</button></div>
+        </div>
+        <div data-view="verify" class="hidden auth-verify">
+          <div class="verify-icon" aria-hidden="true">✉</div>
+          <h2>VERIFIQUE SEU E-MAIL</h2>
+          <p>Enviamos um link de confirmação para:</p>
+          <strong id="verify-email"></strong>
+          <p class="auth-help">Abra o link neste aparelho para voltar direto ao jogo. Se abrir em outro lugar, é só entrar com e-mail e senha depois.</p>
+          <p class="auth-msg" role="status"></p>
+          <button id="resend-btn" type="button">REENVIAR E-MAIL</button>
+          <button id="verify-done" class="primary" type="button">JÁ CONFIRMEI · ENTRAR</button>
+        </div>
+        <div data-view="forgot" class="hidden">
+          <h2>RECUPERAR SENHA</h2>
+          <form id="forgot-form" novalidate>
+            <label>E-mail da conta<input id="forgot-email" type="email" autocomplete="email" inputmode="email" required /></label>
+            <p class="auth-msg" role="alert"></p>
+            <button class="primary auth-submit" type="submit">ENVIAR LINK</button>
+          </form>
+          <div class="auth-links"><button type="button" data-auth-view="login">Voltar ao login</button></div>
+        </div>
+        <div data-view="reset" class="hidden">
+          <h2>NOVA SENHA</h2>
+          <form id="reset-form" novalidate>
+            <label class="pw">Nova senha<input id="reset-password" type="password" autocomplete="new-password" minlength="8" required /><i class="pw-meter"></i></label>
+            <label>Confirmar<input id="reset-confirm" type="password" autocomplete="new-password" required /></label>
+            <p class="auth-msg" role="alert"></p>
+            <button class="primary auth-submit" type="submit">SALVAR SENHA</button>
+          </form>
+        </div>
+        <button id="offline-btn" class="auth-offline" type="button">JOGAR OFFLINE COMO VISITANTE ›</button>
+      </div>
+    </section>
+    <section id="profilescreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>PERFIL</h2><span id="profile-sync" class="sync-pill"></span></header>
+      <div class="profile-layout">
+        <div class="profile-hero">
+          <span class="profile-level" id="profile-level">LVL 1</span>
+          <h1 id="profile-name">Sobrevivente</h1>
+          <p id="profile-handle"></p>
+          <div class="xp-track"><i id="profile-xpbar"></i></div>
+          <span id="profile-xp" class="xp-label"></span>
+          <div class="profile-wallet"><b id="profile-coins"></b><span id="profile-tickets"></span></div>
+          <form id="profile-rename" class="rename-row"><input id="rename-input" maxlength="20" pattern="[A-Za-z0-9_]{3,20}" aria-label="Nome de usuário" /><button type="submit">RENOMEAR</button></form>
+          <div class="profile-actions"><button id="profile-login" class="primary" type="button">ENTRAR / CRIAR CONTA</button><button id="profile-logout" type="button">SAIR DA CONTA</button></div>
+        </div>
+        <div id="profile-stats" class="profile-stats"></div>
+      </div>
+    </section>
+    <section id="missionscreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>MISSÕES</h2><button id="missions-refresh" class="ghost" type="button">↻ ATUALIZAR</button></header>
+      <p class="panel-sub">Missões infinitas: coletou, outra aparece. Quanto mais rara, maior o desafio e a recompensa.</p>
+      <p id="missions-offline" class="offline-banner hidden">OFFLINE · progresso será sincronizado quando a conexão voltar</p>
+      <div id="mission-list" class="mission-list"></div>
+    </section>
+    <section id="playscreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>JOGAR</h2></header>
+      <div class="play-choice">
+        <button id="solo" class="choice-card" type="button"><span class="choice-icon">☠</span><b>SOLO</b><small>Você contra a horda · funciona offline</small></button>
+        <button id="multiplayer" class="choice-card" type="button"><span class="choice-icon">⚑</span><b>MULTIPLAYER</b><small>1–4 jogadores · online</small></button>
+      </div>
+    </section>
+    <section id="mpscreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" id="mp-back" type="button">‹ VOLTAR</button><h2>MULTIPLAYER</h2></header>
+      <div class="mp-grid">
+        <button id="quickplay" class="choice-card" type="button"><span class="choice-icon">»</span><b>QUICK PLAY</b><small>Entra num lobby público ou cria um</small></button>
+        <div class="choice-card as-panel"><span class="choice-icon">＋</span><b>CRIAR LOBBY</b><small>Gera um código para seus amigos</small><label class="check"><input id="lobby-public" type="checkbox" /> Lobby público (Quick Play)</label><button id="createlobby" class="primary" type="button">CRIAR</button></div>
+        <form id="join-form" class="choice-card as-panel"><span class="choice-icon">#</span><b>ENTRAR COM CÓDIGO</b><small>6 caracteres, ex.: X7K29A</small><input id="join-code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CÓDIGO" aria-label="Código do lobby" /><button class="primary" type="submit">ENTRAR</button></form>
+      </div>
+      <p id="mp-msg" class="mp-msg" role="status"></p>
+    </section>
+    <section id="lobbyscreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" id="lobby-leave" type="button">‹ SAIR DO LOBBY</button><h2>LOBBY</h2><span id="lobby-conn" class="sync-pill" data-state="online">● CONECTADO</span></header>
+      <div class="lobby-layout">
+        <div class="lobby-code-box"><span>CÓDIGO</span><button id="lobby-code" type="button" title="Copiar código">------</button><small id="lobby-visibility"></small></div>
+        <ul id="lobby-players" class="lobby-players"></ul>
+        <div class="lobby-options">
+          <label>Mapa<select id="lobby-map"></select></label>
+          <label>Dificuldade<select id="lobby-difficulty"><option value="easy">Fácil</option><option value="medium">Médio</option><option value="hard">Difícil</option><option value="nightmare">Pesadelo</option></select></label>
+          <label>Modo<select id="lobby-mode"><option value="classic">Clássico</option><option value="infinite">Infinito</option><option value="timed">Contra o tempo</option></select></label>
+          <p id="lobby-summary" class="lobby-summary"></p>
+        </div>
+      </div>
+      <footer class="lobby-foot"><span id="lobby-hint"></span><button id="lobby-ready" class="primary" type="button">READY</button><button id="lobby-start" class="primary danger" type="button">INICIAR PARTIDA</button></footer>
+    </section>
+    <section id="errorscreen" class="modal-layer hidden" role="alertdialog" aria-modal="true" aria-labelledby="error-title">
+      <div class="error-card"><span class="error-tag">⚠ ERRO</span><h2 id="error-title">ERRO</h2><p id="error-text"></p><button id="error-ok" class="primary" type="button">ENTENDI</button></div>
+    </section>
+    <section id="missionreward" class="modal-layer hidden" role="dialog" aria-modal="true">
+      <div class="reward-card"><span class="reward-rarity">MISSÃO</span><strong>MISSION COMPLETE</strong><h3></h3><ul class="reward-list"></ul><button id="mission-reward-ok" class="primary" type="button">CLAIM ✓</button></div>
+    </section>
+    <div id="missiontoast" class="hidden" role="status"><span>MISSÃO CONCLUÍDA</span><b></b></div>
     <section id="classscreen" class="screen hidden armory-screen">
       <header class="armory-header">
         <button id="armory-back" data-menu class="armory-back-btn">← BACK</button>
@@ -2643,50 +2740,6 @@ body.dying #hud{opacity:0;transition:opacity .4s}
         </div>
       </div>
     </section>
-    <section id="accountscreen" class="screen modal hidden">
-      <div class="dialog account-dialog">
-        <h2>Seu próximo amanhecer.</h2>
-        <p>
-          Entre para guardar equipamento, aparência e progresso por jogador.
-        </p>
-        <form id="account-form">
-          <label
-            >Usuário<input
-              id="username"
-              name="username"
-              autocomplete="username"
-              minlength="3"
-              maxlength="24"
-              pattern="[A-Za-z0-9_]+"
-              required /></label
-          ><label
-            >Senha<input
-              id="password"
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              minlength="10"
-              maxlength="128"
-              required /></label
-          ><label class="check"
-            ><input id="register-mode" type="checkbox" />Criar uma nova
-            conta</label
-          >
-          <p id="account-error" role="alert"></p>
-          <button id="account-submit" class="primary" type="submit">
-            Entrar / cadastrar
-          </button>
-        </form>
-        <p class="hint">
-          Contas guardadas neste computador pelo servidor do jogo. Novas contas
-          começam com equipamento comum. O save de visitante permanece separado.
-        </p>
-        <div class="row">
-          <button id="logout" hidden>Sair da conta</button
-          ><button data-menu>Voltar</button>
-        </div>
-      </div>
-    </section>
     <section id="mapscreen" class="screen hidden">
       <div class="container">
         <div class="topline">
@@ -2724,8 +2777,9 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               <button type="button" data-choice="difficulty" data-value="easy"><strong>Fácil</strong><small>150 HP · moedas ×1</small></button>
               <button type="button" data-choice="difficulty" data-value="medium"><strong>Médio</strong><small>100 HP · moedas ×1,5</small></button>
               <button type="button" data-choice="difficulty" data-value="hard"><strong>Difícil</strong><small>75 HP · moedas ×2</small></button>
+              <button type="button" data-choice="difficulty" data-value="nightmare"><strong>Pesadelo</strong><small>60 HP · moedas ×3</small></button>
             </div>
-            <select id="difficulty" class="sr-only" aria-label="Dificuldade"><option value="easy">Fácil</option><option value="medium" selected>Médio</option><option value="hard">Difícil</option></select>
+            <select id="difficulty" class="sr-only" aria-label="Dificuldade"><option value="easy">Fácil</option><option value="medium" selected>Médio</option><option value="hard">Difícil</option><option value="nightmare">Pesadelo</option></select>
           </fieldset>
         </div>
         <div class="footer-actions"><span class="hint">Celular: joystick à esquerda · arraste à direita para mirar.</span><button id="deploy" class="primary">Entrar na zona</button></div>
@@ -2851,6 +2905,9 @@ body.dying #hud{opacity:0;transition:opacity .4s}
     </div>
     <div id="announcement"><strong></strong><span></span></div>
     <div id="killcambanner" aria-live="polite"></div>
+    <div id="netoverlay" class="hidden" role="status" aria-live="assertive"><div class="net-card"><i class="net-spinner"></i><h2>CONNECTION LOST</h2><p>Reconectando…</p></div></div>
+    <div id="downed" class="hidden" role="status"><h2>VOCÊ CAIU</h2><p>Aguarde um aliado te reanimar · sangrando <b>30s</b></p></div>
+    <div id="reviveprompt" class="hidden"><span>SEGURE <kbd>E</kbd> PARA REANIMAR</span><b></b><i></i></div>
     <div id="deathfx" aria-live="assertive"><div class="death-blood"></div><div class="death-copy"><h2>VOCÊ MORREU</h2><p></p><small>Toque ou pressione Espaço para continuar</small></div></div>
     <div id="toast" class="toast hidden" role="status"></div>
     <div id="fps" class="hidden"></div>
@@ -2886,6 +2943,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
       <button id="crouchtouch" class="touch-btn touch-move" aria-label="Agachar">
         <span class="touch-icon">⌄</span><span class="touch-label">AGACHAR</span>
       </button>
+      <button id="revivetouch" class="touch-btn touch-special" aria-label="Reanimar aliado"><span class="touch-icon">✚</span><span class="touch-label">REANIMAR</span></button>
       <button id="jumptouch" class="touch-btn touch-action" aria-label="Pular">
         <span class="touch-icon">↑</span><span class="touch-label">PULAR</span>
       </button>
@@ -2897,12 +2955,26 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           'Não foi possível carregar o Three.js. Conecte-se à internet e recarregue esta página.'
       "
     ></script>
+    <script src="vendor/supabase.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth/AuthService.js"></script>
+    <script src="js/auth/GoogleAuth.js"></script>
+    <script src="js/data/Backend.js"></script>
+    <script src="js/missions/Missions.js"></script>
+    <script src="js/network/Transport.js"></script>
+    <script src="js/network/LobbyManager.js"></script>
+    <script src="js/ui/LoginUI.js"></script>
+    <script src="js/ui/ProfileUI.js"></script>
+    <script src="js/ui/MissionUI.js"></script>
+    <script src="js/ui/LobbyUI.js"></script>
     <script src="monsters/voxel-atlas.js"></script>
     <script src="monsters/monster-sfx.js"></script>
     <script>
       "use strict";
       (async () => {
         if (!window.THREE) return;
+        const DR = (window.DR = window.DR || {});
+        const GAME_VERSION = "0.19.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -3373,6 +3445,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           easy: { hp: 150, speed: 0.8, damage: 0.8, coins: 1, count: 0.8 },
           medium: { hp: 100, speed: 1, damage: 1, coins: 1.5, count: 1 },
           hard: { hp: 75, speed: 1.2, damage: 1.3, coins: 2, count: 1.2 },
+          nightmare: { hp: 60, speed: 1.35, damage: 1.6, coins: 3, count: 1.4 },
         };
         let player = {
           pos: new V(0, 1.7, 10),
@@ -7265,6 +7338,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             p.ring = ring;
           }
           projectiles.push(p);
+          if (kind === "enemy" && NetGame.active && NetGame.host)
+            NetGame.fx("proj", { p: [+pos.x.toFixed(2), +pos.y.toFixed(2), +pos.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)], dmg: damage, acid: extra.acid ? 1 : 0 });
           return p;
         }
         function removeProjectile(i) {
@@ -7416,6 +7491,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           hitMeshes: [],
           flowClock: 0,
           spawn(type = 0, boss = null, where = null) {
+            // Multiplayer clients never create zombies on their own: the host owns the horde.
+            if (NetGame.active && !NetGame.host && !NetGame.spawningRemote) return null;
             const t = zombieTypes[type],
               g = new THREE.Group(),
               size = boss ? boss.size : t.size;
@@ -7495,7 +7572,18 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             g.add(shadow);
             z.contact = shadow;
             this.list.push(z);
+            NetGame.registerSpawn(z);
             return z;
+          },
+          // Removes a zombie without a death (multiplayer puppets the host no longer lists).
+          remove(z) {
+            const i = this.list.indexOf(z);
+            if (i >= 0) this.list.splice(i, 1);
+            this.hitMeshes = this.hitMeshes.filter((m) => m.userData.zombie !== z);
+            if (z.flashMat) z.flashMat.dispose();
+            if (z.contact) z.contact.material.dispose();
+            scene.remove(z.group);
+            z.dead = true;
           },
           hit(z, damage, head, point, w, ignoreArmor = false) {
             if (z.dead) return;
@@ -7528,7 +7616,12 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             )
               damage *= 0.35;
             const before = z.hp;
-            z.hp -= damage;
+            if (z.remote) {
+              if (NetGame.applyingRemote) return;
+              NetGame.requestHit(z, damage, head, point, w);
+            } else z.hp -= damage;
+            if (!NetGame.attacker) RunStats.damage += Math.min(damage, Math.max(0, before));
+            if (!z.remote) NetGame.addDamage(Math.min(damage, Math.max(0, before)));
             const localHit = point
               ? z.group.worldToLocal(point.clone())
               : new V(0, 1, 0);
@@ -7548,24 +7641,26 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               BloodFX.emit(hitPoint, head ? 22 : 14);
               if (Math.random() < 0.3) CombatFX.mark(hitPoint, 0x582a26, 0.25);
             }
-            hitUntil = simulationTime + 0.12;
-            UIManager.number(
-              Math.round(damage),
-              point || z.group.position.clone().add(new V(0, 1.7 * z.size, 0)),
-              head ? "#ffa956" : damage > 150 ? "#f6d867" : "#ffffff",
-            );
+            if (!NetGame.attacker) {
+              hitUntil = simulationTime + 0.12;
+              UIManager.number(
+                Math.round(damage),
+                point || z.group.position.clone().add(new V(0, 1.7 * z.size, 0)),
+                head ? "#ffa956" : damage > 150 ? "#f6d867" : "#ffffff",
+              );
+            }
             // Weapon-specific status effects (fire's burn, ice's freeze) and the
             // knife's lifesteal all funnel through here since every damage source —
             // hitscan, explosions, projectiles, melee — ultimately calls hit().
-            if (w?.burn)
+            if (w?.burn && !z.remote)
               this.applyBurn(z, w.burn.dps * rarityMult[w.tier], w.burn.duration, w);
-            if (w?.freeze) this.applySlow(z, w.freeze.slow, w.freeze.duration);
-            if (w?.lifesteal)
+            if (w?.freeze && !z.remote) this.applySlow(z, w.freeze.slow, w.freeze.duration);
+            if (w?.lifesteal && !NetGame.attacker)
               player.hp = Math.min(
                 player.maxhp + player.bonus,
                 player.hp + damage * w.lifesteal,
               );
-            if (z.hp <= 0) this.kill(z, head, damage > before * 1.4, w);
+            if (z.hp <= 0 && !z.remote) this.kill(z, head, damage > before * 1.4, w);
           },
           applyBurn(z, dps, duration, w) {
             z.burnDps = dps;
@@ -7579,6 +7674,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           kill(z, head = false, overkill = false, w = null) {
             if (z.dead) return;
             z.dead = true;
+            const byMe = !NetGame.attacker;
             if (z.rig.voxel && !z.boss && head) {
               const away = z.group.position.clone().sub(player.pos);
               away.y = 0;
@@ -7595,7 +7691,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               VoxelMonsters.gib(z, z.group.position.clone().add(new V(0, 0.6, 0)), 7);
               if (z.contact) z.contact.visible = false;
             }
-            this.corpses.push({
+            if (BossDeath.wants(z)) BossDeath.start(z);
+            else this.corpses.push({
               z,
               head,
               group: z.group,
@@ -7608,20 +7705,26 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               z.type === 2 ? 0x57692f : 0x582a26,
               z.size * 0.8,
             );
-            player.kills++;
-            player.waveKills++;
-            if (head) player.headshots++;
-            const reward = z.boss ? z.boss.coins : head ? 8 : 5;
-            Progression.reward(Math.round(reward * diff[difficulty].coins));
-            const classFx = classEffects();
-            const heal = (overkill ? classFx.overkillHeal || 0 : 0) + (classFx.killHeal || 0);
-            if (heal)
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + heal);
-            if (classFx.ticketEvery && player.waveKills % classFx.ticketEvery === 0) {
-              Progression.reward(0, 1);
-              UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
-            }
-            if (z.type === 9 && this.list.length < 80)
+            if (byMe) {
+              player.kills++;
+              player.waveKills++;
+              if (head) player.headshots++;
+              const family = weaponFamily(w);
+              if (family) RunStats.families[family] = (RunStats.families[family] || 0) + 1;
+              const reward = z.boss ? z.boss.coins : head ? 8 : 5;
+              Progression.reward(Math.round(reward * diff[difficulty].coins));
+              const classFx = classEffects();
+              const heal = (overkill ? classFx.overkillHeal || 0 : 0) + (classFx.killHeal || 0);
+              if (heal)
+                player.hp = Math.min(player.maxhp + player.bonus, player.hp + heal);
+              if (classFx.ticketEvery && player.waveKills % classFx.ticketEvery === 0) {
+                Progression.reward(0, 1);
+                UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
+              }
+            } else if (z.boss) Progression.reward(Math.round(z.boss.coins * diff[difficulty].coins));
+            if (z.boss?.kind) RunStats.bosses[z.boss.kind] = (RunStats.bosses[z.boss.kind] || 0) + 1;
+            NetGame.broadcastKill(z, head, overkill, w, NetGame.attacker);
+            if (z.type === 9 && !z.remote && this.list.length < 80)
               for (let i = 0; i < 3; i++)
                 this.spawn(
                   11,
@@ -7642,7 +7745,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               `${head ? "◎ " : ""}${z.name} · ${w?.name || "Explosão"}`,
               rarityColors[w?.tier || 0],
             );
-            KillFX.onKill(z, head, w, overkill);
+            if (byMe) KillFX.onKill(z, head, w, overkill);
             AudioManager.coin();
             if (Math.random() < 0.25)
               AudioManager.tone(rand(90, 170), 0.3, "sawtooth", 0.1, 35);
@@ -7659,7 +7762,13 @@ body.dying #hud{opacity:0;transition:opacity .4s}
 
             for (const z of [...this.list]) {
               if (z.dead) continue;
+              if (z.remote) {
+                NetGame.drivePuppet(z, dt);
+                continue;
+              }
               if (z.dropping) continue;
+              NetGame.aim(z);
+              try {
               if (
                 z.burnUntil > simulationTime &&
                 simulationTime >= (z.burnTickAt || 0)
@@ -7690,6 +7799,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
                   Math.cos(desiredYaw - z.group.rotation.y),
                 );
               const walking = active && dist > 1.25 + z.size * 0.2;
+              z.walkingNow = walking;
               if (!walking) z.group.rotation.y += turn * Math.min(1, dt * 7);
               speed *= 1 - Math.max(0, z.stagger) * 0.45;
               if (z.slowUntil > simulationTime)
@@ -7857,9 +7967,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
                       .sub(pos.clone().add(new V(0, 1.4, 0)))
                       .normalize(),
                     10,
+                    { acid: true },
                   );
-                  if (projectiles.length)
-                    projectiles[projectiles.length - 1].acid = true;
                 }
                 if (z.boss) {
                   const kind = z.boss?.kind;
@@ -7911,6 +8020,9 @@ body.dying #hud{opacity:0;transition:opacity .4s}
                     }
                   }
                 }
+              }
+              } finally {
+                NetGame.unaim();
               }
             }
             for (let i = this.corpses.length - 1; i >= 0; i--) {
@@ -8196,12 +8308,14 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             return m;
           },
           damagePlayer(amount) {
-            if (state !== GameState.PLAYING || KillCam.active) return;
+            if (NetGame.hurtRemote(amount)) return;
+            if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             player.hp -= amount;
             player.lastDamage = simulationTime;
             hurtUntil = Math.max(hurtUntil, simulationTime + 0.16);
             if (player.hp <= 0) {
               player.hp = 0;
+              if (NetGame.active && NetGame.goDown()) return;
               PlayerController.end(false);
             }
           },
@@ -8274,12 +8388,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               z.trailAt = t + 0.4;
               const r = 0.62 * z.size,
                 p = pos.clone().addScaledVector(fwd, -0.75 * z.size);
-              const m = this.groundPlane(0x7dff2e, 0.8, "blood", false);
-              m.position.set(p.x + rand(-0.15, 0.15), 0.05 + Math.random() * 0.01, p.z + rand(-0.15, 0.15));
-              m.rotation.z = rand(0, 6.28);
-              scene.add(m);
-              this.puddles.push({ mesh: m, pos: p, r, life: 10, grow: 0 });
-              while (this.puddles.length > 48) this.dispose(this.puddles.shift().mesh);
+              this.addPuddle(p, r);
+              NetGame.fx("puddle", { x: +p.x.toFixed(2), z: +p.z.toFixed(2), r: +r.toFixed(2) });
             }
             if (kind === "yeti") {
               if (Math.random() < dt * 16)
@@ -8287,20 +8397,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               if (active && t >= z.frostAt) {
                 // Frost pulse every 5 s: everyone near the yeti is slowed.
                 z.frostAt = t + 5;
-                const radius = 9;
-                this.ring(pos, radius, 0x9fe4ff, 0.75);
-                this.circle(pos, radius * 0.6, 0x6fd2ff, 0.6, 0.35);
-                for (let i = 0; i < 18; i++) {
-                  const a = (i / 18) * Math.PI * 2;
-                  ParticleSystem.emit(pos.clone().add(new V(Math.cos(a) * 3, 0.4, Math.sin(a) * 3)), 0xcff2ff, 3, 4);
-                }
-                MonsterAudio.play("frost", { volume: 0.9 });
-                if (dist < radius) {
-                  player.slowUntil = t + 2.6;
-                  player.slowFactor = 0.5;
-                  shake = Math.max(shake, 0.18);
-                  UIManager.toast("Congelado! Você está lento.");
-                }
+                this.frostPulse(pos, 9);
+                NetGame.fx("frost", { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), r: 9 });
               }
             }
             if (kind === "demon") {
@@ -8355,6 +8453,32 @@ body.dying #hud{opacity:0;transition:opacity .4s}
                   shake = Math.max(shake, 0.45);
                 }
               }
+            }
+          },
+          addPuddle(p, r) {
+            const m = this.groundPlane(0x7dff2e, 0.8, "blood", false);
+            m.position.set(p.x + rand(-0.15, 0.15), 0.05 + Math.random() * 0.01, p.z + rand(-0.15, 0.15));
+            m.rotation.z = rand(0, 6.28);
+            scene.add(m);
+            this.puddles.push({ mesh: m, pos: p.clone(), r, life: 10, grow: 0 });
+            while (this.puddles.length > 48) this.dispose(this.puddles.shift().mesh);
+          },
+          // Area slow around the yeti. Each client checks only its own (real) player.
+          frostPulse(pos, radius) {
+            const t = simulationTime;
+            this.ring(pos, radius, 0x9fe4ff, 0.75);
+            this.circle(pos, radius * 0.6, 0x6fd2ff, 0.6, 0.35);
+            for (let i = 0; i < 18; i++) {
+              const a = (i / 18) * Math.PI * 2;
+              ParticleSystem.emit(pos.clone().add(new V(Math.cos(a) * 3, 0.4, Math.sin(a) * 3)), 0xcff2ff, 3, 4);
+            }
+            MonsterAudio.play("frost", { volume: 0.9 });
+            const me = NetGame.realPos();
+            if (Math.hypot(me.x - pos.x, me.z - pos.z) < radius && !NetGame.down) {
+              player.slowUntil = t + 2.6;
+              player.slowFactor = 0.5;
+              shake = Math.max(shake, 0.18);
+              UIManager.toast("Congelado! Você está lento.");
             }
           },
           // Boss drop after the intro: a telegraph grows on the landing spot, the boss falls out of
@@ -8447,16 +8571,17 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             }
             UIManager.announce(z.name.toUpperCase(), "BOSS · Fase 1", 2.2);
           },
-          startThrow(z, dist) {
+          startThrow(z, dist, presetDirs = null, presetLength = null) {
             const t = simulationTime,
               pos = z.group.position,
-              toPlayer = player.pos.clone().sub(pos);
+              toPlayer = presetDirs ? presetDirs[Math.floor(presetDirs.length / 2)].clone() : player.pos.clone().sub(pos);
             toPlayer.y = 0;
             toPlayer.normalize();
             const offsets = z.phase >= 3 ? [-0.26, 0, 0.26] : z.phase === 2 ? [-0.12, 0.12] : [0],
-              length = clamp(dist + 8, 14, 44),
+              length = presetLength || clamp(dist + 8, 14, 44),
               warn = 1.1;
-            const dirs = offsets.map((a) => toPlayer.clone().applyAxisAngle(new V(0, 1, 0), a));
+            const dirs = presetDirs || offsets.map((a) => toPlayer.clone().applyAxisAngle(new V(0, 1, 0), a));
+            if (!presetDirs) NetGame.fx("throw", { id: z.netId, d: dirs.map((d) => [+d.x.toFixed(3), +d.z.toFixed(3)]), l: +length.toFixed(1) });
             for (const dir of dirs) this.stripe(pos.clone().addScaledVector(dir, 0.8), dir, length, 1.1, warn);
             z.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
             z.throwWind = { start: t, release: t + warn, dirs, length, released: false, pending: dirs.length };
@@ -9710,6 +9835,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           shopEnd: 0,
           timeLeft: 300,
           start() {
+            this.clearedAt = 0;
             this.wave++;
             player.waveKills = 0;
             MutationManager.roll(this.wave);
@@ -9736,6 +9862,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               2.5,
             );
             AudioManager.tone(180, 0.8, "triangle", 0.4, 60);
+            RunStats.waveStarted();
+            NetGame.hostEvent("wave", { n: this.wave, mut: MutationManager.current?.id || null });
           },
           // Demon every 20 waves, Yeti on the other multiples of 10, and the Quarterback /
           // Mutant minibosses alternating on the remaining multiples of 5 (5, 15, 25, 35...).
@@ -9757,12 +9885,16 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               since = Math.max(0, this.wave - (id === "demon" ? 20 : id === "yeti" ? 10 : 5));
             const data = { ...base, hp: Math.round(base.hp * (1 + since * (major ? 0.06 : 0.05))), major };
             const z = ZombieManager.spawn(6, data);
-            if (data.intro && VoxelMonsters.ready()) BossIntro.start(z);
+            if (data.intro && VoxelMonsters.ready()) {
+              BossIntro.start(z);
+              NetGame.fx("intro", { id: z.netId });
+            }
             else
               UIManager.announce(major ? "BOSS INCOMING" : "MINI-BOSS", data.name, 3);
             AudioManager.tone(65, 1.5, "sawtooth", 0.5, 32);
           },
           update(dt) {
+            if (BossDeath.active) return;
             if (mode === "timed") {
               this.timeLeft -= dt;
               if (this.timeLeft <= 0) {
@@ -9794,20 +9926,20 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               !this.bossPending &&
               !ZombieManager.list.length
             ) {
-              Progression.reward(
-                Math.round(20 * this.wave * diff[difficulty].coins * MutationManager.rewardMultiplier()),
-              );
-              MutationManager.finishWave();
-              state = GameState.SHOP;
-              this.shopEnd = simulationTime + 8;
-              mouse.down = false;
-              mouse.aim = false;
-              keys.clear();
-              UIManager.screen("shopscreen");
-
-              UIManager.shop();
-              unlock();
-              AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
+              // Wave cleared: pay out, short breather, and the next wave starts by itself.
+              if (!this.clearedAt) {
+                this.clearedAt = simulationTime;
+                Progression.reward(
+                  Math.round(20 * this.wave * diff[difficulty].coins * MutationManager.rewardMultiplier()),
+                );
+                MutationManager.finishWave();
+                RunStats.waveCleared();
+                UIManager.announce(`ONDA ${this.wave} LIMPA`, `Onda ${this.wave + 1} chegando…`, 2.4);
+                AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
+              } else if (simulationTime - this.clearedAt >= 3) {
+                this.clearedAt = 0;
+                this.start();
+              }
             }
           },
         };
@@ -9875,6 +10007,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             DeathFX.abort();
             KillFX.reset();
             TimeFX.reset();
+            BossDeath.finish();
+            WaveManager.clearedAt = 0;
             ZombieManager.clear();
             BossIntro.abort();
             MonsterFX.clear();
@@ -9959,8 +10093,9 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             WaveManager.start();
             CameraRig.reset();fallback=false;document.body.classList.remove("mouse-captured");
           },
-          hurt(amount) {
-            if (state !== GameState.PLAYING || KillCam.active) return;
+          hurt(amount, fromNet = false) {
+            if (!fromNet && NetGame.hurtRemote(amount)) return;
+            if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             const resistance =
               (classEffects().damageTaken || 1) *
               (classBurst().damageTaken || 1);
@@ -9971,6 +10106,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             AudioManager.tone(85, 0.1, "triangle", 0.4, 35);
             if (player.hp <= 0) {
               player.hp = 0;
+              if (NetGame.active && NetGame.goDown()) return;
               this.end(false);
             }
           },
@@ -10135,6 +10271,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             fireHitscanShot(w, player.pos.clone(), CameraRig.aim(), damage);
           },
           shoot() {
+            if (NetGame.down || NetGame.dead) return;
             const w = WeaponSystem.current();
             if (!w || reloadEnd || simulationTime - lastShot < w.rate) return;
             if (w.ammo <= 0) {
@@ -10173,6 +10310,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             const damage = weaponDamage(w),
               dir = CameraRig.aim(),
               origin = player.pos.clone();
+            NetGame.shot(origin, dir);
             if (["grenade", "missile", "orbital", "quantum"].includes(w.kind)) {
               if (w.kind === "quantum") {
                 const targets = [...ZombieManager.list]
@@ -10386,7 +10524,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               return;
             }
             if (state === GameState.GAMEOVER) return;
-            Account.checkpoint(true);
+            if (NetGame.active) NetGame.finish(timed ? "win" : "loss");
+            Account.checkpoint(true, timed ? "win" : "loss");
             state = GameState.GAMEOVER;
             mouse.down = false;
             mouse.aim = false;
@@ -10624,7 +10763,13 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           },
           menu() {
             if (Progression.busy) return;
-            Account.checkpoint(true);
+            if (NetGame.active) NetGame.leave();
+            NetGame.menuOpen = false;
+            BossDeath.finish();
+            DeathFX.abort();
+            KillCam.stop(true);
+            TimeFX.reset();
+            Account.checkpoint(true, "quit");
             if (CameraRig.avatar) CameraRig.avatar.visible = false;
             HordeAI.clear();
             state = GameState.MENU;
@@ -10980,193 +11125,266 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           {id:"reaper_hood",name:"Capuz do Ceifador",slot:"headgear",tier:4,price:8500,icon:"◆"}
         ];
         const cosmeticSlots={headgear:"Cabeça",facewear:"Rosto",backpack:"Costas",outerwear:"Torso",gloves:"Mãos",footwear:"Pés"};
+        // ── Account: Supabase-backed profile + cross-progression; guest mode stays fully local ────
+        // Same public surface the rest of the game already used (user, apply, queue, begin,
+        // checkpoint, claimMutation, savePreferences, logout), now talking to server functions.
         const Account = {
-          user: null,
+          user: null, // username when signed in
+          userId: null,
+          profile: null,
           online: false,
-          run: null,
+          run: null, // { id, offline, startedAt }
           pending: Promise.resolve(),
           timer: 0,
           lastCheckpoint: 0,
-          async api(path, body) {
-            const response = await fetch("/api/" + path, {
-              method: body ? "POST" : "GET",
-              headers: body ? { "Content-Type": "application/json" } : {},
-              body: body ? JSON.stringify(body) : undefined,
-              credentials: "same-origin",
-            });
-            let value;
-            try {
-              value = await response.json();
-            } catch {
-              throw Error(
-                "Inicie o jogo por INICIAR-JOGO.bat para usar contas.",
-              );
-            }
-            if (!response.ok)
-              throw Error(value.error || "Não foi possível salvar.");
-            return value;
+          guestKey: "deadrecoil.guest",
+          profileCacheKey(id) {
+            return `deadrecoil.profile.${id}`;
+          },
+          signedIn() {
+            return !!this.userId;
           },
           apply(profile) {
             if (!profile) return;
-            Progression.economy.data = profile;
+            this.profile = profile;
+            this.user = profile.username || this.user;
+            this.userId = profile.userId || this.userId;
+            // The economy object is the same shape offline and online; account data is cached
+            // under its own key so a guest save is never overwritten.
+            Progression.economy.key = `deadrecoil.account-economy.${this.userId}`;
+            Progression.economy.data = { ...profile };
             selectedClass = profile.classId;
             player.coins = profile.coins;
             player.normal = profile.normal;
             player.lucky = profile.lucky;
-            CharacterStyle.data={...CharacterStyle.defaults,...profile.cosmetics};
-            CharacterStyle.owned=["standard",...new Set(Array.isArray(profile.ownedCosmetics)?profile.ownedCosmetics:[])];
+            CharacterStyle.data = { ...CharacterStyle.defaults, ...(profile.cosmetics || {}) };
+            CharacterStyle.owned = ["standard", ...new Set(Array.isArray(profile.ownedCosmetics) ? profile.ownedCosmetics : [])];
             normalizeLoadoutState(Progression.economy.data);
-            this.badge();
-          },
-          badge() {
-            const nativeLocal = window.DeadRecoilRuntime?.native && !this.user;
-            $("accountbtn").textContent = this.user
-              ? `${this.user} · Nível ${Progression.data.level || 1}`
-              : nativeLocal ? "Perfil local" : "Conta / entrar";
-            $("account-status").textContent = this.user
-              ? "Progresso salvo no servidor local."
-              : nativeLocal ? "Perfil local · salvo neste aparelho" : "Visitante · progresso neste navegador";
-            $("logout").hidden = !this.user;
-            $("account-form").classList.toggle("hidden", !!this.user);
-          },
-          async init() {
             try {
-              const r = await this.api("session");
-              this.online = true;
-              this.user = r.user;
-              if (r.user) {
-                this.apply(r.profile);
-                SettingsManager.data = {
-                  ...SettingsManager.defaults,
-                  ...r.profile.settings,
-                };
-                SettingsManager.apply();
-              }
+              localStorage.setItem(this.profileCacheKey(this.userId), JSON.stringify(profile));
             } catch {}
             this.badge();
           },
-          async login(register) {
-            const b = $("account-submit");
-            b.disabled = true;
-            $("account-error").textContent = "Conectando…";
+          badge() {
+            const online = DR.Backend.isOnline();
+            const status = $("account-status");
+            if (status)
+              status.textContent = this.signedIn()
+                ? online
+                  ? `${this.user} · progresso salvo na nuvem`
+                  : `${this.user} · OFFLINE (sincroniza ao reconectar)`
+                : "Visitante · progresso salvo neste aparelho";
+            const net = $("netstatus");
+            if (net) {
+              const state = this.signedIn() ? (online ? "online" : "offline") : online ? "guest" : "offline";
+              net.dataset.state = state;
+              net.querySelector("b").textContent = state === "online" ? `ONLINE · ${this.user}` : state === "guest" ? "VISITANTE · entre para salvar na nuvem" : "OFFLINE";
+            }
+            DR.ProfileUI?.chip();
+            DR.MissionUI?.render();
+          },
+          // Boot: restore a stored session (refreshing the token if needed) or fall back.
+          async init() {
+            if (!window.DR?.AuthService?.init()) {
+              this.badge();
+              return "guest";
+            }
+            DR.AuthService.onChange((event) => {
+              if (event === "SIGNED_OUT" && this.userId) this.signedOutRemotely();
+              if (event === "PASSWORD_RECOVERY") DR.LoginUI.open("reset");
+            });
+            DR.Backend.onStatus((online) => this.onConnectivity(online));
+            let session = null;
             try {
-              const r = await this.api(register ? "register" : "login", {
-                username: $("username").value.trim(),
-                password: $("password").value,
-              });
-              this.user = r.user;
-              this.apply(r.profile);
-              SettingsManager.data = {
-                ...SettingsManager.defaults,
-                ...r.profile.settings,
-              };
-              SettingsManager.apply();
-              $("password").value = "";
-              $("account-error").textContent = "";
-              UIManager.menu();
-              UIManager.toast(
-                "Conta conectada. Seu progresso será salvo por jogador.",
-              );
+              session = await DR.AuthService.restore();
             } catch (e) {
-              $("account-error").textContent = e.message;
-            } finally {
-              b.disabled = false;
+              if (e.code !== "network") console.warn("[account] restore", e);
+            }
+            if (!session) {
+              this.badge();
+              return "anonymous";
+            }
+            this.userId = session.user.id;
+            await this.load(true);
+            return "signed-in";
+          },
+          // Loads the profile from the server, or from the local cache when offline.
+          async load(allowCache = false) {
+            try {
+              const r = await DR.ProfileRepository.session();
+              this.online = true;
+              this.apply(r.profile);
+              if (r.profile.settings && Object.keys(r.profile.settings).length) {
+                SettingsManager.data = { ...SettingsManager.defaults, ...r.profile.settings };
+                SettingsManager.apply();
+              }
+              this.flushOffline();
+              DR.MissionManager.refresh().catch(() => {});
+            } catch (e) {
+              if (e.code === "not_authenticated") {
+                await this.expire();
+                return;
+              }
+              this.online = false;
+              if (!allowCache) throw e;
+              let cached = null;
+              try {
+                cached = JSON.parse(localStorage.getItem(this.profileCacheKey(this.userId)) || "null");
+              } catch {}
+              if (cached) this.apply(cached);
+              else this.user = DR.AuthService.user()?.email?.split("@")[0] || "Sobrevivente";
+              DR.MissionManager.loadCache();
+              this.badge();
             }
           },
-          queue(path, data) {
-            const requestId = crypto.randomUUID();
-            const run = () => this.api(path, { ...data, requestId });
-            const op = this.pending.catch(() => {}).then(run);
+          async flushOffline() {
+            if (!this.userId) return;
+            const r = await DR.OfflineQueue.flush(this.userId).catch(() => null);
+            if (r?.synced) {
+              if (r.last?.profile) this.apply(r.last.profile);
+              if (r.last?.missions) DR.MissionManager.set(r.last.missions);
+              UIManager.toast(`${r.synced} partida(s) offline sincronizada(s).`);
+            }
+          },
+          onConnectivity(online) {
+            this.badge();
+            if (online && this.userId && !this.online) this.load().catch(() => {});
+            if (!online) this.online = false;
+          },
+          async expire() {
+            await DR.AuthService.signOut();
+            this.clearLocal();
+            DR.LoginUI.open("login", DR.AuthService.MESSAGES.session_expired);
+          },
+          signedOutRemotely() {
+            if (state === GameState.PLAYING) return; // finish the run; the next call will fail cleanly
+            this.clearLocal();
+            DR.LoginUI.open("login", DR.AuthService.MESSAGES.session_expired);
+          },
+          clearLocal() {
+            this.user = this.userId = this.profile = null;
+            this.run = null;
+            Progression.load();
+            CharacterStyle.load();
+            SettingsManager.load();
+            SettingsManager.apply();
+            DR.MissionManager.list = [];
+            this.badge();
+          },
+          // Serialised server calls. The request id is fixed per call, so a retry after a
+          // dropped connection can never apply twice.
+          queue(path, data = {}) {
+            if (!DR.Backend.isOnline()) return Promise.reject(Error("OFFLINE · conecte-se para alterar o loadout da conta."));
+            const request = DR.Backend.uuid();
+            const run = () => {
+              switch (path) {
+                case "roll":
+                  return DR.InventoryRepository.roll(data.kind, data.lucky, data.payment, request);
+                case "equip":
+                  return DR.InventoryRepository.equip(data.kind, data.slot, data.action, request);
+                case "slot/buy":
+                  return DR.InventoryRepository.buySlot(request);
+                case "cosmetic/buy":
+                  return DR.InventoryRepository.buyCosmetic(data.id, request);
+                case "preferences":
+                  return DR.ProfileRepository.savePreferences(data.cosmetics, data.settings);
+                default:
+                  return Promise.reject(Error("Operação desconhecida: " + path));
+              }
+            };
+            const attempt = () =>
+              run().catch((e) => {
+                if (e.code === "network" || e.code === "timeout") return new Promise((r) => setTimeout(r, 900)).then(run);
+                throw e;
+              });
+            const op = this.pending.catch(() => {}).then(attempt);
             this.pending = op;
             return op;
           },
           savePreferences() {
             clearTimeout(this.timer);
             this.timer = setTimeout(() => {
-              if (this.user)
-                this.queue("preferences", {
-                  cosmetics: { ...CharacterStyle.data },
-                  settings: { ...SettingsManager.data },
-                })
+              if (this.signedIn() && DR.Backend.isOnline())
+                this.queue("preferences", { cosmetics: { ...CharacterStyle.data }, settings: { ...SettingsManager.data } })
                   .then((r) => this.apply(r.profile))
                   .catch((e) => UIManager.toast(e.message));
-              else {
+              else if (!this.signedIn()) {
                 try {
-                  localStorage.setItem("deadrecoil.appearance",JSON.stringify(CharacterStyle.data));
-                  localStorage.setItem("deadrecoil.cosmetics.v1",JSON.stringify(CharacterStyle.owned));
+                  localStorage.setItem("deadrecoil.appearance", JSON.stringify(CharacterStyle.data));
+                  localStorage.setItem("deadrecoil.cosmetics.v1", JSON.stringify(CharacterStyle.owned));
                 } catch {}
               }
             }, 450);
           },
-          async begin() {
-            if (!this.user) {
+          // Opens a server run (or an offline run that syncs later). Never blocks solo play.
+          async begin(lobbyId = null) {
+            this.lastCheckpoint = 0;
+            if (!this.signedIn()) {
               this.run = null;
               return;
             }
-            const r = await this.queue("run/start", {});
-            this.run = r.run;
-            this.lastCheckpoint = 0;
+            if (DR.Backend.isOnline()) {
+              try {
+                const r = await DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId);
+                this.run = { id: r.run, offline: false };
+                if (r.profile) this.apply(r.profile);
+                return;
+              } catch (e) {
+                if (lobbyId) throw e;
+                if (e.code !== "network" && e.code !== "timeout") UIManager.toast("Servidor indisponível: partida offline, sincroniza depois.");
+              }
+            }
+            this.run = { id: null, offline: true };
           },
-          checkpoint(ended = false) {
-            if (!this.user || !this.run) return Promise.resolve();
+          report(result = null) {
+            return { ...RunStats.report(), mode, map: Number(selectedMap), difficulty, result };
+          },
+          checkpoint(ended = false, result = "quit") {
+            if (!this.signedIn() || !this.run) return Promise.resolve();
             const run = this.run;
             if (ended) this.run = null;
-            return this.queue("run/checkpoint", {
-              run,
-              elapsed: Math.floor(elapsed),
-              kills: player.kills,
-              headshots: player.headshots,
-              wave: Math.max(1, WaveManager.wave),
-              ended,
-            })
+            if (run.offline) {
+              if (ended && player.kills + WaveManager.wave > 0) {
+                DR.OfflineQueue.push(this.userId, this.report(result));
+                if (DR.Backend.isOnline()) this.flushOffline();
+                else UIManager.toast("Partida salva offline. Será sincronizada quando a conexão voltar.");
+              }
+              return Promise.resolve();
+            }
+            return DR.RunRepository.report(run.id, this.report(result), ended, ended ? result : null)
               .then((r) => {
                 this.apply(r.profile);
-                $("account-status").textContent =
-                  "Progresso salvo no servidor local.";
+                DR.MissionManager.set(r.missions);
               })
               .catch((e) => {
-                $("account-status").textContent =
-                  "Save pendente · " + e.message;
-                UIManager.toast("Não foi possível salvar: " + e.message);
-                if (ended) this.run = run;
+                if (ended && (e.code === "network" || e.code === "timeout")) {
+                  // Keep the final report for later: the server clamps it to the real run time.
+                  DR.OfflineQueue.push(this.userId, this.report(result));
+                  UIManager.toast("Sem conexão: resultado será sincronizado depois.");
+                } else if (ended) this.run = null;
               });
           },
           claimMutation(wave, event) {
-            if (!this.user || !this.run || !event) return Promise.resolve();
-            return this.queue("mutation/reward", {
-              run: this.run,
-              wave,
-              id: event.id,
-              multiplier: event.reward,
-              difficulty,
-            })
-              .then((r) => {
-                this.apply(r.profile);
-                $("account-status").textContent = `${event.name}: bônus salvo.`;
-              })
-              .catch((e) => UIManager.toast("Bônus da Mutation pendente · " + e.message));
+            if (!this.signedIn() || !this.run || this.run.offline || !event) return Promise.resolve();
+            return DR.RunRepository.mutation(this.run.id, wave, event.id)
+              .then((r) => this.apply(r.profile))
+              .catch(() => {});
           },
           update() {
-            if (this.user && this.run && elapsed - this.lastCheckpoint >= 8) {
+            if (this.signedIn() && this.run && !this.run.offline && elapsed - this.lastCheckpoint >= 8) {
               this.lastCheckpoint = elapsed;
               this.checkpoint();
             }
           },
           async logout() {
+            await this.pending.catch(() => {});
+            if (DR.LobbyManager.lobby) await DR.LobbyManager.leave().catch(() => {});
+            await DR.AuthService.signOut();
             try {
-              await this.pending.catch(() => {});
-              await this.api("logout", {});
-              this.user = null;
-              this.run = null;
-              Progression.load();
-              CharacterStyle.load();
-              SettingsManager.load();
-              SettingsManager.apply();
-              this.badge();
-              UIManager.menu();
-            } catch (e) {
-              $("account-error").textContent = e.message;
-            }
+              localStorage.removeItem(this.guestKey);
+            } catch {}
+            this.clearLocal();
+            DR.LoginUI.open("login", "Você saiu da conta.");
           },
         };
         const Cosmetics={
@@ -11249,10 +11467,6 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             // Punchy confirm: low thud + bright tick (brighter for headshots).
             AudioManager.tone(120, 0.09, "square", 0.16, 55);
             AudioManager.tone(head ? 1480 : 980, 0.07, "triangle", head ? 0.16 : 0.1, head ? 1900 : 1200);
-            if (head || overkill || w?.kind === "missile") TimeFX.slow(0.3, 0.07);
-            const lastOfWave = !z.boss && WaveManager.remaining === 0 && !WaveManager.bossPending && ZombieManager.list.length === 0;
-            if (z.boss || lastOfWave)
-              KillCam.start(z, z.boss ? `${z.name.toUpperCase()} ABATIDO` : `ONDA ${WaveManager.wave} LIMPA`, z.boss ? 2.2 : 1.5);
           },
         };
 
@@ -11448,6 +11662,1199 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             TimeFX.reset();
           },
         };
+
+        // ── Major boss deaths: the Demon is dragged through the gates of the underworld; the Yeti
+        // is flattened by a giant falling snowball. Minibosses and regular zombies use ragdolls.
+        const BossDeath = {
+          active: null,
+          wants(z) {
+            return !!(z.boss && z.rig?.voxel && (z.boss.kind === "demon" || z.boss.kind === "yeti"));
+          },
+          start(z) {
+            if (this.active) this.finish();
+            const pos = z.group.position.clone();
+            pos.y = MapManager.groundAt ? MapManager.groundAt(pos.x, pos.z, 0.5, 0) : 0;
+            const toPlayer = player.pos.clone().sub(pos);
+            toPlayer.y = 0;
+            if (toPlayer.lengthSq() < 0.01) toPlayer.set(0, 0, 1);
+            toPlayer.normalize();
+            const root = new THREE.Group();
+            root.position.copy(pos);
+            root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+            scene.add(root);
+            // The boss faces the camera side; the scene is built in the root's local frame
+            // (+z toward the camera, -z behind the boss).
+            z.group.position.copy(pos);
+            z.group.rotation.y = root.rotation.y;
+            z.rig.cinematic = true;
+            if (z.contact) z.contact.visible = false;
+            this.active = { z, kind: z.boss.kind, root, pos, time: 0, duration: z.boss.kind === "demon" ? 4.8 : 4.2, flags: {}, meshes: [], lights: [] };
+            if (z.boss.kind === "demon") this.buildGate(this.active);
+            else this.buildSnowball(this.active);
+            document.body.classList.add("cinematic", "bossdeath");
+            const b = $("killcambanner");
+            b.textContent = z.boss.kind === "demon" ? "DEMÔNIO BANIDO" : "YETI ESMAGADO";
+            b.classList.remove("show");
+            mouse.down = false;
+            mouse.aim = false;
+          },
+          mesh(parent, geo, mat, pos, scale = [1, 1, 1]) {
+            const m = new THREE.Mesh(geo, mat);
+            m.position.set(...pos);
+            m.scale.set(...scale);
+            m.castShadow = m.receiveShadow = true;
+            parent.add(m);
+            return m;
+          },
+          // Two stone doors in a spiked frame rise behind the demon, swing open on a red void.
+          buildGate(a) {
+            const g = new THREE.Group();
+            g.position.set(0, -7.5, -3.2);
+            a.root.add(g);
+            a.gate = g;
+            const rock = PropKit.mat("hellrock"),
+              lava = PropKit.mat("lava");
+            const W = 5.2,
+              H = 6.6;
+            for (const side of [-1, 1]) {
+              this.mesh(g, unitBox, rock, [side * (W / 2 + 0.55), H / 2, 0], [1.1, H, 1.2]);
+              this.mesh(g, unitBox, lava, [side * (W / 2 + 0.55), H * 0.45, 0.61], [0.18, H * 0.7, 0.04]);
+              for (let i = 0; i < 3; i++) this.mesh(g, unitBox, rock, [side * (W / 2 + 0.55), H + 0.35 + i * 0.4, 0], [0.9 - i * 0.25, 0.4, 0.9 - i * 0.25]);
+            }
+            this.mesh(g, unitBox, rock, [0, H + 0.4, 0], [W + 2.4, 0.8, 1.3]);
+            for (let i = -2; i <= 2; i++) this.mesh(g, unitBox, rock, [i * 1.15, H + 1.1 + (2 - Math.abs(i)) * 0.35, 0], [0.3, 0.7 + (2 - Math.abs(i)) * 0.7, 0.3]);
+            // Glowing void behind the doors.
+            const voidMat = new THREE.MeshBasicMaterial({ color: 0xff2a0a, transparent: true, opacity: 0 });
+            voidMat.userData = { own: true };
+            a.voidMesh = this.mesh(g, unitBox, voidMat, [0, H / 2, -0.35], [W, H, 0.1]);
+            a.doors = [];
+            for (const side of [-1, 1]) {
+              const hinge = new THREE.Group();
+              hinge.position.set(side * (W / 2), 0, 0.2);
+              g.add(hinge);
+              const door = this.mesh(hinge, unitBox, rock, [-side * (W / 4), H / 2, 0], [W / 2 - 0.05, H - 0.1, 0.35]);
+              this.mesh(hinge, unitBox, lava, [-side * (W / 4), H / 2, 0.19], [0.14, H * 0.8, 0.02]);
+              this.mesh(hinge, unitBox, lava, [-side * (W / 4), H * 0.62, 0.19], [W / 2 * 0.7, 0.14, 0.02]);
+              hinge.userData.side = side;
+              a.doors.push(hinge);
+            }
+            const light = new THREE.PointLight(0xff3010, 0, 26, 2);
+            light.position.set(0, 3, 1.5);
+            g.add(light);
+            a.lights.push(light);
+            const crack = MonsterFX.groundPlane(0xff2a08, 0, "glow");
+            crack.scale.set(9, 5, 1);
+            crack.position.set(0, 0.07, -1.8);
+            a.root.add(crack);
+            a.crack = crack;
+            a.chains = [];
+          },
+          buildSnowball(a) {
+            const tex = PropKit.texture("snow");
+            const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0xf4f8ff, roughness: 0.95, flatShading: true, transparent: true, opacity: 1 });
+            mat.userData = { own: true };
+            const radius = 2.1 * (a.z.size / 2.1) * 1.25;
+            const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), mat);
+            ball.userData.ownGeometry = true;
+            ball.castShadow = true;
+            ball.position.set(0, 46, 0);
+            a.root.add(ball);
+            a.ball = ball;
+            a.radius = radius;
+            const shadow = MonsterFX.groundPlane(0x000000, 0, "glow", false);
+            shadow.position.set(0, 0.06, 0);
+            a.root.add(shadow);
+            a.shadow = shadow;
+          },
+          seg: (t, a, b) => clamp((t - a) / (b - a), 0, 1),
+          update(dt) {
+            const a = this.active;
+            if (!a) return;
+            a.time += dt;
+            if (a.kind === "demon") this.demon(a, a.time, dt);
+            else this.yeti(a, a.time, dt);
+            if (a.time >= a.duration) this.finish();
+          },
+          cam(a, local, look) {
+            const eye = a.root.localToWorld(local.clone());
+            if (MapManager.collides(eye.x, eye.z, 0.25)) eye.lerp(a.root.localToWorld(new V(0, eye.y - a.pos.y, 2)), 0.6);
+            camera.position.copy(eye);
+            camera.lookAt(a.root.localToWorld(look.clone()));
+          },
+          demon(a, t, dt) {
+            const z = a.z,
+              r = z.rig,
+              S = z.size,
+              seg = this.seg;
+            if (!a.flags.banner && t > 0.2) {
+              a.flags.banner = true;
+              $("killcambanner").classList.add("show");
+              MonsterAudio.play("demon", { volume: 1.2 });
+            }
+            // Stagger → kneel.
+            const kneel = seg(t, 0, 0.8);
+            r.body.position.y = r.hipY - kneel * r.hipY * 0.35;
+            r.legs[0].rotation.x = -kneel * 1.3;
+            r.legs[1].rotation.x = -kneel * 0.4;
+            r.upper.rotation.x = kneel * 0.35 - seg(t, 2.2, 2.6) * 0.8;
+            r.neck.rotation.x = -seg(t, 1.2, 1.8) * 0.5;
+            r.arms[0].rotation.x = -kneel * 0.4 - seg(t, 2.3, 2.7) * 2.2;
+            r.arms[1].rotation.x = -kneel * 0.4 - seg(t, 2.3, 2.7) * 2.4;
+            if (r.props.trident && t > 0.5 && r.props.trident.visible) {
+              r.props.trident.visible = false;
+              ParticleSystem.emit(z.group.position.clone().add(new V(0, 1, 0)), 0xff5a14, 30, 4);
+            }
+            // Ground cracks, gate rises (0.6-1.7), doors open (1.7-2.4).
+            const rise = seg(t, 0.6, 1.7);
+            a.gate.position.y = -7.5 + (1 - Math.pow(1 - rise, 3)) * 7.5;
+            a.crack.material.opacity = seg(t, 0.3, 0.9) * 0.8 * (1 - seg(t, 4.1, 4.6));
+            if (rise > 0 && rise < 1) {
+              shake = Math.max(shake, 0.35);
+              if (Math.random() < 0.6) ParticleSystem.emit(a.root.localToWorld(new V(rand(-3.5, 3.5), 0.2, -3.2)), 0x5a3a2a, 3, 3);
+            }
+            if (!a.flags.rumble && t > 0.6) {
+              a.flags.rumble = true;
+              AudioManager.tone(40, 1.2, "sawtooth", 0.45, 28);
+            }
+            const open = seg(t, 1.7, 2.4) * (1 - seg(t, 3.7, 3.95));
+            for (const d of a.doors) d.rotation.y = d.userData.side * -open * 1.9;
+            a.voidMesh.material.opacity = open * 0.95;
+            a.lights[0].intensity = open * 6 + Math.sin(t * 20) * open * 0.8;
+            if (!a.flags.open && t > 1.8) {
+              a.flags.open = true;
+              AudioManager.tone(70, 1.4, "sawtooth", 0.35, 140);
+              MonsterAudio.play("roar", { volume: 0.7 });
+            }
+            // Chains shoot out and drag the demon into the void (2.3-3.7).
+            if (!a.flags.chains && t > 2.3) {
+              a.flags.chains = true;
+              const mat = new THREE.MeshStandardMaterial({ color: 0x2a0f0c, emissive: 0x5a0800, emissiveIntensity: 0.6, roughness: 0.6, metalness: 0.4 });
+              mat.userData = { own: true };
+              for (const x of [-1.1, -0.35, 0.35, 1.1]) {
+                const c = new THREE.Mesh(unitBox, mat);
+                c.userData.target = new V(x * 0.5, 1.3 + Math.abs(x) * 0.6, 0);
+                c.userData.from = new V(x * 1.6, 2 + Math.abs(x), -3.2);
+                a.root.add(c);
+                a.chains.push(c);
+              }
+              AudioManager.tone(300, 0.4, "square", 0.15, 90);
+            }
+            const drag = seg(t, 2.6, 3.7),
+              dragE = drag * drag;
+            const bodyLocal = new V(0, -dragE * 0.4, -dragE * 3.6);
+            z.group.position.copy(a.root.localToWorld(bodyLocal.clone()));
+            z.group.scale.setScalar(S * (1 - seg(t, 3.3, 3.75) * 0.9));
+            for (const c of a.chains) {
+              const reach = seg(t, 2.3, 2.6);
+              const to = c.userData.target.clone().add(bodyLocal).lerp(c.userData.from, 1 - reach),
+                from = c.userData.from;
+              const mid = from.clone().add(to).multiplyScalar(0.5),
+                len = from.distanceTo(to);
+              c.position.copy(mid);
+              c.scale.set(0.12, 0.12, Math.max(0.01, len));
+              c.lookAt(a.root.localToWorld(to.clone()));
+              c.visible = t < 3.75;
+            }
+            if (t > 2.6 && t < 3.7 && Math.random() < 0.8) ParticleSystem.emit(z.group.position.clone().add(new V(0, 1.2, 0)), 0xff4a10, 3, 2);
+            if (!a.flags.slam && t > 3.9) {
+              a.flags.slam = true;
+              shake = Math.max(shake, 0.9);
+              MonsterAudio.play("land", { volume: 1.4 });
+              for (let i = 0; i < 40; i++) ParticleSystem.emit(a.root.localToWorld(new V(rand(-3, 3), rand(0.2, 5), -2.9)), i % 2 ? 0xff5a1e : 0x3a2a22, 3, 5);
+            }
+            // Gate sinks back into the ground.
+            if (t > 4.1) a.gate.position.y = -seg(t, 4.1, 4.8) * 8;
+            const orbit = seg(t, 0, 4.8);
+            this.cam(a, new V(Math.sin(0.5 - orbit * 0.9) * 7.5, 2.4 + orbit * 1.4, Math.cos(0.5 - orbit * 0.9) * 7.5 + 1), new V(0, 2.4, -1.4));
+          },
+          yeti(a, t, dt) {
+            const z = a.z,
+              r = z.rig,
+              S = z.size,
+              seg = this.seg;
+            if (!a.flags.banner && t > 1.7) {
+              a.flags.banner = true;
+              $("killcambanner").classList.add("show");
+            }
+            // Wounded, looks up at the whistling shadow and raises its arms.
+            const look = seg(t, 0.2, 0.8);
+            r.neck.rotation.x = -look * 0.9;
+            r.upper.rotation.x = -look * 0.25;
+            r.arms[0].rotation.x = -look * 2.6;
+            r.arms[1].rotation.x = -look * 2.4;
+            if (!a.flags.whistle && t > 0.3) {
+              a.flags.whistle = true;
+              AudioManager.tone(1400, 1.2, "sine", 0.1, 300);
+              MonsterAudio.play("roar", { volume: 0.9 });
+            }
+            const fall = seg(t, 0.55, 1.55),
+              impactY = a.radius * 0.72 + 0.4;
+            a.shadow.material.opacity = fall * 0.55;
+            a.shadow.scale.setScalar(a.radius * (1 + fall * 1.4));
+            if (!a.flags.hit) {
+              a.ball.position.y = 46 - (46 - impactY) * fall * fall;
+              a.ball.rotation.x += dt * 3;
+              a.ball.rotation.z += dt * 2;
+              if (Math.random() < 0.9) ParticleSystem.emit(a.root.localToWorld(a.ball.position.clone().add(new V(0, a.radius, 0))), 0xffffff, 2, 1.2);
+            }
+            if (!a.flags.hit && fall >= 1) {
+              a.flags.hit = true;
+              a.ball.position.y = impactY;
+              shake = Math.max(shake, 1.1);
+              MonsterAudio.play("land", { volume: 1.8 });
+              MonsterAudio.play("blizzard", { volume: 0.6 });
+              MonsterFX.ring(a.pos, 7, 0xe8f6ff, 0.9);
+              MonsterFX.ring(a.pos, 4, 0xffffff, 0.6);
+              for (let i = 0; i < 70; i++) {
+                const ang = rand(0, Math.PI * 2);
+                ParticleSystem.emit(a.pos.clone().add(new V(Math.cos(ang) * 2, rand(0.2, 2), Math.sin(ang) * 2)), i % 3 ? 0xffffff : 0xcfe8ff, 4, 7);
+              }
+              PhysicsProps.impulse(a.pos, 10, 12);
+              CombatFX.mark(a.pos, 0xdfeaf2, 5);
+            }
+            // Flattened under the ball.
+            const squash = seg(t, 1.55, 1.7);
+            z.group.scale.set(S * (1 + squash * 0.45), S * (1 - squash * 0.85), S * (1 + squash * 0.45));
+            if (a.flags.hit) {
+              const settle = seg(t, 1.55, 1.9);
+              a.ball.scale.set(1 + Math.sin(settle * Math.PI) * 0.12, 1 - Math.sin(settle * Math.PI) * 0.18, 1 + Math.sin(settle * Math.PI) * 0.12);
+            }
+            a.ball.material.opacity = 1 - seg(t, 3.5, 4.2);
+            z.group.visible = t < 3.9;
+            const cameraK = seg(t, 0, 4.2);
+            this.cam(a, new V(4.8 - cameraK * 1.5, 1.3 + seg(t, 0.4, 1.4) * 1.4, 7 - cameraK * 1.2), new V(0, a.flags.hit ? 1.6 : 1.8 + seg(t, 0.3, 1.2) * 5 * (1 - fall), 0));
+          },
+          finish() {
+            const a = this.active;
+            if (!a) return;
+            this.active = null;
+            document.body.classList.remove("cinematic", "bossdeath");
+            $("killcambanner").classList.remove("show");
+            a.root.traverse((o) => {
+              if (o.isMesh) {
+                if (o.userData.ownGeometry) o.geometry.dispose();
+                if (o.material?.userData?.own || o.userData.ownMaterial) o.material.dispose();
+              }
+            });
+            scene.remove(a.root);
+            if (a.z.flashMat) a.z.flashMat.dispose();
+            scene.remove(a.z.group);
+          },
+        };
+
+        // ── Per-run statistics reported to the server (missions + stats) ─────────────────────────
+        const weaponFamily = (w) =>
+          !w ? null : w.kind === "melee" ? "melee" : w.kind === "bow" ? "bow" : w.kind === "shotgun" ? "shotgun" : ["antimaterial", "rail"].includes(w.kind) ? "sniper" : w.kind === "missile" ? "explosive" : "rifle";
+        const RunStats = {
+          damage: 0,
+          bosses: {},
+          families: {},
+          noDamageWaves: 0,
+          revives: 0,
+          waveStartedAt: 0,
+          reset() {
+            this.damage = 0;
+            this.bosses = {};
+            this.families = {};
+            this.noDamageWaves = 0;
+            this.revives = 0;
+            this.waveStartedAt = 0;
+          },
+          waveStarted() {
+            this.waveStartedAt = simulationTime;
+          },
+          waveCleared() {
+            if (player.lastDamage < this.waveStartedAt) this.noDamageWaves++;
+          },
+          report() {
+            return {
+              elapsed: Math.floor(elapsed),
+              kills: player.kills,
+              headshots: player.headshots,
+              wave: Math.max(1, WaveManager.wave),
+              damage: Math.round(this.damage),
+              bosses: { ...this.bosses },
+              families: { ...this.families },
+              noDamageWaves: this.noDamageWaves,
+              revives: this.revives,
+            };
+          },
+        };
+
+        // Deterministic PRNG so every client builds the same map props from the lobby seed.
+        function seededRandom(seed) {
+          let a = seed >>> 0;
+          return () => {
+            a |= 0;
+            a = (a + 0x6d2b79f5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+
+        // ── NetGame: MatchManager + PlayerSync + EnemySync for 1-4 player co-op ──────────────────
+        // Host-authoritative: the host runs the wave director, zombie AI/HP, bosses, deaths and the
+        // per-player tallies that cap everyone's server rewards. Clients render interpolated
+        // puppets, send hit *requests*, and stay authoritative only over their own movement/HP.
+        // Everything lives in one realtime channel ("lobby:<id>"); rates come from DR_CONFIG.net.
+        const NetGame = {
+          active: false,
+          host: false,
+          lobby: null,
+          t: null,
+          me: null,
+          remotes: new Map(),
+          zmap: new Map(),
+          nextZid: 1,
+          clock: { state: 0, snap: 0, report: 0, tally: 0, beacon: 0 },
+          tallies: {},
+          outbox: [],
+          unsubs: [],
+          attacker: null,
+          applyingRemote: false,
+          spawningRemote: false,
+          target: null,
+          savedPos: null,
+          lastSnap: null,
+          lastSnapAt: 0,
+          lastHostMsg: 0,
+          connection: "online",
+          lostAt: 0,
+          down: false,
+          bleedUntil: 0,
+          dead: false,
+          reviveHold: 0,
+          reviveTarget: null,
+          ended: false,
+          hitBudget: new Map(),
+          stats: { sent: 0, received: 0 },
+
+          cfg() {
+            const n = this.lobby?.players?.length || 1,
+              c = window.DR_CONFIG?.net || {};
+            return n > 2
+              ? { state: c.crowdedStateHz || 7, snap: c.crowdedSnapshotHz || 6 }
+              : { state: c.stateHz || 10, snap: c.snapshotHz || 8 };
+          },
+          blank() {
+            return { kills: 0, headshots: 0, damage: 0, bosses: {}, revives: 0 };
+          },
+          tally(id) {
+            return (this.tallies[id] ||= this.blank());
+          },
+          send(type, payload) {
+            if (!this.t) return false;
+            this.stats.sent++;
+            return this.t.send(type, payload);
+          },
+          queue(type, payload) {
+            this.outbox.push([type, payload]);
+          },
+
+          // ── lifecycle ──
+          begin(lobby) {
+            this.cleanup();
+            const L = window.DR.LobbyManager;
+            this.active = true;
+            this.ended = false;
+            this.lobby = lobby;
+            this.t = L.transport;
+            this.me = L.me.id;
+            this.host = lobby.hostId === this.me;
+            this.tallies = {};
+            for (const p of lobby.players) this.tallies[p.userId] = this.blank();
+            this.down = this.dead = false;
+            this.lastHostMsg = performance.now();
+            const on = (type, fn) => this.unsubs.push(this.t.on(type, (m) => { this.stats.received++; fn.call(this, m); }));
+            on("st", this.onState);
+            on("pk", this.onPacket);
+            on("hello", this.onHello);
+            on("sp", this.onSpawn);
+            on("need", this.onNeed);
+            on("hit", this.onHit);
+            on("hurt", this.onHurt);
+            on("k", this.onKill);
+            on("ev", this.onEvent);
+            on("rv", this.onRevive);
+            on("bye", (m) => this.dropRemote(m.from));
+            this.unsubs.push(this.t.onStatus((s) => this.onConnection(s)));
+            this.unsubs.push(L.on((type, data) => this.onLobby(type, data)));
+            selectedMap = Number(lobby.map) || 0;
+            mode = lobby.mode || "classic";
+            difficulty = lobby.difficulty || "medium";
+            $("mode").value = mode;
+            $("difficulty").value = difficulty;
+            // Build the same arena everywhere.
+            const realRandom = Math.random;
+            Math.random = seededRandom(lobby.seed || 1);
+            try {
+              PlayerController.start();
+            } finally {
+              Math.random = realRandom;
+            }
+            const index = Math.max(0, lobby.players.findIndex((p) => p.userId === this.me));
+            player.pos.x += (index - 1.5) * 1.6;
+            if (!this.host) {
+              // Clients never direct waves: wait for the host's events.
+              WaveManager.remaining = 0;
+              WaveManager.bossPending = false;
+              WaveManager.wave = 0;
+              MutationManager.reset();
+            }
+            this.hello();
+            UIManager.toast(this.host ? "Você é o HOST desta partida." : `Conectado à partida de ${L.name(lobby.hostId)}.`);
+            document.body.classList.add("netgame");
+          },
+          cleanup() {
+            for (const u of this.unsubs) u?.();
+            this.unsubs = [];
+            for (const r of this.remotes.values()) this.disposeRemote(r);
+            this.remotes.clear();
+            this.zmap.clear();
+            this.outbox = [];
+            this.hitBudget.clear();
+            this.active = false;
+            this.host = false;
+            this.nextZid = 1;
+            this.lastSnap = null;
+            this.reviveHold = 0;
+            this.reviveTarget = null;
+            $("netoverlay")?.classList.add("hidden");
+            $("downed")?.classList.add("hidden");
+            document.body.classList.remove("netgame", "net-downed");
+          },
+          // Local match over (death, end event or leaving). Keeps the lobby for a rematch.
+          finish(result) {
+            if (!this.active || this.ended) return;
+            this.ended = true;
+            if (this.host) this.send("ev", { k: "end", result });
+            this.send("bye", {});
+            const L = window.DR.LobbyManager;
+            if (this.host) {
+              this.reportLobby(true);
+              setTimeout(() => L.finish(), 400);
+            }
+            this.active = false;
+            setTimeout(() => this.cleanup(), 0);
+          },
+          leave() {
+            if (this.active) this.finish("quit");
+            this.cleanup();
+          },
+
+          hello() {
+            this.send("hello", { name: window.DR.LobbyManager.me.name, cls: selectedClass, cos: { ...CharacterStyle.data }, w: WeaponSystem.current()?.id ?? 0 });
+          },
+
+          // ── frame ──
+          update(dt) {
+            if (!this.active) return;
+            const c = this.cfg();
+            this.clock.state -= dt;
+            if (this.clock.state <= 0) {
+              this.clock.state = 1 / c.state;
+              this.sendState();
+            }
+            if (this.host) {
+              this.clock.snap -= dt;
+              if (this.clock.snap <= 0) {
+                this.clock.snap = 1 / c.snap;
+                this.sendSnapshot();
+              }
+              this.clock.tally -= dt;
+              if (this.clock.tally <= 0) {
+                this.clock.tally = 2;
+                this.queue("ev", { k: "tally", tallies: this.tallies, wave: WaveManager.wave });
+              }
+              this.clock.report -= dt;
+              if (this.clock.report <= 0) {
+                this.clock.report = 5;
+                this.reportLobby(false);
+              }
+              for (const [id, b] of this.hitBudget) b.spent = Math.max(0, b.spent - b.cap * dt);
+            } else if (performance.now() - this.lastHostMsg > 6000 && this.connection === "online") {
+              // Host went silent: the lobby heartbeat will migrate the host role.
+              this.setOverlay("HOST SEM RESPOSTA", "Aguardando novo host…");
+            }
+            for (const r of this.remotes.values()) this.driveRemote(r, dt);
+            this.updateDowned(dt);
+            this.flushOutbox();
+            if (this.connection !== "online" && performance.now() - this.lostAt > 30000) {
+              UIManager.toast("Conexão perdida. Você saiu da partida.");
+              this.finish("quit");
+              PlayerController.end(false, true);
+            }
+          },
+          flushOutbox() {
+            if (!this.outbox.length) return;
+            // Bundle everything queued this frame into one message.
+            this.send("pk", { e: this.outbox.splice(0) });
+          },
+          onPacket(m) {
+            if (m.from === this.lobby?.hostId) this.lastHostMsg = performance.now();
+            for (const [type, payload] of m.e || []) {
+              const msg = { ...payload, from: m.from };
+              if (type === "snap") this.onSnapshot(msg);
+              else if (type === "sp") this.onSpawn(msg);
+              else if (type === "k") this.onKill(msg);
+              else if (type === "ev") this.onEvent(msg);
+              else if (type === "hit") this.onHit(msg);
+              else if (type === "hurt") this.onHurt(msg);
+              else if (type === "fx") this.onFx(msg);
+              else if (type === "sh") this.onShot(msg);
+              else if (type === "rv") this.onRevive(msg);
+            }
+          },
+
+          // ── PlayerSync ──
+          sendState() {
+            const w = WeaponSystem.current(),
+              moving = Math.hypot(PlayerController.motion.vx || 0, PlayerController.motion.vz || 0);
+            this.send("st", {
+              x: +player.pos.x.toFixed(2),
+              y: +player.pos.y.toFixed(2),
+              z: +player.pos.z.toFixed(2),
+              yw: +yaw.toFixed(3),
+              pt: +pitch.toFixed(3),
+              sp: +moving.toFixed(2),
+              c: keys.has("ControlLeft") || keys.has("ControlRight") ? 1 : 0,
+              j: +(player.jump || 0).toFixed(2),
+              w: w?.id ?? 0,
+              hp: Math.max(0, Math.round(player.hp)),
+              mhp: Math.round(player.maxhp + player.bonus),
+              dn: this.down ? 1 : this.dead ? 2 : 0,
+              cls: selectedClass,
+              rl: reloadEnd > simulationTime ? 1 : 0,
+            });
+          },
+          onHello(m) {
+            const r = this.ensureRemote(m.from, m);
+            r.name = m.name || r.name;
+            // Answer with our own identity so late joiners see us too; the host adds the world.
+            if (!m.reply) this.send("hello", { name: window.DR.LobbyManager.me.name, cls: selectedClass, cos: { ...CharacterStyle.data }, w: WeaponSystem.current()?.id ?? 0, reply: true });
+            if (this.host) this.syncWorldTo(m.from);
+          },
+          ensureRemote(id, info = {}) {
+            let r = this.remotes.get(id);
+            if (r) return r;
+            const L = window.DR.LobbyManager;
+            const saved = CharacterStyle.data;
+            if (info.cos && typeof info.cos === "object") CharacterStyle.data = { ...CharacterStyle.defaults, ...info.cos };
+            let avatar;
+            try {
+              avatar = Survivor.create(Number(info.cls) || 0, WeaponSystem.weapons[Number(info.w) || 0]);
+            } finally {
+              CharacterStyle.data = saved;
+            }
+            scene.add(avatar);
+            const tag = this.nameTag(info.name || L.name(id));
+            tag.position.y = 2.15;
+            avatar.add(tag);
+            r = { id, name: info.name || L.name(id), avatar, tag, buf: [], hp: 100, mhp: 100, dn: 0, lastSeen: performance.now(), pos: new V(0, 1.7, 0), phase: 0, pitch: 0 };
+            this.remotes.set(id, r);
+            this.tally(id);
+            return r;
+          },
+          nameTag(name) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 256;
+            canvas.height = 64;
+            const g = canvas.getContext("2d");
+            g.font = "600 30px Oswald, Arial";
+            g.textAlign = "center";
+            g.fillStyle = "#000a";
+            g.fillRect(28, 8, 200, 40);
+            g.fillStyle = "#e7ddd0";
+            g.fillText(String(name).slice(0, 14).toUpperCase(), 128, 38);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }));
+            sprite.scale.set(1.3, 0.33, 1);
+            sprite.renderOrder = 20;
+            sprite.userData.ownMaterial = true;
+            sprite.userData.canvas = canvas;
+            return sprite;
+          },
+          updateTag(r) {
+            const canvas = r.tag.userData.canvas,
+              g = canvas.getContext("2d");
+            g.clearRect(0, 0, 256, 64);
+            g.font = "600 28px Oswald, Arial";
+            g.textAlign = "center";
+            g.fillStyle = "#000b";
+            g.fillRect(28, 4, 200, 38);
+            g.fillStyle = r.dn === 1 ? "#ff5a4a" : r.dn === 2 ? "#777" : "#e7ddd0";
+            g.fillText((r.dn === 1 ? "✚ " : "") + String(r.name).slice(0, 14).toUpperCase(), 128, 32);
+            const pct = clamp(r.hp / Math.max(1, r.mhp), 0, 1);
+            g.fillStyle = "#300";
+            g.fillRect(48, 48, 160, 7);
+            g.fillStyle = pct > 0.35 ? "#b3141b" : "#ff3b30";
+            g.fillRect(48, 48, 160 * pct, 7);
+            r.tag.material.map.needsUpdate = true;
+          },
+          onState(m) {
+            if (!this.active || m.from === this.me) return;
+            const r = this.ensureRemote(m.from, m);
+            r.lastSeen = performance.now();
+            if (m.from === this.lobby?.hostId) this.lastHostMsg = r.lastSeen;
+            r.buf.push({ at: performance.now() / 1000, x: m.x, y: m.y, z: m.z, yw: m.yw, pt: m.pt });
+            if (r.buf.length > 20) r.buf.shift();
+            const changed = r.hp !== m.hp || r.dn !== m.dn || r.mhp !== m.mhp;
+            r.hp = m.hp;
+            r.mhp = m.mhp;
+            r.dn = m.dn;
+            r.sp = m.sp;
+            r.c = m.c;
+            r.j = m.j;
+            r.rl = m.rl;
+            if (r.w !== m.w) {
+              r.w = m.w;
+              // Swap the weapon prop the avatar carries.
+              const gun = r.avatar.userData.rig.gun;
+              if (gun && WeaponSystem.weapons[m.w]) {
+                const replacement = Survivor.gunFor ? Survivor.gunFor(WeaponSystem.weapons[m.w]) : null;
+                if (replacement) {
+                  gun.parent.add(replacement);
+                  replacement.position.copy(gun.position);
+                  gun.parent.remove(gun);
+                  r.avatar.userData.rig.gun = replacement;
+                }
+              }
+            }
+            if (changed) this.updateTag(r);
+          },
+          driveRemote(r, dt) {
+            const now = performance.now() / 1000 - 0.12;
+            const b = r.buf;
+            if (!b.length) return;
+            let a = b[0],
+              c = b[b.length - 1];
+            for (let i = 0; i < b.length - 1; i++)
+              if (b[i].at <= now && b[i + 1].at >= now) {
+                a = b[i];
+                c = b[i + 1];
+                break;
+              }
+            const k = c.at > a.at ? clamp((now - a.at) / (c.at - a.at), 0, 1.25) : 1;
+            r.pos.set(a.x + (c.x - a.x) * k, a.y + (c.y - a.y) * k, a.z + (c.z - a.z) * k);
+            const yawNow = a.yw + Math.atan2(Math.sin(c.yw - a.yw), Math.cos(c.yw - a.yw)) * Math.min(1, k);
+            r.pitch = a.pt + (c.pt - a.pt) * Math.min(1, k);
+            r.yaw = yawNow;
+            const av = r.avatar;
+            av.position.set(r.pos.x, r.pos.y - 1.7 + (r.c ? 0.25 : 0), r.pos.z);
+            if (r.dn === 1) {
+              av.rotation.set(-1.25, yawNow + Math.PI, 0);
+              av.position.y = r.pos.y - 1.55;
+            } else if (r.dn === 2) {
+              av.rotation.set(-1.45, yawNow + Math.PI, 0);
+              av.position.y = r.pos.y - 1.6;
+            } else av.rotation.set(0, yawNow + Math.PI, 0);
+            r.phase += dt * (r.sp || 0) * 1.55;
+            Survivor.animate(av, dt, simulationTime, r.sp || 0, !!r.c, r.j || 0, 99, !!r.rl, false, r.phase, r.pitch);
+            if (performance.now() - r.lastSeen > 15000) this.dropRemote(r.id);
+          },
+          disposeRemote(r) {
+            r.tag?.material?.map?.dispose();
+            r.tag?.material?.dispose();
+            Survivor.dispose(r.avatar);
+          },
+          dropRemote(id) {
+            const r = this.remotes.get(id);
+            if (!r) return;
+            this.disposeRemote(r);
+            this.remotes.delete(id);
+          },
+          // Local fire → remote tracer + sound (bundled, max one per packet).
+          shot(origin, dir) {
+            if (!this.active) return;
+            if (this.outbox.some(([t]) => t === "sh")) return;
+            this.queue("sh", { o: [+origin.x.toFixed(2), +origin.y.toFixed(2), +origin.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)], w: WeaponSystem.current()?.id ?? 0 });
+          },
+          onShot(m) {
+            const o = new V(...m.o),
+              d = new V(...m.d);
+            ParticleSystem.line(o.clone().addScaledVector(d, 0.6), o.clone().addScaledVector(d, 22), 0xffd386);
+            SpatialSound.emit?.(o, 520, 0.08, 0.12);
+          },
+
+          // ── Targets for host AI ──
+          targets() {
+            const list = [];
+            if (!this.down && !this.dead) list.push({ id: null, pos: player.pos });
+            for (const r of this.remotes.values()) if (r.dn === 0 && performance.now() - r.lastSeen < 4000) list.push({ id: r.id, pos: r.pos });
+            return list;
+          },
+          // Called for every zombie before its AI step: aim it at the nearest living player.
+          aim(z) {
+            if (!this.active || !this.host) return;
+            if (!z.netAim || simulationTime > z.netAim.until) {
+              let best = null,
+                bestD = Infinity;
+              for (const t of this.targets()) {
+                const d = t.pos.distanceToSquared(z.group.position);
+                if (d < bestD) (bestD = d), (best = t);
+              }
+              z.netAim = { target: best, until: simulationTime + 0.5 };
+            }
+            const t = z.netAim.target;
+            if (t && t.id) {
+              this.savedPos = player.pos;
+              player.pos = t.pos.clone();
+              this.target = t.id;
+            }
+          },
+          unaim() {
+            if (this.savedPos) {
+              player.pos = this.savedPos;
+              this.savedPos = null;
+            }
+            this.target = null;
+          },
+          realPos() {
+            return this.savedPos || player.pos;
+          },
+          // Routed from PlayerController.hurt / MonsterFX.damagePlayer while a remote is targeted.
+          hurtRemote(amount) {
+            if (!this.target) return false;
+            this.queue("hurt", { to: this.target, a: Math.round(amount * 10) / 10 });
+            return true;
+          },
+          onHurt(m) {
+            if (m.to !== this.me || this.down || this.dead) return;
+            PlayerController.hurt(m.a, true);
+          },
+
+          // ── EnemySync (host) ──
+          registerSpawn(z) {
+            if (!this.active || !this.host || this.spawningRemote) return;
+            z.netId = this.nextZid++;
+            this.zmap.set(z.netId, z);
+            this.queue("sp", this.spawnInfo(z));
+          },
+          spawnInfo(z) {
+            const p = z.group.position;
+            return {
+              id: z.netId,
+              ty: z.type,
+              b: z.boss ? { ...z.boss } : null,
+              x: +p.x.toFixed(2),
+              y: +p.y.toFixed(2),
+              z: +p.z.toFixed(2),
+              hp: Math.round(z.hp),
+              mhp: Math.round(z.maxhp),
+              sp: +z.speed.toFixed(2),
+            };
+          },
+          syncWorldTo(to) {
+            const e = [];
+            for (const z of ZombieManager.list) if (z.netId && !z.dead) e.push(["sp", this.spawnInfo(z)]);
+            e.push(["ev", { k: "sync", to, wave: WaveManager.wave, mut: MutationManager.current?.id || null, tallies: this.tallies }]);
+            // Split into modest packets.
+            for (let i = 0; i < e.length; i += 25) this.send("pk", { e: e.slice(i, i + 25) });
+          },
+          sendSnapshot() {
+            const zs = [];
+            for (const z of ZombieManager.list) {
+              if (!z.netId || z.dead) continue;
+              const p = z.group.position;
+              const flags = (z.walkingNow ? 1 : 0) | (z.swingStart && simulationTime - z.swingStart < 0.45 ? 2 : 0) | (z.dropping ? 4 : 0);
+              zs.push([z.netId, z.type, Math.round(p.x * 20), Math.round(p.y * 20), Math.round(p.z * 20), Math.round(z.group.rotation.y * 100), Math.max(0, Math.round(z.hp)), flags]);
+            }
+            this.queue("snap", { z: zs, w: WaveManager.wave, r: WaveManager.remaining, bp: WaveManager.bossPending ? 1 : 0, tl: Math.round(WaveManager.timeLeft) });
+          },
+          reportLobby(final) {
+            if (!this.host || !this.lobby || window.DR.LobbyManager.local) return;
+            const tallies = {};
+            for (const [id, t] of Object.entries(this.tallies)) tallies[id] = t;
+            window.DR.LobbyRepository.report(this.lobby.id, WaveManager.wave, tallies).catch(() => {});
+          },
+          // Remote hit request → validated, applied with attribution.
+          onHit(m) {
+            if (!this.host) return;
+            const z = this.zmap.get(m.id);
+            if (!z || z.dead) return;
+            const w = WeaponSystem.weapons[m.w] ? { ...WeaponSystem.weapons[m.w], id: m.w } : null;
+            const r = this.remotes.get(m.from);
+            // Plausibility: per-player damage budget refilled at a weapon-derived DPS, and range.
+            const perShot = (w ? w.damage * (rarityMult[w.tier] || 1) * (w.pellets || 1) : 60) * 3.2;
+            const dps = perShot / Math.max(0.04, w?.rate || 0.1) * 1.6 + 400;
+            let b = this.hitBudget.get(m.from);
+            if (!b) this.hitBudget.set(m.from, (b = { spent: 0, cap: dps }));
+            b.cap = Math.max(b.cap, dps);
+            const dmg = Math.min(Number(m.d) || 0, perShot * (m.x ? 2.5 : 1));
+            if (dmg <= 0 || b.spent + dmg > b.cap * 1.5) return;
+            if (r && r.pos.distanceTo(z.group.position) > (w?.range || 80) + 12) return;
+            b.spent += dmg;
+            this.attacker = m.from;
+            try {
+              const point = m.p ? new V(m.p[0], m.p[1], m.p[2]) : null;
+              ZombieManager.hit(z, dmg, !!m.h, point, w, true);
+            } finally {
+              this.attacker = null;
+            }
+          },
+          requestHit(z, damage, head, point, w) {
+            if (!z.netId) return;
+            this.queue("hit", { id: z.netId, d: Math.round(damage * 10) / 10, h: head ? 1 : 0, w: w?.id ?? 0, x: w?.kind === "missile" || !w ? 1 : 0, p: point ? [+point.x.toFixed(2), +point.y.toFixed(2), +point.z.toFixed(2)] : null });
+          },
+          broadcastKill(z, head, overkill, w, by) {
+            if (!this.active || !this.host || !z.netId) return;
+            const t = this.tally(by || this.me);
+            t.kills++;
+            if (head) t.headshots++;
+            if (z.boss?.kind) for (const id of Object.keys(this.tallies)) this.tallies[id].bosses[z.boss.kind] = (this.tallies[id].bosses[z.boss.kind] || 0) + 1;
+            this.queue("k", { id: z.netId, h: head ? 1 : 0, o: overkill ? 1 : 0, by: by || this.me, w: w?.id ?? null });
+            this.zmap.delete(z.netId);
+          },
+          addDamage(amount) {
+            if (this.active && this.host) this.tally(this.attacker || this.me).damage += amount;
+          },
+
+          // ── EnemySync (client) ──
+          onSpawn(m) {
+            if (this.host || !this.active) return;
+            if (this.zmap.has(m.id)) return;
+            this.spawningRemote = true;
+            let z;
+            try {
+              z = ZombieManager.spawn(m.ty, m.b, new V(m.x, m.y || 0, m.z));
+            } finally {
+              this.spawningRemote = false;
+            }
+            if (!z) return;
+            z.remote = true;
+            z.netId = m.id;
+            z.hp = m.hp;
+            z.maxhp = m.mhp;
+            z.speed = m.sp || z.speed;
+            z.netBuf = [{ at: performance.now() / 1000, x: m.x, y: m.y || 0, z: m.z, yw: 0, flags: 0 }];
+            z.group.position.set(m.x, m.y || 0, m.z);
+            this.zmap.set(m.id, z);
+          },
+          onNeed(m) {
+            if (!this.host) return;
+            for (const id of m.ids || []) {
+              const z = this.zmap.get(id);
+              if (z && !z.dead) this.queue("sp", this.spawnInfo(z));
+            }
+          },
+          onSnapshot(m) {
+            if (this.host || !this.active) return;
+            this.lastHostMsg = performance.now();
+            this.lastSnap = m;
+            this.lastSnapAt = performance.now();
+            const at = performance.now() / 1000,
+              seen = new Set(),
+              missing = [];
+            for (const [id, type, x, y, zz, yw, hp, flags] of m.z) {
+              seen.add(id);
+              const z = this.zmap.get(id);
+              if (!z) {
+                missing.push(id);
+                continue;
+              }
+              z.netBuf.push({ at, x: x / 20, y: y / 20, z: zz / 20, yw: yw / 100, flags });
+              if (z.netBuf.length > 12) z.netBuf.shift();
+              z.hp = hp;
+              z.missingSince = 0;
+            }
+            if (missing.length) this.send("need", { ids: missing.slice(0, 40) });
+            // Anything the host no longer lists (and that we did not see die) fades out.
+            for (const [id, z] of this.zmap) {
+              if (seen.has(id) || z.dead) continue;
+              z.missingSince ||= performance.now();
+              if (performance.now() - z.missingSince > 1500) {
+                ZombieManager.remove?.(z);
+                this.zmap.delete(id);
+              }
+            }
+            WaveManager.wave = m.w;
+            WaveManager.remaining = m.r;
+            WaveManager.bossPending = !!m.bp;
+            if (mode === "timed") WaveManager.timeLeft = m.tl;
+          },
+          drivePuppet(z, dt) {
+            if (z.dropping || BossIntro.active?.z === z) return;
+            const b = z.netBuf;
+            if (!b?.length) return;
+            const now = performance.now() / 1000 - 0.14;
+            let a = b[0],
+              c = b[b.length - 1];
+            for (let i = 0; i < b.length - 1; i++)
+              if (b[i].at <= now && b[i + 1].at >= now) {
+                a = b[i];
+                c = b[i + 1];
+                break;
+              }
+            const k = c.at > a.at ? clamp((now - a.at) / (c.at - a.at), 0, 1.2) : 1;
+            const p = z.group.position,
+              ox = p.x,
+              oz = p.z;
+            p.set(a.x + (c.x - a.x) * k, a.y + (c.y - a.y) * k, a.z + (c.z - a.z) * k);
+            z.group.rotation.y = a.yw + Math.atan2(Math.sin(c.yw - a.yw), Math.cos(c.yw - a.yw)) * Math.min(1, k);
+            const walking = !!(c.flags & 1) || Math.hypot(p.x - ox, p.z - oz) > dt * 0.3;
+            if (c.flags & 2 && !(z.netSwing && simulationTime - z.netSwing < 0.5)) {
+              z.netSwing = simulationTime;
+              z.swingStart = simulationTime;
+            }
+            z.phase = z.hp / Math.max(1, z.maxhp) < 0.33 ? 3 : z.hp / Math.max(1, z.maxhp) < 0.67 ? 2 : 1;
+            CreatureRig.animate(z, dt, walking);
+            if (z.throwWind && !z.throwWind.released && simulationTime >= z.throwWind.release) MonsterFX.releaseThrow(z);
+          },
+          onKill(m) {
+            if (this.host || !this.active) return;
+            const z = this.zmap.get(m.id);
+            this.zmap.delete(m.id);
+            if (!z || z.dead) return;
+            this.applyingRemote = true;
+            this.attacker = m.by === this.me ? null : m.by;
+            try {
+              z.hp = 0;
+              ZombieManager.kill(z, !!m.h, !!m.o, m.w != null && WeaponSystem.weapons[m.w] ? { ...WeaponSystem.weapons[m.w], id: m.w } : null);
+            } finally {
+              this.applyingRemote = false;
+              this.attacker = null;
+            }
+          },
+
+          // ── Global events ──
+          hostEvent(k, data = {}) {
+            if (this.active && this.host) this.queue("ev", { k, ...data });
+          },
+          fx(k, data) {
+            if (this.active && this.host) this.queue("fx", { k, ...data });
+          },
+          onFx(m) {
+            if (this.host) return;
+            const z = m.id ? this.zmap.get(m.id) : null;
+            if (m.k === "puddle") MonsterFX.addPuddle(new V(m.x, 0, m.z), m.r);
+            else if (m.k === "frost") MonsterFX.frostPulse(new V(m.x, 0, m.z), m.r);
+            else if (m.k === "throw" && z) MonsterFX.startThrow(z, 0, m.d.map(([x, zz]) => new V(x, 0, zz)), m.l);
+            else if (m.k === "proj") {
+              const p = spawnProjectile("enemy", new V(m.p[0], m.p[1], m.p[2]), new V(m.d[0], m.d[1], m.d[2]), m.dmg);
+              if (m.acid) p.acid = true;
+            } else if (m.k === "intro" && z && VoxelMonsters.ready()) BossIntro.start(z);
+          },
+          onEvent(m) {
+            if (m.from === this.lobby?.hostId) this.lastHostMsg = performance.now();
+            if (m.k === "tally") {
+              if (!this.host) this.tallies = m.tallies || this.tallies;
+              return;
+            }
+            if (this.host) return;
+            if (m.k === "wave") this.remoteWave(m.n, m.mut);
+            else if (m.k === "sync" && m.to === this.me) {
+              if (m.wave && WaveManager.wave !== m.wave) this.remoteWave(m.wave, m.mut, true);
+              this.tallies = m.tallies || this.tallies;
+            } else if (m.k === "shop") {
+              RunStats.waveCleared();
+              state = GameState.SHOP;
+              WaveManager.shopEnd = simulationTime + (m.secs || 8) + 2;
+              mouse.down = mouse.aim = false;
+              keys.clear();
+              UIManager.screen("shopscreen");
+              UIManager.shop();
+              unlock();
+            } else if (m.k === "next") {
+              if (state === GameState.SHOP) {
+                state = GameState.PLAYING;
+                UIManager.screen(null);
+                $("world").focus({ preventScroll: true });
+              }
+            } else if (m.k === "announce") UIManager.announce(m.a, m.b || "", m.s || 2.5);
+            else if (m.k === "end") {
+              UIManager.toast(m.result === "win" ? "Vitória da equipe!" : "A equipe caiu.");
+              this.finish(m.result);
+              if (state === GameState.PLAYING || state === GameState.SHOP) PlayerController.end(m.result === "win", true);
+            }
+          },
+          remoteWave(n, mut, silent = false) {
+            const roll = MutationManager.roll;
+            MutationManager.roll = function () {
+              this.restoreEnvironment();
+              this.current = mut ? this.events.find((e) => e.id === mut) || null : null;
+              if (this.current) {
+                this.lastId = mut;
+                this.lastWave = n;
+                this.applyEnvironment();
+                if (!silent) UIManager.announce(`⚠ MUTATION · ${this.current.name}`, this.current.subtitle, 3.4);
+              }
+              return this.current;
+            };
+            if (!silent && WaveManager.wave > 0) RunStats.waveCleared();
+            try {
+              WaveManager.wave = n - 1;
+              WaveManager.start();
+            } finally {
+              MutationManager.roll = roll;
+            }
+            WaveManager.remaining = 0;
+            WaveManager.bossPending = false;
+          },
+
+          // ── Downed / revive ──
+          goDown() {
+            if (this.down || this.dead) return false;
+            const living = [...this.remotes.values()].some((r) => r.dn === 0 && performance.now() - r.lastSeen < 5000);
+            if (!living) return false; // last one standing: normal death
+            this.down = true;
+            this.bleedUntil = simulationTime + 30;
+            player.hp = 0;
+            mouse.down = mouse.aim = false;
+            document.body.classList.add("net-downed");
+            $("downed").classList.remove("hidden");
+            UIManager.announce("VOCÊ CAIU", "Um aliado pode te reanimar", 2);
+            this.sendState();
+            this.checkWipe();
+            return true;
+          },
+          updateDowned(dt) {
+            if (this.down) {
+              const left = Math.max(0, this.bleedUntil - simulationTime);
+              $("downed").querySelector("b").textContent = `${Math.ceil(left)}s`;
+              if (left <= 0) {
+                this.down = false;
+                this.dead = true;
+                document.body.classList.remove("net-downed");
+                $("downed").classList.add("hidden");
+                this.sendState();
+                UIManager.announce("SANGROU ATÉ A MORTE", "Assistindo seus aliados", 2.2);
+                this.checkWipe();
+              }
+            }
+            // Reviving a teammate: hold E (or the touch button) close to them for 3 s.
+            if (this.down || this.dead) return;
+            let near = null;
+            for (const r of this.remotes.values()) if (r.dn === 1 && r.pos.distanceTo(player.pos) < 2.4) near = r;
+            const hold = near && (keys.has("KeyE") || touchRevive);
+            $("reviveprompt").classList.toggle("hidden", !near);
+            if (near) $("reviveprompt").querySelector("b").textContent = near.name.toUpperCase();
+            if (hold) {
+              if (this.reviveTarget !== near.id) (this.reviveTarget = near.id), (this.reviveHold = 0);
+              this.reviveHold += dt;
+              $("reviveprompt").style.setProperty("--p", Math.min(1, this.reviveHold / 3));
+              if (this.reviveHold >= 3) {
+                this.reviveHold = 0;
+                this.reviveTarget = null;
+                RunStats.revives++;
+                this.queue("rv", { to: near.id });
+                near.dn = 0;
+                UIManager.toast(`Você reanimou ${near.name}!`);
+              }
+            } else {
+              this.reviveHold = 0;
+              $("reviveprompt").style.setProperty("--p", 0);
+            }
+          },
+          onRevive(m) {
+            if (this.host) this.tally(m.from).revives++;
+            if (m.to !== this.me || !this.down) return;
+            this.down = false;
+            player.hp = Math.round((player.maxhp + player.bonus) * 0.35);
+            player.lastDamage = simulationTime;
+            document.body.classList.remove("net-downed");
+            $("downed").classList.add("hidden");
+            UIManager.announce("REANIMADO", `${this.remotes.get(m.from)?.name || "Um aliado"} te levantou`, 2);
+            this.sendState();
+          },
+          checkWipe() {
+            if (!this.host) return;
+            setTimeout(() => {
+              if (!this.active) return;
+              const meUp = !this.down && !this.dead;
+              const anyUp = meUp || [...this.remotes.values()].some((r) => r.dn === 0 && performance.now() - r.lastSeen < 5000);
+              if (!anyUp) {
+                this.finish("loss");
+                PlayerController.end(false, true);
+              }
+            }, 400);
+          },
+
+          // Dead in multiplayer: watch a living teammate over the shoulder.
+          spectate() {
+            const r = [...this.remotes.values()].find((x) => x.dn === 0) || [...this.remotes.values()][0];
+            if (!r) return;
+            const yw = r.yaw || 0;
+            const eye = new V(r.pos.x + Math.sin(yw) * 3.2, r.pos.y + 1.1, r.pos.z + Math.cos(yw) * 3.2);
+            camera.position.lerp(eye, 0.2);
+            camera.lookAt(r.pos.x, r.pos.y - 0.2, r.pos.z);
+            $("downed").classList.add("hidden");
+            WeaponSystem.model.visible = false;
+          },
+          // ── Connection + host migration ──
+          onConnection(s) {
+            this.connection = s;
+            if (s === "online") {
+              $("netoverlay").classList.add("hidden");
+              if (this.lostAt) {
+                this.lostAt = 0;
+                this.hello();
+                UIManager.toast("Reconectado.");
+              }
+            } else if (s === "reconnecting" && this.active) {
+              if (!this.lostAt) this.lostAt = performance.now();
+              this.setOverlay("CONNECTION LOST", "Reconectando…");
+            }
+          },
+          setOverlay(title, sub) {
+            const o = $("netoverlay");
+            o.querySelector("h2").textContent = title;
+            o.querySelector("p").textContent = sub;
+            o.classList.remove("hidden");
+          },
+          onLobby(type, data) {
+            if (!this.active) return;
+            if (type === "host-changed") {
+              const nowHost = data.hostId === this.me;
+              if (nowHost && !this.host) this.promote();
+              else if (!nowHost && this.host) this.demote();
+              UIManager.toast(nowHost ? "O host saiu. Você agora é o HOST." : `Novo host: ${window.DR.LobbyManager.name(data.hostId)}`);
+            } else if (type === "player-left") {
+              this.dropRemote(data.userId);
+              UIManager.toast(`${data.username} saiu da partida.`);
+              if (this.host) this.checkWipe();
+            } else if (type === "player-joined") UIManager.toast(`${data.username} entrou.`);
+            else if (type === "kicked") {
+              UIManager.toast("Você foi removido do lobby.");
+              this.finish("quit");
+              PlayerController.end(false, true);
+            }
+          },
+          // Host migration: puppets become authoritative zombies, the wave director resumes.
+          promote() {
+            this.host = true;
+            $("netoverlay").classList.add("hidden");
+            let maxId = 0;
+            for (const [id, z] of this.zmap) {
+              maxId = Math.max(maxId, id);
+              z.remote = false;
+              z.netBuf = null;
+              z.attack = simulationTime + 1;
+              z.special = simulationTime + rand(2, 4);
+              z.strikeAt = 0;
+            }
+            this.nextZid = maxId + 1000;
+            const s = this.lastSnap;
+            if (s) {
+              WaveManager.wave = s.w;
+              WaveManager.remaining = s.r;
+              WaveManager.bossPending = !!s.bp;
+              WaveManager.total = Math.max(WaveManager.total || 0, s.r + ZombieManager.list.length);
+              WaveManager.spawnClock = 1;
+            }
+            for (const id of Object.keys(this.tallies)) this.tally(id);
+            this.hostEvent("announce", { a: "NOVO HOST", b: window.DR.LobbyManager.me.name });
+            if (state === GameState.SHOP) WaveManager.shopEnd = Math.min(WaveManager.shopEnd, simulationTime + 4);
+          },
+          demote() {
+            // Another player now owns the world: our zombies become puppets fed by their snapshots.
+            this.host = false;
+            for (const [, z] of this.zmap) {
+              z.remote = true;
+              z.netBuf = [{ at: performance.now() / 1000, x: z.group.position.x, y: z.group.position.y, z: z.group.position.z, yw: z.group.rotation.y, flags: 0 }];
+            }
+          },
+        };
+        let touchRevive = false;
 
         // One articulated survivor shared by the armory and third-person gameplay.
         const Survivor = {
@@ -11806,6 +13213,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             attack = 99,
             reloading = false,
             dead = false,
+            phaseOverride = null,
+            pitchOverride = null,
           ) {
             if (!g) return;
             const r = g.userData.rig;
@@ -11813,9 +13222,11 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               (Math.min(1, speed / 5.6) - r.blend) * (1 - Math.exp(-dt * 10));
             const b = r.blend,
               phase =
-                state === GameState.CLASS_SELECT
-                  ? t * 2.2
-                  : PlayerController.motion.phase;
+                phaseOverride != null
+                  ? phaseOverride
+                  : state === GameState.CLASS_SELECT
+                    ? t * 2.2
+                    : PlayerController.motion.phase;
             r.hips.position.y +=
               ((crouch ? 0.61 : 0.86) + jump - r.hips.position.y) *
               (1 - Math.exp(-dt * 16));
@@ -11825,7 +13236,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             r.head.rotation.x =
               state === GameState.CLASS_SELECT
                 ? Math.sin(t * 0.7) * 0.025
-                : -pitch * 0.5;
+                : -(pitchOverride != null ? pitchOverride : pitch) * 0.5;
             for (let i = 0; i < 2; i++) {
               const step = Math.sin(phase + i * Math.PI);
               r.legs[i].rotation.x = step * 0.62 * b + (crouch ? -0.35 : 0);
@@ -12473,7 +13884,11 @@ body.dying #hud{opacity:0;transition:opacity .4s}
         // accounts sync their loadout from the server, which doesn't know this field yet.
         Progression.buyWeaponSlot = function () {
           if (state !== GameState.CLASS_SELECT || this.busy) return;
-          if (Account.user) { UIManager.toast("Slots extras estão disponíveis apenas offline por enquanto."); return; }
+          if (Account.user) {
+            this.busy = true;
+            Account.queue("slot/buy").then((r) => { Account.apply(r.profile); AudioManager.coin(); }).catch((e) => UIManager.toast(e.message)).finally(() => { this.busy = false; Armory.render(); });
+            return;
+          }
           normalizeLoadoutState(this.data);
           const owned = this.data.weaponSlotsOwned;
           if (owned >= WEAPON_SLOT_MAX) return;
@@ -12920,6 +14335,15 @@ body.dying #hud{opacity:0;transition:opacity .4s}
         }
         function pause() {
           if (state !== GameState.PLAYING) return;
+          if (NetGame.active) {
+            // The shared world cannot stop: open the menu over the running match.
+            NetGame.menuOpen = true;
+            mouse.down = mouse.aim = false;
+            keys.clear();
+            UIManager.screen("pausescreen");
+            unlock();
+            return;
+          }
           state = GameState.PAUSED;
           PlayerController.motion.vx = PlayerController.motion.vz = 0;
           lockAttempt++;
@@ -12934,11 +14358,15 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           UIManager.screen("pausescreen");
           unlock();
         }
-        function resume(){state=GameState.PLAYING;WeaponSystem.model.visible=true;fallback=false;UIManager.screen(null);$("lockhint").textContent=touchMode?"Arraste a direita para olhar · pinça alterna 1ª/3ª pessoa.":"Clique na arena para capturar o mouse. Esc ou P libera e pausa."}
+        function resume(){NetGame.menuOpen=false;state=GameState.PLAYING;WeaponSystem.model.visible=true;fallback=false;UIManager.screen(null);$("lockhint").textContent=touchMode?"Arraste a direita para olhar · pinça alterna 1ª/3ª pessoa.":"Clique na arena para capturar o mouse. Esc ou P libera e pausa."}
         function nextWave() {
+          // In multiplayer only the host advances the wave; clients follow its "next" event.
+          if (NetGame.active && !NetGame.host) return;
           state = GameState.PLAYING;
           UIManager.screen(null);
           WaveManager.start();
+          NetGame.hostEvent("next", {});
+          NetGame.flushOutbox();
           fallback=false;$("world").focus({preventScroll:true});
         }
         function openSettings(from) {
@@ -12948,11 +14376,19 @@ body.dying #hud{opacity:0;transition:opacity .4s}
         }
         $("play").onclick = () => {
           AudioManager.init();
-          state = GameState.MAP_SELECT;
-          UIManager.mapCards();
-          UIManager.screen("mapscreen");
+          DR.LobbyUI.openPlay();
         };
-        $("classesbtn").onclick = () => Armory.open();
+        $("loadoutbtn").onclick = () => {
+          Armory.tab = "weapon";
+          Armory.open();
+        };
+        $("classesbtn").onclick = () => {
+          Armory.tab = "class";
+          Armory.open();
+        };
+        $("missionsbtn").onclick = () => DR.MissionUI.open();
+        $("home-missions-all").onclick = () => DR.MissionUI.open();
+        $("mp-back").onclick = () => DR.LobbyUI.openPlay();
         $("customizebtn").onclick = () => Armory.openCustomize();
         document.querySelectorAll("[data-armory-tab]").forEach(
           (b) =>
@@ -12964,19 +14400,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
               Armory.render();
             }),
         );
-        $("accountbtn").onclick = () => {
-          if (window.DeadRecoilRuntime?.native && !Account.user) {
-            UIManager.toast("Perfil local ativo · progresso salvo neste aparelho.");
-            return;
-          }
-          UIManager.screen("accountscreen");
-          Account.badge();
-        };
-        $("account-form").onsubmit = (e) => {
-          e.preventDefault();
-          Account.login($("register-mode").checked);
-        };
-        $("logout").onclick = () => Account.logout();
+        $("accountbtn").onclick = () => DR.ProfileUI.open();
         let fullscreenWasActive = false;
         function enterFullscreen() {
           if (window.DeadRecoilRuntime?.native) return Promise.resolve();
@@ -13031,6 +14455,8 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           if ($("deploy").disabled) return;
           $("deploy").disabled = true;
           const full = enterFullscreen();
+          mode = $("mode").value;
+          difficulty = $("difficulty").value;
           try {
             await Promise.all([full, Account.begin()]);
           } catch (e) {
@@ -13052,7 +14478,10 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             "Mova o mouse sobre a arena ou use as setas para olhar. P pausa o jogo.",
           );
         };
-        $("abandon").onclick = () => UIManager.menu();
+        $("abandon").onclick = () => {
+          UIManager.menu();
+          if (DR.LobbyManager.lobby) DR.LobbyUI.openLobby();
+        };
         $("settingsbtn").onclick = () => openSettings("menu");
         $("pausesettings").onclick = () => openSettings("pausescreen");
         $("settingsback").onclick = () => UIManager.screen(settingsReturn);
@@ -13089,8 +14518,13 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           .forEach((b) => (b.onclick = () => UIManager.menu()));
         $("retry").textContent = "Voltar ao preparo";
         $("retry").onclick = () => {
+          if (DR.LobbyManager.lobby) {
+            UIManager.menu();
+            DR.LobbyUI.openLobby();
+            return;
+          }
           UIManager.menu();
-          $("play").onclick();
+          App.startSolo();
         };
         $("nextwave").onclick = nextWave;
         document.addEventListener("pointerlockchange", () => {
@@ -13123,7 +14557,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             if (state === GameState.PLAYING) pause();
             return;
           }
-          if (state !== GameState.PLAYING) return;
+          if (state !== GameState.PLAYING || NetGame.menuOpen) return;
           if (
             [
               "Space",
@@ -13374,6 +14808,7 @@ body.dying #hud{opacity:0;transition:opacity .4s}
         }
 
         bindHoldButton("firetouch", () => { mouse.down = true; }, () => { mouse.down = false; });
+        bindHoldButton("revivetouch", () => { touchRevive = true; }, () => { touchRevive = false; });
         bindHoldButton("sprinttouch", () => keys.add("ShiftLeft"), () => keys.delete("ShiftLeft"));
         $("moretouch").onpointerdown = (e) => {
           if (state !== GameState.PLAYING) return;
@@ -13413,28 +14848,131 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           camera.updateProjectionMatrix();
         });
         window.addEventListener("pagehide", () => {
-          if (Account.user && Account.run) {
-            const body = {
-              requestId: crypto.randomUUID(),
-              run: Account.run,
-              elapsed: Math.floor(elapsed),
-              kills: player.kills,
-              headshots: player.headshots,
-              wave: Math.max(1, WaveManager.wave),
-              ended: true,
-            };
-            navigator.sendBeacon(
-              "/api/run/checkpoint",
-              new Blob([JSON.stringify(body)], { type: "application/json" }),
-            );
-          }
+          if (NetGame.active) NetGame.send("bye", {});
+          if (Account.run) Account.checkpoint(true, "quit");
+        });
+        // ── App shell: wires the UI modules (login, profile, missions, lobby) to the game ─────────
+        const App = {
+          screen: (id) => UIManager.screen(id),
+          toast: (t) => UIManager.toast(t),
+          signedIn: () => Account.signedIn(),
+          profile: () => Account.profile,
+          economy: () => Progression.data,
+          maps: () => maps,
+          inMatch: () => NetGame.active,
+          applyProfile(p) {
+            Account.apply(p);
+          },
+          openLogin(message = "") {
+            DR.LoginUI.open("login", message);
+          },
+          async afterSignIn() {
+            const session = await DR.AuthService.restore();
+            if (!session) throw Error(DR.AuthService.MESSAGES.session_expired);
+            Account.userId = session.user.id;
+            try {
+              localStorage.removeItem(Account.guestKey);
+            } catch {}
+            await Account.load(true);
+            this.configureNet();
+            UIManager.menu();
+            UIManager.toast(`Bem-vindo, ${Account.profile?.displayName || Account.user}!`);
+          },
+          playOffline() {
+            try {
+              localStorage.setItem(Account.guestKey, "1");
+            } catch {}
+            Account.badge();
+            UIManager.menu();
+          },
+          async logout() {
+            await Account.logout();
+          },
+          startSolo() {
+            AudioManager.init();
+            state = GameState.MAP_SELECT;
+            UIManager.mapCards();
+            UIManager.screen("mapscreen");
+          },
+          // Lobby moved to in_game: every member starts the shared match.
+          async startMatch(lobby) {
+            if (NetGame.active) return;
+            try {
+              await enterFullscreen();
+              selectedMap = lobby.map;
+              mode = lobby.mode;
+              difficulty = lobby.difficulty;
+              await Account.begin(DR.LobbyManager.local ? null : lobby.id).catch((e) => UIManager.toast("Recompensas desta partida não serão salvas: " + e.message));
+              WeaponSystem.model.visible = true;
+              NetGame.begin(lobby);
+            } catch (e) {
+              this.error("FALHA AO INICIAR", e.message);
+            }
+          },
+          configureNet() {
+            const local = new URLSearchParams(location.search).get("net") === "local";
+            const q = new URLSearchParams(location.search);
+            const me = local
+              ? { id: sessionStorage.getItem("dr.localId") || (sessionStorage.setItem("dr.localId", DR.Backend.uuid()), sessionStorage.getItem("dr.localId")), name: q.get("name") || "Local" }
+              : { id: Account.userId, name: Account.profile?.displayName || Account.user || "Sobrevivente" };
+            DR.LobbyManager.configure({ local, me });
+          },
+          error(title, text) {
+            $("error-title").textContent = title;
+            $("error-text").textContent = text;
+            $("errorscreen").classList.remove("hidden");
+            $("error-ok").focus({ preventScroll: true });
+          },
+          feedEvent(text) {
+            if (state === GameState.PLAYING) UIManager.feed(text, "#9dff45");
+            else UIManager.toast(text);
+          },
+          missionToast(m) {
+            const t = $("missiontoast");
+            t.style.setProperty("--rarity", m.color);
+            t.querySelector("b").textContent = m.title;
+            t.classList.remove("hidden", "show");
+            void t.offsetWidth;
+            t.classList.add("show");
+            clearTimeout(this.missionTimer);
+            this.missionTimer = setTimeout(() => t.classList.add("hidden"), 4200);
+            AudioManager.tone(660, 0.18, "triangle", 0.2, 990);
+            setTimeout(() => AudioManager.tone(990, 0.3, "triangle", 0.18, 1320), 160);
+          },
+          sound(kind) {
+            if (kind === "reward") {
+              AudioManager.coin();
+              AudioManager.tone(520, 0.25, "triangle", 0.2, 1040);
+              setTimeout(() => AudioManager.tone(780, 0.4, "triangle", 0.2, 1560), 180);
+            }
+          },
+          localLevel: () => 1,
+        };
+        $("error-ok").onclick = () => $("errorscreen").classList.add("hidden");
+        DR.LoginUI.init(App);
+        DR.ProfileUI.init(App);
+        DR.MissionUI.init(App);
+        DR.LobbyUI.init(App);
+        DR.GoogleAuth.setHandler(async (url) => {
+          const result = await DR.AuthService.handleCallback(url);
+          await DR.LoginUI.callback(result);
         });
         Progression.load();
-        await Account.init();
+        const bootQuery = new URLSearchParams(location.search);
+        const bootState = await Account.init();
+        App.configureNet();
         SettingsManager.apply();
         MapManager.build(0);
         $("loading").classList.add("hidden");
-        UIManager.screen("menu");
+        let guestChosen = false;
+        try {
+          guestChosen = !!localStorage.getItem(Account.guestKey);
+        } catch {}
+        // First launch without a session opens LOGIN; afterwards it remembers the choice.
+        if (bootState === "signed-in" || guestChosen || (bootQuery.has("test") && !bootQuery.has("login")) || bootQuery.get("net") === "local") UIManager.menu();
+        else DR.LoginUI.open("login");
+        $("home-version").textContent = `DEAD RECOIL ${GAME_VERSION} · ${(window.DeadRecoilRuntime?.platform || "web").toUpperCase()}`;
+        DR.GoogleAuth.collectPending();
         let lastFrame = performance.now(),
           fpsFrames = 0,
           fpsTime = 0,
@@ -13488,24 +15026,31 @@ body.dying #hud{opacity:0;transition:opacity .4s}
           ].includes(state);
           const sdt = dt * TimeFX.update(dt);
           WeaponSystem.model.visible =
-            inWorld && CameraRig.distance < 0.6 && !!WeaponSystem.current() && !BossIntro.active && !KillCam.active && state !== GameState.DYING;
+            inWorld && CameraRig.distance < 0.6 && !!WeaponSystem.current() && !BossIntro.active && !KillCam.active && !BossDeath.active && state !== GameState.DYING;
           if (CameraRig.avatar)
             CameraRig.avatar.visible = inWorld && (CameraRig.distance > 0.6 || (!!CameraRig.avatar.userData.fallen && !(DeathFX.active && DeathFX.active.time < 1.25)));
           for (const item of MapManager.group.children)
             if (item.userData.menuOnly) item.visible = !inWorld;
           if (state === GameState.PLAYING) {
             simulationTime += sdt;
+            NetGame.update(dt);
             if (BossIntro.active) BossIntro.update(dt);
-            else {
-              const cinematic = !!KillCam.active;
+            else if (BossDeath.active && !NetGame.active) {
+              // Solo: the world holds still while the boss dies.
+              BossDeath.update(dt);
+              UIManager.hud(0);
+            } else {
+              const cinematic = !!KillCam.active || !!BossDeath.active;
               if (!cinematic) PlayerController.update(sdt);
               if (state === GameState.PLAYING) ZombieManager.update(sdt);
               if (state === GameState.PLAYING) updateProjectiles(sdt);
-              if (state === GameState.PLAYING && !cinematic) WaveManager.update(sdt);
+              if (state === GameState.PLAYING && !cinematic && (!NetGame.active || NetGame.host)) WaveManager.update(sdt);
+              if (NetGame.active && NetGame.dead) NetGame.spectate();
               if (state === GameState.PLAYING) MonsterFX.update(sdt);
               if (state === GameState.PLAYING) PhysicsProps.update(sdt);
               if (state === GameState.PLAYING) Medkits.update(sdt);
-              if (cinematic) KillCam.update(dt);
+              if (KillCam.active) KillCam.update(dt);
+              if (BossDeath.active) BossDeath.update(dt);
               UIManager.hud(sdt);
             }
           } else if (state === GameState.DYING) {
@@ -13653,6 +15198,9 @@ body.dying #hud{opacity:0;transition:opacity .4s}
             KillCam,
             DeathFX,
             TimeFX,
+            BossDeath,
+            NetGame,
+            RunStats,
             MapManager,
             UIManager,
             SettingsManager,

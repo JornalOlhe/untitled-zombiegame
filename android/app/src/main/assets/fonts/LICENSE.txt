@@ -1,0 +1,2 @@
+Bebas Neue (Dharma Type), IBM Plex Mono (IBM) and Oswald (Vernon Adams) are licensed under the
+SIL Open Font License 1.1 — https://openfontlicense.org. Files taken from the @fontsource npm packages.

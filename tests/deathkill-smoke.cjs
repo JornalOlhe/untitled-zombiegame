@@ -50,16 +50,47 @@ const shots = process.env.MONSTER_SHOTS !== '0';
         return { mark: document.getElementById('killmark').classList.contains('show'), head: document.getElementById('killmark').classList.contains('head'), cam: !!T.KillCam.active, left: T.ZombieManager.list.length };
       });
       assert.ok(first.mark && first.head && !first.cam && first.left === 1, `map ${map}: kill marker without cinematic (${JSON.stringify(first)})`);
-      // Last zombie of the wave: final-kill camera takes over, then control returns.
+      // Last zombie of the wave: no slow motion, no camera — the next wave starts by itself.
       const last = await page.evaluate(() => {
         const T = DeadRecoilTest, z = T.ZombieManager.list[0];
+        const wave = T.WaveManager.wave;
         T.ZombieManager.hit(z, 99999, false, z.group.position.clone(), T.WeaponSystem.current());
-        return { cam: !!T.KillCam.active, state: T.state, remaining: T.WaveManager.remaining, left: T.ZombieManager.list.length };
+        return { cam: !!T.KillCam.active || !!T.BossDeath.active, slow: T.TimeFX.current, target: T.TimeFX.target, wave };
       });
-      assert.ok(last.cam, `map ${map}: final kill starts the kill cam (${JSON.stringify(last)})`);
-      await page.waitForTimeout(500);
-      if (shots && map % 2 === 0) await page.screenshot({ path: `test-results/killcam-map${map}.png` });
-      await page.waitForFunction(() => !DeadRecoilTest.KillCam.active, null, { timeout: 60000 });
+      assert.ok(!last.cam && last.slow === 1 && last.target === 1, `map ${map}: no slow motion or cinematic on regular kills (${JSON.stringify(last)})`);
+      await page.waitForFunction(w => DeadRecoilTest.WaveManager.wave === w + 1, last.wave, { timeout: 90000 });
+      assert.equal(await page.evaluate(() => DeadRecoilTest.state), 'PLAYING', `map ${map}: next wave starts without a shop screen`);
+      if (map === 0) {
+        // Major boss deaths get their own cinematic: Demon → underworld gates, Yeti → giant snowball.
+        for (const kind of ['demon', 'yeti']) {
+          await page.evaluate(k => {
+            const T = DeadRecoilTest, V = THREE.Vector3;
+            T.WaveManager.remaining = 0;
+            T.WaveManager.bossPending = false;
+            T.ZombieManager.clear();
+            T.ZombieManager.spawn(0, null, new V(-30, 0, -30)).speed = 0;
+            const z = T.ZombieManager.spawn(6, { ...T.WaveManager.bossRoster[k], hp: 50 }, new V(T.player.pos.x + 1, 0, T.player.pos.z - 9));
+            z.speed = 0;
+            T.ZombieManager.hit(z, 99999, false, z.group.position.clone(), T.WeaponSystem.current());
+          }, kind);
+          assert.equal(await page.evaluate(() => DeadRecoilTest.BossDeath.active?.kind), kind, `${kind} death cinematic starts`);
+          for (const [t, name] of kind === 'demon' ? [[1.3, 'gate'], [2.9, 'drag'], [4.0, 'slam']] : [[1.1, 'fall'], [1.9, 'impact'], [3.0, 'crushed']]) {
+            await page.waitForFunction(v => (DeadRecoilTest.BossDeath.active?.time ?? 99) >= v, t, { timeout: 120000 });
+            if (shots) await page.screenshot({ path: `test-results/bossdeath-${kind}-${name}.png` });
+          }
+          await page.waitForFunction(() => !DeadRecoilTest.BossDeath.active, null, { timeout: 120000 });
+          assert.equal(await page.evaluate(() => DeadRecoilTest.state), 'PLAYING', `${kind}: control returns after the cinematic`);
+        }
+        // Minibosses: plain ragdoll, no cinematic.
+        const mini = await page.evaluate(() => {
+          const T = DeadRecoilTest, V = THREE.Vector3;
+          const z = T.ZombieManager.spawn(6, { ...T.WaveManager.bossRoster.quarterback, hp: 50 }, new V(T.player.pos.x + 1, 0, T.player.pos.z - 7));
+          z.speed = 0;
+          T.ZombieManager.hit(z, 99999, false, z.group.position.clone(), T.WeaponSystem.current());
+          return !!T.BossDeath.active || !!T.KillCam.active;
+        });
+        assert.ok(!mini, 'miniboss death has no cinematic');
+      }
       // Death: slow-motion collapse, then the game-over screen.
       await page.evaluate(() => {
         const T = DeadRecoilTest, V = THREE.Vector3;
