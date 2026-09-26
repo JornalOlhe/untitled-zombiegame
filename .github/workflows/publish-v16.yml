@@ -1,10 +1,21 @@
-name: Publish Dead Recoil v15
+name: Publish Dead Recoil v16
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/app/src/main/assets/index.html'
+      - 'android/app/build.gradle'
+      - 'desktop/package.json'
+      - 'android/app/src/main/assets/monsters/**'
+      - 'tests/ui-smoke.cjs'
+      - 'tests/monsters-smoke.cjs'
+      - 'release/v16-notes.md'
+      - '.github/workflows/publish-v16.yml'
 
 concurrency:
-  group: publish-v15
+  group: publish-v16
   cancel-in-progress: true
 
 permissions:
@@ -24,7 +35,26 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: DeadRecoil-v15-UI
+          name: DeadRecoil-v16-UI
+          path: test-results/
+          retention-days: 15
+
+  monsters-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/monsters-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DeadRecoil-v16-Monsters
           path: test-results/
           retention-days: 15
 
@@ -58,8 +88,8 @@ jobs:
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
           BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
-          echo "$BADGING" | grep -q "versionCode='15'"
-          echo "$BADGING" | grep -q "versionName='0.15.0'"
+          echo "$BADGING" | grep -q "versionCode='16'"
+          echo "$BADGING" | grep -q "versionName='0.16.0'"
           python3 - <<'PY'
           import zipfile
           from pathlib import Path
@@ -69,15 +99,15 @@ jobs:
               packaged = apk.read("assets/index.html")
           if source != packaged:
               raise SystemExit("Packaged game assets do not match current main.")
-          print("Android v15 QA verified.")
+          print("Android v16 QA verified.")
           PY
           mkdir -p dist
-          cp "$APK" dist/DeadRecoil-v15-QA.apk
+          cp "$APK" dist/DeadRecoil-v16-QA.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v15-Android-QA
-          path: dist/DeadRecoil-v15-QA.apk
+          name: DeadRecoil-v16-Android-QA
+          path: dist/DeadRecoil-v16-QA.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -94,7 +124,7 @@ jobs:
         shell: pwsh
         run: |
           $package = Get-Content desktop/package.json | ConvertFrom-Json
-          if ($package.version -ne "0.15.0") { throw "Expected desktop 0.15.0" }
+          if ($package.version -ne "0.16.0") { throw "Expected desktop 0.16.0" }
 
       - name: Install dependencies
         working-directory: desktop
@@ -117,7 +147,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v15-Windows
+          name: DeadRecoil-v16-Windows
           path: desktop/dist/DeadRecoil-Windows.exe
           if-no-files-found: error
           retention-days: 30
@@ -130,36 +160,36 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v15-Android-QA
+          name: DeadRecoil-v16-Android-QA
           path: dist
 
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v15-Windows
+          name: DeadRecoil-v16-Windows
           path: dist
 
-      - name: Publish GitHub pre-release v15
+      - name: Publish GitHub pre-release v16
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/DeadRecoil-v15-QA.apk
+          test -f dist/DeadRecoil-v16-QA.apk
           test -f dist/DeadRecoil-Windows.exe
 
-          if gh release view v15 >/dev/null 2>&1; then
-            gh release upload v15 dist/DeadRecoil-v15-QA.apk dist/DeadRecoil-Windows.exe --clobber
-            gh release edit v15 \
-              --title "Dead Recoil 0.15.0 QA" \
-              --notes-file release/v15-notes.md \
+          if gh release view v16 >/dev/null 2>&1; then
+            gh release upload v16 dist/DeadRecoil-v16-QA.apk dist/DeadRecoil-Windows.exe --clobber
+            gh release edit v16 \
+              --title "Dead Recoil 0.16.0 QA" \
+              --notes-file release/v16-notes.md \
               --prerelease
           else
-            gh release create v15 \
-              dist/DeadRecoil-v15-QA.apk \
+            gh release create v16 \
+              dist/DeadRecoil-v16-QA.apk \
               dist/DeadRecoil-Windows.exe \
               --target "$GITHUB_SHA" \
-              --title "Dead Recoil 0.15.0 QA" \
-              --notes-file release/v15-notes.md \
+              --title "Dead Recoil 0.16.0 QA" \
+              --notes-file release/v16-notes.md \
               --prerelease
           fi
 
@@ -167,4 +197,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: gh release view v15 --json tagName,name,isDraft,isPrerelease,assets
+        run: gh release view v16 --json tagName,name,isDraft,isPrerelease,assets
