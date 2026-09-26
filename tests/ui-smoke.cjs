@@ -118,6 +118,43 @@ const server = http.createServer((req, res) => {
       assert.ok(await page.locator('#rarity-board .rarity-items .rarity-item').count() > 0, 'Clicking a rarity must reveal its items');
       const armoryCopy = await page.locator('#classscreen').innerText();
       assert.ok(!/sacrificar|descartar resultado|eliminar resultado/i.test(armoryCopy), 'Old result/sacrifice flow must not be visible');
+      const duplicateLoadout = await page.evaluate(async () => {
+        const p = DeadRecoilTest.Progression;
+        const original = JSON.parse(JSON.stringify(p.data));
+        try {
+          p.data.weaponSlotsOwned = 3;
+          p.data.weaponSlots = [4, null, 4, null, null];
+          p.data.weaponId = 4;
+          p.data.weaponSlot = 2;
+          p.data.pendingLoadout = {};
+          p.render();
+          const cards = [...document.querySelectorAll('#armory-list .slot-card')].slice(0,3);
+          const selected = cards.map((card, i) => card.classList.contains('selected') ? i : -1).filter(i => i >= 0);
+          const names = cards.map(card => card.querySelector('.slot-name')?.textContent || '');
+          const target = p.spinTargetSlot('weapon', 4);
+          await p.slotEquip('weapon', 0);
+          return {
+            slots: p.data.weaponSlots.slice(0,3),
+            names,
+            selected,
+            duplicateCount: p.data.weaponSlots.slice(0,3).filter(id => id === 4).length,
+            spinTarget: target,
+            equippedAfterClick: p.data.weaponSlot,
+            weaponAfterClick: p.data.weaponId,
+          };
+        } finally {
+          p.economy.data = original;
+          p.economy.save();
+          p.render();
+        }
+      });
+      assert.deepEqual(duplicateLoadout.slots, [4,0,4], 'Owned empty weapon slots must auto-fill with Machete');
+      assert.equal(duplicateLoadout.names[1], 'Machete', 'Machete must visibly occupy an empty owned slot');
+      assert.equal(duplicateLoadout.duplicateCount, 2, 'Duplicate weapons must coexist in different slots');
+      assert.deepEqual(duplicateLoadout.selected, [2], 'Only the exact equipped duplicate slot may be highlighted');
+      assert.equal(duplicateLoadout.spinTarget, 2, 'Rolling a duplicate weapon must replace the equipped slot, not jump to the old copy');
+      assert.equal(duplicateLoadout.equippedAfterClick, 0, 'Equipping a duplicate must preserve exact slot identity');
+      assert.equal(duplicateLoadout.weaponAfterClick, 4, 'Equipping a duplicate keeps the weapon id while changing slot identity');
       await page.screenshot({path:`test-results/armory-${width}.png`});
       if (width === 1280) {
         const previousWeapon = await page.evaluate(() => {
