@@ -67,7 +67,7 @@ const server = http.createServer((req, res) => {
 
           e.data.weaponMythicPity = 25;
           e.data.weaponDivinePity = 70;
-          e.random = () => 0.995;
+          e.random = () => 0.99975;
           roll = e.roll("weapon", false, "coins");
           result.naturalDivine = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
         } finally {
