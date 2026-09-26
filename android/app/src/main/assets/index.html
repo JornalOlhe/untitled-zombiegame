@@ -3042,7 +3042,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.23.0";
+        const GAME_VERSION = "0.24.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -8243,9 +8243,10 @@ body.netgame #revivetouch{display:flex}
             this.reloadSoundStep = 0;
           },
           update(dt) {
+            GrenadeThrow.update(dt);
             const w = this.current();
             if (!w || !this.parts) return;
-            const aiming = mouse.aim && !reloadEnd && w.kind !== "melee",
+            const aiming = mouse.aim && !reloadEnd && w.kind !== "melee" && !GrenadeThrow.active,
               moving =
                 keys.has("KeyW") ||
                 keys.has("KeyS") ||
@@ -8275,6 +8276,8 @@ body.netgame #revivetouch{display:flex}
               : Math.cos(phase * 0.5) * (moving ? 0.007 : 0.001) - swayX;
             target.y += bob - swayY;
             target.z += this.kick * 0.07;
+            target.y -= GrenadeThrow.drop * 0.3;
+            target.x += GrenadeThrow.drop * 0.08;
             this.model.position.lerp(target, 1 - Math.exp(-dt * 16));
             this.model.rotation.set(
               this.kick * 0.075 + swayY * 0.3,
@@ -8743,6 +8746,105 @@ body.netgame #revivetouch{display:flex}
           viewFrustum.setFromProjectionMatrix(viewFrustumMatrix);
           return viewFrustum.containsPoint(pos);
         }
+        // Hand-grenade throw: raise it, pull the pin with the teeth, wind up and release. The
+        // projectile leaves exactly on the release frame; the gun is blocked until the arm is back.
+        const GrenadeThrow = {
+          active: false,
+          t: 0,
+          drop: 0,
+          RELEASE: 0.66,
+          END: 0.95,
+          keys: [
+            [0, [0.2, -0.36, -0.36], [0.3, 0, 0.2]],
+            [0.18, [0.13, -0.11, -0.33], [0.15, 0.4, 0.1]],
+            [0.3, [0.03, -0.05, -0.22], [0.45, 0.2, -0.2]],
+            [0.44, [0.03, -0.05, -0.21], [0.5, 0.1, -0.3]],
+            [0.6, [0.2, 0.0, -0.24], [-0.5, -0.3, 0.3]],
+            [0.66, [0.08, 0.03, -0.45], [0.6, 0, 0]],
+            [0.95, [0.1, -0.4, -0.45], [0.6, 0, 0]],
+          ],
+          build() {
+            const src = WeaponModels.scenes.get("Grenade");
+            this.group = new THREE.Group();
+            // Gloved hand wrapped around the body; the grenade sits in the palm.
+            const glove = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x3a3630).convertSRGBToLinear(), roughness: 0.9 });
+            const palm = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.022, 0.05), glove);
+            palm.position.set(0.003, -0.034, 0.008);
+            const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.04, 0.044), glove);
+            fingers.position.set(-0.026, -0.014, 0.006);
+            const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.032, 0.014), glove);
+            thumb.position.set(0.027, -0.01, 0.02);
+            const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.04, 0.05), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x46533d).convertSRGBToLinear(), roughness: 0.95 }));
+            sleeve.position.set(0.004, -0.05, 0.05);
+            this.group.add(palm, fingers, thumb, sleeve);
+            if (src) {
+              const m = src.clone(true);
+              m.scale.setScalar(0.42);
+              this.group.add(m);
+              m.traverse((o) => { if (/^pin/.test(o.name)) this.pin = o; });
+            } else {
+              this.group.add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), new THREE.MeshStandardMaterial({ color: 0x4b5a2e, roughness: 0.7 })));
+            }
+            this.pinBase = this.pin?.position.clone();
+          },
+          start(release) {
+            if (this.active) return false;
+            if (!this.group) this.build();
+            this.active = true;
+            this.t = 0;
+            this.released = false;
+            this.pinPulled = false;
+            this.release = release;
+            if (this.pin) {
+              this.pin.visible = true;
+              this.pin.position.copy(this.pinBase);
+              this.pin.rotation.set(0, 0, 0);
+            }
+            this.group.visible = CameraRig.distance < 0.6;
+            Viewmodel.camera.add(this.group);
+            return true;
+          },
+          cancel() {
+            this.active = false;
+            this.drop = 0;
+            this.group?.parent?.remove(this.group);
+          },
+          update(dt) {
+            if (!this.active) return;
+            this.t += dt;
+            const t = this.t,
+              K = this.keys;
+            let i = 0;
+            while (i < K.length - 2 && t > K[i + 1][0]) i++;
+            const [t0, p0, r0] = K[i],
+              [t1, p1, r1] = K[i + 1],
+              u = clamp((t - t0) / Math.max(0.001, t1 - t0), 0, 1),
+              e = u * u * (3 - 2 * u);
+            this.group.position.set(p0[0] + (p1[0] - p0[0]) * e, p0[1] + (p1[1] - p0[1]) * e, p0[2] + (p1[2] - p0[2]) * e);
+            this.group.rotation.set(r0[0] + (r1[0] - r0[0]) * e, r0[1] + (r1[1] - r0[1]) * e, r0[2] + (r1[2] - r0[2]) * e);
+            // Pin: yanked sideways by the teeth, then falls out of view.
+            if (this.pin && t > 0.34) {
+              const k = Math.min(1, (t - 0.34) / 0.1);
+              this.pin.position.set(this.pinBase.x - 0.12 * k, this.pinBase.y + 0.04 * k - Math.max(0, t - 0.44) * 0.8, this.pinBase.z + 0.03 * k);
+              this.pin.rotation.z = k * 1.4;
+              this.pin.visible = t < 0.62;
+            }
+            if (!this.pinPulled && t > 0.36) {
+              this.pinPulled = true;
+              AudioManager.tone(2400, 0.05, "square", 0.08, 1500, "weapons");
+              AudioManager.noise(0.03, 0.08);
+            }
+            // The gun ducks out of the way while the off hand works.
+            this.drop = t < 0.15 ? t / 0.15 : t < 0.75 ? 1 : Math.max(0, 1 - (t - 0.75) / 0.2);
+            this.group.visible = CameraRig.distance < 0.6 && t < this.RELEASE + 0.02;
+            if (!this.released && t >= this.RELEASE) {
+              this.released = true;
+              AudioManager.noise(0.12, 0.12);
+              this.release();
+            }
+            if (t >= this.END) this.cancel();
+          },
+        };
         function spawnProjectile(kind, pos, dir, damage, extra = {}) {
           const mesh = sphere(
             scene,
@@ -8774,7 +8876,24 @@ body.netgame #revivetouch{display:flex}
             damage,
             ...extra,
           };
-          if (kind === "grenade") p.vel.y += 6;
+          if (kind === "grenade") {
+            // Arc tuned for a hand throw: ~7 m looking level, ~15 m at 30° up, then bounce and roll.
+            p.vel.copy(dir).multiplyScalar(13);
+            p.vel.y += 4.5;
+            p.life = 2.4;
+            const model = WeaponModels.scenes.get("Grenade");
+            if (model) {
+              const g = model.clone(true);
+              g.scale.setScalar(2.2);
+              g.traverse((o) => { if (/^pin/.test(o.name)) o.visible = false; });
+              g.position.copy(mesh.position);
+              scene.remove(mesh);
+              scene.add(g);
+              p.mesh = g;
+              p.pos = g.position;
+            }
+            p.spin = new V(rand(8, 12), rand(-3, 3), rand(-2, 2));
+          }
           if (kind === "orbital") {
             mesh.position.copy(extra.target);
             mesh.position.y = 0.08;
@@ -11902,6 +12021,7 @@ body.netgame #revivetouch{display:flex}
             CombatFX.clear();
             BloodFX.clear();
             while (projectiles.length) removeProjectile(projectiles.length - 1);
+            GrenadeThrow.cancel();
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
             for (const n of damageNumbers) n.el.remove();
@@ -12061,16 +12181,16 @@ body.netgame #revivetouch{display:flex}
               UIManager.toast("Sem granadas.");
               return;
             }
+            if (GrenadeThrow.active) return;
             player.grenades--;
-            spawnProjectile(
-              "grenade",
-              player.pos.clone(),
-              forward(),
-              160 * (classEffects().grenadeDamage || 1),
-              {
-                cluster: false,
-              },
-            );
+            GrenadeThrow.start(() => {
+              if (state !== GameState.PLAYING && !NetGame.active) return;
+              const dir = forward(),
+                right = new V(Math.cos(yaw), 0, -Math.sin(yaw)),
+                from = player.pos.clone().addScaledVector(dir, 0.45).addScaledVector(right, 0.18);
+              from.y -= 0.12;
+              spawnProjectile("grenade", from, dir, 160 * (classEffects().grenadeDamage || 1), { cluster: false });
+            });
           },
           strike(w, damage, reach = Math.min(w.range, 2.6)) {
             scene.updateMatrixWorld(true);
@@ -12292,7 +12412,7 @@ body.netgame #revivetouch{display:flex}
             }
             if (w && w.spear) this.updateSpear(w, dt);
             else if (w && w.charge) this.updateChargeShot(w, dt);
-            else if (mouse.down) this.shoot();
+            else if (mouse.down && !GrenadeThrow.active) this.shoot();
             if (this.meleeStrike && simulationTime >= this.meleeStrike.at) {
               const strike = this.meleeStrike;
               this.meleeStrike = null;
@@ -12408,7 +12528,7 @@ body.netgame #revivetouch{display:flex}
             );
             const targetFov =
               SettingsManager.data.fov *
-              (mouse.aim && w?.kind !== "melee"
+              (mouse.aim && w?.kind !== "melee" && !GrenadeThrow.active
                 ? w?.cat === 2
                   ? 0.48
                   : 0.78
@@ -12509,7 +12629,7 @@ body.netgame #revivetouch{display:flex}
                 Math.min(1, dt * 8),
               );
             }
-            if (p.kind === "grenade") p.vel.y -= 10 * dt;
+            if (p.kind === "grenade") p.vel.y -= 18 * dt;
             const previous = p.pos.clone(),
               movement = p.vel.clone().multiplyScalar(dt);
             let collided = false;
@@ -12521,14 +12641,25 @@ body.netgame #revivetouch{display:flex}
             }
             if (!collided) p.pos.add(movement);
             else if (p.kind === "grenade") {
-              p.vel.x *= -0.45;
-              p.vel.z *= -0.45;
+              p.vel.x *= -0.4;
+              p.vel.z *= -0.4;
+              p.vel.y *= 0.6;
             }
-            if (p.pos.y < 0.16 && p.kind === "grenade") {
-              p.pos.y = 0.16;
-              p.vel.y = Math.abs(p.vel.y) * 0.35;
-              p.vel.x *= 0.7;
-              p.vel.z *= 0.7;
+            if (p.kind === "grenade") {
+              // Lands on the real floor (upper walkways, props), bounces a little and rolls to a stop.
+              const floor = MapManager.groundAt(p.pos.x, p.pos.z, 0.1, p.pos.y) + 0.07;
+              if (p.pos.y < floor) {
+                p.pos.y = floor;
+                const impact = Math.abs(p.vel.y) > 2;
+                p.vel.y = impact ? Math.abs(p.vel.y) * 0.28 : 0;
+                const f = impact ? 0.55 : Math.exp(-dt * 7);
+                p.vel.x *= f;
+                p.vel.z *= f;
+                p.spin.multiplyScalar(0.9);
+              }
+              p.mesh.rotation.x += p.spin.x * dt;
+              p.mesh.rotation.y += p.spin.y * dt;
+              p.mesh.rotation.z += p.spin.z * dt;
             }
             ParticleSystem.line(
               previous,
@@ -12558,8 +12689,8 @@ body.netgame #revivetouch{display:flex}
             if (
               p.life <= 0 ||
               (p.kind !== "grenade" && (collided || p.pos.y < 0 || hit)) ||
-              Math.abs(p.pos.x) > 36 ||
-              Math.abs(p.pos.z) > 36
+              Math.abs(p.pos.x) > MapManager.half + 6 ||
+              Math.abs(p.pos.z) > MapManager.half + 6
             ) {
               if (p.kind === "enemy") {
                 ParticleSystem.emit(p.pos, p.acid ? 0x71854a : 0xb076ff, 10, 2);
@@ -12690,6 +12821,7 @@ body.netgame #revivetouch{display:flex}
             CombatFX.clear();
             BloodFX.clear();
             while (projectiles.length) removeProjectile(projectiles.length - 1);
+            GrenadeThrow.cancel();
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
             for (const n of damageNumbers) n.el.remove();
@@ -17294,6 +17426,8 @@ body.netgame #revivetouch{display:flex}
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
             MonsterPortraits,
+            GrenadeThrow,
+            setPitch: (v) => (pitch = v),
             GameState,
             WeaponSystem,
             WeaponModels,
