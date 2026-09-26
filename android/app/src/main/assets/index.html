@@ -8113,6 +8113,20 @@ body.netgame #revivetouch{display:flex}
             reloadEnd = 0;
             this.buildModel();
           },
+          // World position of the barrel end: the viewmodel is drawn by its own camera, so project
+          // the flash point to the screen and back into the world camera at the same distance.
+          muzzleWorld(fallback = player?.pos) {
+            const f = this.parts?.flash;
+            if (!f || !this.model.parent || CameraRig.distance > 0.6) return fallback.clone();
+            Viewmodel.camera.updateMatrixWorld(true);
+            this.model.updateMatrixWorld(true);
+            const wp = f.getWorldPosition(new V()),
+              dist = Viewmodel.camera.worldToLocal(wp.clone()).length(),
+              ndc = wp.clone().project(Viewmodel.camera);
+            camera.updateMatrixWorld(true);
+            const p = new V(ndc.x, ndc.y, 0.5).unproject(camera);
+            return camera.position.clone().add(p.sub(camera.position).normalize().multiplyScalar(dist));
+          },
           buildModel() {
             this.model.traverse((o) => {
               if (o.isMesh && o.geometry?.type === "ExtrudeGeometry")
@@ -8593,6 +8607,18 @@ body.netgame #revivetouch{display:flex}
           return new V(0, 0, -1).applyEuler(
             new THREE.Euler(pitch, yaw, 0, "YXZ"),
           );
+        }
+        // Where the crosshair ray first meets a wall, prop or zombie (or far away): shots from the
+        // barrel are aimed at this point so what you see leaving the muzzle lands on the crosshair.
+        function aimTarget(max = 80) {
+          raycaster.set(player.pos.clone(), forward());
+          raycaster.far = max;
+          let d = max;
+          const wall = raycaster.intersectObjects(MapManager.walls);
+          if (wall.length) d = Math.min(d, wall[0].distance);
+          const zh = raycaster.intersectObjects(ZombieManager.hitMeshes);
+          if (zh.length) d = Math.min(d, zh[0].distance);
+          return player.pos.clone().addScaledVector(forward(), Math.max(2, d));
         }
         function aimPoint() {
           raycaster.set(player.pos.clone(), forward());
@@ -11740,9 +11766,7 @@ body.netgame #revivetouch{display:flex}
             PhysicsProps.shove(propHit[0].object.userData.prop, shot, propHit[0].point, damage);
             end = propHit[0].point;
           }
-          const gunOrigin = origin
-            .clone()
-            .add(new V(0.2, -0.2, -0.4).applyAxisAngle(new V(0, 1, 0), yaw));
+          const gunOrigin = WeaponSystem.muzzleWorld(origin);
           ParticleSystem.line(
             gunOrigin,
             end,
@@ -12083,6 +12107,12 @@ body.netgame #revivetouch{display:flex}
               origin = player.pos.clone();
             NetGame.shot(origin, dir);
             if (["grenade", "missile", "orbital", "quantum"].includes(w.kind)) {
+              // Projectiles leave from the real barrel end and fly toward the crosshair point.
+              const muzzle = WeaponSystem.muzzleWorld(origin);
+              if (CameraRig.distance < 0.6) {
+                dir.copy(aimTarget().sub(muzzle).normalize());
+                origin.copy(muzzle);
+              }
               if (w.kind === "quantum") {
                 const targets = [...ZombieManager.list]
                   .filter((z) => z.group.position.distanceTo(origin) < w.range)
