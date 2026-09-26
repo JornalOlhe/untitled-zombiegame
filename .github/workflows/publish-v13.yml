@@ -2,15 +2,6 @@ name: Publish Dead Recoil v13
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'android/app/src/main/assets/index.html'
-      - 'android/app/build.gradle'
-      - 'desktop/package.json'
-      - 'tests/ui-smoke.cjs'
-      - 'release/v13-notes.md'
-      - '.github/workflows/publish-v13.yml'
 
 concurrency:
   group: publish-v13
