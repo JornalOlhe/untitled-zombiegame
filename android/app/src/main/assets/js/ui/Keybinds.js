@@ -16,6 +16,7 @@
     { id: "aim", label: "Mirar", def: "Mouse2", group: "Combate" },
     { id: "reload", label: "Recarregar", def: "KeyR", group: "Combate" },
     { id: "ability", label: "Habilidade da classe", def: "KeyQ", group: "Combate" },
+    { id: "weaponAbility", label: "Habilidade da arma", def: "KeyF", group: "Combate" },
     { id: "grenade", label: "Granada", def: "KeyG", group: "Combate" },
     { id: "slot1", label: "Arma 1", def: "Digit1", group: "Combate" },
     { id: "slot2", label: "Arma 2", def: "Digit2", group: "Combate" },
