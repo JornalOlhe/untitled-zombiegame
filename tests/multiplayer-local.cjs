@@ -90,12 +90,21 @@ const shots = process.env.MONSTER_SHOTS !== '0';
 
     console.log('step:', 'Client shoots a puppet: the host validates, applies damage and credits the kill to the client.');
     // Client shoots a puppet: the host validates, applies damage and credits the kill to the client.
+    // Walk up to the puppet first: the host range-checks hits against where it last saw the shooter.
     const target = await T(guest, () => {
-      const T2 = DeadRecoilTest, z = T2.ZombieManager.list[0], w = T2.WeaponSystem.current();
+      const T2 = DeadRecoilTest, z = T2.ZombieManager.list[0];
       T2.player.pos.set(z.group.position.x + 3, 1.7, z.group.position.z);
-      for (let i = 0; i < 6; i++) T2.ZombieManager.hit(z, 40, true, z.group.position.clone().add(new THREE.Vector3(0, 1.7, 0)), w);
       return z.netId;
     });
+    await host.waitForFunction(id => {
+      const N = DeadRecoilTest.NetGame, z = N.zmap.get(id), r = [...N.remotes.values()][0];
+      return z && r && r.pos.distanceTo(z.group.position) < 20;
+    }, target, { timeout: 20000 });
+    await T(guest, id => {
+      const T2 = DeadRecoilTest, z = T2.ZombieManager.list.find(q => q.netId === id), w = T2.WeaponSystem.current();
+      T2.player.pos.set(z.group.position.x + 3, 1.7, z.group.position.z);
+      for (let i = 0; i < 6; i++) T2.ZombieManager.hit(z, 40, true, z.group.position.clone().add(new THREE.Vector3(0, 1.7, 0)), w);
+    }, target);
     await guest.waitForFunction(id => !DeadRecoilTest.ZombieManager.list.some(z => z.netId === id), target, { timeout: 30000 });
     await guest.waitForFunction(() => DeadRecoilTest.player.kills >= 1, null, { timeout: 20000 });
     assert.equal(await T(host, () => DeadRecoilTest.player.kills), 0, 'host does not get credit for the client kill');
