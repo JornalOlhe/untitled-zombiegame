@@ -3260,8 +3260,8 @@ body.netgame #revivetouch{display:flex}
             name: "Arctic Base",
             lore: "O frio preservou tudo. Inclusive a infecção.",
             color: "#92b5c8",
-            fog: 0x40565f,
-            density: 0.06,
+            fog: 0x8aa0ad,
+            density: 0.013,
             ground: 0x9dafb2,
             rating: "●○○",
           },
@@ -3405,6 +3405,9 @@ body.netgame #revivetouch{display:flex}
         scene.add(ambient);
         const sun = new THREE.DirectionalLight(0xc4dfef, 1.3);
         sun.position.set(-18, 40, -22);
+        scene.add(sun.target);
+        // The shadow box follows the player so the bigger maps keep sharp shadows.
+        const sunOffset = new THREE.Vector3(-18, 40, -22);
         sun.castShadow = true;
         sun.shadow.camera.left = -40;
         sun.shadow.camera.right = 40;
@@ -4387,6 +4390,109 @@ body.netgame #revivetouch{display:flex}
               neck.rotation.x = -Math.PI / 2 + 0.18;
             }
             return rig;
+          },
+          // Map-specific looks for regular zombies (same rig, stats and hitboxes): hospital staff
+          // and patients, lab workers splashed with chemicals, snow on heads and shoulders.
+          dressMats: new Map(),
+          dressMat(color, glow = 0, tex = "plaster") {
+            const id = color + "/" + glow + "/" + tex;
+            if (!this.dressMats.has(id))
+              this.dressMats.set(
+                id,
+                new THREE.MeshStandardMaterial({
+                  color,
+                  map: PropKit.texture(tex),
+                  roughness: 0.85,
+                  emissive: glow ? new THREE.Color(glow) : new THREE.Color(0),
+                  emissiveIntensity: glow ? 0.9 : 0,
+                }),
+              );
+            return this.dressMats.get(id);
+          },
+          dress(rig, map) {
+            if (!rig?.voxel || rig.style === "crawler") return;
+            const s = rig.shape,
+              P = this.P,
+              tw = s.tw * P,
+              th = s.th * P,
+              td = s.td * P,
+              aw = s.aw * P,
+              ah = s.ah * P,
+              lw = s.lw * P,
+              lh = s.lh * P,
+              hs = s.hs * P;
+            const add = (parent, size, pos, color, glow = 0, tex = "plaster") => {
+              const m = new THREE.Mesh(unitBox, this.dressMat(color, glow, tex));
+              m.scale.set(...size);
+              m.position.set(...pos);
+              m.castShadow = true;
+              parent.add(m);
+              return m;
+            };
+            const torso = (color, tex, extra = 0.035, long = 0) => {
+              add(rig.upper, [tw + extra, th * 0.96 + long, td + extra], [0, th / 2 - long / 2, 0], color, 0, tex);
+            };
+            const sleeves = (color, tex, len = 0.55) => {
+              rig.arms.forEach((a) => add(a, [aw + 0.03, ah * len, aw + 0.03], [0, -(ah * len) / 2 + aw / 2, 0], color, 0, tex));
+            };
+            const pants = (color, tex) => {
+              rig.legs.forEach((l) => add(l, [lw + 0.025, lh * 0.9, lw + 0.025], [0, -(lh * 0.9) / 2, 0], color, 0, tex));
+            };
+            const splash = (parent, w, h, d, y, color) => {
+              for (let i = 0; i < 3; i++) {
+                const side = Math.random() < 0.5 ? 1 : -1;
+                add(parent, [rand(0.05, 0.12), rand(0.05, 0.14), 0.02], [rand(-w / 2.6, w / 2.6), y + rand(-h / 3, h / 3), side * (d / 2 + 0.02)], color, color);
+              }
+            };
+            const r = Math.random();
+            if (map === 1) {
+              if (r < 0.28) {
+                // Doctor: white coat down to the thighs, dark trousers, stethoscope, name badge.
+                torso(0xe8ecea, "white", 0.05, lh * 0.35);
+                sleeves(0xe8ecea, "white", 0.75);
+                pants(0x2c3238, "plaster");
+                add(rig.upper, [tw * 0.5, 0.025, 0.02], [0, th * 0.78, td / 2 + 0.035], 0x22262a);
+                add(rig.upper, [0.07, 0.05, 0.01], [tw * 0.22, th * 0.66, td / 2 + 0.036], 0x3a78c8);
+                if (Math.random() < 0.6) splash(rig.upper, tw, th, td + 0.05, th * 0.4, 0x7a0e0e);
+              } else if (r < 0.55) {
+                // Nurse: teal scrubs, cap.
+                torso(0x3f8f8a, "plaster");
+                sleeves(0x3f8f8a, "plaster", 0.35);
+                pants(0x3f8f8a, "plaster");
+                add(rig.head, [hs * 0.7, 0.05, hs * 0.7], [0, hs / 2 + 0.03, 0], 0x3f8f8a);
+              } else if (r < 0.85) {
+                // Patient: pale gown to the knees, wristband.
+                torso(0x9fc2d6, "mattress", 0.045, lh * 0.55);
+                add(rig.arms[0], [aw + 0.035, 0.035, aw + 0.035], [0, -ah + aw, 0], 0xf0f0f0);
+              } else {
+                // Staff: grey coveralls.
+                torso(0x5b6268, "plaster");
+                sleeves(0x5b6268, "plaster", 0.8);
+                pants(0x5b6268, "plaster");
+              }
+            } else if (map === 3) {
+              const chem = [0x39ff5a, 0xb050ff, 0xffd23a][Math.floor(Math.random() * 3)];
+              if (r < 0.45) {
+                torso(0xdfe4e6, "white", 0.05, lh * 0.35);
+                sleeves(0xdfe4e6, "white", 0.75);
+              } else if (r < 0.7) {
+                // Hazmat suit with a visor.
+                torso(0xc9b23a, "plaster", 0.05);
+                sleeves(0xc9b23a, "plaster", 0.9);
+                pants(0xc9b23a, "plaster");
+                add(rig.head, [hs * 0.8, hs * 0.35, 0.03], [0, hs * 0.05, hs / 2 + 0.02], 0x1c2a30, 0x103038);
+              }
+              // Chemical splashes and drips (glowing a little).
+              splash(rig.upper, tw, th, td + 0.06, th / 2, chem);
+              if (Math.random() < 0.7) add(rig.head, [hs * 0.5, 0.06, hs * 0.4], [rand(-0.05, 0.05), hs / 2 + 0.02, 0], chem, chem);
+              rig.arms.forEach((a) => Math.random() < 0.5 && add(a, [aw + 0.04, 0.08, aw + 0.04], [0, -ah * rand(0.3, 0.8), 0], chem, chem));
+            } else if (map === 4) {
+              // Snow settled on the head and shoulders, a few frost flecks.
+              add(rig.neck, [hs * 0.9, 0.05, hs * 0.85], [0, hs + 0.025, (s.drop * P) * 0.35], 0xf2f7fa, 0, "snow");
+              rig.arms.forEach((a) => add(a, [aw + 0.02, 0.04, aw + 0.02], [0, aw / 2 + 0.02, 0], 0xf2f7fa, 0, "snow"));
+              if (Math.random() < 0.5) add(rig.upper, [tw * 0.6, 0.035, td * 0.6], [0, th + 0.02, 0], 0xf2f7fa, 0, "snow");
+              for (let i = 0; i < 3; i++) add(rig.upper, [0.04, 0.04, 0.015], [rand(-tw / 2.5, tw / 2.5), rand(0.1, th - 0.1), td / 2 + 0.012], 0xd8f0ff, 0x203040);
+            }
           },
           accessories(rig, key, mat) {
             const P = this.P,
@@ -5447,7 +5553,7 @@ body.netgame #revivetouch{display:flex}
               [["metal_plate", 2.4, 0x6f7688], ["concrete_wall_008", 4, 0x6d7482]],
               [["snow_02", 6, 0xdde8ee], ["concrete_wall_008", 4, 0x7e95a0]],
             ][map] || [["asphalt_02", 7, 0x6a7478], ["concrete_wall_008", 4, 0x7a858c]];
-            if (floor) {
+            if (floor && !MapDesigns[map]) {
               floor.material = A.surface(look[0][0], look[0][2], map === 0 ? "asphalt" : "concrete", { roughness: map === 3 ? 0.55 : map === 0 ? 0.82 : 0.92, metalness: map === 3 ? 0.35 : 0 });
               A.tileUV(floor, look[0][1]);
             }
@@ -5455,12 +5561,12 @@ body.netgame #revivetouch{display:flex}
               if (!m.isMesh || m === floor) continue;
               // Only real building volumes (unit boxes with collision) get the wall material; flat
               // decals and other shapes scaled up keep their own geometry and look.
-              if (m.geometry === unitBox && m.scale.y > 3 && m.scale.x > 3 && m.scale.z > 3) {
+              if (!MapDesigns[map] && m.geometry === unitBox && m.scale.y > 3 && m.scale.x > 3 && m.scale.z > 3) {
                 m.material = A.surface(look[1][0], look[1][2], "concrete");
                 A.tileUV(m, look[1][1]);
               }
             }
-            if (map === 0) {
+            if (!MapDesigns[map] && map === 0) {
               // Sidewalk curbs, rainwater, litter, damaged facade panels and emergency lighting.
               for (const x of [-6.9, 6.9])
                 for (let z = -33; z < 35; z += 2) {
@@ -5568,7 +5674,7 @@ body.netgame #revivetouch{display:flex}
                 this.decor.push({ type: "fire", light, flame });
               }
             }
-            if (map === 1) {
+            if (!MapDesigns[map] && map === 1) {
               for (const x of [-20, 20])
                 for (const z of [-15, 2, 22]) {
                   A.tube(g, [x + 1.5, 1, z], 0.018, 2, 0x99abaa, "steel", "y");
@@ -5590,7 +5696,7 @@ body.netgame #revivetouch{display:flex}
                   );
                 }
             }
-            if (map === 2) {
+            if (!MapDesigns[map] && map === 2) {
               for (let i = 0; i < 35; i++) {
                 const x = rand(-31, 31),
                   z = rand(-31, 31);
@@ -5606,7 +5712,7 @@ body.netgame #revivetouch{display:flex}
                 }
               }
             }
-            if (map === 3) {
+            if (!MapDesigns[map] && map === 3) {
               for (const x of [-21, 21])
                 for (const z of [-20, -8, 5, 20]) {
                   A.block(
@@ -5626,6 +5732,45 @@ body.netgame #revivetouch{display:flex}
                       "steel",
                     );
                 }
+            }
+            if (MapDesigns[map]) {
+              // Burning barrels / wrecks and police light bars placed by the map design.
+              for (const [x, z, big] of MapManager.fires) {
+                const y0 = MapManager.groundAt(x, z, 0.3, 5);
+                if (!big) {
+                  A.tube(g, [x, y0 + 0.5, z], 0.32, 1, 0x45554d, "steel", "y");
+                  WorldProps.collider(x, z, 0.7, 0.7, y0 + 1);
+                }
+                const flame = new THREE.Sprite(
+                  new THREE.SpriteMaterial({ map: A.texture("glow"), color: 0xff8c35, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+                );
+                flame.position.set(x, y0 + (big ? 1.4 : 1.2), z);
+                flame.scale.set(big ? 2.4 : 0.8, big ? 3.2 : 1.8, 1);
+                flame.userData.disposableMaterial = true;
+                g.add(flame);
+                const light = new THREE.PointLight(0xff8a38, big ? 2.4 : 1.4, big ? 18 : 13, 2);
+                light.position.set(x, y0 + 1.3, z);
+                g.add(light);
+                this.decor.push({ type: "fire", light, flame });
+              }
+              for (const [x, z] of MapManager.beacons) {
+                const rig = A.pivot(g, x, 1.72, z);
+                const red = A.ellipsoid(rig, [-0.35, 0, 0], [0.19, 0.07, 0.1], 0xae392f, "steel", 0xdd3526),
+                  blue = A.ellipsoid(rig, [0.35, 0, 0], [0.19, 0.07, 0.1], 0x3679a9, "steel", 0x276db4);
+                const lamp = new THREE.PointLight(0xe64632, 0, 11, 2);
+                lamp.position.set(x, 2, z);
+                g.add(lamp);
+                this.decor.push({ type: "beacon", light: lamp, red, blue });
+              }
+              for (const [x, z, color, intensity, range, flicker] of MapManager.lights || []) {
+                const l = new THREE.PointLight(color, intensity, range, 2);
+                l.position.set(x, MapManager.closed ? 9.5 : 4.5, z);
+                l.userData.base = intensity;
+                if (flicker) this.decor.push({ type: flicker, light: l, next: 0, on: true });
+                g.add(l);
+              }
+              if (MapManager.capsule) this.buildCapsule(g, MapManager.capsule);
+              if (MapManager.landscape) this.buildLandscape(g, MapManager.landscape);
             }
             for (const figure of g.children) {
               if (figure.userData.menuOnly) {
@@ -5650,7 +5795,7 @@ body.netgame #revivetouch{display:flex}
                   depthWrite: false,
                 }),
               );
-              fog.position.set(rand(-31, 31), rand(0.5, 1.8), rand(-31, 31));
+              fog.position.set(rand(-MapManager.half + 5, MapManager.half - 5), rand(0.5, 1.8), rand(-MapManager.half + 5, MapManager.half - 5));
               fog.scale.set(rand(12, 19), rand(2, 4), 1);
               fog.userData.disposableMaterial = true;
               g.add(fog);
@@ -5694,8 +5839,140 @@ body.netgame #revivetouch{display:flex}
             this.weather.frustumCulled = false;
             scene.add(this.weather);
           },
+          // Terrain that rises into mountains past the playable edge (one low-poly mesh, vertex
+          // colours: snow on top and on gentle slopes, rock on steep faces, forest green below).
+          buildLandscape(g, L) {
+            const size = (L.inner + 140) * 2,
+              seg = 140,
+              geo = new THREE.PlaneGeometry(size, size, seg, seg);
+            geo.rotateX(-Math.PI / 2);
+            const pos = geo.attributes.position,
+              noise = (x, z) =>
+                Math.sin(x * 0.045 + Math.sin(z * 0.03) * 2) * 0.5 +
+                Math.sin(z * 0.052 + Math.cos(x * 0.021) * 1.7) * 0.35 +
+                Math.sin((x + z) * 0.11) * 0.15 +
+                Math.sin(x * 0.23 - z * 0.19) * 0.06;
+            for (let i = 0; i < pos.count; i++) {
+              const x = pos.getX(i),
+                z = pos.getZ(i),
+                d = Math.max(Math.abs(x), Math.abs(z)) - L.inner;
+              let h = -0.25;
+              if (d > 0) {
+                const far = Math.max(0, d - 14),
+                  t = Math.min(1, far / 80);
+                h = Math.pow(t, 1.25) * L.peak * (0.55 + 0.45 * noise(x, z)) + Math.max(0, noise(x * 1.7, z * 1.7)) * t * 10 + Math.min(d, 14) * 0.06 + noise(x * 0.5, z * 0.5) * Math.min(1, d / 14) * 0.8;
+              }
+              pos.setY(i, h);
+            }
+            geo.computeVertexNormals();
+            const nor = geo.attributes.normal,
+              colors = new Float32Array(pos.count * 3),
+              c = new THREE.Color();
+            for (let i = 0; i < pos.count; i++) {
+              const h = pos.getY(i),
+                steep = 1 - nor.getY(i);
+              if (L.snow) {
+                if (steep > 0.45 && h > 4) c.setHex(0x5d666a);
+                else c.setHex(h > 22 || steep < 0.3 ? 0xe6eef2 : 0xb9c7cf);
+              } else {
+                if (h > 30 && steep < 0.35) c.setHex(0xc9d3d6);
+                else if (steep > 0.4) c.setHex(0x4a4f4a);
+                else c.setHex(h > 12 ? 0x2f3b2c : 0x243021);
+              }
+              c.offsetHSL(0, 0, (Math.sin(i * 12.9898) * 43758.5453 % 1) * 0.04);
+              colors.set([c.r, c.g, c.b], i * 3);
+            }
+            geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+            const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
+            mesh.position.y = -0.02;
+            mesh.receiveShadow = true;
+            mesh.userData.disposableMaterial = true;
+            g.add(mesh);
+          },
+          // Floor-to-ceiling containment capsule with the (decorative) mutant specimen.
+          buildCapsule(g, cap) {
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fd8c8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false });
+            const liquidMat = new THREE.MeshStandardMaterial({ color: 0x47ff6a, emissive: 0x1fbf3a, emissiveIntensity: 1.1, roughness: 0.2, transparent: true, opacity: 0.34, depthWrite: false });
+            glassMat.userData = liquidMat.userData = {};
+            const H = cap.h - 2.2;
+            const liquid = new THREE.Mesh(new THREE.CylinderGeometry(cap.r - 0.15, cap.r - 0.15, H - 0.6, 28, 1, true), liquidMat);
+            liquid.position.y = 0.9 + (H - 0.6) / 2;
+            const glass = new THREE.Mesh(new THREE.CylinderGeometry(cap.r, cap.r, H, 32, 1, true), glassMat);
+            glass.position.y = 0.9 + H / 2;
+            for (const m of [liquid, glass]) {
+              m.userData.disposableMaterial = true;
+              m.renderOrder = 5;
+              g.add(m);
+            }
+            const top = new THREE.Mesh(new THREE.CylinderGeometry(cap.r - 0.15, cap.r - 0.15, 0.05, 28), new THREE.MeshBasicMaterial({ color: 0x5dff7a, transparent: true, opacity: 0.35 }));
+            top.position.y = liquid.position.y + (H - 0.6) / 2;
+            top.userData.disposableMaterial = true;
+            g.add(top);
+            for (const y of [1.2, 4.2, 7.2, 9.6]) {
+              const ring = new THREE.Mesh(VisualArt.geometries.ring, VisualArt.mat(0x5c6670, "steel"));
+              ring.rotation.x = Math.PI / 2;
+              ring.scale.set(cap.r + 0.1, cap.r + 0.1, 1.6);
+              ring.position.y = y;
+              g.add(ring);
+            }
+            const light = new THREE.PointLight(0x5dff7a, 3, 26, 2);
+            light.position.set(0, 5, 0);
+            g.add(light);
+            // The specimen: the mutant rig, hanging limp in the liquid.
+            const specimen = new THREE.Group();
+            specimen.position.set(0, 2.2, 0);
+            g.add(specimen);
+            const rig = VoxelMonsters.available?.() !== false ? CreatureRig.create(specimen, 0, { kind: "mutant", voxel: "06", color: 0x6f9a4a }) : null;
+            specimen.scale.setScalar(2.1);
+            if (rig) {
+              rig.arms?.forEach((a, i) => (a.rotation.x = 0.25 + i * 0.1, a.rotation.z = i ? -0.35 : 0.35));
+              if (rig.neck) rig.neck.rotation.x = 0.55;
+              rig.legs?.forEach((l, i) => (l.rotation.x = i ? 0.15 : -0.1));
+            }
+            specimen.traverse((o) => {
+              if (o.isMesh && o.material) {
+                o.material = o.material.clone();
+                o.material.color?.multiplyScalar(0.75).lerp(new THREE.Color(0x3a8a4a), 0.25);
+                o.userData.disposableMaterial = true;
+              }
+            });
+            const bubbles = [];
+            for (let i = 0; i < 18; i++) {
+              const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xbfffcc, transparent: true, opacity: 0.6, depthWrite: false }));
+              b.userData.disposableMaterial = true;
+              b.scale.setScalar(rand(0.12, 0.3));
+              b.position.set(rand(-cap.r + 0.6, cap.r - 0.6), rand(1, H), rand(-cap.r + 0.6, cap.r - 0.6));
+              g.add(b);
+              bubbles.push(b);
+            }
+            this.decor.push({ type: "specimen", specimen, bubbles, light, top: H, base: 2.2 });
+          },
           update(dt) {
             for (const o of this.decor) {
+              if (o.type === "stutter") {
+                o.next -= dt;
+                if (o.next <= 0) {
+                  o.on = !o.on || Math.random() < 0.3;
+                  o.next = o.on ? rand(0.4, 3.5) : rand(0.04, 0.22);
+                }
+                o.light.intensity = o.on ? o.light.userData.base : o.light.userData.base * 0.05;
+                continue;
+              }
+              if (o.type === "alarm") {
+                o.light.intensity = o.light.userData.base * (0.35 + 0.65 * Math.max(0, Math.sin(menuTime * 3.2)));
+                continue;
+              }
+              if (o.type === "specimen") {
+                o.specimen.position.y = o.base + Math.sin(menuTime * 0.6) * 0.12;
+                o.specimen.rotation.y += dt * 0.05;
+                for (const b of o.bubbles) {
+                  b.position.y += dt * (0.4 + (b.scale.x * 2));
+                  b.position.x += Math.sin(menuTime * 2 + b.position.y) * dt * 0.05;
+                  if (b.position.y > o.top) b.position.y = 1;
+                }
+                o.light.intensity = 3 + Math.sin(menuTime * 1.3) * 0.35;
+                continue;
+              }
               if (o.type === "beacon") {
                 o.light.intensity = Math.sin(menuTime * 2.1) > 0 ? 0.85 : 0.08;
                 o.light.color.set(
@@ -5725,8 +6002,36 @@ body.netgame #revivetouch{display:flex}
                 ? 0
                 : selectedMap,
               weatherOn = SettingsManager.data.vfx !== "off";
-            this.weather.visible = weatherOn;
+            this.weather.visible = weatherOn && map !== 4;
+            if (this.snow) this.snow.visible = weatherOn && map === 4;
             if (!weatherOn) return;
+            if (map === 4) {
+              // Snowfall: round flakes drifting in a box around the camera, cheap (one draw call).
+              if (!this.snow) {
+                const n = 900;
+                this.snowSeed = Array.from({ length: n }, () => [rand(-24, 24), rand(0, 16), rand(-24, 24), rand(0.5, 1.2), rand(0, 6)]);
+                this.snowPos = new Float32Array(n * 3);
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute("position", new THREE.BufferAttribute(this.snowPos, 3));
+                this.snow = new THREE.Points(geo, new THREE.PointsMaterial({ map: VisualArt.texture("glow"), color: 0xf2f8ff, size: 0.16, transparent: true, opacity: 0.85, depthWrite: false }));
+                this.snow.frustumCulled = false;
+                scene.add(this.snow);
+              }
+              const o = camera.position,
+                n = { low: 300, medium: 500, high: 750, ultra: 900 }[SettingsManager.data.graphics] || 500;
+              for (let i = 0; i < n; i++) {
+                const f = this.snowSeed[i];
+                f[1] -= dt * 1.4 * f[3];
+                if (f[1] < 0) f[1] = 16;
+                const j = i * 3;
+                this.snowPos[j] = o.x + ((((f[0] + menuTime * 0.9 + 24) % 48) + 48) % 48) - 24 + Math.sin(menuTime * 0.8 + f[4]) * 0.6;
+                this.snowPos[j + 1] = f[1];
+                this.snowPos[j + 2] = o.z + f[2] + Math.cos(menuTime * 0.6 + f[4]) * 0.4;
+              }
+              this.snow.geometry.setDrawRange(0, n);
+              this.snow.geometry.attributes.position.needsUpdate = true;
+              return;
+            }
             const count =
                 SettingsManager.data.vfx === "low"
                   ? 100
@@ -6160,6 +6465,797 @@ body.netgame #revivetouch{display:flex}
         };
         ParticleSystem.init();
         // MapManager: five procedural environments, solid cover and a flow field for pursuit.
+        // New map layouts (v24). Each entry builds one map with the helpers of MapManager and
+        // WorldProps; maps without an entry keep their original layout.
+        const MapDesigns = {};
+        // Shared builders for the v24 maps: every helper writes into WorldProps' batched meshes
+        // (one draw per material) and registers simplified box colliders.
+        const MapKit = {
+          seed: 1,
+          rnd() {
+            this.seed = (this.seed * 16807) % 2147483647;
+            return (this.seed - 1) / 2147483646;
+          },
+          r(a, b) {
+            return a + (b - a) * this.rnd();
+          },
+          pick(list) {
+            return list[Math.floor(this.rnd() * list.length)];
+          },
+          hard(kind, pos, size, rot = null, density = 1) {
+            PropKit.add(WorldProps.hard, kind, pos, size, rot, density);
+          },
+          soft(kind, pos, size, rot = null, density = 1) {
+            PropKit.add(WorldProps.soft, kind, pos, size, rot, density);
+          },
+          col(x, z, w, d, top) {
+            WorldProps.collider(x, z, w, d, top);
+          },
+          // Local (ox, oz) around a pivot rotated by ry, in world space.
+          at(x, z, ry, ox, oz) {
+            const c = Math.cos(ry),
+              s = Math.sin(ry);
+            return [x + ox * c + oz * s, z - ox * s + oz * c];
+          },
+          rotCol(x, z, ry, w, d, top) {
+            const c = Math.abs(Math.cos(ry)),
+              s = Math.abs(Math.sin(ry));
+            this.col(x, z, w * c + d * s, w * s + d * c, top);
+          },
+          // A building volume with a photo-textured shell (tileUV keeps bricks their real size).
+          building(M, x, z, w, d, h, surface, tint, tile = 3.2) {
+            const m = M.solid(x, h / 2, z, w, h, d, tint);
+            m.material = VisualArt.surface(surface, tint, "concrete");
+            VisualArt.tileUV(m, tile);
+            return m;
+          },
+          // Window grid on the four faces; `skip` lists faces to leave blank ("n","s","e","w").
+          windows(x, z, w, d, h, opts = {}) {
+            const start = opts.start ?? 3.4,
+              floor = opts.floor ?? 3.2,
+              gap = opts.gap ?? 2.6,
+              lit = opts.lit ?? 0.12,
+              broken = opts.broken ?? 0.12,
+              skip = opts.skip || [];
+            const faces = [
+              ["n", 0, -d / 2 - 0.05, w, 0],
+              ["s", 0, d / 2 + 0.05, w, 0],
+              ["w", -w / 2 - 0.05, 0, d, Math.PI / 2],
+              ["e", w / 2 + 0.05, 0, d, Math.PI / 2],
+            ];
+            for (const [name, ox, oz, len, ry] of faces) {
+              if (skip.includes(name)) continue;
+              const count = Math.max(1, Math.floor((len - 1.2) / gap));
+              for (let y = start; y < h - 1.2; y += floor)
+                for (let i = 0; i < count; i++) {
+                  const t = (i - (count - 1) / 2) * gap,
+                    px = x + ox + (ry ? 0 : t),
+                    pz = z + oz + (ry ? t : 0),
+                    k = this.rnd(),
+                    kind = k < lit ? "windowLit" : k < lit + broken ? "windowBroken" : "window";
+                  this.soft(kind, [px, y, pz], [1.2, 1.5, 0.08], [0, ry, 0], 0);
+                  this.soft("curb", [px, y - 0.82, pz], [1.4, 0.12, 0.16], [0, ry, 0]);
+                }
+            }
+          },
+          // Street-level shop front on one face: glass, door, awning and a lit sign.
+          shopFront(x, z, len, ry, h = 3.2) {
+            const [gx, gz] = [x, z];
+            this.soft("shopGlass", [gx, 1.5, gz], [len * 0.8, 2.3, 0.1], [0, ry, 0], 0);
+            const [ax, az] = this.at(gx, gz, ry, 0, 0.9);
+            this.soft(this.pick(["awningRed", "awningGreen", "awningBlue"]), [ax, 3.05, az], [len * 0.86, 0.12, 1.8], [0.22, ry, 0], 1.2);
+            this.soft(this.pick(["signRed", "signYellow", "signCyan", "signGreen"]), [gx, 3.75, gz], [len * 0.6, 0.7, 0.14], [0, ry, 0], 0);
+          },
+          // Metal ladder on a wall, and the climb zone the player uses.
+          ladder(M, x, z, ry, top) {
+            for (const side of [-0.28, 0.28]) {
+              const [lx, lz] = this.at(x, z, ry, side, 0);
+              this.hard("ladder", [lx, top / 2, lz], [0.07, top + 0.8, 0.07], [0, ry, 0]);
+            }
+            for (let y = 0.35; y < top + 0.6; y += 0.35) this.soft("ladder", [x, y, z], [0.56, 0.05, 0.05], [0, ry, 0]);
+            M.ladders.push({ x, z, top, ry });
+          },
+          car(x, z, ry, style = "carRed", opts = {}) {
+            const burnt = style === "carBurnt",
+              police = style === "policeBW",
+              at = (ox, oz) => this.at(x, z, ry, ox, oz),
+              tilt = opts.tilt || 0;
+            const body = [0, 0.62, 0],
+              [bx, bz] = at(0, 0);
+            this.hard(style, [bx, 0.62 + tilt * 0.4, bz], [1.9, 0.78, 4.3], [tilt, ry, 0]);
+            const [cx, cz] = at(0, 0.25);
+            this.hard(burnt ? "carBurnt" : police ? "policeBW" : style, [cx, 1.3, cz], [1.7, 0.62, 2.2], [tilt, ry, 0]);
+            if (!burnt) {
+              for (const oz of [-0.86, 1.36]) {
+                const [gx, gz] = at(0, oz);
+                this.soft("glassCar", [gx, 1.3, gz], [1.6, 0.5, 0.06], [oz < 0 ? 0.5 : -0.5, ry, 0]);
+              }
+              for (const ox of [-0.86, 0.86]) {
+                const [gx, gz] = at(ox, 0.25);
+                this.soft("glassCar", [gx, 1.32, gz], [0.05, 0.42, 1.9], [0, ry, 0]);
+              }
+              for (const ox of [-0.62, 0.62]) {
+                const [hx, hz] = at(ox, -2.16);
+                this.soft("lightWhite", [hx, 0.72, hz], [0.36, 0.16, 0.05], [0, ry, 0]);
+                const [tx, tz] = at(ox, 2.16);
+                this.soft("lightRed", [tx, 0.78, tz], [0.36, 0.14, 0.05], [0, ry, 0]);
+              }
+            }
+            for (const [ox, oz] of [[-0.95, -1.35], [0.95, -1.35], [-0.95, 1.35], [0.95, 1.35]]) {
+              const [wx, wz] = at(ox, oz);
+              this.hard("tire", [wx, 0.34, wz], [0.26, 0.68, 0.68], [0, ry, 0]);
+            }
+            if (police) {
+              const [lx, lz] = at(0, 0.25);
+              this.soft("lightRed", [lx - Math.cos(ry) * 0.35, 1.68, lz + Math.sin(ry) * 0.35], [0.5, 0.14, 0.3], [0, ry, 0]);
+              this.soft("lightBlue", [lx + Math.cos(ry) * 0.35, 1.68, lz - Math.sin(ry) * 0.35], [0.5, 0.14, 0.3], [0, ry, 0]);
+            }
+            if (opts.doorOpen) {
+              const [dx, dz] = at(1.45, -0.2);
+              this.hard(style, [dx, 0.85, dz], [0.08, 0.9, 1.1], [0, ry + 0.9, 0]);
+            }
+            this.rotCol(x, z, ry, 1.9, 4.3, 1.62);
+          },
+          bus(x, z, ry, onSide = false) {
+            if (onSide) {
+              this.hard("carWhite", [x, 1.3, z], [2.6, 2.5, 10], [0, ry, Math.PI / 2 * 0.98]);
+              this.rotCol(x, z, ry, 3.0, 10, 2.6);
+              return;
+            }
+            this.hard("carWhite", [x, 1.7, z], [2.5, 2.7, 10], [0, ry, 0]);
+            for (let i = -4; i <= 4; i += 1.2) {
+              const [wx, wz] = this.at(x, z, ry, 1.27, i);
+              this.soft("windowBroken", [wx, 2.2, wz], [0.05, 0.9, 1.0], [0, ry, 0], 0);
+              const [vx, vz] = this.at(x, z, ry, -1.27, i);
+              this.soft("window", [vx, 2.2, vz], [0.05, 0.9, 1.0], [0, ry, 0], 0);
+            }
+            this.rotCol(x, z, ry, 2.5, 10, 3.05);
+          },
+          lampPost(x, z, ry) {
+            this.hard("metal", [x, 3, z], [0.18, 6, 0.18]);
+            const [ax, az] = this.at(x, z, ry, 0, -1.1);
+            this.hard("metal", [(x + ax) / 2, 5.95, (z + az) / 2], [0.14, 0.14, 1.3], [0, ry, 0]);
+            this.soft("lamp", [ax, 5.8, az], [0.4, 0.14, 0.6], [0, ry, 0]);
+            this.col(x, z, 0.3, 0.3, 6);
+          },
+          trafficLight(x, z, ry) {
+            this.hard("metal", [x, 2.1, z], [0.16, 4.2, 0.16]);
+            const [ax, az] = this.at(x, z, ry, 0, -1.6);
+            this.hard("metal", [(x + ax) / 2, 4.1, (z + az) / 2], [0.12, 0.12, 3.2], [0, ry, 0]);
+            this.hard("metal", [ax, 3.6, az], [0.36, 1.1, 0.3], [0, ry, 0]);
+            for (const [k, y] of [["lightRed", 3.95], ["lightAmber", 3.6], ["window", 3.25]]) {
+              const [lx, lz] = this.at(ax, az, ry, 0, 0.16);
+              this.soft(k, [lx, y, lz], [0.22, 0.22, 0.04], [0, ry, 0], 0);
+            }
+            this.col(x, z, 0.3, 0.3, 4.2);
+          },
+          streetSign(x, z, ry) {
+            this.hard("metal", [x, 1.4, z], [0.08, 2.8, 0.08]);
+            this.soft("streetSign", [x, 2.7, z], [1.2, 0.26, 0.04], [0, ry, 0], 0);
+            this.soft("streetSign", [x, 2.45, z], [0.04, 0.26, 1.1], [0, ry, 0], 0);
+          },
+          hydrant(x, z) {
+            this.hard("barrel", [x, 0.35, z], [0.28, 0.7, 0.28]);
+            this.hard("barrel", [x, 0.52, z], [0.46, 0.1, 0.14]);
+            this.col(x, z, 0.3, 0.3, 0.7);
+          },
+          dumpster(x, z, ry) {
+            this.hard("dumpster", [x, 0.75, z], [1.9, 1.3, 1.1], [0, ry, 0]);
+            this.hard("dumpster", [x, 1.46, z], [2.0, 0.1, 1.2], [0.25, ry, 0]);
+            this.rotCol(x, z, ry, 1.9, 1.1, 1.5);
+          },
+          sandbags(x, z, len, ry) {
+            for (let row = 0; row < 3; row++)
+              for (let i = 0; i < Math.floor(len / 0.7); i++) {
+                const [sx, sz] = this.at(x, z, ry, -len / 2 + 0.35 + i * 0.7 + (row % 2) * 0.35, 0);
+                this.hard("sandbag", [sx, 0.16 + row * 0.3, sz], [0.66, 0.3, 0.42], [0, ry, 0]);
+              }
+            this.rotCol(x, z, ry, len, 0.6, 0.95);
+          },
+          jersey(x, z, ry) {
+            this.hard("barrier", [x, 0.42, z], [2.4, 0.84, 0.55], [0, ry, 0]);
+            this.hard("barrier", [x, 0.14, z], [2.4, 0.28, 0.85], [0, ry, 0]);
+            this.rotCol(x, z, ry, 2.4, 0.85, 0.84);
+          },
+          rubble(x, z, size = 3) {
+            for (let i = 0; i < 7; i++) {
+              const s = size * this.r(0.25, 0.55),
+                h = this.r(0.25, 1.1) * size * 0.4;
+              this.hard(this.pick(["rubble", "concrete", "rubble"]), [x + this.r(-0.7, 0.7) * size, h / 2, z + this.r(-0.7, 0.7) * size], [s, h, s * this.r(0.7, 1.3)], [this.r(-0.2, 0.2), this.r(0, 3), this.r(-0.2, 0.2)]);
+            }
+            this.col(x, z, size * 1.2, size * 1.2, size * 0.35);
+          },
+          container(x, z, ry, stacked = 1) {
+            for (let i = 0; i < stacked; i++) this.hard("container", [x, 1.3 + i * 2.6, z], [2.5, 2.6, 6.1], [0, ry, 0]);
+            this.rotCol(x, z, ry, 2.5, 6.1, 2.6 * stacked);
+          },
+          tapeLine(x0, z0, x1, z1) {
+            const len = Math.hypot(x1 - x0, z1 - z0),
+              ry = Math.atan2(x1 - x0, z1 - z0);
+            const n = Math.max(1, Math.round(len / 3));
+            for (let i = 0; i <= n; i++) {
+              const x = x0 + ((x1 - x0) * i) / n,
+                z = z0 + ((z1 - z0) * i) / n;
+              this.hard("tape", [x, 0.55, z], [0.1, 1.1, 0.1]);
+            }
+            this.soft("tape", [(x0 + x1) / 2, 0.95, (z0 + z1) / 2], [0.03, 0.12, len], [0, ry, 0]);
+            this.soft("tape", [(x0 + x1) / 2, 0.55, (z0 + z1) / 2], [0.03, 0.12, len], [0, ry, 0]);
+          },
+          warnSign(x, z, ry) {
+            this.hard("metal", [x, 0.8, z], [0.08, 1.6, 0.08]);
+            this.soft("hazard", [x, 1.45, z], [1.2, 0.7, 0.05], [0, ry, 0], 0);
+            this.soft("signRed", [x, 1.45, z + 0.03], [1.0, 0.4, 0.04], [0, ry, 0], 0);
+          },
+        };
+        // MAP 1 — CITY (140 m). A 3×3 street grid (avenues at x/z = 0, ±40) with sidewalks,
+        // crossings and traffic lights; 16 blocks of shops, apartments and offices split by alleys;
+        // a jammed avenue, a police checkpoint, a crashed bus, a collapsed block and four low
+        // buildings whose roofs are reached by ladders.
+        MapDesigns[0] = (M, H) => {
+          const K = MapKit;
+          K.seed = 7011;
+          M.playerStart = [0, 16];
+          M.spawns = [[0, -64], [64, 0], [0, 64], [-64, 0], [-40, -64], [40, 64], [64, -40], [-64, 40], [40, -64], [-40, 64], [64, 40], [-64, -40]];
+          M.keepOut = [[0, 0, 8], [0, 16, 4]];
+          const streets = [-40, 0, 40],
+            roadHalf = 6,
+            walk = 3;
+          // Road surface, lane markings and crossings.
+          for (const s of streets) {
+            for (let t = -H + 4; t < H - 4; t += 6) {
+              if (streets.some((c) => Math.abs(t - c) < roadHalf + walk + 1)) continue;
+              K.soft("stripeYellow", [s, 0.02, t], [0.18, 0.02, 3], null);
+              K.soft("stripeYellow", [t, 0.02, s], [3, 0.02, 0.18], null);
+            }
+            for (const c of streets)
+              for (let i = -4; i <= 4; i++) {
+                K.soft("stripeWhite", [s + i * 1.2, 0.02, c - roadHalf - 1.6], [0.6, 0.02, 2.4]);
+                K.soft("stripeWhite", [s + i * 1.2, 0.02, c + roadHalf + 1.6], [0.6, 0.02, 2.4]);
+                K.soft("stripeWhite", [c - roadHalf - 1.6, 0.02, s + i * 1.2], [2.4, 0.02, 0.6]);
+                K.soft("stripeWhite", [c + roadHalf + 1.6, 0.02, s + i * 1.2], [2.4, 0.02, 0.6]);
+              }
+          }
+          // Blocks: raised sidewalk slab + curb, then lots.
+          const spans = [[-H + 2, -40 - roadHalf], [-40 + roadHalf, -roadHalf], [roadHalf, 40 - roadHalf], [40 + roadHalf, H - 2]];
+          const lowRoofs = [];
+          let blockIndex = 0;
+          for (const [x0, x1] of spans)
+            for (const [z0, z1] of spans) {
+              blockIndex++;
+              const cx = (x0 + x1) / 2,
+                cz = (z0 + z1) / 2,
+                bw = x1 - x0,
+                bd = z1 - z0;
+              K.hard("sidewalk", [cx, 0.08, cz], [bw, 0.16, bd], null, 0.5);
+              M.obstacles.push({ x: cx, z: cz, w: bw / 2, d: bd / 2, h: 0.16, top: 0.16 });
+              for (const [ex, ez, ew, ed] of [[cx, z0, bw, 0.3], [cx, z1, bw, 0.3], [x0, cz, 0.3, bd], [x1, cz, 0.3, bd]])
+                K.soft("curb", [ex, 0.1, ez], [ew, 0.2, ed]);
+              // Street furniture along the curb.
+              for (let t = x0 + 4; t < x1 - 3; t += 11) {
+                if (z0 > -H + 3) K.lampPost(t, z0 + 0.8, 0);
+                if (z1 < H - 3) K.lampPost(t + 5, z1 - 0.8, Math.PI);
+              }
+              if (K.rnd() < 0.5) K.hydrant(x0 + 1.2, cz + K.r(-3, 3));
+              const inner = { x0: x0 + walk, x1: x1 - walk, z0: z0 + walk, z1: z1 - walk };
+              const iw = inner.x1 - inner.x0,
+                id = inner.z1 - inner.z0;
+              // Special blocks.
+              if (blockIndex === 6) {
+                // Collapsed block: rubble, broken shells, a fire and scattered wrecks.
+                K.building(M, inner.x0 + 4, inner.z0 + 4, 7, 7, 5.5, "concrete_wall_008", 0x6e716f, 4);
+                K.windows(inner.x0 + 4, inner.z0 + 4, 7, 7, 5.5, { broken: 0.8, lit: 0 });
+                for (const [rx, rz, sz] of [[cx, cz, 3.2], [cx + 5, cz - 4, 2.4], [cx - 4, cz + 5, 2.8], [cx + 3, cz + 6, 2]]) K.rubble(rx, rz, sz);
+                K.hard("concrete", [cx - 6, 2.5, cz + 1], [0.5, 5, 6], [0, 0, 0.08]);
+                M.obstacles.push({ x: cx - 6, z: cz + 1, w: 0.35, d: 3, h: 5, top: 5 });
+                K.car(cx + 7, cz + 7, 0.6, "carBurnt", { tilt: 0.1 });
+                M.fires.push([cx + 1, cz - 1]);
+                continue;
+              }
+              if (blockIndex === 11) {
+                // Parking lot with abandoned cars and a low office with a roof ladder.
+                K.soft("stripeWhite", [cx, 0.17, cz], [0.15, 0.01, id - 2]);
+                for (let i = 0; i < 4; i++) {
+                  K.car(cx - 4, inner.z0 + 3 + i * 4, Math.PI / 2 + K.r(-0.1, 0.1), K.pick(["carRed", "carBlue", "carGray", "carWhite", "carGreen"]), { doorOpen: i === 1 });
+                }
+                K.building(M, cx + 5, cz, 8, 12, 4.8, "concrete_wall_008", 0x8a8f8c, 4);
+                K.windows(cx + 5, cz, 8, 12, 4.8, { start: 2.2, lit: 0.1 });
+                lowRoofs.push([cx + 5, cz, 8, 12, 4.8, -Math.PI / 2]);
+                continue;
+              }
+              // Regular block: 2×2 lots split by alleys (one lot per block may be a low roof).
+              const alley = 3;
+              const lotW = (iw - alley) / 2,
+                lotD = (id - alley) / 2;
+              for (const lx of [0, 1])
+                for (const lz of [0, 1]) {
+                  const x = inner.x0 + lotW / 2 + lx * (lotW + alley),
+                    z = inner.z0 + lotD / 2 + lz * (lotD + alley);
+                  const edgeX = lx ? inner.x1 : inner.x0,
+                    edgeZ = lz ? inner.z1 : inner.z0;
+                  const outer = Math.abs(cx) > 45 || Math.abs(cz) > 45,
+                    low = !outer && lx === 0 && lz === 1 && blockIndex % 3 === 1;
+                  const kind = low ? "low" : K.pick(outer ? ["apartment", "office", "apartment"] : ["shop", "apartment", "shop", "office"]);
+                  const h = low ? 4.8 : kind === "shop" ? K.r(5, 7.5) : kind === "apartment" ? K.r(9, 16) : K.r(14, 26);
+                  const surface = kind === "office" ? "concrete_wall_008" : K.pick(["red_brick_03", "red_brick_03", "concrete_wall_008"]);
+                  const tint = surface === "red_brick_03" ? K.pick([0x8a7f7c, 0x9a8a80, 0x7a6e6a]) : K.pick([0x8e958f, 0x7b8487, 0x9a9790]);
+                  K.building(M, x, z, lotW, lotD, h, surface, tint, surface === "red_brick_03" ? 3.2 : 4);
+                  // Faces toward the street get shops (for shop lots) and ground-floor detail.
+                  const streetFaces = [];
+                  if (lz === 0) streetFaces.push(["n", x, z - lotD / 2 - 0.06, lotW, 0]);
+                  if (lz === 1) streetFaces.push(["s", x, z + lotD / 2 + 0.06, lotW, Math.PI]);
+                  if (lx === 0) streetFaces.push(["w", x - lotW / 2 - 0.06, z, lotD, -Math.PI / 2]);
+                  if (lx === 1) streetFaces.push(["e", x + lotW / 2 + 0.06, z, lotD, Math.PI / 2]);
+                  K.windows(x, z, lotW, lotD, h, { start: kind === "shop" ? 5.2 : low ? 2.2 : 3.4, lit: 0.1, broken: 0.14 });
+                  if (kind === "shop")
+                    for (const [, fx, fz, len, ry] of streetFaces) K.shopFront(fx, fz, len, ry);
+                  // Roof: parapet, AC units, water tank on tall ones.
+                  K.soft("roof", [x, h + 0.02, z], [lotW - 0.2, 0.05, lotD - 0.2]);
+                  for (const [px, pz, pw, pd] of [[x, z - lotD / 2 + 0.1, lotW, 0.2], [x, z + lotD / 2 - 0.1, lotW, 0.2], [x - lotW / 2 + 0.1, z, 0.2, lotD], [x + lotW / 2 - 0.1, z, 0.2, lotD]])
+                    K.soft("concrete", [px, h + 0.35, pz], [pw, 0.7, pd]);
+                  K.hard("metal", [x + K.r(-1, 1), h + 0.6, z + K.r(-1, 1)], [1.6, 1.2, 1.2]);
+                  if (h > 14) K.hard("metal", [x - lotW / 4, h + 1.6, z + lotD / 4], [1.8, 3.2, 1.8]);
+                  if (low) lowRoofs.push([x, z, lotW, lotD, h, lx ? Math.PI / 2 : -Math.PI / 2]);
+                }
+              // Alley life: dumpsters, trash, a barrel.
+              K.dumpster(cx + K.r(-2, 2), cz, K.pick([0, Math.PI / 2]));
+              M.designProps.push(["trash", cx + 1.2, cz + 3], ["barrel", cx - 1, cz - 3]);
+            }
+          // Low buildings: roof access by ladder, roof cover (AC units) for shooting from above.
+          for (const [x, z, w, d, h, side] of lowRoofs) {
+            const lx = x + Math.sin(side) * (w / 2 + 0.25),
+              lz = z + Math.cos(side) * (d / 2 + 0.25) * 0;
+            K.ladder(M, lx, lz, side, h);
+            for (const [ox, oz] of [[-w / 4, -d / 4], [w / 4, d / 4]]) {
+              K.hard("metal", [x + ox, h + 0.55, z + oz], [1.4, 1.1, 1.0]);
+              WorldProps.collider(x + ox, z + oz, 1.4, 1.0, h + 1.1);
+            }
+          }
+          // Story set pieces on the streets.
+          // Jammed northbound avenue: cars nose to tail, doors open, two crashed.
+          for (let i = 0; i < 7; i++) {
+            const z = -18 - i * 5.2;
+            if (Math.abs(z + 40) < 9) continue;
+            K.car(3 + K.r(-0.4, 0.4), z, Math.PI + K.r(-0.12, 0.12), K.pick(["carRed", "carBlue", "carGray", "carWhite", "carGreen"]), { doorOpen: K.rnd() < 0.4 });
+          }
+          K.car(-2.6, -25, 2.5, "carGray", { tilt: 0.05 });
+          K.car(-3.5, -29, 2.0, "carBurnt");
+          // Police checkpoint at the north crossing.
+          K.car(-4, -34, 0.8, "policeBW", { doorOpen: true });
+          K.car(4.5, -46, -0.7, "policeBW");
+          for (let i = -2; i <= 2; i++) K.jersey(i * 2.5, -40 - 7.2, 0);
+          K.sandbags(-8, -37.5, 4, 0);
+          K.sandbags(8, -37.5, 4, 0);
+          M.beacons.push([-4, -34], [4.5, -46]);
+          for (const [x, z] of [[-1.5, -38], [1, -38.6], [3, -37.8], [-3.2, -38.8]]) M.designProps.push(["cone", x, z]);
+          // Crashed bus across the east avenue and a car in a shop window.
+          K.bus(40, 18, 0.35);
+          K.car(29.5, -12, Math.PI / 2 + 0.3, "carBlue", { tilt: 0.06 });
+          K.rubble(26.5, -12, 1.4);
+          // West avenue: burnt wrecks and a fire barrel group.
+          for (const [x, z] of [[0, -40], [0, 40], [-40, 0], [40, 0], [0, 16], [-40, -40], [40, 40]]) M.lights.push([x + 7, z + 7, 0xffa052, 1.1, 16]);
+          K.car(-41, 22, 0.2, "carBurnt");
+          K.car(-38, 30, -0.4, "carBurnt", { tilt: 0.12 });
+          M.fires.push([-43, 26]);
+          // South crossing: military barricade with containers.
+          K.container(-8, 44, 0);
+          K.container(9, 45, 0);
+          K.sandbags(0, 47, 6, 0);
+          // Traffic lights and signs at crossings.
+          for (const sx of streets)
+            for (const sz of streets) {
+              K.trafficLight(sx - roadHalf - 1, sz - roadHalf - 1, Math.PI / 2);
+              K.trafficLight(sx + roadHalf + 1, sz + roadHalf + 1, -Math.PI / 2);
+              K.streetSign(sx + roadHalf + 1, sz - roadHalf - 1, 0);
+            }
+          // Bus stop on the main avenue.
+          K.hard("metal", [8.5, 1.3, 20], [0.1, 2.6, 0.1]);
+          K.hard("metal", [8.5, 1.3, 24], [0.1, 2.6, 0.1]);
+          K.soft("shopGlass", [9.2, 1.3, 22], [0.05, 2.2, 4], null, 0);
+          K.hard("roof", [8.8, 2.65, 22], [1.6, 0.1, 4.4]);
+          // Street ends at the map edge: barricades that explain the boundary.
+          for (const s of streets) {
+            for (const [x, z, ry] of [[s, -H + 3, 0], [s, H - 3, 0], [-H + 3, s, Math.PI / 2], [H - 3, s, Math.PI / 2]]) {
+              K.container(x + (ry ? 0 : -3.2), z + (ry ? -3.2 : 0), ry);
+              K.container(x + (ry ? 0 : 3.2), z + (ry ? 3.2 : 0), ry, 2);
+              K.hard("fence", [x, 2, z], ry ? [0.1, 4, 12] : [12, 4, 0.1], null, 0.5);
+            }
+          }
+          // Tall perimeter facades so the city never visibly ends.
+          for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
+            const m = M.solid(x, 9, z, w, 18, d, 0x3a4246);
+            m.material = VisualArt.surface("red_brick_03", 0x5c5654, "concrete");
+            VisualArt.tileUV(m, 3.2);
+          }
+          const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
+          if (floor) {
+            floor.material = VisualArt.surface("asphalt_02", 0x6a7478, "asphalt", { roughness: 0.82 });
+            VisualArt.tileUV(floor, 7);
+          }
+        };
+        // MAP 4 — UNDERGROUND LAB (112 m, closed). One big research hall under a 12 m ceiling.
+        // Centre: a floor-to-ceiling containment capsule (glass, green liquid, the mutant specimen
+        // as decoration) inside a two-level ring — the ground ring with its control consoles and a
+        // wider balcony ring at 4.5 m reached by two curved staircases. Around it: chemical storage,
+        // server rows, cryo pods, a surgery bay, generators, spills and damaged lighting.
+        MapDesigns[3] = (M, H) => {
+          const K = MapKit;
+          K.seed = 4403;
+          const CEIL = 12,
+            RING_Y = 4.5,
+            R_IN = 8.5,
+            R_OUT = 19,
+            CAPSULE_R = 3.4;
+          M.playerStart = [0, 32];
+          M.spawns = [[0, -51], [51, 0], [0, 51], [-51, 0], [-51, -30], [51, 30], [30, -51], [-30, 51], [51, -30], [-51, 30]];
+          M.keepOut = [[0, 0, R_OUT + 3], [0, 32, 4]];
+          M.closed = true;
+          // Floor, ceiling, perimeter.
+          const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
+          if (floor) {
+            floor.material = VisualArt.surface("metal_plate", 0x6f7688, "concrete", { roughness: 0.55, metalness: 0.35 });
+            VisualArt.tileUV(floor, 2.4);
+          }
+          K.soft("labWall", [0, CEIL + 0.3, 0], [H * 2, 0.6, H * 2], null, 0.25);
+          for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
+            const m = M.solid(x, CEIL / 2, z, w, CEIL, d, 0x4a5260);
+            m.material = VisualArt.surface("concrete_wall_008", 0x6d7482, "concrete");
+            VisualArt.tileUV(m, 4);
+            // Hazard band and a pipe run along every wall.
+            const inX = x === 0 ? 0 : -Math.sign(x) * 1.05,
+              inZ = z === 0 ? 0 : -Math.sign(z) * 1.05;
+            K.soft("hazard", [x + inX, 0.5, z + inZ], [x === 0 ? w - 2 : 0.05, 1, x === 0 ? 0.05 : d], null, 1);
+            for (const y of [8.4, 9.1]) K.hard("metal", [x + inX * 1.3, y, z + inZ * 1.3], [x === 0 ? w - 3 : 0.35, 0.35, x === 0 ? 0.35 : d - 3]);
+          }
+          // Blast doors where the horde comes in.
+          for (const [sx, sz] of M.spawns) {
+            const alongX = Math.abs(sz) > Math.abs(sx),
+              wx = alongX ? sx : Math.sign(sx) * (H - 1.05),
+              wz = alongX ? Math.sign(sz) * (H - 1.05) : sz,
+              ry = alongX ? 0 : Math.PI / 2;
+            K.soft("hazard", [wx, 2.4, wz], [5.4, 4.8, 0.12], [0, ry, 0], 0.8);
+            K.soft("labFloor", [wx, 2.1, wz], [4.2, 4.2, 0.16], [0, ry, 0], 0.5);
+            K.soft("lightRed", [wx, 5.1, wz], [0.6, 0.25, 0.2], [0, ry, 0], 0);
+          }
+          // Ceiling light panels: working, flickering, broken (dark) and a few fallen on the floor.
+          M.lamps = [];
+          for (let x = -H + 8; x < H - 4; x += 14)
+            for (let z = -H + 8; z < H - 4; z += 14) {
+              if (Math.hypot(x, z) < R_OUT + 2) continue;
+              const k = K.rnd();
+              if (k < 0.14) {
+                K.soft("window", [x, CEIL - 0.1, z], [3, 0.12, 0.8]);
+                const fx = x + K.r(-2, 2),
+                  fz = z + K.r(-2, 2);
+                K.hard("lightWhite", [fx, 0.12, fz], [3, 0.12, 0.8], [K.r(-0.25, 0.25), K.r(0, 3), 0.18]);
+                K.soft("labFloor", [x, CEIL - 1.4, z + 0.3], [0.03, 2.6, 0.03], [0.25, 0, 0]);
+              } else if (k < 0.24) K.soft("window", [x, CEIL - 0.1, z], [3, 0.12, 0.8]);
+              else K.soft("lightWhite", [x, CEIL - 0.1, z], [3, 0.12, 0.8]);
+            }
+          M.lights.push(
+            [-30, -30, 0xdfe8ff, 2.2, 36, "stutter"], [30, -30, 0xdfe8ff, 2.2, 36], [-30, 30, 0xdfe8ff, 2.0, 36], [30, 30, 0xdfe8ff, 2.2, 36, "stutter"],
+            [0, -40, 0xff3020, 2.4, 30, "alarm"], [0, 42, 0xdfe8ff, 2.0, 34], [-42, 0, 0xb060ff, 2.0, 30], [42, 0, 0x40d0ff, 2.0, 30, "stutter"], [0, 14, 0xdfe8ff, 1.6, 26],
+          );
+          // ---- Central capsule (visual meshes are built in WorldArt; here: base, cables, collision).
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            K.hard("metal", [Math.cos(a) * 3.2, 0.45, Math.sin(a) * 3.2], [2.8, 0.9, 1.4], [0, -a, 0]);
+            K.hard("metal", [Math.cos(a) * 3.2, CEIL - 0.7, Math.sin(a) * 3.2], [2.8, 1.4, 1.4], [0, -a, 0]);
+            K.hard("labFloor", [Math.cos(a) * 3.75, CEIL / 2, Math.sin(a) * 3.75], [0.26, CEIL, 0.26]);
+          }
+          M.obstacles.push({ x: 0, z: 0, w: 4.4, d: 4.4, h: CEIL, top: CEIL });
+          M.capsule = { r: CAPSULE_R, h: CEIL };
+          // Pipes and cable bundles from the capsule across the ceiling and floor to the machines.
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + 0.3,
+              len = 26;
+            K.hard("metal", [Math.cos(a) * (4 + len / 2), CEIL - 1.1 - (i % 2) * 0.5, Math.sin(a) * (4 + len / 2)], [len, 0.45, 0.45], [0, -a, 0]);
+            K.soft("tire", [Math.cos(a) * (4 + 5), 0.05, Math.sin(a) * (4 + 5)], [10, 0.1, 0.22], [0, -a + 0.05, 0]);
+          }
+          // ---- Ground ring: consoles facing the capsule.
+          for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2 + 0.15,
+              x = Math.cos(a) * 7,
+              z = Math.sin(a) * 7;
+            if (Math.abs(a - Math.PI / 2) < 0.4) continue; // walkway toward the player start
+            K.hard("labWall", [x, 0.55, z], [1.9, 1.1, 0.9], [0, -a + Math.PI / 2, 0]);
+            K.soft("screen", [x - Math.cos(a) * 0.46, 1.35, z - Math.sin(a) * 0.46], [1.5, 0.7, 0.05], [0.3 * 0, -a + Math.PI / 2, 0], 0);
+            K.col(x, z, 1.6, 1.6, 1.1);
+          }
+          // ---- Upper ring (balcony at 4.5 m): concentric bands of tangential segments; each
+          // collider has a base so the ground floor stays walkable underneath.
+          const bands = 4,
+            band = (R_OUT - R_IN) / bands;
+          for (let b = 0; b < bands; b++) {
+            const r0 = R_IN + b * band,
+              rm = r0 + band / 2,
+              n = Math.round((2 * Math.PI * rm) / 2.4);
+            for (let i = 0; i < n; i++) {
+              const a = (i / n) * Math.PI * 2,
+                x = Math.cos(a) * rm,
+                z = Math.sin(a) * rm,
+                seg = (2 * Math.PI * rm) / n + 0.05;
+              K.hard("labFloor", [x, RING_Y - 0.15, z], [band + 0.02, 0.3, seg], [0, -a, 0], 0.6);
+              const ca = Math.abs(Math.cos(a)),
+                sa = Math.abs(Math.sin(a));
+              M.obstacles.push({ x, z, w: (ca * band + sa * seg) * 0.42, d: (sa * band + ca * seg) * 0.42, h: 0.3, top: RING_Y, base: RING_Y - 0.4 });
+            }
+          }
+          // Railings (inner edge everywhere, outer edge except at the stair landings) + support columns.
+          const rail = (r, skip) => {
+            const n = Math.round((2 * Math.PI * r) / 1.6);
+            for (let i = 0; i < n; i++) {
+              const a = (i / n) * Math.PI * 2;
+              if (skip && skip.some((s) => Math.abs(Math.atan2(Math.sin(a - s), Math.cos(a - s))) < 0.22)) continue;
+              const x = Math.cos(a) * r,
+                z = Math.sin(a) * r;
+              K.soft("metal", [x, RING_Y + 0.55, z], [0.08, 1.1, 0.08]);
+              K.soft("hazard", [x, RING_Y + 1.05, z], [0.1, 0.08, 1.7], [0, -a, 0]);
+              M.obstacles.push({ x, z, w: 0.35, d: 0.35, h: 1.1, top: RING_Y + 1.1, base: RING_Y - 0.4 });
+            }
+          };
+          const landings = [Math.PI * 0.25, Math.PI * 1.25];
+          rail(R_IN, null);
+          rail(R_OUT, landings);
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2 + 0.13,
+              x = Math.cos(a) * (R_OUT - 0.6),
+              z = Math.sin(a) * (R_OUT - 0.6);
+            K.hard("metal", [x, RING_Y / 2, z], [0.5, RING_Y, 0.5]);
+            K.col(x, z, 0.6, 0.6, RING_Y - 0.35);
+          }
+          // Two curved staircases wrapping around the outside of the ring.
+          for (const landing of landings) {
+            const steps = 12,
+              r = R_OUT + 1.6;
+            for (let s = 0; s < steps; s++) {
+              const a = landing - (steps - 1 - s) * 0.075,
+                x = Math.cos(a) * r,
+                z = Math.sin(a) * r,
+                top = ((s + 1) * RING_Y) / steps;
+              K.hard("labFloor", [x, top / 2, z], [2.6, top, 1.55], [0, -a, 0], 0.6);
+              K.soft("hazard", [x, top + 0.01, z], [2.6, 0.02, 0.18], [0, -a, 0]);
+              M.obstacles.push({ x, z, w: 1.05, d: 1.05, h: top, top });
+            }
+            const lx = Math.cos(landing) * (R_OUT + 0.3),
+              lz = Math.sin(landing) * (R_OUT + 0.3);
+            K.hard("labFloor", [lx, RING_Y - 0.15, lz], [2.2, 0.3, 2.4], [0, -landing, 0]);
+            M.obstacles.push({ x: lx, z: lz, w: 1.1, d: 1.1, h: 0.3, top: RING_Y, base: RING_Y - 0.4 });
+          }
+          // Research stations on the balcony: desks with monitors, sample racks, documents, potions.
+          const potion = ["lightGreen", "signCyan", "lightAmber", "lightBlue"];
+          const potionOf = (i) => ["lightGreen", "lightAmber", "signRed"][i % 3];
+          for (let i = 0; i < 14; i++) {
+            const a = (i / 14) * Math.PI * 2 + 0.11;
+            if (landings.some((s) => Math.abs(Math.atan2(Math.sin(a - s), Math.cos(a - s))) < 0.35)) continue;
+            const r = R_OUT - 2.2,
+              x = Math.cos(a) * r,
+              z = Math.sin(a) * r,
+              ry = -a + Math.PI / 2;
+            K.hard("white", [x, RING_Y + 0.42, z], [2.2, 0.08, 0.9], [0, ry, 0]);
+            for (const s of [-0.95, 0.95]) {
+              const [lx, lz] = K.at(x, z, ry, s, 0);
+              K.soft("metal", [lx, RING_Y + 0.2, lz], [0.06, 0.4, 0.8], [0, ry, 0]);
+            }
+            const broken = K.rnd() < 0.3;
+            const [mx, mz] = K.at(x, z, ry, -0.4, 0.2);
+            K.soft(broken ? "windowBroken" : "screen", [mx, RING_Y + 0.8, mz], [0.8, 0.55, 0.05], [broken ? 0.9 : 0, ry, 0], 0);
+            K.soft("metal", [mx, RING_Y + 0.52, mz + 0.05], [0.12, 0.2, 0.08], [0, ry, 0]);
+            for (let v = 0; v < 4; v++) {
+              const [vx, vz] = K.at(x, z, ry, 0.35 + v * 0.16, -0.15);
+              K.soft(potionOf(i + v), [vx, RING_Y + 0.56, vz], [0.08, 0.2, 0.08], null, 0);
+            }
+            const [dx, dz] = K.at(x, z, ry, 0.5, 0.25);
+            K.soft("white", [dx, RING_Y + 0.47, dz], [0.3, 0.01, 0.42], [0, ry + 0.3, 0]);
+            M.obstacles.push({ x, z, w: 1.0, d: 1.0, h: 0.5, top: RING_Y + 0.5, base: RING_Y - 0.4 });
+          }
+          // ---- Zones around the ring. North: chemical storage.
+          for (let row = 0; row < 3; row++)
+            for (let i = 0; i < 5; i++) {
+              const x = -24 + i * 12,
+                z = -36 - row * 5;
+              K.hard("metal", [x, 1.6, z], [4.5, 3.2, 1.1]);
+              for (const y of [0.5, 1.3, 2.1, 2.9]) {
+                K.soft("labFloor", [x, y, z], [4.6, 0.06, 1.15]);
+                for (let b = 0; b < 8; b++) if (K.rnd() < 0.7) K.soft(potionOf(b + row + i), [x - 2 + b * 0.55, y + 0.17, z + K.r(-0.3, 0.3)], [0.14, 0.28, 0.14], null, 0);
+              }
+              K.col(x, z, 4.6, 1.2, 3.2);
+            }
+          for (const [x, z] of [[-30, -30], [-27, -31], [26, -30], [30, -31.5], [-6, -30], [8, -30.5]]) M.designProps.push([K.rnd() < 0.5 ? "barrel" : "toxic", x, z]);
+          // East: server rows with blinking status lights.
+          for (let row = 0; row < 4; row++) {
+            const x = 30 + row * 5;
+            for (let z = -16; z <= 16; z += 8) {
+              K.hard("labWall", [x, 1.25, z], [1.2, 2.5, 6.8], null, 0.5);
+              for (let k = 0; k < 6; k++) K.soft(K.rnd() < 0.2 ? "lightRed" : "lightGreen", [x - 0.62, 0.5 + k * 0.33, z + K.r(-3, 3)], [0.03, 0.06, 0.12], null, 0);
+              K.col(x, z, 1.2, 6.8, 2.5);
+            }
+          }
+          // South: cryo pods and a surgery bay.
+          for (let i = 0; i < 7; i++) {
+            const x = -24 + i * 8,
+              z = 44;
+            K.hard("metal", [x, 0.3, z], [2.2, 0.6, 2.2]);
+            K.hard("metal", [x, 3.4, z], [2.2, 0.5, 2.2]);
+            K.soft(i === 2 || i === 5 ? "windowBroken" : "signCyan", [x, 1.9, z - 0.9], [1.6, 2.6, 0.08], null, 0);
+            K.soft("labFloor", [x, 1.9, z + 0.3], [1.9, 2.6, 1.5]);
+            K.col(x, z, 2.2, 2.2, 3.6);
+          }
+          K.hard("white", [-38, 0.9, 30], [2.2, 0.2, 0.9]);
+          K.hard("metal", [-38, 0.45, 30], [0.3, 0.9, 0.3]);
+          K.soft("mattress", [-38, 1.02, 30], [2, 0.06, 0.8]);
+          K.soft("lightWhite", [-38, 3.2, 30], [1.2, 0.2, 1.2]);
+          K.soft("blood", [-37.4, 1.06, 30.1], [0.6, 0.01, 0.5]);
+          K.col(-38, 30, 2.2, 0.9, 1);
+          // West: generators, tanks and pipe manifolds.
+          for (const z of [-16, 0, 16]) {
+            K.hard("metal", [-42, 2, z], [5, 4, 3.6]);
+            K.hard("hazard", [-42, 4.05, z], [5.1, 0.1, 3.7]);
+            K.hard("labWall", [-38.6, 1.1, z], [1.8, 2.2, 1.4]);
+            K.col(-42, z, 5, 3.6, 4);
+            K.col(-38.6, z, 1.8, 1.4, 2.2);
+            K.hard("metal", [-45, 7, z], [0.6, 10, 0.6]);
+          }
+          // Spills: green / purple / yellow puddles near storage, servers and the capsule.
+          for (const [x, z, k, s] of [[-18, -30, "lightGreen", 2.6], [4, -31, "signYellow", 1.8], [24, -8, "lightBlue", 1.6], [-10, 20, "lightGreen", 2.2], [12, 24, "signYellow", 1.4], [-26, 8, "lightGreen", 1.8], [-6, -24, "lightBlue", 1.2]])
+            K.soft(k === "lightBlue" ? "signRed" : k, [x, 0.012, z], [s, 0.01, s * K.r(0.6, 1.1)], [0, K.r(0, 3), 0], 0);
+          for (const [x, z, k, s] of [[-20, -29, "lightBlue", 1.9], [16, 12, "lightBlue", 1.5]]) K.soft("signCyan", [x, 0.012, z], [s, 0.01, s], [0, K.r(0, 3), 0], 0);
+          // Open-floor cover: workbenches, crates, overturned carts (combat space around the ring).
+          for (const [x, z, ry] of [[-24, -14, 0.3], [22, 22, -0.4], [-20, 22, 0.8], [14, -20, 1.2], [-30, -4, 0], [28, 36, 0.2]]) {
+            K.hard("white", [x, 0.9, z], [3, 0.12, 1.2], [0, ry, 0]);
+            K.hard("metal", [x, 0.45, z], [2.8, 0.9, 1.0], [0, ry, 0]);
+            K.rotCol(x, z, ry, 3, 1.2, 1);
+          }
+          for (const [x, z] of [[-14, 30], [18, 30], [34, -40], [-38, -40], [40, 40], [-44, 40]]) M.designProps.push(["toxic", x, z], ["box", x + 1.2, z + 0.4]);
+          for (const [x, z] of [[20, -36], [-36, 20], [36, -20]]) M.designProps.push(["barrel", x, z]);
+        };
+        // MAP 5 — ARCTIC BASE (120 m, open sky). A research outpost in a snowfield: prefab huts,
+        // fuel tanks, a radio mast and fences around a frozen lake; wind-sculpted drifts, snow-capped
+        // rocks and pine groves; five walk-in igloos; taped "DO NOT CROSS" barriers at the invisible
+        // edge and a ring of snowy mountains that keeps going past it.
+        MapDesigns[4] = (M, H) => {
+          const K = MapKit;
+          K.seed = 5507;
+          M.playerStart = [0, 18];
+          M.spawns = [[0, -54], [54, 0], [0, 54], [-54, 0], [-40, -50], [44, 48], [52, -38], [-52, 36], [30, -54], [-34, 54]];
+          M.keepOut = [[0, 0, 8], [0, 18, 4]];
+          const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
+          if (floor) {
+            floor.material = VisualArt.surface("snow_02", 0xe4eef3, "concrete", { roughness: 0.95, normal: 1.2 });
+            VisualArt.tileUV(floor, 5);
+          }
+          // Frozen lake (north-west): clear ice with a darker rim of packed snow.
+          K.soft("ice", [-26, 0.015, -24], [22, 0.02, 16], null, 0.4);
+          for (let i = 0; i < 24; i++) {
+            const a = (i / 24) * Math.PI * 2;
+            K.soft("snow", [-26 + Math.cos(a) * 11.4, 0.1, -24 + Math.sin(a) * 8.4], [2.6, 0.2, 1.2], [0, -a + Math.PI / 2, 0]);
+          }
+          // Wind-sculpted drifts: terraced so the player can walk over them.
+          const drift = (x, z, len, ry, h = 0.9) => {
+            const layers = Math.max(1, Math.round(h / 0.3));
+            for (let l = 0; l < layers; l++) {
+              const f = 1 - l / (layers + 0.5);
+              K.hard("snow", [x, 0.15 + l * 0.3, z], [len * f, 0.3, 2.6 * f], [0, ry, 0], 0.6);
+            }
+            K.rotCol(x, z, ry, len * 0.6, 1.2, Math.min(h, 0.45));
+          };
+          for (let i = 0; i < 16; i++) {
+            const x = K.r(-H + 8, H - 8),
+              z = K.r(-H + 8, H - 8);
+            if (Math.hypot(x, z) < 12 || Math.hypot(x + 26, z + 24) < 14 || Math.hypot(x, z - 18) < 6) continue;
+            drift(x, z, K.r(5, 10), K.r(0, 3), K.r(0.6, 1.2));
+          }
+          // Outpost: three prefab huts, fuel tanks, radio mast, fences.
+          const hut = (x, z, ry, w = 8, d = 5) => {
+            const m = M.solid(x, 1.6, z, ry ? d : w, 3.2, ry ? w : d, 0x6d7f86);
+            m.material = VisualArt.surface("concrete_wall_008", 0x7e95a0, "concrete");
+            VisualArt.tileUV(m, 4);
+            K.soft("snow", [x, 3.35, z], [(ry ? d : w) + 0.5, 0.3, (ry ? w : d) + 0.5], null, 0.5);
+            K.soft("snow", [x, 3.62, z], [(ry ? d : w) * 0.6, 0.24, (ry ? w : d) * 0.6], null, 0.5);
+            const [dx, dz] = K.at(x, z, ry, 0, d / 2 + 0.06);
+            K.soft("labFloor", [dx, 1.1, dz], [1.2, 2.2, 0.1], [0, ry, 0], 0);
+            K.soft("lightAmber", [dx, 2.5, dz], [0.4, 0.15, 0.2], [0, ry, 0], 0);
+            for (const s of [-2.6, 2.6]) {
+              const [wx, wz] = K.at(x, z, ry, s, d / 2 + 0.06);
+              K.soft(K.rnd() < 0.4 ? "windowLit" : "window", [wx, 1.8, wz], [1.2, 0.9, 0.08], [0, ry, 0], 0);
+            }
+          };
+          hut(22, -22, 0);
+          hut(34, -12, Math.PI / 2);
+          hut(18, -36, Math.PI);
+          for (const [x, z] of [[38, -30], [42, -26]]) {
+            K.hard("white", [x, 2, z], [3.2, 4, 3.2]);
+            K.soft("snow", [x, 4.15, z], [3.3, 0.3, 3.3]);
+            K.soft("hazard", [x, 1.2, z + 1.62], [2, 0.3, 0.04]);
+            K.col(x, z, 3.2, 3.2, 4);
+          }
+          for (let y = 0; y < 18; y += 3) {
+            K.hard("metal", [30, y + 1.5, -44], [0.2, 3, 0.2], [0, 0, 0.04]);
+            K.soft("metal", [30, y + 1.5, -44], [1.4 - y * 0.05, 0.06, 0.06], [0.7, 0, 0]);
+          }
+          K.soft("lightRed", [30, 18.2, -44], [0.3, 0.3, 0.3], null, 0);
+          K.col(30, -44, 1, 1, 18);
+          for (let x = 12; x < 48; x += 3) {
+            K.hard("metal", [x, 0.9, -48], [0.1, 1.8, 0.1]);
+            K.soft("fence", [x + 1.5, 0.9, -48], [3, 1.6, 0.05], null, 0.8);
+          }
+          M.lights.push([26, -26, 0xffc27a, 1.4, 22], [0, 0, 0xcfe4ff, 0.8, 40]);
+          M.fires.push([16, -18]);
+          M.designProps.push(["barrel", 36, -18], ["barrel", 37, -19.2], ["toxic", 20, -30], ["box", 24, -18], ["box", 25, -18.5], ["barrel", -20, 36], ["box", -30, 14]);
+          // Pine groves (trees get snow caps and wind from their material) and snow-capped rocks.
+          for (const [gx, gz, n, r] of [[40, 30, 14, 12], [-40, 30, 16, 13], [-44, -8, 10, 9], [8, 44, 10, 10], [46, 6, 8, 8], [-10, -46, 10, 10]]) {
+            for (let i = 0; i < n; i++) {
+              const a = K.r(0, Math.PI * 2),
+                d = Math.sqrt(K.rnd()) * r,
+                x = gx + Math.cos(a) * d,
+                z = gz + Math.sin(a) * d;
+              if (Math.abs(x) > H - 4 || Math.abs(z) > H - 4) continue;
+              WorldProps.tree(x, z, K.r(0.85, 1.3), "snowPine");
+            }
+          }
+          for (let i = 0; i < 18; i++) {
+            const x = K.r(-H + 6, H - 6),
+              z = K.r(-H + 6, H - 6);
+            if (Math.hypot(x, z) < 10 || Math.hypot(x, z - 18) < 5) continue;
+            const s = K.r(1.1, 2.4),
+              h = K.r(0.5, 1.4);
+            K.hard("stone", [x, h / 2, z], [s, h, s * K.r(0.7, 1.2)], [0, K.r(0, 3), 0]);
+            K.soft("snow", [x, h + 0.08, z], [s * 0.9, 0.16, s * 0.8], [0, K.r(0, 3), 0]);
+            K.col(x, z, s, s, h);
+          }
+          // Five igloos: ring courses of snow blocks that step inward to a dome, a tunnel entrance,
+          // collision per block (the doorway stays open) and a warm lamp inside.
+          const igloo = (x, z, facing) => {
+            const R = 2.7,
+              courses = 6;
+            for (let c = 0; c < courses; c++) {
+              const t = c / courses,
+                r = R * Math.cos(t * Math.PI * 0.46),
+                y = 0.25 + Math.sin(t * Math.PI * 0.5) * 2.3,
+                n = Math.max(6, Math.round((2 * Math.PI * r) / 0.9));
+              for (let i = 0; i < n; i++) {
+                const a = (i / n) * Math.PI * 2 + (c % 2) * (Math.PI / n);
+                const off = Math.atan2(Math.sin(a - facing), Math.cos(a - facing));
+                if (c < 3 && Math.abs(off) < 0.42) continue; // doorway
+                const bx = x + Math.cos(a) * r,
+                  bz = z + Math.sin(a) * r;
+                K.hard("snow", [bx, y, bz], [0.5, 0.5, (2 * Math.PI * r) / n + 0.06], [0.35 * t, -a, 0], 1.4);
+                if (c < 4) M.obstacles.push({ x: bx, z: bz, w: 0.32, d: 0.32, h: y + 0.25, top: 2.6 });
+              }
+            }
+            K.hard("snow", [x, 2.62, z], [1.1, 0.35, 1.1], null, 1.4);
+            // Entrance tunnel.
+            for (const s of [-1, 1]) {
+              const [tx, tz] = K.at(x, z, -facing + Math.PI / 2, s * 1.0, R + 0.9);
+              K.hard("snow", [tx, 0.75, tz], [0.4, 1.5, 1.8], [0, -facing + Math.PI / 2, 0], 1.4);
+              M.obstacles.push({ x: tx, z: tz, w: 0.35, d: 0.35, h: 1.5, top: 2 });
+            }
+            const [rx, rz] = K.at(x, z, -facing + Math.PI / 2, 0, R + 0.9);
+            K.hard("snow", [rx, 1.62, rz], [2.5, 0.3, 1.9], [0, -facing + Math.PI / 2, 0], 1.4);
+            // Floor furs and a lamp inside.
+            K.soft("sandbag", [x, 0.03, z], [2.2, 0.04, 1.6], [0, K.r(0, 3), 0]);
+            K.soft("lightAmber", [x + 0.6, 0.35, z - 0.4], [0.2, 0.3, 0.2], null, 0);
+            M.lights.push([x + 0.6, z - 0.4, 0xffb060, 0.9, 5.5]);
+          };
+          igloo(-14, 26, Math.PI / 2);
+          igloo(-36, -40, 0.4);
+          igloo(12, 30, Math.PI * 0.6);
+          igloo(-34, 8, 0);
+          igloo(44, 20, Math.PI);
+          // Taped barriers at the invisible edge, and snowy mountains beyond it.
+          const e = H - 3;
+          for (const [x0, z0, x1, z1] of [[-e, -e, e, -e], [e, -e, e, e], [e, e, -e, e], [-e, e, -e, -e]]) {
+            const segs = 8;
+            for (let i = 0; i < segs; i++) {
+              const ax = x0 + ((x1 - x0) * i) / segs,
+                az = z0 + ((z1 - z0) * i) / segs,
+                bx = x0 + ((x1 - x0) * (i + 1)) / segs,
+                bz = z0 + ((z1 - z0) * (i + 1)) / segs;
+              K.tapeLine(ax, az, bx, bz);
+              if (i % 2 === 0) K.warnSign((ax + bx) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
+            }
+          }
+          M.landscape = { inner: H - 1, peak: 58, snow: 1 };
+        };
         const MapManager = {
           group: new THREE.Group(),
           obstacles: [],
@@ -6175,6 +7271,10 @@ body.netgame #revivetouch{display:flex}
           spawnCursor: 0,
           gridSize: 35,
           cell: 2,
+          // Half the side of the playable square, per map (the maps got much bigger in v24).
+          half: 36,
+          halves: [70, 36, 36, 56, 60],
+          index: null,
           flow: null,
           blocked: null,
           build(index) {
@@ -6187,6 +7287,18 @@ body.netgame #revivetouch{display:flex}
             scene.add(this.group);
             this.obstacles = [];
             this.walls = [];
+            this.index = null;
+            this.half = this.halves[index] || 36;
+            this.ladders = [];
+            this.fires = [];
+            this.beacons = [];
+            this.designProps = [];
+            this.lights = [];
+            this.landscape = null;
+            this.capsule = null;
+            this.closed = false;
+            this.keepOut = null;
+            this.playerStart = null;
             WorldProps.begin();
             this.spawns = this.spawnSets[index].map((p) => p.slice());
             this.spawnCursor = 0;
@@ -6199,15 +7311,26 @@ body.netgame #revivetouch{display:flex}
             renderer.toneMappingExposure = index === 2 ? 1.08 : index === 4 ? 0.96 : 1.04;
             ambient.intensity = index === 4 ? 0.65 : 0.4;
             sun.intensity = index === 4 ? 0.6 : index === 2 ? 0.26 : 0.42;
-            box(this.group, 0, -0.3, 0, 72, 0.6, 72, m.ground);
-            for (const [x, z, w, d] of [
-              [0, -36, 74, 2],
-              [0, 36, 74, 2],
-              [-36, 0, 2, 72],
-              [36, 0, 2, 72],
-            ])
-              this.solid(x, 2, z, w, 4, d, 0x283b46);
-            if (index === 0) {
+            const H = this.half;
+            const legacy = !MapDesigns[index];
+            box(this.group, 0, -0.3, 0, H * 2, 0.6, H * 2, m.ground);
+            if (!MapDesigns[index])
+              for (const [x, z, w, d] of [
+                [0, -H, H * 2 + 2, 2],
+                [0, H, H * 2 + 2, 2],
+                [-H, 0, 2, H * 2],
+                [H, 0, 2, H * 2],
+              ])
+                this.solid(x, 2, z, w, 4, d, 0x283b46);
+            if (MapDesigns[index]) MapDesigns[index](this, H);
+            if (this.closed) {
+              // Underground: no sky light, the lamps do the work.
+              sun.intensity = 0.06;
+              ambient.intensity = 1.05;
+              ambient.color.setHex(0x9aa6c0);
+              ambient.groundColor.setHex(0x2a2e38);
+            }
+            if (legacy && index === 0) {
               box(this.group, 0, 0.015, 0, 12, 0.03, 70, 0x19262d);
               box(this.group, 0, 0.018, 0, 70, 0.04, 10, 0x1e2a30);
               for (let z = -30; z < 34; z += 7)
@@ -6281,7 +7404,7 @@ body.netgame #revivetouch{display:flex}
                 this.group.add(l);
               }
             }
-            if (index === 1) {
+            if (legacy && index === 1) {
               for (const x of [-20, 20])
                 for (const z of [-20, -3, 17]) {
                   this.solid(x, 1.5, z, 12, 3, 0.7, 0x728078);
@@ -6301,7 +7424,7 @@ body.netgame #revivetouch{display:flex}
                 this.group.add(l);
               }
             }
-            if (index === 2) {
+            if (legacy && index === 2) {
               for (let i = 0; i < 95; i++) {
                 const x = rand(-33, 33),
                   z = rand(-33, 33);
@@ -6326,7 +7449,7 @@ body.netgame #revivetouch{display:flex}
                   0x3d4638,
                 );
             }
-            if (index === 3) {
+            if (legacy && index === 3) {
               for (const x of [-22, 22])
                 for (const z of [-22, -10, 3, 18, 28]) {
                   this.solid(x, 1.7, z, 4, 3.4, 4, 0x35415a);
@@ -6359,7 +7482,7 @@ body.netgame #revivetouch{display:flex}
                 this.group.add(l);
               }
             }
-            if (index === 4) {
+            if (legacy && index === 4) {
               for (const [x, z] of [
                 [-21, -21],
                 [20, 20],
@@ -6388,7 +7511,7 @@ body.netgame #revivetouch{display:flex}
                 WorldProps.rock(x, z, rand(1.2, 2.4), rand(0.9, 1.3), "ice");
               }
             }
-            if (index === 0) {
+            if (legacy && index === 0) {
               for (const [x, z] of [
                 [-3, -19],
                 [2, -24],
@@ -6444,19 +7567,51 @@ body.netgame #revivetouch{display:flex}
           // Anything whose top is within STEP of your feet can be walked onto — no invisible walls.
           STEP: 0.5,
           collides(x, z, r = 0.4, feet = 0) {
-            if (Math.abs(x) > 34.8 - r || Math.abs(z) > 34.8 - r) return true;
+            const edge = this.half - 1.2;
+            if (Math.abs(x) > edge - r || Math.abs(z) > edge - r) return true;
             const limit = feet + this.STEP;
-            return this.obstacles.some(
-              (o) => o.top > limit && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r,
-            );
+            for (const o of this.near(x, z, r))
+              if (o.top > limit && (o.base === undefined || feet + 1.7 > o.base) && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return true;
+            return false;
           },
           // Height of the surface under (x, z) that someone with feet at `feet` can stand on.
           groundAt(x, z, r = 0.3, feet = 0) {
             const limit = feet + this.STEP;
             let g = 0;
-            for (const o of this.obstacles)
+            for (const o of this.near(x, z, r))
               if (o.top <= limit && o.top > g && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) g = o.top;
             return g;
+          },
+          // Spatial index over the obstacle boxes (4 m buckets). Rebuilt lazily whenever the
+          // obstacle list changes length, so the big maps stay cheap for every zombie every frame.
+          BUCKET: 4,
+          near(x, z, r) {
+            if (this.indexed !== this.obstacles || this.indexedCount !== this.obstacles.length) this.reindex();
+            if (r > 2.5) return this.obstacles;
+            const B = this.BUCKET,
+              key = ((Math.floor(x / B) + 512) << 10) | (Math.floor(z / B) + 512);
+            return this.buckets.get(key) || this.emptyBucket;
+          },
+          emptyBucket: [],
+          reindex() {
+            const B = this.BUCKET,
+              pad = 2.6;
+            this.buckets = new Map();
+            for (const o of this.obstacles) {
+              const x0 = Math.floor((o.x - o.w - pad) / B),
+                x1 = Math.floor((o.x + o.w + pad) / B),
+                z0 = Math.floor((o.z - o.d - pad) / B),
+                z1 = Math.floor((o.z + o.d + pad) / B);
+              for (let bx = x0; bx <= x1; bx++)
+                for (let bz = z0; bz <= z1; bz++) {
+                  const key = ((bx + 512) << 10) | (bz + 512);
+                  let list = this.buckets.get(key);
+                  if (!list) this.buckets.set(key, (list = []));
+                  list.push(o);
+                }
+            }
+            this.indexed = this.obstacles;
+            this.indexedCount = this.obstacles.length;
           },
           move(pos, dx, dz, r = 0.4, feet = 0) {
             if (!this.collides(pos.x + dx, pos.z, r, feet)) pos.x += dx;
@@ -6468,8 +7623,8 @@ body.netgame #revivetouch{display:flex}
               for (let r = 1; r <= 7; r++) {
                 for (let i = 0; i < 16; i++) {
                   const a = (i / 16) * Math.PI * 2,
-                    x = clamp(sx + Math.cos(a) * r, -32, 32),
-                    z = clamp(sz + Math.sin(a) * r, -32, 32);
+                    x = clamp(sx + Math.cos(a) * r, -this.half + 4, this.half - 4),
+                    z = clamp(sz + Math.sin(a) * r, -this.half + 4, this.half - 4);
                   if (!this.collides(x, z, 1.15)) return [x, z];
                 }
               }
@@ -6481,21 +7636,23 @@ body.netgame #revivetouch{display:flex}
               .map((p, i) => ({ p, i, d: Math.hypot(p[0] - target.x, p[1] - target.z) }))
               .filter((entry) => !this.collides(entry.p[0], entry.p[1], 0.8))
               .sort((a, b) => b.d - a.d);
-            if (!ranked.length) return [0, -31];
+            if (!ranked.length) return [0, -(this.half - 5)];
             const safe = ranked.filter((entry) => entry.d > 12);
             const pool = safe.length ? safe : ranked;
             const choice = pool[this.spawnCursor++ % Math.min(2, pool.length)];
             return choice.p;
           },
           makeGrid() {
+            this.gridSize = Math.floor((this.half * 2) / this.cell) + 1;
+            this.gridOffset = (this.gridSize - 1) / 2;
             const n = this.gridSize;
             this.blocked = new Uint8Array(n * n);
             this.openPenalty = new Float32Array(n * n);
             for (let z = 0; z < n; z++)
               for (let x = 0; x < n; x++) {
                 const id = z * n + x,
-                  wx = (x - 17) * 2,
-                  wz = (z - 17) * 2;
+                  wx = (x - this.gridOffset) * 2,
+                  wz = (z - this.gridOffset) * 2;
                 this.blocked[id] = this.collides(wx, wz, 0.55) ? 1 : 0;
                 if (!this.blocked[id]) {
                   let crowd = 0;
@@ -6510,9 +7667,10 @@ body.netgame #revivetouch{display:flex}
             this.flow = new Int32Array(n * n);
           },
           cellAt(x, z) {
+            const o = this.gridOffset ?? 17;
             return [
-              clamp(Math.round(x / 2) + 17, 0, 34),
-              clamp(Math.round(z / 2) + 17, 0, 34),
+              clamp(Math.round(x / 2) + o, 0, this.gridSize - 1),
+              clamp(Math.round(z / 2) + o, 0, this.gridSize - 1),
             ];
           },
           updateFlow() {
@@ -7697,6 +8855,7 @@ body.netgame #revivetouch{display:flex}
             g.scale.setScalar(size);
             scene.add(g);
             const rig = CreatureRig.create(g, type, boss);
+            if (!boss) VoxelMonsters.dress(rig, selectedMap);
             const scaling =
                 mode === "infinite"
                   ? Math.pow(1.12, WaveManager.wave - 1)
@@ -8099,9 +9258,9 @@ body.netgame #revivetouch{display:flex}
                         kind: "fragment",
                       },
                       new V(
-                        clamp(pos.x + rand(-4, 4), -31, 31),
+                        clamp(pos.x + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
                         0,
-                        clamp(pos.z + rand(-4, 4), -31, 31),
+                        clamp(pos.z + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
                       ),
                     );
                   UIManager.announce(
@@ -8158,9 +9317,9 @@ body.netgame #revivetouch{display:flex}
                           0,
                           null,
                           new V(
-                            clamp(pos.x + rand(-4, 4), -31, 31),
+                            clamp(pos.x + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
                             0,
-                            clamp(pos.z + rand(-4, 4), -31, 31),
+                            clamp(pos.z + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
                           ),
                         );
                     if (dist < 20)
@@ -8185,9 +9344,9 @@ body.netgame #revivetouch{display:flex}
                           kind === "king" ? 1 : 0,
                           null,
                           new V(
-                            clamp(pos.x + rand(-4, 4), -31, 31),
+                            clamp(pos.x + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
                             0,
-                            clamp(pos.z + rand(-4, 4), -31, 31),
+                            clamp(pos.z + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
                           ),
                         );
                     }
@@ -9482,6 +10641,193 @@ body.netgame #revivetouch{display:flex}
                 fill([214, 204, 180], 20);
                 dots([160, 146, 120], 12, 12);
                 break;
+              // --- v24 city / hospital / forest / lab material set ---
+              case "window":
+              case "windowLit":
+              case "windowBroken": {
+                const lit = kind === "windowLit";
+                fill([62, 70, 74], 10);
+                for (let y = 1; y < N - 1; y++)
+                  for (let x = 1; x < N - 1; x++) px(x, y, jitter(lit ? [214, 170, 96] : [34, 48, 58], 12));
+                for (let i = 1; i < N - 1; i++) { px(7, i, [70, 78, 80]); px(8, i, [70, 78, 80]); px(i, 7, [70, 78, 80]); }
+                if (!lit) for (let i = 2; i < 7; i++) px(i + 1, i, [92, 118, 132]);
+                if (kind === "windowBroken") for (let i = 0; i < 26; i++) px(2 + ((R() * 12) | 0), 2 + ((R() * 12) | 0), [14, 16, 18]);
+                break;
+              }
+              case "shopGlass":
+                fill([28, 38, 44], 8);
+                for (let x = 0; x < N; x++) { px(x, 0, [96, 100, 100]); px(x, N - 1, [96, 100, 100]); }
+                for (let y = 0; y < N; y++) { px(0, y, [96, 100, 100]); px(8, y, [96, 100, 100]); }
+                for (let i = 2; i < 12; i++) px(i, 14 - i, [80, 104, 116]);
+                break;
+              case "awningRed":
+              case "awningGreen":
+              case "awningBlue": {
+                const col = { awningRed: [150, 38, 34], awningGreen: [40, 110, 62], awningBlue: [38, 70, 130] }[kind];
+                for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) px(x, y, jitter(x % 4 < 2 ? col : [220, 214, 200], 14));
+                break;
+              }
+              case "signRed":
+              case "signYellow":
+              case "signCyan":
+              case "signGreen": {
+                const col = { signRed: [230, 60, 50], signYellow: [240, 200, 60], signCyan: [70, 220, 230], signGreen: [60, 210, 110] }[kind];
+                fill([26, 28, 30], 6);
+                for (let y = 4; y < 12; y++) for (let x = 2; x < 14; x++) if ((x + y * 3) % 5 !== 0) px(x, y, jitter(col, 20));
+                break;
+              }
+              case "brick":
+                for (let y = 0; y < N; y++)
+                  for (let x = 0; x < N; x++) {
+                    const row = y >> 2, mortar = y % 4 === 3 || (x + (row % 2) * 4) % 8 === 7;
+                    px(x, y, mortar ? jitter([150, 142, 130], 12) : jitter([128, 62, 48], 26));
+                  }
+                break;
+              case "plaster":
+                fill([176, 170, 156], 18);
+                dots([140, 134, 120], 20, 14);
+                break;
+              case "roof":
+                fill([54, 56, 58], 14);
+                dots([38, 40, 42], 26, 10);
+                break;
+              case "sidewalk":
+                fill([150, 150, 146], 14);
+                for (let i = 0; i < N; i++) { px(i, 0, [112, 112, 108]); px(0, i, [112, 112, 108]); }
+                dots([122, 122, 118], 10, 10);
+                break;
+              case "curb":
+                fill([176, 176, 170], 12);
+                break;
+              case "stripeWhite":
+                fill([226, 226, 216], 14);
+                dots([170, 170, 160], 12, 12);
+                break;
+              case "stripeYellow":
+                fill([226, 188, 64], 16);
+                dots([170, 140, 50], 10, 12);
+                break;
+              case "carRed": case "carBlue": case "carWhite": case "carGray": case "carGreen": case "carBurnt": {
+                const col = { carRed: [150, 30, 28], carBlue: [34, 64, 126], carWhite: [210, 212, 208], carGray: [98, 102, 106], carGreen: [52, 92, 60], carBurnt: [44, 38, 34] }[kind];
+                fill(col, kind === "carBurnt" ? 40 : 12);
+                if (kind === "carBurnt") dots([96, 58, 30], 30, 30);
+                else dots(col.map((v) => v * 0.7), 8, 10);
+                break;
+              }
+              case "policeBW":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, jitter(y < 8 ? [230, 230, 228] : [20, 22, 26], 8));
+                for (let x = 2; x < 14; x++) px(x, 5, [40, 70, 150]);
+                break;
+              case "tire":
+                fill([24, 24, 26], 8);
+                for (let i = 4; i < 12; i++) for (let j = 4; j < 12; j++) px(i, j, [120, 122, 124]);
+                break;
+              case "glassCar":
+                fill([30, 44, 54], 10);
+                for (let i = 3; i < 10; i++) px(i, 12 - i, [90, 120, 136]);
+                break;
+              case "lightRed": case "lightBlue": case "lightAmber": case "lightGreen": case "lightWhite": case "fire": {
+                const col = { lightRed: [255, 50, 40], lightBlue: [50, 110, 255], lightAmber: [255, 170, 40], lightGreen: [60, 255, 120], lightWhite: [255, 246, 220], fire: [255, 120, 30] }[kind];
+                fill(col, 30);
+                break;
+              }
+              case "ladder":
+                fill([70, 74, 78], 10);
+                for (let y = 0; y < N; y += 4) for (let x = 0; x < N; x++) px(x, y, [150, 156, 160]);
+                break;
+              case "rubble":
+                fill([120, 116, 108], 40);
+                dots([80, 76, 70], 40, 20);
+                dots([150, 110, 90], 12, 20);
+                break;
+              case "dumpster":
+                fill([46, 92, 64], 16);
+                for (let x = 0; x < N; x += 4) for (let y = 0; y < N; y++) px(x, y, [34, 70, 48]);
+                break;
+              case "sandbag":
+                fill([150, 132, 96], 20);
+                for (let y = 0; y < N; y += 5) for (let x = 0; x < N; x++) px(x, y, [110, 96, 70]);
+                break;
+              case "tape":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, ((x + y) >> 2) % 2 ? [236, 200, 30] : [20, 20, 20]);
+                break;
+              case "streetSign":
+                fill([34, 110, 64], 10);
+                for (let x = 2; x < 14; x++) { px(x, 6, [230, 236, 230]); if (x % 3) px(x, 9, [230, 236, 230]); }
+                break;
+              case "container":
+                for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) px(x, y, jitter(x % 3 === 0 ? [120, 50, 36] : [158, 70, 48], 14));
+                break;
+              case "fence":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, (x + y) % 4 === 0 || (x - y + 16) % 4 === 0 ? [140, 146, 150] : [22, 26, 28]);
+                break;
+              case "tile":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, x % 8 === 0 || y % 8 === 0 ? [150, 156, 150] : jitter([206, 212, 204], 10));
+                break;
+              case "hospitalWall":
+                fill([196, 206, 200], 10);
+                for (let y = 10; y < N; y++) for (let x = 0; x < N; x++) px(x, y, jitter([96, 140, 132], 10));
+                for (let x = 0; x < N; x++) px(x, 9, [70, 110, 104]);
+                break;
+              case "labWall":
+                fill([70, 78, 88], 12);
+                for (let x = 0; x < N; x++) { px(x, 0, [44, 50, 58]); px(x, 8, [44, 50, 58]); }
+                for (let y = 0; y < N; y++) px(0, y, [44, 50, 58]);
+                break;
+              case "labFloor":
+                fill([58, 62, 70], 10);
+                for (let i = 0; i < N; i += 4) for (let j = 0; j < N; j++) { px(i, j, [44, 48, 54]); px(j, i, [44, 48, 54]); }
+                break;
+              case "hazard":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, ((x + y) >> 2) % 2 ? [220, 180, 30] : [30, 30, 30]);
+                break;
+              case "screen":
+                fill([20, 60, 70], 10);
+                for (let y = 3; y < 13; y += 2) for (let x = 2; x < 14; x++) if (R() > 0.4) px(x, y, [90, 230, 210]);
+                break;
+              case "white":
+                fill([222, 224, 222], 8);
+                break;
+              case "mattress":
+                fill([196, 208, 214], 10);
+                for (let x = 0; x < N; x++) px(x, 7, [160, 172, 180]);
+                break;
+              case "blood":
+                fill([96, 12, 12], 30);
+                break;
+              case "dirt":
+                fill([74, 58, 40], 26);
+                dots([52, 40, 28], 30, 16);
+                break;
+              case "mud":
+                fill([56, 44, 32], 18);
+                dots([40, 30, 22], 20, 10);
+                dots([90, 80, 62], 6, 10);
+                break;
+              case "leaves":
+                fill([80, 58, 30], 34);
+                dots([120, 80, 34], 30, 30);
+                dots([60, 70, 34], 14, 20);
+                break;
+              case "planks":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, y % 4 === 0 ? [56, 38, 24] : jitter([112, 80, 50], 20));
+                break;
+              case "cabinRoof":
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, y % 3 === 0 ? [40, 34, 30] : jitter([72, 58, 48], 18));
+                break;
+              case "mountain":
+                fill([54, 62, 60], 30);
+                dots([80, 88, 84], 20, 20);
+                break;
+              case "mountainSnow":
+                fill([206, 218, 224], 20);
+                dots([160, 172, 180], 16, 20);
+                break;
+              case "road":
+                fill([52, 54, 56], 16);
+                dots([70, 72, 74], 20, 14);
+                break;
+
               default:
                 fill([128, 128, 128], 20);
             }
@@ -9497,14 +10843,18 @@ body.netgame #revivetouch{display:flex}
           },
           mat(kind) {
             if (this.materials.has(kind)) return this.materials.get(kind);
-            const glow = { lamp: 0xffc070, lava: 0xff4a10, ice: 0x0a2a3a }[kind];
+            const glow = {
+              lamp: 0xffc070, lava: 0xff4a10, ice: 0x0a2a3a, windowLit: 0xffc27a, signRed: 0xff4a3a, signYellow: 0xffd24a,
+              signCyan: 0x4ae8ff, signGreen: 0x4aff8a, lightRed: 0xff2a20, lightBlue: 0x2a6aff, lightAmber: 0xffa020,
+              lightGreen: 0x30ff70, lightWhite: 0xfff2d0, fire: 0xff7a20, screen: 0x40e0d0,
+            }[kind];
             const m = new THREE.MeshStandardMaterial({
               map: this.texture(kind),
               roughness: kind === "metal" ? 0.55 : kind === "ice" ? 0.25 : 0.92,
               metalness: kind === "metal" ? 0.35 : 0,
               emissive: glow ? new THREE.Color(glow) : new THREE.Color(0),
               emissiveMap: glow ? this.texture(kind) : null,
-              emissiveIntensity: kind === "lamp" ? 1.4 : kind === "lava" ? 1.1 : glow ? 0.5 : 0,
+              emissiveIntensity: kind === "lamp" ? 1.4 : kind === "lava" ? 1.1 : kind === "ice" ? 0.5 : glow ? 0.9 : 0,
             });
             if (["leaf", "leafDark", "pine", "snowPine"].includes(kind)) this.wind(m, kind === "pine" || kind === "snowPine" ? 0.6 : 1);
             this.materials.set(kind, m);
@@ -9564,7 +10914,7 @@ body.netgame #revivetouch{display:flex}
                   uvA = g.attributes.uv;
                 for (let i = 0; i < uvA.count; i++) {
                   const f = Math.floor(i / 4);
-                  uvA.setXY(i, uvA.getX(i) * faceDims[f][0] * b.density, uvA.getY(i) * faceDims[f][1] * b.density);
+                  if (b.density) uvA.setXY(i, uvA.getX(i) * faceDims[f][0] * b.density, uvA.getY(i) * faceDims[f][1] * b.density);
                 }
                 e.set(...(b.rot || [0, 0, 0]));
                 m4.compose(new V(...b.pos), q.setFromEuler(e), one);
@@ -9583,7 +10933,7 @@ body.netgame #revivetouch{display:flex}
               geo.setIndex(idx);
               geo.computeBoundingSphere();
               const mesh = new THREE.Mesh(geo, this.mat(kind));
-              mesh.castShadow = !["lamp", "lava"].includes(kind);
+              mesh.castShadow = !["lamp", "lava", "window", "windowLit", "windowBroken", "shopGlass", "stripeWhite", "stripeYellow", "curb"].includes(kind) && !kind.startsWith("sign") && !kind.startsWith("light");
               mesh.receiveShadow = true;
               mesh.userData.propBatch = true;
               parent.add(mesh);
@@ -9606,14 +10956,16 @@ body.netgame #revivetouch{display:flex}
             MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: top, top });
           },
           free(x, z, r) {
-            if (Math.abs(x) > 33 - r || Math.abs(z) > 33 - r) return false;
-            if (MapManager.obstacles.some((o) => Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r)) return false;
+            if (Math.abs(x) > MapManager.half - 3 - r || Math.abs(z) > MapManager.half - 3 - r) return false;
+            if (MapManager.near(x, z, r).some((o) => Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r)) return false;
+            if (MapManager.keepOut?.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr + r)) return false;
             if (MapManager.spawns.some((s) => Math.hypot(x - s[0], z - s[1]) < 4.5)) return false;
-            if (Math.hypot(x, z - 10) < 3.5) return false; // player start
+            const ps = MapManager.playerStart || [0, 10];
+            if (Math.hypot(x - ps[0], z - ps[1]) < 3.5) return false; // player start
             if (Math.hypot(x, z) < 6.5) return false; // keep the boss landing zone clear
             return true;
           },
-          spot(r, tries = 40, area = 31) {
+          spot(r, tries = 40, area = MapManager.half - 5) {
             for (let i = 0; i < tries; i++) {
               const x = rand(-area, area),
                 z = rand(-area, area);
@@ -9699,7 +11051,9 @@ body.netgame #revivetouch{display:flex}
           },
           finish(index) {
             // Every map: low rocks to hop across and crate stairs up onto cover.
-            if (index === 0) {
+            if (MapDesigns[index]) {
+              // The new layouts place their own details (MapDesigns).
+            } else if (index === 0) {
               for (const z of [-30, -16, -2, 12, 26]) this.tree(rand(-9.5, -8.6), z + rand(-1, 1), 0.85, "leaf");
               for (const [x, z, r] of [[-3, 4, 0], [3.5, -4, 0], [12, 5, Math.PI / 2], [-12, -5, Math.PI / 2]]) this.barrier(x, z, r);
               this.crateStairs(-4.2, -12.2, 0, 1, 3);
@@ -9833,6 +11187,10 @@ body.netgame #revivetouch{display:flex}
           },
           populate(index) {
             this.clear();
+            if (MapDesigns[index]) {
+              for (const [kind, x, z] of MapManager.designProps) if (!MapManager.collides(x, z, 0.4)) this.spawn(kind, x, z, MapManager.groundAt(x, z, 0.3, 0.2));
+              return;
+            }
             const counts = [
               { barrel: 5, cone: 8, trash: 3, box: 4 },
               { box: 8, trash: 4, barrel: 2 },
@@ -10120,8 +11478,8 @@ body.netgame #revivetouch{display:flex}
             let best = null,
               score = -1;
             for (let i = 0, found = 0; i < 90 && found < 7; i++) {
-              const x = rand(-34, 34),
-                z = rand(-34, 34);
+              const x = rand(-MapManager.half + 3, MapManager.half - 3),
+                z = rand(-MapManager.half + 3, MapManager.half - 3);
               const dp = Math.hypot(x - player.pos.x, z - player.pos.z);
               if (MapManager.collides(x, z, 0.6) || dp < 8) continue;
               found++;
@@ -10435,7 +11793,7 @@ body.netgame #revivetouch{display:flex}
             simulationTime = 0;
             const d = diff[difficulty];
             player = {
-              pos: new V(0, 1.7, 10),
+              pos: new V(MapManager.playerStart?.[0] ?? 0, 1.7, MapManager.playerStart?.[1] ?? 10),
               hp: d.hp,
               maxhp: d.hp,
               bonus: 0,
@@ -10873,6 +12231,13 @@ body.netgame #revivetouch{display:flex}
               player.stepOffset = (player.stepOffset || 0) + (ground - feet);
               feet = ground;
             }
+            // Ladders: standing at one and pushing forward climbs; at the top the roof is walkable.
+            const ladder = MapManager.ladders?.find((l) => Math.hypot(player.pos.x - l.x, player.pos.z - l.z) < 0.95 && feet < l.top + 0.3);
+            const pushing = Math.hypot(x, z) > 0.1 || keys.has("Space");
+            if (ladder && pushing) {
+              player.vy = Math.max(player.vy, 3.4);
+              player.onLadder = true;
+            } else player.onLadder = false;
             player.vy -= 16 * dt;
             feet += player.vy * dt;
             if (feet < ground) feet = ground;
@@ -11458,43 +12823,40 @@ body.netgame #revivetouch{display:flex}
             if (!nativeAndroid) this.minimap();
           },
           minimap() {
+            // Radar centred on the player (the maps are far bigger than the minimap).
             const c = $("minimap").getContext("2d"),
               n = 180,
-              k = n / 74;
+              R = Math.min(42, MapManager.half),
+              k = n / (R * 2),
+              px = player.pos.x,
+              pz = player.pos.z,
+              X = (x) => (x - px + R) * k,
+              Z = (z) => (z - pz + R) * k,
+              inside = (x, z, m = 0) => Math.abs(x - px) < R + m && Math.abs(z - pz) < R + m;
             c.clearRect(0, 0, n, n);
             c.fillStyle = "#75889655";
             for (const o of MapManager.obstacles)
-              c.fillRect(
-                (o.x - o.w + 37) * k,
-                (o.z - o.d + 37) * k,
-                o.w * 2 * k,
-                o.d * 2 * k,
-              );
+              if (inside(o.x, o.z, o.w + o.d)) c.fillRect(X(o.x - o.w), Z(o.z - o.d), o.w * 2 * k, o.d * 2 * k);
             c.font = "11px Arial";
             c.fillStyle = "#ed7064";
-            for (const [x, z] of MapManager.spawns)
-              c.fillText("×", (x + 37) * k - 3, (z + 37) * k + 3);
+            for (const [x, z] of MapManager.spawns) if (inside(x, z)) c.fillText("×", X(x) - 3, Z(z) + 3);
             for (const z of ZombieManager.list) {
+              if (!inside(z.group.position.x, z.group.position.z)) continue;
               c.fillStyle = z.boss ? "#ffb74b" : "#e66358";
               c.beginPath();
-              c.arc(
-                (z.group.position.x + 37) * k,
-                (z.group.position.z + 37) * k,
-                z.boss ? 4 : 2,
-                0,
-                Math.PI * 2,
-              );
+              c.arc(X(z.group.position.x), Z(z.group.position.z), z.boss ? 4 : 2, 0, Math.PI * 2);
               c.fill();
             }
             for (const m of Medkits.items) {
+              if (!inside(m.pos.x, m.pos.z)) continue;
               c.fillStyle = m.kind === "grenade" ? "#ffb050" : "#6dff92";
-              const mx = (m.pos.x + 37) * k,
-                mz = (m.pos.z + 37) * k;
+              const mx = X(m.pos.x),
+                mz = Z(m.pos.z);
               c.fillRect(mx - 1.5, mz - 4, 3, 8);
               c.fillRect(mx - 4, mz - 1.5, 8, 3);
             }
             c.save();
-            c.translate((player.pos.x + 37) * k, (player.pos.z + 37) * k);
+            c.translate(n / 2, n / 2);
             c.rotate(-yaw);
             c.fillStyle = "#fff";
             c.beginPath();
@@ -15578,6 +16940,12 @@ body.netgame #revivetouch{display:flex}
               if (state === GameState.PLAYING) MonsterFX.update(sdt);
               if (state === GameState.PLAYING) PhysicsProps.update(sdt);
               PropKit.windTime.value += dt;
+              if (player) {
+                const sx = Math.round(player.pos.x / 4) * 4,
+                  sz = Math.round(player.pos.z / 4) * 4;
+                sun.target.position.set(sx, 0, sz);
+                sun.position.set(sx + sunOffset.x, sunOffset.y, sz + sunOffset.z);
+              }
               if (state === GameState.PLAYING) Medkits.update(sdt);
               if (KillCam.active) KillCam.update(dt);
               if (BossDeath.active) BossDeath.update(dt);
