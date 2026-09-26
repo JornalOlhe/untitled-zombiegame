@@ -4073,9 +4073,11 @@
             if (this.matCache.has(id)) return this.matCache.get(id);
             const texture = new THREE.TextureLoader().load(window.DR_VOXEL_ATLAS.atlases[key]);
             texture.encoding = THREE.sRGBEncoding;
+            // Crisp pixels up close, mipmapped + anisotropic far away so skins don't shimmer.
             texture.magFilter = THREE.NearestFilter;
-            texture.minFilter = THREE.LinearFilter;
-            texture.generateMipmaps = false;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.generateMipmaps = true;
+            texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
             const m = new THREE.MeshStandardMaterial({
               map: texture,
               roughness: 0.92,
@@ -4269,6 +4271,140 @@
               handR.add(rig.props.trident);
             }
           },
+          flash(z) {
+            if (!z.flashMat) {
+              z.flashMat = z.rig.hits[0].material.clone();
+              z.flashMat.emissive = new THREE.Color(0xffffff);
+              z.group.traverse((o) => {
+                if (o.isMesh && o.material === z.rig.hits[0].material) o.material = z.flashMat;
+              });
+            }
+            z.flashUntil = simulationTime + 0.09;
+            z.flashMat.emissiveIntensity = 0.55;
+          },
+          // Voxel death physics: the body topples away from the killing blow, bounces once, limbs go
+          // limp on springs, it slides with friction and finally sinks. Crawlers roll onto their side;
+          // blast kills get thrown; the Constructor's own dynamite blows him into flying blocks.
+          spring(c, key, obj, prop, target, k = 60, damp = 7) {
+            const s = (c.springs[key] ||= { v: 0 });
+            const cur = obj.rotation[prop];
+            s.v += ((target - cur) * k - s.v * damp) * c.dt;
+            obj.rotation[prop] = cur + s.v * c.dt;
+          },
+          initCorpse(c, z) {
+            const r = z.rig,
+              from = z.lastHitPoint && simulationTime - (z.lastHitAt || 0) < 0.3 ? z.lastHitPoint : player.pos,
+              away = z.group.position.clone().sub(from);
+            away.y = 0;
+            if (away.lengthSq() < 0.001) away.set(rand(-1, 1), 0, rand(-1, 1));
+            away.normalize();
+            const blast = simulationTime - (z.blastAt || -9) < 0.3,
+              yaw = z.group.rotation.y,
+              local = away.clone().applyAxisAngle(new V(0, 1, 0), -yaw);
+            // Tip over around the horizontal axis perpendicular to the push direction.
+            c.fallX = local.z;
+            c.fallZ = local.x;
+            c.angle = 0;
+            c.w = blast ? 4 : z.boss ? 0.6 : 1.4 + (c.head ? 1.2 : 0);
+            c.vel = away.clone().multiplyScalar(blast ? rand(6, 9) : z.boss ? 0.4 : rand(0.8, 1.8));
+            c.vy = blast ? rand(4, 6.5) : 0;
+            c.spin = blast ? rand(-4, 4) : 0;
+            c.springs = {};
+            c.bounced = false;
+            c.crawler = r.style === "crawler";
+            c.boss = !!z.boss;
+            c.life = z.boss ? 6 : 4;
+            c.max = c.life;
+            c.lift = (r.shape.td * this.P) / 2;
+            c.init = true;
+          },
+          corpse(c, z, dt) {
+            if (!c.init) this.initCorpse(c, z || c.z);
+            const r = c.rig,
+              g = c.group;
+            c.dt = Math.min(dt, 0.05);
+            c.life -= dt;
+            const zz = z || c.z;
+            if (zz?.flashMat) zz.flashMat.emissiveIntensity = zz.flashUntil > simulationTime ? 0.55 * ((zz.flashUntil - simulationTime) / 0.09) : 0;
+            // Airborne/sliding motion of the whole body.
+            c.vy -= 20 * dt;
+            const nx = g.position.x + c.vel.x * dt,
+              nz = g.position.z + c.vel.z * dt;
+            if (!MapManager.collides(nx, g.position.z, 0.35)) g.position.x = nx;
+            else c.vel.x *= -0.3;
+            if (!MapManager.collides(g.position.x, nz, 0.35)) g.position.z = nz;
+            else c.vel.z *= -0.3;
+            const ground = MapManager.groundAt(g.position.x, g.position.z, 0.2, g.position.y);
+            g.position.y += c.vy * dt;
+            if (g.position.y <= ground) {
+              if (c.vy < -4) {
+                ParticleSystem.emit(g.position.clone().add(new V(0, 0.2, 0)), 0x6a5a4a, 10, 2);
+                c.vy = -c.vy * 0.25;
+              } else c.vy = 0;
+              g.position.y = ground;
+              c.vel.multiplyScalar(Math.exp(-5 * dt));
+              c.spin *= Math.exp(-6 * dt);
+            }
+            g.rotation.y += c.spin * dt;
+            if (c.crawler) {
+              // Roll onto the side instead of pitching up.
+              const target = c.fallZ >= 0 ? 1.35 : -1.35;
+              c.angle += (target - c.angle) * Math.min(1, dt * 6);
+              r.root.rotation.z = c.angle;
+              r.root.position.y = Math.abs(Math.sin(c.angle)) * 0.1;
+              for (const [i, a] of r.arms.entries()) {
+                this.spring(c, "a" + i, a, "x", -1.2 + i * 0.5, 40, 5);
+                this.spring(c, "az" + i, a, "z", i ? -0.6 : 0.6, 40, 5);
+              }
+              for (const [i, l] of r.legs.entries()) this.spring(c, "l" + i, l, "z", i ? -0.35 : 0.35, 40, 5);
+              this.spring(c, "neck", r.neck, "z", 0.5, 30, 5);
+            } else {
+              // Gravity-driven topple with one soft bounce when the back hits the ground.
+              const limit = Math.PI / 2 - 0.05;
+              c.w += (2.5 + 9 * Math.sin(Math.min(limit, c.angle) + 0.12)) * dt * (c.boss ? 0.55 : 1);
+              c.angle += c.w * dt;
+              if (c.angle >= limit) {
+                c.angle = limit;
+                if (!c.bounced && c.w > 1.5) {
+                  c.bounced = true;
+                  c.w = -c.w * 0.22;
+                  const p = g.position.clone();
+                  ParticleSystem.emit(p.add(new V(0, 0.1, 0)), c.boss ? 0x8a7a6a : 0x6a5a4a, c.boss ? 50 : 14, c.boss ? 4 : 2);
+                  if (c.boss) shake = Math.max(shake, 0.5);
+                  BloodFX.emit(g.position.clone().add(new V(0, 0.2, 0)), 8);
+                } else c.w = 0;
+              }
+              const len = Math.hypot(c.fallX, c.fallZ) || 1;
+              r.root.rotation.x = (c.fallX / len) * c.angle;
+              r.root.rotation.z = (-c.fallZ / len) * c.angle;
+              r.root.position.y = Math.sin(c.angle) * c.lift;
+              r.body.position.y = r.hipY;
+              r.upper.rotation.x *= Math.exp(-4 * dt);
+              for (const [i, a] of r.arms.entries()) {
+                this.spring(c, "a" + i, a, "x", -2.2 - i * 0.4, 35, 4);
+                this.spring(c, "az" + i, a, "z", i ? -0.8 : 0.8, 35, 4);
+              }
+              for (const [i, l] of r.legs.entries()) {
+                this.spring(c, "l" + i, l, "x", i ? 0.25 : -0.15, 35, 4);
+                this.spring(c, "lz" + i, l, "z", i ? -0.3 : 0.3, 35, 4);
+              }
+              this.spring(c, "neck", r.neck, "x", -0.5, 30, 4);
+              this.spring(c, "neckz", r.neck, "z", c.fallZ > 0 ? 0.4 : -0.4, 30, 4);
+            }
+            if (c.life < 1.1) g.position.y -= dt * 0.6;
+          },
+          gib(z, center, force = 8) {
+            const r = z.rig;
+            for (const m of [...r.hits]) {
+              const wp = m.getWorldPosition(new V()),
+                dir = wp.clone().sub(center);
+              dir.y = Math.abs(dir.y) + 0.5;
+              dir.normalize();
+              PhysicsProps.fling(m, dir.multiplyScalar(force * rand(0.7, 1.3)).add(new V(0, rand(2, 5), 0)), rand(6, 16), rand(3, 4.5));
+            }
+            for (const p of Object.values(r.props)) if (p.parent) PhysicsProps.fling(p, new V(rand(-6, 6), rand(4, 8), rand(-6, 6)), 12, 3);
+            BloodFX.emit(center.clone().add(new V(0, 1, 0)), 30);
+          },
           // Trident mesh (also used for the thrown projectile). Origin at the grip, prongs along +Y.
           trident(key = "10", mat = this.material("10")) {
             const P = this.P,
@@ -4284,6 +4420,7 @@
           animate(z, dt, moving) {
             const r = z.rig,
               st = r.style,
+              _flash = z.flashMat && (z.flashMat.emissiveIntensity = z.flashUntil > simulationTime ? 0.55 * ((z.flashUntil - simulationTime) / 0.09) : 0),
               heavy = st === "yeti" || st === "demon" || st === "mutant",
               fast = st === "quarterback" || z.type === 1;
             z.moveBlend = (z.moveBlend || 0) + ((moving ? 1 : 0) - (z.moveBlend || 0)) * (1 - Math.exp(-dt * 7));
@@ -4307,7 +4444,7 @@
               r.legs[1].rotation.x = -s * stride;
               r.body.position.y = r.hipY + bounce * (fast ? 0.05 : heavy ? 0.035 : 0.025) * mb;
               r.body.rotation.z = Math.sin(t) * (heavy ? 0.045 : 0.025) * mb;
-              const lean = { quarterback: 0.34, yeti: 0.24, mutant: 0.14, demon: 0.07 }[st] ?? 0.1;
+              const lean = st === "quarterback" ? 0.34 : st === "yeti" ? 0.24 : st === "mutant" ? 0.14 : st === "demon" ? 0.07 : 0.1;
               r.upper.rotation.x = lean * (0.4 + 0.6 * mb) + r.lean;
               r.upper.rotation.y = Math.sin(t) * (heavy ? 0.1 : 0.06) * mb;
               r.neck.rotation.x = -r.upper.rotation.x * 0.7 + Math.sin(t * 0.6) * 0.05;
@@ -7088,6 +7225,7 @@
           } else
             for (const z of [...ZombieManager.list]) {
               const d = z.group.position.distanceTo(pos);
+              if (d < radius) z.blastAt = simulationTime;
               if (d < radius)
                 ZombieManager.hit(
                   z,
@@ -7290,6 +7428,11 @@
           },
           hit(z, damage, head, point, w, ignoreArmor = false) {
             if (z.dead) return;
+            if (point) {
+              z.lastHitPoint = point.clone();
+              z.lastHitAt = simulationTime;
+            }
+            if (z.rig.voxel) VoxelMonsters.flash(z);
             const toPlayer = player.pos
                 .clone()
                 .sub(z.group.position)
@@ -7376,7 +7519,14 @@
             this.hitMeshes = this.hitMeshes.filter(
               (m) => m.userData.zombie !== z,
             );
+            if (z.rig.voxel && z.type === 2 && !z.boss) {
+              // The Constructor's dynamite blows him apart into flying blocks.
+              VoxelMonsters.gib(z, z.group.position.clone().add(new V(0, 0.6, 0)), 7);
+              if (z.contact) z.contact.visible = false;
+            }
             this.corpses.push({
+              z,
+              head,
               group: z.group,
               rig: z.rig,
               life: 3.5,
@@ -7693,6 +7843,15 @@
             }
             for (let i = this.corpses.length - 1; i >= 0; i--) {
               const c = this.corpses[i];
+              if (c.rig.voxel) {
+                VoxelMonsters.corpse(c, c.z, dt);
+                if (c.life <= 0) {
+                  if (c.z?.flashMat) c.z.flashMat.dispose();
+                  scene.remove(c.group);
+                  this.corpses.splice(i, 1);
+                }
+                continue;
+              }
               c.life -= dt;
               const fall = Math.min(1, (3.5 - c.life) / 0.65);
               c.group.rotation.x = fall * 1.42;
@@ -7717,6 +7876,7 @@
           },
           clear() {
             for (const z of this.list) {
+              if (z.flashMat) z.flashMat.dispose();
               if (z.contact) z.contact.material.dispose();
               scene.remove(z.group);
             }
@@ -8892,8 +9052,9 @@
             }
             const t = new THREE.CanvasTexture(canvas);
             t.magFilter = THREE.NearestFilter;
-            t.minFilter = THREE.LinearFilter;
-            t.generateMipmaps = false;
+            t.minFilter = THREE.LinearMipmapLinearFilter;
+            t.generateMipmaps = true;
+            t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
             t.wrapS = t.wrapT = THREE.RepeatWrapping;
             t.encoding = THREE.sRGBEncoding;
             this.textures.set(kind, t);
@@ -9023,6 +9184,15 @@
             PropKit.add(this.hard, "metal", [x + side * 0.55, 5.9, z], [1.25, 0.16, 0.2]);
             PropKit.add(this.soft, "lamp", [x + side * 1.0, 5.72, z], [0.55, 0.2, 0.34]);
             this.collider(x, z, 0.45, 0.45, 6);
+            const halo = new THREE.Sprite(this.haloMat ||= new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xffb060, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+            halo.scale.setScalar(2.6);
+            halo.position.set(x + side * 1.0, 5.55, z);
+            MapManager.group.add(halo);
+            const pool = new THREE.Mesh(VisualArt.geometries.plane, this.poolMat ||= new THREE.MeshBasicMaterial({ map: VisualArt.texture("glow"), color: 0xffa050, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+            pool.rotation.x = -Math.PI / 2;
+            pool.scale.setScalar(6);
+            pool.position.set(x + side * 1.0, 0.06, z);
+            MapManager.group.add(pool);
           },
           // Rock clusters: low ones can simply be walked onto, taller ones need a jump.
           rock(x, z, size = 1, top = 0.45, kind = "stone") {
@@ -9192,6 +9362,7 @@
             group.rotation.y = rand(0, 6.28);
             MapManager.group.add(group);
             const p = { kind, d, group, tilt, mesh, pos: group.position, vel: new V(), spin: 0, angle: 0, target: 0, axis: new V(1, 0, 0), roll: 0, awake: true };
+            mesh.userData.prop = p;
             this.pose(p);
             this.items.push(p);
             return p;
@@ -9224,6 +9395,21 @@
             p.axis.set(dir.z, 0, -dir.x).normalize();
             p.axis.applyAxisAngle(new V(0, 1, 0), -p.group.rotation.y);
             p.target = Math.PI / 2;
+          },
+          meshes() {
+            return this.items.map((p) => p.mesh);
+          },
+          // A bullet hit: push along the shot, spin, and tip light props over.
+          shove(p, dir, point, damage) {
+            if (!p) return;
+            const push = Math.min(7, 1.2 + damage * 0.05) / p.d.mass;
+            p.vel.x += dir.x * push;
+            p.vel.z += dir.z * push;
+            p.vel.y += push * 0.25;
+            p.spin += rand(-1, 1) * push * 2;
+            p.awake = true;
+            ParticleSystem.emit(point, p.d.tex === "cone" ? 0xff8a3a : 0xbcbcbc, 5, 1.5);
+            if (push > 2.5) this.knock(p, new V(dir.x, 0, dir.z).normalize());
           },
           impulse(center, radius, force) {
             for (const p of this.items) {
@@ -9265,7 +9451,46 @@
                   if (speed > 6.5 && p.d.mass < 0.8) this.knock(p, new V(nx, 0, nz));
                 }
               }
+              // Zombies shoulder props aside; props don't overlap each other.
+              for (const z of HordeAI.neighbors(p.pos)) {
+                const dx = p.pos.x - z.group.position.x,
+                  dz = p.pos.z - z.group.position.z,
+                  dd = Math.hypot(dx, dz),
+                  reach = p.d.r + 0.35 * z.size;
+                if (dd < reach && dd > 0.001) {
+                  p.pos.x = z.group.position.x + (dx / dd) * reach;
+                  p.pos.z = z.group.position.z + (dz / dd) * reach;
+                  p.vel.x += (dx / dd) * 1.5 * dt * 20;
+                  p.vel.z += (dz / dd) * 1.5 * dt * 20;
+                  p.awake = true;
+                  if (z.size > 1.3 && p.d.mass < 1.2) this.knock(p, new V(dx / dd, 0, dz / dd));
+                }
+              }
               if (!p.awake) continue;
+              for (const q of this.items) {
+                if (q === p) continue;
+                const dx = p.pos.x - q.pos.x,
+                  dz = p.pos.z - q.pos.z,
+                  dd = Math.hypot(dx, dz),
+                  min = p.d.r + q.d.r;
+                if (dd < min && dd > 0.0001 && Math.abs(p.pos.y - q.pos.y) < 0.6) {
+                  const push = (min - dd) / 2,
+                    nx2 = dx / dd,
+                    nz2 = dz / dd;
+                  p.pos.x += nx2 * push;
+                  p.pos.z += nz2 * push;
+                  q.pos.x -= nx2 * push;
+                  q.pos.z -= nz2 * push;
+                  const rel = (p.vel.x - q.vel.x) * nx2 + (p.vel.z - q.vel.z) * nz2;
+                  if (rel < 0) {
+                    p.vel.x -= rel * nx2 * 0.6;
+                    p.vel.z -= rel * nz2 * 0.6;
+                    q.vel.x += rel * nx2 * 0.6;
+                    q.vel.z += rel * nz2 * 0.6;
+                    q.awake = true;
+                  }
+                }
+              }
               p.vel.y -= 20 * dt;
               const nx = p.pos.x + p.vel.x * dt,
                 nz = p.pos.z + p.vel.z * dt;
@@ -9521,6 +9746,11 @@
             ZombieManager.hit(z, damage * mult, head, h.point, w);
             end = h.point;
             remaining--;
+          }
+          const propHit = raycaster.intersectObjects(PhysicsProps.meshes());
+          if (propHit.length && propHit[0].distance < Math.min(wallDistance, origin.distanceTo(end) + 0.01)) {
+            PhysicsProps.shove(propHit[0].object.userData.prop, shot, propHit[0].point, damage);
+            end = propHit[0].point;
           }
           const gunOrigin = origin
             .clone()
