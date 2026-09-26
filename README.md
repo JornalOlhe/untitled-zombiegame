@@ -16,7 +16,7 @@ Controles principais: `WASD` para mover, mouse para mirar e atirar, `R` para rec
 
 ## Armory
 
-O Armory usa dois tipos de spin. O Lucky Spin entrega somente Épico, Lendário, Mítico ou Divino: 59% / 37% / 3% / 1%. Na v12 a roleta tem sequência longa e variável, near-miss visual ocasional e uma aproximação que pode frear no canto do card antes de encaixar no centro exato do prêmio; isso não altera as probabilidades reais. Todos os resultados entram diretamente no loadout e resultados Divinos recebem uma celebração própria. O único aviso acontece antes de um novo giro quando o item equipado é Mítico ou Divino.
+O Armory usa dois tipos de spin. O Normal Spin custa 50 moedas e soma +1 nos pities; o Lucky Spin tem custo base de 250 moedas, soma +2 e entrega somente Épico, Lendário, Mítico ou Divino: 59% / 37% / 3% / 1%. Armas e classes possuem pities separados: 75 garante Mítico ou Divino no próprio giro que atinge o limite, e 150 garante Divino. Um Mítico reseta apenas o pity Mítico; um Divino reseta os dois. A roleta mantém a sequência longa, near-miss visual e encaixe final no centro sem alterar o resultado real. Todos os resultados entram diretamente no loadout e resultados Divinos recebem uma celebração própria. O único aviso acontece antes de um novo giro quando o item equipado é Mítico ou Divino.
 
 ## Builds
 
