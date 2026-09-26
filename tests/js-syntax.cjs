@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const file = path.resolve("android/app/src/main/assets/index.html");
 const html = fs.readFileSync(file, "utf8");
@@ -9,7 +10,7 @@ if (!scripts.length) throw new Error("No inline scripts found.");
 let failures = 0;
 scripts.forEach((code, i) => {
   try {
-    new Function(code);
+    new vm.Script(code, { filename: `inline-script-${i}.js` });
   } catch (error) {
     failures++;
     console.error("\nINLINE SCRIPT", i, "FAILED");
