@@ -2557,8 +2557,20 @@ body.netgame #revivetouch{display:flex}
       <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
     <section id="loginscreen" class="screen hidden auth-screen">
+      <div class="auth-art" aria-hidden="true">
+        <span class="brand-kicker">UNTITLED ZOMBIE GAME</span>
+        <h1>DEAD<br />RECOIL</h1>
+        <p class="auth-tag">A cidade caiu. Sua conta mantém você de pé.</p>
+        <ul class="auth-perks">
+          <li><b>☁</b><span><strong>Progresso na nuvem</strong>Nível, armas e moedas no PC e no Android.</span></li>
+          <li><b>★</b><span><strong>Missões e Índice</strong>Diárias, semanais, conquistas e marcos de abate.</span></li>
+          <li><b>⚑</b><span><strong>Co-op online</strong>Até 4 sobreviventes contra a mesma horda.</span></li>
+        </ul>
+        <i class="auth-scan"></i>
+      </div>
       <div class="auth-card">
         <div class="auth-brand"><span class="brand-kicker">UNTITLED ZOMBIE GAME</span><h1>DEAD RECOIL</h1></div>
+        <div class="auth-status"><i></i><span id="auth-status-text">ACESSO DO SOBREVIVENTE</span></div>
         <p id="login-offline-note" class="auth-note hidden">Sem internet: você pode jogar SOLO offline e entrar depois.</p>
         <div data-view="login">
           <button id="google-btn" class="google-btn" type="button"><span class="g-logo" aria-hidden="true"></span>CONTINUAR COM GOOGLE</button>
@@ -2622,18 +2634,29 @@ body.netgame #revivetouch{display:flex}
     </section>
     <section id="profilescreen" class="screen hidden panel-screen">
       <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>PERFIL</h2><span id="profile-sync" class="sync-pill"></span></header>
-      <div class="profile-layout">
-        <div class="profile-hero">
+      <div class="profile-hero">
+        <div class="profile-avatar" id="profile-avatar" aria-hidden="true">?</div>
+        <div class="profile-id">
           <span class="profile-level" id="profile-level">LVL 1</span>
           <h1 id="profile-name">Sobrevivente</h1>
           <p id="profile-handle"></p>
+          <p id="profile-since" class="profile-since"></p>
+        </div>
+        <div class="profile-xpbox">
           <div class="xp-track"><i id="profile-xpbar"></i></div>
           <span id="profile-xp" class="xp-label"></span>
-          <div class="profile-wallet"><b id="profile-coins"></b><span id="profile-tickets"></span></div>
+        </div>
+        <div class="profile-wallet"><b id="profile-coins"></b><span id="profile-tickets"></span></div>
+        <div class="profile-loadout" id="profile-loadout"></div>
+      </div>
+      <div class="profile-grid">
+        <section class="profile-card profile-card-stats"><h3>ESTATÍSTICAS</h3><div id="profile-stats" class="profile-stats"></div></section>
+        <section class="profile-card"><h3>PROGRESSO</h3><div id="profile-progress" class="profile-progress"></div></section>
+        <section class="profile-card"><h3>DESTAQUES</h3><div id="profile-highlights" class="profile-highlights"></div></section>
+        <section class="profile-card profile-account"><h3>CONTA</h3>
           <form id="profile-rename" class="rename-row"><input id="rename-input" maxlength="20" pattern="[A-Za-z0-9_]{3,20}" aria-label="Nome de usuário" /><button type="submit">RENOMEAR</button></form>
           <div class="profile-actions"><button id="profile-login" class="primary" type="button">ENTRAR / CRIAR CONTA</button><button id="profile-logout" type="button">SAIR DA CONTA</button></div>
-        </div>
-        <div id="profile-stats" class="profile-stats"></div>
+        </section>
       </div>
     </section>
     <section id="missionscreen" class="screen hidden panel-screen">
@@ -17004,6 +17027,10 @@ body.netgame #revivetouch{display:flex}
           },
           localLevel: () => 1,
           resumeGame: () => resume(),
+          loadout: () => {
+            const id = Progression.data.weaponSlots?.[Progression.data.weaponSlot || 0] ?? Progression.data.weaponId;
+            return { cls: classes[selectedClass]?.name, weapon: id != null ? WeaponSystem.create(id)?.name : null };
+          },
           openGameMissions: () => openGameMissions(),
           // Short exit animation of the home menu before a page opens from it.
           animateTo(id) {

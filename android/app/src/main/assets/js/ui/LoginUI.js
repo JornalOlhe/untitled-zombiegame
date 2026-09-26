@@ -79,6 +79,9 @@
         await fn();
       } catch (e) {
         this.message(e.message || String(e));
+        form.classList.remove("shake");
+        void form.offsetWidth;
+        form.classList.add("shake");
         if (e.code === "email_not_confirmed") {
           this.pendingEmail = $("login-email").value.trim();
           const link = document.createElement("button");

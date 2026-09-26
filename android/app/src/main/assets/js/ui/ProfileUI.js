@@ -23,35 +23,47 @@
         this.rename();
       };
       $("profilechip").onclick = () => this.open();
+      $("profile-progress").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-go]");
+        if (b) b.dataset.go === "index" ? DR.MissionUI.openIndex() : DR.MissionUI.open();
+      });
     },
     open() {
       this.game.screen("profilescreen");
       this.render();
+      // Progress panels use the missions and Index data; fetch them if this session has none yet.
+      if (this.game.signedIn() && DR.Backend.isOnline()) {
+        if (!DR.MissionManager.list.length) DR.MissionManager.refresh().then(() => this.render(), () => {});
+        if (!DR.Bestiary.list.length) DR.Bestiary.refresh().then(() => this.render(), () => {});
+      }
     },
     render() {
       const p = this.game.profile();
       const signed = this.game.signedIn();
-      const guest = !signed;
-      $("profilescreen").classList.toggle("guest", guest);
+      $("profilescreen").classList.toggle("guest", !signed);
       const name = signed ? p?.displayName || p?.username || "Sobrevivente" : "Visitante";
       const level = p?.level || this.game.localLevel?.() || 1,
         xp = p?.xp || 0,
         need = p?.xpNeeded || 310;
+      $("profile-avatar").textContent = (name || "?").slice(0, 2).toUpperCase();
       $("profile-name").textContent = name;
-      $("profile-handle").textContent = signed ? `@${p?.username || ""} · ${DR.AuthService.user()?.email || ""}` : "Progresso salvo apenas neste aparelho";
+      $("profile-handle").textContent = signed ? [`@${p?.username || ""}`, DR.AuthService.user()?.email].filter(Boolean).join(" · ") : "Progresso salvo apenas neste aparelho";
       $("profile-level").textContent = `LVL ${level}`;
-      $("profile-xp").textContent = `${n(xp)} / ${n(need)} XP`;
+      $("profile-xp").textContent = `${n(xp)} / ${n(need)} XP para o nível ${level + 1}`;
       $("profile-xpbar").style.width = `${Math.min(100, (100 * xp) / Math.max(1, need))}%`;
       const eco = this.game.economy();
       $("profile-coins").textContent = `◈ ${n(eco.coins)}`;
-      $("profile-tickets").textContent = `↻ ${n(eco.normal)} · ✦ ${n(eco.lucky)}`;
+      $("profile-tickets").textContent = `↻ ${n(eco.normal)} normal · ✦ ${n(eco.lucky)} Lucky`;
+      const load = this.game.loadout?.() || {};
+      $("profile-loadout").innerHTML = `<span><small>CLASSE</small><b>${esc(load.cls || "—")}</b></span><span><small>ARMA</small><b>${esc(load.weapon || "—")}</b></span>`;
       const s = p?.stats || {};
       const stats = [
         ["Eliminações", n(s.kills)],
         ["Maior onda", n(s.highestWave)],
-        ["Chefes mortos", n((s.bossesKilled || 0) + (s.minibossesKilled || 0))],
-        ["Partidas", n(s.gamesPlayed)],
         ["Headshots", n(s.headshots)],
+        ["Chefes", n(s.bossesKilled)],
+        ["Mini-bosses", n(s.minibossesKilled)],
+        ["Partidas", n(s.gamesPlayed)],
         ["Vitórias", n(s.wins)],
         ["Derrotas", n(s.losses)],
         ["Tempo jogado", time(s.totalPlaytime)],
@@ -62,11 +74,49 @@
       ];
       $("profile-stats").innerHTML = signed
         ? stats.map(([k, v]) => `<div><strong>${esc(v)}</strong><span>${esc(k)}</span></div>`).join("")
-        : `<p class="home-hint">Crie uma conta para salvar estatísticas, missões e cross-progression entre PC e Android.</p>`;
+        : `<p class="home-hint">Crie uma conta para salvar estatísticas, missões, o Índice e o progresso entre PC e Android.</p>`;
+      $("profile-progress").innerHTML = signed ? this.progress() : "";
+      $("profile-highlights").innerHTML = signed ? this.highlights(s) : "";
+      $("profile-since").textContent = signed && p?.createdAt ? `Sobrevivente desde ${new Date(p.createdAt).toLocaleDateString("pt-BR")}` : "";
       $("profile-sync").textContent = signed ? (DR.Backend.isOnline() ? "● Sincronizado na nuvem" : "● OFFLINE · sincroniza ao reconectar") : "● Perfil local";
       $("profile-sync").dataset.state = signed ? (DR.Backend.isOnline() ? "online" : "offline") : "local";
       $("rename-input").value = p?.username || "";
       this.chip();
+    },
+    progress() {
+      const MM = DR.MissionManager,
+        B = DR.Bestiary;
+      const row = (label, done, total, go, extra = "") =>
+        `<button class="pp-row" type="button" data-go="${go}"><span>${label}</span><b>${total ? `${done} / ${total}` : "—"}</b><i><em style="width:${total ? (100 * done) / total : 0}%"></em></i>${extra ? `<small>${extra}</small>` : ""}</button>`;
+      const cat = (c) => {
+        const list = MM.of(c).filter((m) => !m.final);
+        return [list.filter((m) => m.completed).length, list.length];
+      };
+      const uniq = MM.of("unique"),
+        seen = B.list.filter((e) => e.kills > 0).length,
+        ready = MM.claimable(),
+        idxReady = B.claimable();
+      return (
+        row("Missões diárias", ...cat("daily"), "missions") +
+        row("Missões semanais", ...cat("weekly"), "missions") +
+        row("Conquistas únicas", uniq.filter((m) => m.claimed).length, uniq.length, "missions") +
+        row("Espécies no Índice", seen, B.list.length, "index", idxReady ? `${idxReady} recompensa${idxReady > 1 ? "s" : ""} para resgatar` : "") +
+        (ready ? `<p class="pp-ready">${ready} ${ready > 1 ? "missões prontas" : "missão pronta"} para resgatar</p>` : "")
+      );
+    },
+    highlights(s) {
+      const kills = Number(s.kills || 0),
+        games = Number(s.gamesPlayed || 0),
+        mins = Number(s.totalPlaytime || 0) / 60;
+      const top = DR.Bestiary.list.filter((e) => !e.boss).sort((a, b) => b.kills - a.kills)[0];
+      const items = [
+        ["Precisão de headshot", kills ? `${Math.round((100 * (s.headshots || 0)) / kills)}%` : "—"],
+        ["Eliminações por partida", games ? n(Math.round(kills / games)) : "—"],
+        ["Eliminações por minuto", mins >= 1 ? (kills / mins).toFixed(1).replace(".", ",") : "—"],
+        ["Taxa de vitória", s.wins || s.losses ? `${Math.round((100 * (s.wins || 0)) / ((s.wins || 0) + (s.losses || 0)))}%` : "—"],
+        ["Inimigo mais abatido", top?.kills ? `${DR.Bestiary.info(top.key).name} · ${n(top.kills)}` : "—"],
+      ];
+      return items.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("");
     },
     chip() {
       const p = this.game.profile(),
