@@ -6460,7 +6460,48 @@ body.netgame #revivetouch{display:flex}
           coin() {
             this.tone(900, 0.1, "sine", 0.16, 1450, "ui");
           },
+          // Map ambience on the Ambient bus: a looped, filtered noise bed per map
+          // (city rumble, hospital hum, forest wind, lab machinery, snow wind).
+          ambience(map) {
+            if (!this.ctx || this.ambMap === map) return;
+            if (this.amb) {
+              const old = this.amb;
+              old.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.4);
+              setTimeout(() => {
+                try { old.src.stop(); old.lfo.stop(); } catch {}
+                old.src.disconnect();
+                old.g.disconnect();
+              }, 2000);
+              this.amb = null;
+            }
+            this.ambMap = map;
+            if (map === null || !this.buses.ambient) return;
+            const ctx = this.ctx, n = ctx.sampleRate * 4, b = ctx.createBuffer(1, n, ctx.sampleRate), a = b.getChannelData(0);
+            let last = 0;
+            for (let i = 0; i < n; i++) { last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; a[i] = last * 6; }
+            // [band centre Hz, Q, level, LFO Hz] per map
+            const cfg = [[260, 0.7, 0.09, 0.07], [520, 1.2, 0.05, 0.11], [900, 0.8, 0.08, 0.05], [140, 3, 0.07, 0.3], [700, 0.6, 0.14, 0.08]][map] || [300, 1, 0.08, 0.1];
+            const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+            src.buffer = b;
+            src.loop = true;
+            f.type = "bandpass";
+            f.frequency.value = cfg[0];
+            f.Q.value = cfg[1];
+            lfo.frequency.value = cfg[3];
+            lg.gain.value = cfg[0] * 0.45;
+            lfo.connect(lg);
+            lg.connect(f.frequency);
+            g.gain.setValueAtTime(0.0001, ctx.currentTime);
+            g.gain.setTargetAtTime(cfg[2], ctx.currentTime, 1.2);
+            src.connect(f);
+            f.connect(g);
+            g.connect(this.buses.ambient);
+            src.start();
+            lfo.start();
+            this.amb = { src, g, lfo };
+          },
           update() {
+            this.ambience(state === GameState.PLAYING || state === GameState.PAUSED ? selectedMap : null);
             if (!this.ctx || this.ctx.currentTime < this.nextNote) return;
             this.nextNote = this.ctx.currentTime + 2.8;
             const root = [55, 49, 43.65, 61.74, 65.4][selectedMap];
@@ -12401,6 +12442,7 @@ body.netgame #revivetouch{display:flex}
 
             selectedMap = Number(selectedMap);
             MapManager.build(selectedMap);
+            RunStats.reset(); // per-match counters (bosses, weapon families, Index kills) must not leak into the next match
             elapsed = 0;
             simulationTime = 0;
             const d = diff[difficulty];
