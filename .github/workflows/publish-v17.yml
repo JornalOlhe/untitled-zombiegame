@@ -1,15 +1,6 @@
 name: Publish Dead Recoil v17
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/publish-v17.yml'
-      - 'android/app/src/main/assets/index.html'
-      - 'android/app/build.gradle'
-      - 'desktop/package.json'
-      - 'tests/ui-smoke.cjs'
-      - 'release/v17-notes.md'
   workflow_dispatch:
 
 concurrency:
