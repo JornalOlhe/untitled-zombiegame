@@ -25,10 +25,22 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(`http://127.0.0.1:${server.address().port}/?native=1&platform=android&test=1`);
       await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
-      assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,59,37,3,1]);
+      assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,58.9,37,3,1,0.1]);
       assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky.reduce((a,b)=>a+b,0)),100);
       assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.weapon.some(item => item.tier === 6)), 'Divine weapon must exist');
       assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.class.some(item => item.tier === 6)), 'Divine class must exist');
+      assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.weapon.some(item => item.tier === 7)), 'Secret weapon must exist');
+      assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.class.some(item => item.tier === 7)), 'Secret class must exist');
+      const secretCatalog = await page.evaluate(() => ({
+        classes: DeadRecoilTest.Progression.economy.catalogs.class.filter(item => item.tier === 7).map(item => item.name),
+        weapons: DeadRecoilTest.Progression.economy.catalogs.weapon.filter(item => item.tier === 7).map(item => item.name),
+        medic: DeadRecoilTest.Progression.economy.catalogs.class.find(item => item.name === 'Medic'),
+        reaper: DeadRecoilTest.Progression.economy.catalogs.class.find(item => item.name === 'Reaper'),
+      }));
+      assert.deepEqual(secretCatalog.classes, ['Archangel','Archdemon']);
+      assert.deepEqual(secretCatalog.weapons, ['Demonic Fury','Angelic Specter']);
+      assert.equal(secretCatalog.medic.passiveOnly, true, 'Medic must stay passive-only');
+      assert.equal(secretCatalog.reaper.cd, 15, 'Reaper cooldown must remain 15 s');
       assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.cost(false)), 50, 'Normal Spin must cost 50');
       assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.cost(true)), 250, 'Lucky Spin base cost must be 250');
       const pityMechanics = await page.evaluate(() => {
@@ -112,8 +124,9 @@ const server = http.createServer((req, res) => {
       assert.ok(previewRatio.height >= 100 && previewRatio.ratio >= 0.48, 'Armory preview must remain visually dominant on compact landscape screens');
       await page.locator('[data-odds-mode="lucky"]').click();
       const luckyRarities = await page.locator('#rarity-board [data-rarity-tier]').evaluateAll(items => items.map(el => el.textContent.trim().replace(/[+−]/g,'').replace(/\s+/g,' ')));
-      assert.ok(luckyRarities.length === 4 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO|DIVINO/.test(text)), 'Lucky Spin must expose only Epic+ tiers including Divine');
+      assert.ok(luckyRarities.length === 5 && luckyRarities.every(text => /ÉPICO|LENDÁRIO|MÍTICO|DIVINO|SECRETA/.test(text)), 'Lucky Spin must expose only Epic+ tiers including Secret');
       assert.ok(luckyRarities.some(text => /DIVINO.*1%/.test(text)), 'Lucky Spin Divine chance must be 1%');
+      assert.ok(luckyRarities.some(text => /SECRETA.*0[,.]1%/.test(text)), 'Lucky Spin Secret chance must be 0.1%');
       await page.locator('[data-rarity-tier="4"]').click();
       assert.ok(await page.locator('#rarity-board .rarity-items .rarity-item').count() > 0, 'Clicking a rarity must reveal its items');
       const armoryCopy = await page.locator('#classscreen').innerText();
