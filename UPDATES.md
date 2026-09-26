@@ -13,8 +13,9 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 - v15: build QA com a Bazooka disparando mísseis de verdade (voo reto, explosão maior, guiado se segurar o botão) em vez de granadas, e um inventário de armas de verdade: 1 slot inicial, até 5 compráveis na Armaria (preço crescente), trocando entre as armas equipadas com as teclas 1-5 durante a partida; Android usa `versionCode 15` / `0.15.0` e Windows usa `0.15.0`.
 - v16: build QA com os novos monstros voxel (skins pintadas, animações próprias), bosses Demônio (a cada 20 ondas) e Yeti (a cada 10) com cinemáticas numa arena distante e queda no meio do mapa, mini-bosses Quarterback/Mutante alternados, habilidades novas, obstáculos escaláveis, medkits a cada 30 s, física de objetos e sons do ElevenLabs; Android usa `versionCode 16` / `0.16.0` e Windows usa `0.16.0`.
 - v18: build QA com a câmera da intro do Demônio sem pilares na frente, animações de kill (marcador X, headshot dourado, sequências DOUBLE KILL/MASSACRE, câmera lenta e câmera cinematográfica no último zumbi da onda e ao matar chefes) e a nova morte do jogador (a visão cai no chão, a câmera sai do corpo e a horda cerca) em todos os mapas; Android usa `versionCode 18` / `0.18.0` e Windows usa `0.18.0`.
+- v19: build QA com contas online (e-mail/senha, confirmação, recuperação de senha e Google via deep link `untitledzombie://auth/callback`), cross-progression no Supabase com economia validada no servidor, missões infinitas, multiplayer online 1–4 jogadores (lobby com código, quick play, ready, host autoritativo, reanimação, reconexão e migração de host), nova interface survival horror, próxima onda automática sem tela de loja, sem câmera lenta em kills e mortes cinematográficas do Demônio (portões do submundo) e do Yeti (bola de neve gigante); Android usa `versionCode 19` / `0.19.0` e Windows usa `0.19.0`.
 
-No Windows, a v10 compara a versão do executável com as tags `vN` publicadas. Quando uma tag mais nova como `v18` estiver disponível, o jogo informa que a versão instalada está desatualizada e oferece o download do asset `DeadRecoil-Windows.exe`.
+No Windows, a v10 compara a versão do executável com as tags `vN` publicadas. Quando uma tag mais nova como `v19` estiver disponível, o jogo informa que a versão instalada está desatualizada e oferece o download do asset `DeadRecoil-Windows.exe`.
 
 No Android, uma atualização por cima só pode ser instalada quando o APK novo usa a mesma assinatura do aplicativo instalado. Releases QA/prerelease podem abrir o asset oficial no GitHub quando a assinatura não permite instalação automática.
 
@@ -31,5 +32,5 @@ A chave privada nunca deve ser adicionada ao repositório.
 
 ## QA
 
-Cada push na `main` executa testes de interface e gera builds de validação. A v18 possui um workflow dedicado que testa a UI, compila Android/Windows e publica a prerelease somente quando todos os jobs passam.
+Cada push na `main` executa testes de interface e gera builds de validação. A v19 possui um workflow dedicado que testa a UI, compila Android/Windows e publica a prerelease somente quando todos os jobs passam.
 - v17: build QA com pity separado de Mítico/Divino para armas e classes (75/150), Normal Spin somando +1, Lucky Spin somando +2, Normal por 50 moedas e Lucky com custo base de 250 moedas; Android usa `versionCode 17` / `0.17.0` e Windows usa `0.17.0`.

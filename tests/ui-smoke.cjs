@@ -82,7 +82,7 @@ const server = http.createServer((req, res) => {
       assert.deepEqual(pityMechanics.luckyMythic, {tier:5,mythic:0,divine:42}, '73/75 + Lucky must add 2 pity and guarantee Mythic+');
       assert.deepEqual(pityMechanics.naturalMythic, {tier:5,mythic:0,divine:54}, 'Natural Mythic must reset only Mythic pity while Divine keeps +2');
       assert.deepEqual(pityMechanics.naturalDivine, {tier:6,mythic:0,divine:0}, 'Natural Divine must reset Mythic and Divine pity');
-      await page.locator('#classesbtn').click();
+      await page.locator('#loadoutbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
       const armoryLayout = await page.evaluate(() => {
         const box = (selector) => {
@@ -180,6 +180,7 @@ const server = http.createServer((req, res) => {
       await page.locator('#armory-back').click();
       await page.locator('#menu:not(.hidden)').waitFor({state:'visible'});
       await page.locator('#play').click();
+      await page.locator('#solo').click();
       const cards = await page.locator('#mapcards > button').evaluateAll(items => items.map(el => ({top:el.getBoundingClientRect().top,width:el.getBoundingClientRect().width})));
       assert.equal(cards.length,5);
       assert.ok(cards.every(c => Math.abs(c.top-cards[0].top)<2 && c.width>=140), 'Maps must remain in one horizontal row');

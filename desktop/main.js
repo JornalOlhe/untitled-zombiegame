@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog, net } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, net, ipcMain } = require("electron");
 const path = require("node:path");
 
 const smokeTest = process.argv.includes("--smoke-test");
@@ -6,6 +6,53 @@ const RELEASES_API = "https://api.github.com/repos/JornalOlhe/untitled-zombiegam
 const RELEASE_ASSET_PREFIX = "https://github.com/JornalOlhe/untitled-zombiegame/releases/download/";
 
 let mainWindow = null;
+// Login deep links (Google OAuth, e-mail confirmation, password reset) come back as
+// untitledzombie://auth/callback?code=… and are handed to the running game.
+const AUTH_PROTOCOL = "untitledzombie";
+let pendingAuthUrl = null;
+
+function authUrlFromArgs(argv) {
+  return (argv || []).find((arg) => typeof arg === "string" && arg.startsWith(`${AUTH_PROTOCOL}://`)) || null;
+}
+
+function deliverAuthUrl(url) {
+  if (!url) return;
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) {
+    pendingAuthUrl = url;
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.webContents
+    .executeJavaScript(`window.DeadRecoilAuthCallback && window.DeadRecoilAuthCallback(${JSON.stringify(url)})`)
+    .catch(() => (pendingAuthUrl = url));
+}
+
+if (!smokeTest) {
+  // The portable build extracts itself to a temp folder: register the real .exe instead.
+  const exe = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+  if (process.defaultApp && process.argv.length >= 2) app.setAsDefaultProtocolClient(AUTH_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+  else app.setAsDefaultProtocolClient(AUTH_PROTOCOL, exe);
+  if (!app.requestSingleInstanceLock()) app.quit();
+  app.on("second-instance", (_event, argv) => deliverAuthUrl(authUrlFromArgs(argv)));
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    deliverAuthUrl(url);
+  });
+  pendingAuthUrl = authUrlFromArgs(process.argv);
+}
+
+ipcMain.handle("dr:open-external", (_event, url) => {
+  if (/^https:\/\//i.test(url)) return shell.openExternal(url);
+  return false;
+});
+ipcMain.handle("dr:take-pending-auth", () => {
+  const url = pendingAuthUrl;
+  pendingAuthUrl = null;
+  return url;
+});
+ipcMain.handle("dr:quit", () => app.quit());
 let smokeTimeout = null;
 let updateCheckStarted = false;
 
@@ -123,7 +170,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      preload: path.join(__dirname, "preload.js")
     }
   });
 
@@ -155,6 +203,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.on("did-finish-load", () => {
+    if (pendingAuthUrl) setTimeout(() => { const url = pendingAuthUrl; pendingAuthUrl = null; deliverAuthUrl(url); }, 1500);
     if (smokeTest) {
       console.log("PASS: desktop runtime loaded the game");
       finishSmoke(0);

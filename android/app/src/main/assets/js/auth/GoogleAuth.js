@@ -9,6 +9,7 @@
   "use strict";
   const DR = (window.DR = window.DR || {});
   const queue = [];
+  const seen = new Set();
   let handler = null;
 
   const GoogleAuth = {
@@ -24,6 +25,8 @@
     },
     deliver(url) {
       if (!url || !/auth\/callback|[?&#](code|error|access_token)=/.test(url)) return false;
+      if (seen.has(url)) return false; // the same link can arrive twice (native + page load)
+      seen.add(url);
       if (handler) handler(url);
       else queue.push(url);
       return true;

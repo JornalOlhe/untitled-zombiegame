@@ -18,6 +18,21 @@ Controles principais: `WASD` para mover, mouse para mirar e atirar, `R` para rec
 
 O Armory usa dois tipos de spin. O Normal Spin custa 50 moedas e soma +1 nos pities; o Lucky Spin tem custo base de 250 moedas, soma +2 e entrega somente Épico, Lendário, Mítico ou Divino: 59% / 37% / 3% / 1%. Armas e classes possuem pities separados: 75 garante Mítico ou Divino no próprio giro que atinge o limite, e 150 garante Divino. Um Mítico reseta apenas o pity Mítico; um Divino reseta os dois. A roleta mantém a sequência longa, near-miss visual e encaixe final no centro sem alterar o resultado real. Todos os resultados entram diretamente no loadout e resultados Divinos recebem uma celebração própria. O único aviso acontece antes de um novo giro quando o item equipado é Mítico ou Divino.
 
+## Online (contas, missões e multiplayer)
+
+A partir da v19 o jogo tem contas (e-mail/senha e Google), cross-progression entre PC e Android, missões infinitas e multiplayer online de 1 a 4 jogadores. O backend é Supabase. Veja `supabase/README.md` para a arquitetura, as migrations e os três ajustes de painel (URLs de retorno, Google e SMTP). O modo SOLO continua funcionando offline.
+
+Código do cliente em `android/app/src/main/assets/js/`:
+- `auth/`: AuthService e GoogleAuth
+- `data/`: Backend e repositórios
+- `missions/`: definições e gerenciador
+- `network/`: transporte realtime e LobbyManager
+- `ui/`: telas de login, perfil, missões e lobby
+
+A sincronização da partida (NetGame) fica em `index.html`.
+
+Testes: `tests/ui-smoke.cjs`, `tests/monsters-smoke.cjs`, `tests/deathkill-smoke.cjs`, `tests/multiplayer-local.cjs` (dois clientes reais usando `?net=local`) e `supabase/tests/backend_smoke.sql`.
+
 ## Builds
 
 A `main` está preparada como v0.12.0 QA. A v11 publica EXE portátil para Windows e APK de QA para Android; a release Android estável continua exigindo a mesma assinatura da instalação estável anterior.

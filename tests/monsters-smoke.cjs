@@ -37,6 +37,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.deepEqual(schedule, ['quarterback', 'yeti', 'mutant', 'demon', 'quarterback', 'yeti', 'mutant', 'demon', 'quarterback', 'yeti']);
 
     await page.locator('#play').click();
+    await page.locator('#solo').click();
     await page.locator('[data-map="0"]').click();
     await page.locator('#nextmode').click();
     await page.locator('#rulescreen:not(.hidden)').waitFor({ state: 'visible' });
