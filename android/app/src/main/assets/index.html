@@ -2505,6 +2505,42 @@
     .reel-card.divine-winner,
     .divine-celebration i{animation:none!important}
   }
+
+/* ── Kill + death feedback ─────────────────────────────────────────────── */
+#killmark{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none}
+#killmark i{position:absolute;left:50%;top:50%;width:13px;height:3px;margin:-1.5px 0 0 -6.5px;background:#ff2f2f;box-shadow:0 0 6px #ff000088;border-radius:1px}
+#killmark i:nth-child(1){transform:rotate(45deg) translateX(-12px)}#killmark i:nth-child(2){transform:rotate(135deg) translateX(-12px)}
+#killmark i:nth-child(3){transform:rotate(225deg) translateX(-12px)}#killmark i:nth-child(4){transform:rotate(315deg) translateX(-12px)}
+#killmark.head i{background:#ffc93c;box-shadow:0 0 8px #ffb000aa}
+#killmark.show{animation:killmark .42s cubic-bezier(.2,1.6,.4,1) forwards}
+@keyframes killmark{0%{opacity:1;transform:translate(-50%,-50%) scale(1.5)}25%{opacity:1;transform:translate(-50%,-50%) scale(.95)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.1)}}
+#killpop{position:absolute;left:50%;top:calc(50% + 46px);transform:translateX(-50%);display:flex;gap:6px;align-items:baseline;opacity:0;pointer-events:none;font:900 13px/1 var(--display,system-ui);letter-spacing:.22em;color:#f3ede4;text-shadow:0 2px 0 #000,0 0 12px #000}
+#killpop b{color:#ff3b30;font-size:15px}#killpop.head span{color:#ffc93c}#killpop.boss span{color:#ff6a2a;font-size:17px}
+#killpop.show{animation:killpop .9s ease-out forwards}
+@keyframes killpop{0%{opacity:0;transform:translate(-50%,6px) scale(1.2)}12%{opacity:1;transform:translate(-50%,0) scale(1)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-10px)}}
+#streakbanner{position:absolute;left:50%;top:26%;transform:translateX(-50%);font:900 clamp(22px,4vw,44px)/1 var(--display,system-ui);letter-spacing:.12em;color:#ff3b30;text-shadow:0 0 18px #ff000077,0 3px 0 #000;opacity:0;pointer-events:none;white-space:nowrap}
+#streakbanner.show{animation:streak 1.3s ease-out forwards}
+@keyframes streak{0%{opacity:0;transform:translateX(-50%) scale(1.8) skewX(-8deg);filter:blur(4px)}15%{opacity:1;transform:translateX(-50%) scale(1) skewX(-8deg);filter:none}75%{opacity:1}100%{opacity:0;transform:translateX(-50%) scale(.96) skewX(-8deg)}}
+#killcambanner{position:fixed;left:0;right:0;bottom:15%;text-align:center;font:900 clamp(24px,5vw,56px)/1 var(--display,system-ui);letter-spacing:.14em;color:#f3ede4;text-shadow:0 0 30px #b3000099,0 4px 0 #000;opacity:0;pointer-events:none;z-index:40}
+#killcambanner.show{animation:killcam 2s ease-out forwards}
+@keyframes killcam{0%{opacity:0;letter-spacing:.5em}20%{opacity:1;letter-spacing:.14em}80%{opacity:1}100%{opacity:0}}
+body.killcam #hud>*:not(#killpop):not(#streakbanner),body.killcam #touch,body.killcam #announcement,body.dying #announcement{opacity:0!important;transition:opacity .2s}
+body.killcam::before,body.killcam::after,body.dying::before,body.dying::after{content:"";position:fixed;left:0;right:0;height:9vh;background:#000;z-index:35;pointer-events:none;animation:bars .35s ease-out both}
+body.killcam::before,body.dying::before{top:0}body.killcam::after,body.dying::after{bottom:0}
+@keyframes bars{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+body.dying #world{filter:grayscale(.75) contrast(1.25) brightness(.8) sepia(.25);transition:filter 1.2s}
+body.dying #hud{opacity:0;transition:opacity .4s}
+#deathfx{position:fixed;inset:0;z-index:36;pointer-events:none;opacity:0;display:grid;place-items:center}
+#deathfx.show{opacity:1}
+#deathfx .death-blood{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,#3a0000cc 75%,#000 100%);animation:deathpulse 1.1s ease-in-out infinite alternate}
+#deathfx.show .death-blood{animation:deathflash .5s ease-out,deathpulse 1.1s .5s ease-in-out infinite alternate}
+@keyframes deathflash{0%{background-color:#c0000088}100%{background-color:transparent}}
+@keyframes deathpulse{from{opacity:.75}to{opacity:1}}
+#deathfx .death-copy{position:relative;text-align:center;opacity:0;transform:scale(1.15);transition:opacity .9s,transform 1.4s}
+#deathfx.late .death-copy{opacity:1;transform:none}
+#deathfx h2{margin:0;font:900 clamp(40px,9vw,112px)/.9 var(--display,system-ui);letter-spacing:.08em;color:#b50f0f;text-shadow:0 0 40px #ff000055,0 5px 0 #000}
+#deathfx p{margin:14px 0 0;font:700 clamp(12px,1.6vw,17px)/1.4 var(--mono,monospace);letter-spacing:.2em;text-transform:uppercase;color:#e7ddd0}
+#deathfx small{display:block;margin-top:26px;font:600 11px/1 var(--mono,monospace);letter-spacing:.24em;color:#e7ddd088;text-transform:uppercase}
 </style>
 
 </head>
@@ -2796,6 +2832,9 @@
       <div id="bossbar" class="hidden"></div>
       <div class="crosshair"></div>
       <div id="hitmark">+</div>
+      <div id="killmark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div id="killpop" aria-hidden="true"><span>KILL</span><b></b></div>
+      <div id="streakbanner" aria-live="polite"></div>
       <div id="damageveil"></div>
       <div id="statusline"></div>
       <canvas
@@ -2811,6 +2850,8 @@
       </div>
     </div>
     <div id="announcement"><strong></strong><span></span></div>
+    <div id="killcambanner" aria-live="polite"></div>
+    <div id="deathfx" aria-live="assertive"><div class="death-blood"></div><div class="death-copy"><h2>VOCÊ MORREU</h2><p></p><small>Toque ou pressione Espaço para continuar</small></div></div>
     <div id="toast" class="toast hidden" role="status"></div>
     <div id="fps" class="hidden"></div>
     <div id="touch" class="hidden" aria-label="Controles mobile">
@@ -2875,6 +2916,7 @@
           PAUSED: "PAUSED",
           SHOP: "SHOP",
           GAMEOVER: "GAMEOVER",
+          DYING: "DYING",
         });
         const rarityNames = [
             "Comum",
@@ -7600,6 +7642,7 @@
               `${head ? "◎ " : ""}${z.name} · ${w?.name || "Explosão"}`,
               rarityColors[w?.tier || 0],
             );
+            KillFX.onKill(z, head, w, overkill);
             AudioManager.coin();
             if (Math.random() < 0.25)
               AudioManager.tone(rand(90, 170), 0.3, "sawtooth", 0.1, 35);
@@ -8153,7 +8196,7 @@
             return m;
           },
           damagePlayer(amount) {
-            if (state !== GameState.PLAYING) return;
+            if (state !== GameState.PLAYING || KillCam.active) return;
             player.hp -= amount;
             player.lastDamage = simulationTime;
             hurtUntil = Math.max(hurtUntil, simulationTime + 0.16);
@@ -8631,11 +8674,17 @@
             PropKit.add(batch, "hellrock", [0, -0.25, 4], [90, 0.5, 90], null, 0.5);
             for (const [x, zz, w, d] of [[-7, 6, 2.2, 40], [8, 3, 2.6, 40], [0, 16, 40, 2.4], [-14, -2, 30, 1.8]])
               PropKit.add(batch, "lava", [x, 0.02, zz], [w, 0.06, d], null, 1);
-            for (let i = 0; i < 22; i++) {
+            // Spires only behind and beside the throne: never inside the camera corridor
+            // (the camera dollies along +z towards the throne, so anything in front of it blocks the shot).
+            for (let i = 0, placed = 0; placed < 22 && i < 400; i++) {
               const ang = rand(0, Math.PI * 2),
                 r = rand(9, 24),
-                h = rand(3, 11);
-              PropKit.add(batch, "hellrock", [Math.cos(ang) * r, h / 2, Math.sin(ang) * r - 4], [rand(0.8, 2), h, rand(0.8, 2)], [0, rand(0, 3), 0], 0.8);
+                h = rand(3, 11),
+                x = Math.cos(ang) * r,
+                zz = Math.sin(ang) * r - 4;
+              if (!this.clearOfCamera(x, zz, 1.1)) continue;
+              placed++;
+              PropKit.add(batch, "hellrock", [x, h / 2, zz], [rand(0.8, 2), h, rand(0.8, 2)], [0, rand(0, 3), 0], 0.8);
             }
             for (let i = 0; i < 10; i++)
               PropKit.add(batch, "bone", [rand(-6, 6), 0.12, rand(-1, 8)], [rand(0.3, 0.9), 0.12, 0.14], [0, rand(0, 3), 0], 2);
@@ -8675,6 +8724,13 @@
             a.light.position.set(0, hip + 2.2, 1.2);
             a.embers = this.particles(g, 500, 0xff6a20, 0.08, [-12, 12], [0, 10], [-8, 14]);
           },
+          // True when a prop at local (x, z) cannot sit between the intro camera and the boss.
+          clearOfCamera(x, z, halfW = 1) {
+            if (z + halfW < -3) return true; // behind the throne / den
+            if (Math.abs(x) - halfW > 10) return true; // well off to the side
+            if (z - halfW > 13) return true; // behind the camera start
+            return false;
+          },
           buildMountain(a) {
             const g = a.stage;
             this.setSky(a, 0xb9cbd9, 0.03);
@@ -8693,12 +8749,19 @@
                 h = 0.5 + ((i * 37) % 7) * 0.12;
               PropKit.add(batch, "ice", [x, 4.45 - h / 2, -0.7], [0.16, h, 0.16]);
             }
-            for (let i = 0; i < 14; i++) {
+            for (let i = 0, placed = 0; placed < 14 && i < 400; i++) {
               const ang = rand(0.5, Math.PI * 2 - 0.5) + Math.PI / 2,
                 r = rand(11, 26),
-                h = rand(6, 16);
-              PropKit.add(batch, "stone", [Math.cos(ang) * r, h / 2, Math.sin(ang) * r - 6], [rand(4, 8), h, rand(4, 8)], [0, rand(0, 3), 0], 0.4);
-              PropKit.add(batch, "snow", [Math.cos(ang) * r, h + 0.3, Math.sin(ang) * r - 6], [rand(4, 8), 0.6, rand(4, 8)], [0, rand(0, 3), 0], 0.4);
+                h = rand(6, 16),
+                w = rand(4, 8),
+                d = rand(4, 8),
+                x = Math.cos(ang) * r,
+                zz = Math.sin(ang) * r - 6;
+              if (!this.clearOfCamera(x, zz, Math.hypot(w, d) / 2)) continue;
+              placed++;
+              const rot = [0, rand(0, 3), 0];
+              PropKit.add(batch, "stone", [x, h / 2, zz], [w, h, d], rot, 0.4);
+              PropKit.add(batch, "snow", [x, h + 0.3, zz], [w + 0.2, 0.6, d + 0.2], rot, 0.4);
             }
             PropKit.build(batch, g);
             const back = this.block(g, [7.4, 5.8, 0.8], [0, 2.9, -5.4], VoxelMonsters.flat(0x06080b));
@@ -9809,6 +9872,9 @@
             MutationManager.reset();
             HordeAI.clear();
             this.meleeStrike = null;
+            DeathFX.abort();
+            KillFX.reset();
+            TimeFX.reset();
             ZombieManager.clear();
             BossIntro.abort();
             MonsterFX.clear();
@@ -9894,7 +9960,7 @@
             CameraRig.reset();fallback=false;document.body.classList.remove("mouse-captured");
           },
           hurt(amount) {
-            if (state !== GameState.PLAYING) return;
+            if (state !== GameState.PLAYING || KillCam.active) return;
             const resistance =
               (classEffects().damageTaken || 1) *
               (classBurst().damageTaken || 1);
@@ -10314,7 +10380,12 @@
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
           },
-          end(timed) {
+          end(timed, force = false) {
+            if (!timed && !force && state === GameState.PLAYING && !DeathFX.active) {
+              DeathFX.start();
+              return;
+            }
+            if (state === GameState.GAMEOVER) return;
             Account.checkpoint(true);
             state = GameState.GAMEOVER;
             mouse.down = false;
@@ -11111,6 +11182,271 @@
             }catch(e){UIManager.toast(e.message)}finally{Progression.busy=false;Armory.render();updatePreview()}
           },
           unequip(slot){if(!cosmeticSlots[slot]||Progression.busy)return;CharacterStyle.data[slot]="none";Account.savePreferences();updatePreview();Armory.render()}
+        };
+
+        // ── Time scale: hit-stop and slow motion for kills and deaths (real-time driven) ─────────────
+        const TimeFX = {
+          current: 1,
+          target: 1,
+          until: 0,
+          clock: 0,
+          // Slow the simulation to `scale` for `seconds` of real time. Never slows multiplayer.
+          slow(scale, seconds) {
+            if (typeof NetGame !== "undefined" && NetGame.active) return;
+            this.target = Math.min(this.target, scale);
+            this.current = Math.min(this.current, scale);
+            this.until = Math.max(this.until, this.clock + seconds);
+          },
+          update(realDt) {
+            this.clock += realDt;
+            if (this.clock >= this.until) this.target = 1;
+            this.current += (this.target - this.current) * Math.min(1, realDt * (this.target > this.current ? 6 : 30));
+            if (Math.abs(this.current - 1) < 0.01 && this.target === 1) this.current = 1;
+            return this.current;
+          },
+          reset() {
+            this.current = this.target = 1;
+            this.until = 0;
+          },
+        };
+
+        // ── Kill feedback: marker, streaks, sound, hit-stop and the final-kill cinematic ───────────
+        const KillFX = {
+          streak: 0,
+          lastKill: -99,
+          streakNames: { 2: "DOUBLE KILL", 3: "TRIPLE KILL", 5: "MASSACRE", 8: "CARNIFICINA", 12: "APOCALIPSE" },
+          reset() {
+            this.streak = 0;
+            this.lastKill = -99;
+            KillCam.stop(true);
+          },
+          onKill(z, head, w, overkill) {
+            const now = performance.now() / 1000;
+            this.streak = now - this.lastKill < 1.6 ? this.streak + 1 : 1;
+            this.lastKill = now;
+            const mark = $("killmark");
+            mark.classList.remove("show", "head");
+            void mark.offsetWidth; // restart the CSS animation
+            mark.classList.add("show");
+            if (head) mark.classList.add("head");
+            const pop = $("killpop");
+            pop.querySelector("b").textContent = this.streak > 1 ? `×${this.streak}` : "";
+            pop.querySelector("span").textContent = head ? "HEADSHOT" : z.boss ? "ABATIDO" : "KILL";
+            pop.classList.remove("show", "head", "boss");
+            void pop.offsetWidth;
+            pop.classList.add("show");
+            if (head) pop.classList.add("head");
+            if (z.boss) pop.classList.add("boss");
+            const title = this.streakNames[this.streak];
+            if (title) {
+              const s = $("streakbanner");
+              s.textContent = title;
+              s.classList.remove("show");
+              void s.offsetWidth;
+              s.classList.add("show");
+              AudioManager.tone(260 + this.streak * 30, 0.35, "sawtooth", 0.12, 520 + this.streak * 60);
+            }
+            // Punchy confirm: low thud + bright tick (brighter for headshots).
+            AudioManager.tone(120, 0.09, "square", 0.16, 55);
+            AudioManager.tone(head ? 1480 : 980, 0.07, "triangle", head ? 0.16 : 0.1, head ? 1900 : 1200);
+            if (head || overkill || w?.kind === "missile") TimeFX.slow(0.3, 0.07);
+            const lastOfWave = !z.boss && WaveManager.remaining === 0 && !WaveManager.bossPending && ZombieManager.list.length === 0;
+            if (z.boss || lastOfWave)
+              KillCam.start(z, z.boss ? `${z.name.toUpperCase()} ABATIDO` : `ONDA ${WaveManager.wave} LIMPA`, z.boss ? 2.2 : 1.5);
+          },
+        };
+
+        // Final-kill camera: brief slow-motion orbit around the victim, then control returns.
+        const KillCam = {
+          active: null,
+          start(z, label, seconds) {
+            if (this.active || (typeof NetGame !== "undefined" && NetGame.active) || state !== GameState.PLAYING) {
+              if (typeof NetGame !== "undefined" && NetGame.active) UIManager.announce(label, "", 1.6);
+              return;
+            }
+            const focus = z.group.position.clone();
+            focus.y += 1.1 * (z.size || 1);
+            const from = player.pos.clone().sub(focus);
+            from.y = 0;
+            this.active = {
+              focus,
+              angle: Math.atan2(from.x, from.z),
+              radius: clamp(3 + (z.size || 1) * 1.6, 3.5, 8),
+              time: 0,
+              duration: seconds,
+              label,
+            };
+            mouse.down = false;
+            mouse.aim = false;
+            TimeFX.slow(0.18, seconds * 0.8);
+            document.body.classList.add("killcam");
+            const b = $("killcambanner");
+            b.textContent = label;
+            b.classList.remove("show");
+            void b.offsetWidth;
+            b.classList.add("show");
+            AudioManager.tone(70, 1.2, "sine", 0.35, 40);
+          },
+          update(realDt) {
+            const k = this.active;
+            if (!k) return false;
+            k.time += realDt;
+            const p = Math.min(1, k.time / k.duration),
+              ease = p * p * (3 - 2 * p),
+              a = k.angle + ease * 1.3,
+              r = k.radius * (1.15 - ease * 0.25);
+            const eye = new V(k.focus.x + Math.sin(a) * r, k.focus.y + 0.9 + ease * 1.2, k.focus.z + Math.cos(a) * r);
+            // Never put the orbit camera inside a wall.
+            if (MapManager.collides(eye.x, eye.z, 0.3)) {
+              eye.lerp(new V(k.focus.x, eye.y, k.focus.z), 0.55);
+            }
+            camera.position.copy(eye);
+            camera.lookAt(k.focus);
+            if (p >= 1) this.stop();
+            return true;
+          },
+          stop(silent = false) {
+            if (!this.active) return;
+            this.active = null;
+            document.body.classList.remove("killcam");
+            if (!silent) TimeFX.reset();
+          },
+        };
+
+        // ── Player death: slow-motion collapse, camera falls, then lifts out of the body ──────────
+        const DeathFX = {
+          active: null,
+          start(killerName) {
+            const nearest = ZombieManager.list
+              .filter((z) => !z.dead)
+              .sort((a, b) => a.group.position.distanceToSquared(player.pos) - b.group.position.distanceToSquared(player.pos))[0];
+            const killer = nearest && nearest.group.position.distanceTo(player.pos) < 9 ? nearest : null;
+            const toKiller = killer ? killer.group.position.clone().sub(player.pos) : forward();
+            toKiller.y = 0;
+            if (toKiller.lengthSq() < 0.001) toKiller.set(0, 0, -1);
+            toKiller.normalize();
+            const ground = player.ground || 0;
+            this.active = {
+              time: 0,
+              duration: 4.4,
+              killer,
+              killerName: killerName || killer?.name || (MonsterFX.puddles?.length ? "Ácido do Mutante" : "A horda"),
+              start: player.pos.clone(),
+              startYaw: yaw,
+              startPitch: pitch,
+              // The body falls away from whatever killed it.
+              fallDir: toKiller.clone().multiplyScalar(-1),
+              body: new V(player.pos.x, ground, player.pos.z),
+              skippable: false,
+            };
+            state = GameState.DYING;
+            mouse.down = false;
+            mouse.aim = false;
+            keys.clear();
+            unlock();
+            $("touch").classList.add("hidden");
+            KillCam.stop(true);
+            TimeFX.reset();
+            TimeFX.slow(0.28, 3.2);
+            document.body.classList.add("dying");
+            const o = $("deathfx");
+            o.querySelector("h2").textContent = "VOCÊ MORREU";
+            o.querySelector("p").textContent = `Abatido por ${this.active.killerName} · Onda ${WaveManager.wave}`;
+            o.classList.remove("show", "late");
+            void o.offsetWidth;
+            o.classList.add("show");
+            if (CameraRig.avatar) {
+              CameraRig.avatar.userData.fallen = true;
+              CameraRig.avatar.visible = false;
+              CameraRig.avatar.position.copy(this.active.body);
+              CameraRig.avatar.rotation.set(0, Math.atan2(this.active.fallDir.x, this.active.fallDir.z) + Math.PI, 0);
+            }
+            // Flatline + a few slowing heartbeats under a muffled world.
+            AudioManager.tone(55, 0.5, "sine", 0.5, 30);
+            for (let i = 0; i < 3; i++)
+              setTimeout(() => {
+                if (!this.active) return;
+                AudioManager.tone(62, 0.12, "sine", 0.4 - i * 0.1, 40);
+                setTimeout(() => this.active && AudioManager.tone(58, 0.1, "sine", 0.3 - i * 0.08, 36), 180);
+              }, 350 + i * (650 + i * 250));
+            setTimeout(() => this.active && AudioManager.tone(880, 1.6, "sine", 0.06, 880), 2200);
+            if (AudioManager.sfxGain && AudioManager.ctx)
+              AudioManager.sfxGain.gain.setTargetAtTime((SettingsManager.data.sfx / 100) * 0.45 * 0.35, AudioManager.ctx.currentTime, 0.4);
+          },
+          skip() {
+            if (this.active && this.active.skippable) this.active.time = this.active.duration;
+          },
+          update(realDt) {
+            const d = this.active;
+            if (!d) return;
+            d.time += realDt;
+            const t = d.time;
+            if (t > 1.2) d.skippable = true;
+            const body = d.body;
+            // Body collapse: knees buckle, then the torso falls flat along fallDir.
+            const avatar = CameraRig.avatar;
+            // The body is only shown once the camera has left it (it would fill the lens before).
+            if (avatar) avatar.visible = t >= 1.25;
+            if (avatar) {
+              const r = avatar.userData.rig,
+                buckle = clamp(t / 0.35, 0, 1),
+                fall = clamp((t - 0.25) / 0.55, 0, 1),
+                fallEase = fall * fall;
+              avatar.rotation.x = -fallEase * 1.45;
+              avatar.position.y = body.y - buckle * 0.18 * (1 - fallEase) + fallEase * 0.12;
+              r.knees.forEach((k) => (k.rotation.x = buckle * 1.1 * (1 - fallEase * 0.6)));
+              r.legs.forEach((l, i) => (l.rotation.x = -buckle * 0.5 * (1 - fallEase) + (i ? 0.15 : -0.1) * fallEase));
+              r.arms.forEach((a, i) => {
+                a.rotation.x = -0.4 - fallEase * 1.6;
+                a.rotation.z = (i ? -1 : 1) * (0.5 + fallEase * 0.7);
+              });
+              r.head.rotation.x = fallEase * 0.4;
+              r.chest.rotation.x = -buckle * 0.2;
+            }
+            if (t < 1.25) {
+              // First person: the view drops to the floor, rolls and tips up toward the killer.
+              const k = clamp(t / 0.85, 0, 1),
+                drop = k * k;
+              const eye = d.start.clone();
+              eye.y = d.start.y + (body.y + 0.28 - d.start.y) * drop;
+              eye.addScaledVector(d.fallDir, drop * 0.6);
+              camera.position.copy(eye);
+              camera.rotation.set(d.startPitch + drop * 0.55, d.startYaw, drop * 1.25, "YXZ");
+            } else {
+              // Out-of-body: rise above the corpse while the horde closes in.
+              const k = clamp((t - 1.25) / 2.6, 0, 1),
+                e = 1 - (1 - k) * (1 - k),
+                ang = d.startYaw + Math.PI * 0.25 + e * 0.9,
+                radius = 1.4 + e * 3.6;
+              const eye = new V(body.x + Math.sin(ang) * radius, body.y + 1.2 + e * 5.5, body.z + Math.cos(ang) * radius);
+              if (MapManager.collides(eye.x, eye.z, 0.3)) eye.set(body.x + (eye.x - body.x) * 0.35, eye.y + 1.2, body.z + (eye.z - body.z) * 0.35);
+              camera.position.copy(eye);
+              camera.lookAt(body.x, body.y + 0.3, body.z);
+              if (!d.late && t > 1.6) {
+                d.late = true;
+                $("deathfx").classList.add("late");
+              }
+            }
+            if (t >= d.duration) this.finish();
+          },
+          finish() {
+            if (!this.active) return;
+            this.active = null;
+            document.body.classList.remove("dying");
+            $("deathfx").classList.remove("show", "late");
+            TimeFX.reset();
+            if (AudioManager.sfxGain && AudioManager.ctx)
+              AudioManager.sfxGain.gain.setTargetAtTime((SettingsManager.data.sfx / 100) * 0.45, AudioManager.ctx.currentTime, 0.3);
+            state = GameState.PLAYING; // end() below moves to GAMEOVER and saves the run.
+            PlayerController.end(false, true);
+          },
+          abort() {
+            if (!this.active) return;
+            this.active = null;
+            document.body.classList.remove("dying");
+            $("deathfx").classList.remove("show", "late");
+            TimeFX.reset();
+          },
         };
 
         // One articulated survivor shared by the armory and third-person gameplay.
@@ -12775,7 +13111,14 @@
         document.addEventListener("pointerlockerror", () => {
           if (lockPending) useFallback();
         });
+        window.addEventListener("pointerdown", () => {
+          if (state === GameState.DYING) DeathFX.skip();
+        });
         window.addEventListener("keydown", (e) => {
+          if (state === GameState.DYING && ["Space", "Enter", "Escape"].includes(e.code)) {
+            DeathFX.skip();
+            return;
+          }
           if (e.code === "Escape" || e.code === "KeyP") {
             if (state === GameState.PLAYING) pause();
             return;
@@ -13141,26 +13484,37 @@
             GameState.SHOP,
             GameState.PAUSED,
             GameState.GAMEOVER,
+            GameState.DYING,
           ].includes(state);
+          const sdt = dt * TimeFX.update(dt);
           WeaponSystem.model.visible =
-            inWorld && CameraRig.distance < 0.6 && !!WeaponSystem.current() && !BossIntro.active;
+            inWorld && CameraRig.distance < 0.6 && !!WeaponSystem.current() && !BossIntro.active && !KillCam.active && state !== GameState.DYING;
           if (CameraRig.avatar)
-            CameraRig.avatar.visible = inWorld && CameraRig.distance > 0.6;
+            CameraRig.avatar.visible = inWorld && (CameraRig.distance > 0.6 || (!!CameraRig.avatar.userData.fallen && !(DeathFX.active && DeathFX.active.time < 1.25)));
           for (const item of MapManager.group.children)
             if (item.userData.menuOnly) item.visible = !inWorld;
           if (state === GameState.PLAYING) {
-            simulationTime += dt;
+            simulationTime += sdt;
             if (BossIntro.active) BossIntro.update(dt);
             else {
-              PlayerController.update(dt);
-              if (state === GameState.PLAYING) ZombieManager.update(dt);
-              if (state === GameState.PLAYING) updateProjectiles(dt);
-              if (state === GameState.PLAYING) WaveManager.update(dt);
-              if (state === GameState.PLAYING) MonsterFX.update(dt);
-              if (state === GameState.PLAYING) PhysicsProps.update(dt);
-              if (state === GameState.PLAYING) Medkits.update(dt);
-              UIManager.hud(dt);
+              const cinematic = !!KillCam.active;
+              if (!cinematic) PlayerController.update(sdt);
+              if (state === GameState.PLAYING) ZombieManager.update(sdt);
+              if (state === GameState.PLAYING) updateProjectiles(sdt);
+              if (state === GameState.PLAYING && !cinematic) WaveManager.update(sdt);
+              if (state === GameState.PLAYING) MonsterFX.update(sdt);
+              if (state === GameState.PLAYING) PhysicsProps.update(sdt);
+              if (state === GameState.PLAYING) Medkits.update(sdt);
+              if (cinematic) KillCam.update(dt);
+              UIManager.hud(sdt);
             }
+          } else if (state === GameState.DYING) {
+            simulationTime += sdt;
+            ZombieManager.update(sdt);
+            updateProjectiles(sdt);
+            MonsterFX.update(sdt);
+            PhysicsProps.update(sdt);
+            DeathFX.update(dt);
           } else if (state === GameState.SHOP) {
             simulationTime += dt;
 
@@ -13170,7 +13524,7 @@
               "s";
             if (simulationTime >= WaveManager.shopEnd) nextWave();
           }
-          if (state === GameState.GAMEOVER && CameraRig.avatar) {
+          if (state === GameState.GAMEOVER && CameraRig.avatar && !CameraRig.avatar.userData.fallen) {
             Survivor.animate(
               CameraRig.avatar,
               dt,
@@ -13295,6 +13649,10 @@
             Medkits,
             WorldProps,
             AudioManager,
+            KillFX,
+            KillCam,
+            DeathFX,
+            TimeFX,
             MapManager,
             UIManager,
             SettingsManager,
@@ -13311,6 +13669,9 @@
             },
             get renderer() {
               return renderer;
+            },
+            get camera() {
+              return camera;
             },
             get projectiles() {
               return projectiles;

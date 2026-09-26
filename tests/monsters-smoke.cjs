@@ -260,6 +260,21 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     for (const [t, name] of [[0.5, 'throne'], [1.4, 'rise'], [2.5, 'grab'], [3.3, 'roar'], [4.5, 'leap']]) {
       await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time ?? 99) >= v, t, { timeout: 120000 });
       if (shots) await page.screenshot({ path: `test-results/monsters-demon-intro-${name}.png` });
+      if (name !== 'leap') {
+        // Nothing in the arena may stand between the intro camera and the demon.
+        const blocked = await page.evaluate(() => {
+          const T = DeadRecoilTest, a = T.BossIntro.active, cam = T.camera;
+          const target = new THREE.Vector3();
+          a.z.group.getWorldPosition(target);
+          target.y += 2.2 * a.z.size;
+          const dir = target.clone().sub(cam.position), dist = dir.length();
+          const ray = new THREE.Raycaster(cam.position.clone(), dir.normalize(), 0.1, dist - 1.2);
+          const meshes = [];
+          a.stage.traverse(o => { if (o.isMesh && o.visible) meshes.push(o); });
+          return ray.intersectObjects(meshes, false).length;
+        });
+        assert.equal(blocked, 0, `demon intro camera must have a clear view (${name})`);
+      }
     }
     await page.waitForFunction(() => !DeadRecoilTest.BossIntro.active, null, { timeout: 120000 });
     await waitSim(0.9);
