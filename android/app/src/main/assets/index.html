@@ -2791,29 +2791,41 @@ body.netgame #revivetouch{display:flex}
       </div>
     </section>
     <section id="pausescreen" class="screen modal hidden">
-      <div class="dialog">
-        <div class="eyebrow">Sinal interrompido</div>
-        <h2>Respire. A horda espera.</h2>
-        <p>O jogo está pausado.</p>
-        <div class="row">
-          <button id="resume" class="primary">Continuar</button
-          ><button id="pausesettings">Configurações</button
-          ><button id="abandon">Voltar ao menu</button>
+      <div class="dialog pause-dialog" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="pause-head">
+          <span class="eyebrow" id="pause-eyebrow">SINAL INTERROMPIDO · PARTIDA PAUSADA</span>
+          <h2 id="pause-title">RESPIRE.<br />A HORDA ESPERA.</h2>
+          <p id="pause-sub">O jogo está pausado.</p>
         </div>
-        <p id="lockhint" class="hint" style="margin-top: 20px">
-          Clique em Continuar e depois na arena para capturar o mouse.
-        </p>
-        <button id="fallback" class="small">Jogar sem captura do mouse</button>
+        <div class="pause-stats" id="pause-stats"></div>
+        <nav class="pause-nav" aria-label="Menu da partida">
+          <button id="resume" class="primary" type="button"><b>Continuar</b><small>Esc</small></button>
+          <button id="pausemissions" type="button"><b>Missões</b><small id="pause-missions-key">M</small></button>
+          <button id="pausesettings" type="button"><b>Configurações</b><small>Gráficos, áudio, câmera, teclas</small></button>
+          <button id="pausehelp" type="button"><b>Controles</b><small>Teclas atuais</small></button>
+          <button id="abandon" class="pause-quit" type="button"><b>Abandonar partida</b><small>Volta ao menu principal</small></button>
+        </nav>
+        <p id="lockhint" class="hint">Clique em Continuar e depois na arena para capturar o mouse.</p>
+        <button id="fallback" class="small ghost">Jogar sem captura do mouse</button>
       </div>
     </section>
     <section id="settingsscreen" class="screen modal hidden">
-      <div class="dialog">
-        <h2>Configurações</h2>
-        <div id="settingsfields" class="settings-grid scroll"></div>
-        <div class="row">
-          <button id="settingsback" class="primary">Concluir</button
-          ><button id="resetsettings">Restaurar padrões</button>
-        </div>
+      <div class="dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <header class="settings-head">
+          <div><span class="eyebrow">SISTEMA</span><h2 id="settings-title">CONFIGURAÇÕES</h2></div>
+          <nav class="settings-tabs" role="tablist" aria-label="Categorias">
+            <button type="button" role="tab" data-settings-tab="graphics">Gráficos</button>
+            <button type="button" role="tab" data-settings-tab="audio">Áudio</button>
+            <button type="button" role="tab" data-settings-tab="camera">Câmera</button>
+            <button type="button" role="tab" data-settings-tab="controls">Controles</button>
+          </nav>
+        </header>
+        <div id="settingsfields" class="settings-body" role="tabpanel"></div>
+        <footer class="settings-foot">
+          <p id="settings-msg" role="status"></p>
+          <button id="resetsettings" type="button">Restaurar aba</button>
+          <button id="settingsback" class="primary" type="button">Concluir</button>
+        </footer>
       </div>
     </section>
     <section id="helpscreen" class="screen modal hidden">
@@ -2823,7 +2835,7 @@ body.netgame #revivetouch{display:flex}
           Elimine a onda inteira. Use as moedas no Armory antes da partida e
           procure tiros na cabeça.
         </p>
-        <div class="controls">
+        <div class="controls" id="helpcontrols">
           <span><kbd>W A S D</kbd> Mover</span
           ><span><kbd>Mouse</kbd> Olhar</span
           ><span><kbd>Clique</kbd> Atirar / atacar</span
@@ -2983,6 +2995,8 @@ body.netgame #revivetouch{display:flex}
     <script src="js/missions/Missions.js"></script>
     <script src="js/network/Transport.js"></script>
     <script src="js/network/LobbyManager.js"></script>
+    <script src="js/ui/Keybinds.js"></script>
+    <script src="js/ui/SettingsUI.js"></script>
     <script src="js/ui/LoginUI.js"></script>
     <script src="js/ui/ProfileUI.js"></script>
     <script src="js/ui/MissionUI.js"></script>
@@ -3272,24 +3286,33 @@ body.netgame #revivetouch{display:flex}
             graphics: window.DeadRecoilRuntime?.platform === "android" ? "medium" : "high",
             shadows: window.DeadRecoilRuntime?.platform === "android" ? "off" : "medium",
             vfx: window.DeadRecoilRuntime?.platform === "android" ? "low" : "high",
+            master: 100,
             sfx: 65,
+            weapons: 65,
+            ambient: 65,
+            ui: 65,
             music: 25,
             fov: 85,
             sensitivity: 1,
+            adsSensitivity: 0.7,
+            drawDistance: 1,
+            resolution: 1,
+            keys: {},
             numbers: true,
             fps: false,
             invert: false,
           },
           data: {},
           load() {
-            this.data = { ...this.defaults };
+            this.data = { ...this.defaults, keys: {} };
+            let saved = {};
             try {
-              const s = JSON.parse(
+              saved = JSON.parse(
                 localStorage.getItem("deadrecoil.settings") || "{}",
-              );
+              ) || {};
               for (const k in this.defaults) {
-                if (typeof s[k] === typeof this.defaults[k])
-                  this.data[k] = s[k];
+                if (typeof saved[k] === typeof this.defaults[k])
+                  this.data[k] = saved[k];
               }
             } catch {}
             // Migrate older Android installs that saved desktop quality by default.
@@ -3306,11 +3329,22 @@ body.netgame #revivetouch{display:flex}
                 this.save();
               }
             }
+            if (typeof saved.weapons !== "number") {
+              for (const k of ["weapons", "ambient", "ui"]) this.data[k] = this.data.sfx;
+            }
+            if (!this.data.keys || Array.isArray(this.data.keys)) this.data.keys = {};
             for (const [k, a, b] of [
+              ["master", 0, 100],
               ["sfx", 0, 100],
+              ["weapons", 0, 100],
+              ["ambient", 0, 100],
+              ["ui", 0, 100],
               ["music", 0, 100],
               ["fov", 60, 120],
               ["sensitivity", 0.1, 5],
+              ["adsSensitivity", 0.1, 2],
+              ["drawDistance", 0.6, 1.4],
+              ["resolution", 0.5, 1.5],
             ])
               this.data[k] = clamp(this.data[k], a, b);
             for (const [k, opts] of [
@@ -3332,7 +3366,7 @@ body.netgame #revivetouch{display:flex}
             const s = this.data;
             renderScale = Math.min(devicePixelRatio,
               (nativeAndroid ? { low: .68, medium: .85, high: 1.05, ultra: 1.25 }
-                             : { low: .8, medium: 1, high: 1.5, ultra: 2 })[s.graphics]);
+                             : { low: .8, medium: 1, high: 1.5, ultra: 2 })[s.graphics]) * s.resolution;
             renderer.setPixelRatio(renderScale);
             renderer.setSize(innerWidth, innerHeight, false);
             const quality = {
@@ -3344,7 +3378,7 @@ body.netgame #revivetouch{display:flex}
             renderer.shadowMap.enabled =
               s.shadows !== "off" && quality.shadow > 0;
             ParticleSystem.budget = nativeAndroid ? Math.min(quality.particles, 240) : quality.particles;
-            camera.far = nativeAndroid ? Math.min(quality.far, 95) : quality.far;
+            camera.far = (nativeAndroid ? Math.min(quality.far, 95) : quality.far) * s.drawDistance;
             camera.updateProjectionMatrix();
             renderer.shadowMap.type =
               s.graphics === "ultra"
@@ -3374,6 +3408,8 @@ body.netgame #revivetouch{display:flex}
           },
         };
         SettingsManager.load();
+        DR.Settings = SettingsManager;
+        DR.Keybinds.load(SettingsManager.data.keys);
         let renderer, renderScale = 1;
         const nativeAndroid = window.DeadRecoilRuntime?.platform === "android";
         try {
@@ -6216,6 +6252,8 @@ body.netgame #revivetouch{display:flex}
           ctx: null,
           musicGain: null,
           sfxGain: null,
+          buses: {},
+          route: null,
           nextNote: 0,
           init() {
             if (!this.ctx) {
@@ -6223,10 +6261,14 @@ body.netgame #revivetouch{display:flex}
                 this.ctx = new (
                   window.AudioContext || window.webkitAudioContext
                 )();
-                this.sfxGain = this.ctx.createGain();
-                this.musicGain = this.ctx.createGain();
-                this.sfxGain.connect(this.ctx.destination);
-                this.musicGain.connect(this.ctx.destination);
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.connect(this.ctx.destination);
+                for (const k of ["music", "ambient", "weapons", "effects", "ui"]) {
+                  this.buses[k] = this.ctx.createGain();
+                  this.buses[k].connect(this.masterGain);
+                }
+                this.sfxGain = this.buses.effects;
+                this.musicGain = this.buses.music;
                 this.volumes();
               } catch {
                 return;
@@ -6237,9 +6279,21 @@ body.netgame #revivetouch{display:flex}
           },
           volumes() {
             if (!this.ctx) return;
-            this.sfxGain.gain.value = (SettingsManager.data.sfx / 100) * 0.45;
-            this.musicGain.gain.value =
-              (SettingsManager.data.music / 100) * 0.12;
+            const s = SettingsManager.data;
+            this.masterGain.gain.value = s.master / 100;
+            this.buses.effects.gain.value = (s.sfx / 100) * 0.45;
+            this.buses.weapons.gain.value = (s.weapons / 100) * 0.45;
+            this.buses.ui.gain.value = (s.ui / 100) * 0.45;
+            this.buses.ambient.gain.value = (s.ambient / 100) * 0.45;
+            this.buses.music.gain.value = (s.music / 100) * 0.12;
+          },
+          out(bus) {
+            return this.buses[bus || this.route] || this.sfxGain;
+          },
+          on(bus, fn) {
+            const prev = this.route;
+            this.route = bus;
+            try { fn(); } finally { this.route = prev; }
           },
           tone(
             freq = 220,
@@ -6262,7 +6316,7 @@ body.netgame #revivetouch{display:flex}
             g.gain.setValueAtTime(Math.max(0.0001, volume), t);
             g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
             o.connect(g);
-            g.connect(music ? this.musicGain : this.sfxGain);
+            g.connect(music === true ? this.musicGain : this.out(music || null));
             o.start(t);
             o.stop(t + duration);
             o.onended = () => {
@@ -6286,7 +6340,7 @@ body.netgame #revivetouch{display:flex}
             g.gain.value = volume;
             src.connect(f);
             f.connect(g);
-            g.connect(this.sfxGain);
+            g.connect(this.out());
             src.start();
             src.onended = () => {
               src.disconnect();
@@ -6316,7 +6370,7 @@ body.netgame #revivetouch{display:flex}
             gain.gain.value = 0.24;
             source.connect(filter);
             filter.connect(gain);
-            gain.connect(this.sfxGain);
+            gain.connect(this.out("weapons"));
             source.start();
             source.onended = () => {
               source.disconnect();
@@ -6325,8 +6379,10 @@ body.netgame #revivetouch{display:flex}
             };
           },
           meleeImpact() {
-            this.noise(0.065, 0.23);
-            this.tone(65, 0.09, "sine", 0.2, 28);
+            this.on("weapons", () => {
+              this.noise(0.065, 0.23);
+              this.tone(65, 0.09, "sine", 0.2, 28);
+            });
           },
           footstep(running) {
             this.noise(running ? 0.045 : 0.035, running ? 0.065 : 0.04);
@@ -6337,17 +6393,19 @@ body.netgame #revivetouch{display:flex}
               this.meleeSwing();
               return;
             }
-            if (w.tier >= 3) this.tone(650, 0.16, "sawtooth", 0.23, 80);
-            else {
-              this.noise(
-                w.cat === 0 ? 0.28 : w.modelId === 8 ? 0.045 : 0.1,
-                w.modelId === 8 ? 0.28 : 0.7,
-              );
-              this.tone(w.cat === 2 ? 190 : 100, 0.13, "triangle", 0.6, 25);
-            }
+            this.on("weapons", () => {
+              if (w.tier >= 3) this.tone(650, 0.16, "sawtooth", 0.23, 80);
+              else {
+                this.noise(
+                  w.cat === 0 ? 0.28 : w.modelId === 8 ? 0.045 : 0.1,
+                  w.modelId === 8 ? 0.28 : 0.7,
+                );
+                this.tone(w.cat === 2 ? 190 : 100, 0.13, "triangle", 0.6, 25);
+              }
+            });
           },
           coin() {
-            this.tone(900, 0.1, "sine", 0.16, 1450);
+            this.tone(900, 0.1, "sine", 0.16, 1450, "ui");
           },
           update() {
             if (!this.ctx || this.ctx.currentTime < this.nextNote) return;
@@ -6358,6 +6416,7 @@ body.netgame #revivetouch{display:flex}
               this.tone(65, 0.16, "sine", 0.7, 35);
           },
         };
+        DR.Audio = AudioManager;
         // ParticleSystem: one reusable points buffer and bounded tracer effects.
         const ParticleSystem = {
           items: [],
@@ -8512,7 +8571,7 @@ body.netgame #revivetouch{display:flex}
             detail.innerHTML =
               "<h3>Sorteando…</h3><p>A sorte está lançada.</p>";
             AudioManager.init();
-            AudioManager.tone(lucky ? 700 : 420, 0.5, "triangle", 0.25, 1100);
+            AudioManager.tone(lucky ? 700 : 420, 0.5, "triangle", 0.25, 1100, "ui");
             setTimeout(() => {
               this.busy = false;
               this.messages[kind] =
@@ -9556,7 +9615,7 @@ body.netgame #revivetouch{display:flex}
           preload() {
             for (const name of Object.keys(window.DR_MONSTER_SFX || {})) this.load(name);
           },
-          play(name, { volume = 1, loop = false, rate = 1, fadeIn = 0 } = {}) {
+          play(name, { volume = 1, loop = false, rate = 1, fadeIn = 0, bus = loop ? "ambient" : "effects" } = {}) {
             const ctx = AudioManager.ctx,
               handle = { stopped: false, stopNow: null };
             if (ctx)
@@ -9571,7 +9630,7 @@ body.netgame #revivetouch{display:flex}
                 gain.gain.setValueAtTime(fadeIn ? 0.0001 : volume, now);
                 if (fadeIn) gain.gain.exponentialRampToValueAtTime(volume, now + fadeIn);
                 source.connect(gain);
-                gain.connect(AudioManager.sfxGain);
+                gain.connect(AudioManager.out(bus));
                 source.start();
                 handle.stopNow = (fade) => {
                   try {
@@ -11910,7 +11969,7 @@ body.netgame #revivetouch{display:flex}
             if (!w || w.ammo === Infinity || w.ammo === w.mag || reloadEnd)
               return;
             reloadEnd = simulationTime + w.reload;
-            AudioManager.tone(180, 0.12, "square", 0.12, 80);
+            AudioManager.tone(180, 0.12, "square", 0.12, 80, "weapons");
           },
           switch(slot) {
             if (!player.inventory[slot] || slot === player.slot) return;
@@ -12192,7 +12251,7 @@ body.netgame #revivetouch{display:flex}
             if (reloadEnd && simulationTime >= reloadEnd) {
               w.ammo = w.mag;
               reloadEnd = 0;
-              AudioManager.tone(260, 0.08, "square", 0.12, 160);
+              AudioManager.tone(260, 0.08, "square", 0.12, 160, "weapons");
             }
             if (w && w.spear) this.updateSpear(w, dt);
             else if (w && w.charge) this.updateChargeShot(w, dt);
@@ -12555,6 +12614,7 @@ body.netgame #revivetouch{display:flex}
           kills: [],
           hudClock: 0,
           screen(id) {
+            if (id === "pausescreen") this.pauseMenu();
             for (const el of document.querySelectorAll(".screen"))
               el.classList.toggle("hidden", el.id !== id);
             $("touch").classList.toggle(
@@ -12667,98 +12727,26 @@ body.netgame #revivetouch{display:flex}
               `<span>${classes[selectedClass].name}</span><span>${WeaponSystem.current().name}</span>`;
           },
           settings() {
-            const s = SettingsManager.data,
-              selects = [
-                [
-                  "graphics",
-                  "Qualidade gráfica",
-                  [
-                    ["low", "Baixo"],
-                    ["medium", "Médio"],
-                    ["high", "Alto"],
-                    ["ultra", "Ultra"],
-                  ],
-                ],
-                [
-                  "shadows",
-                  "Sombras",
-                  [
-                    ["off", "Desligadas"],
-                    ["low", "Baixo"],
-                    ["medium", "Médio"],
-                    ["high", "Alto"],
-                  ],
-                ],
-                [
-                  "vfx",
-                  "Partículas",
-                  [
-                    ["off", "Desligadas"],
-                    ["low", "Baixo"],
-                    ["high", "Alto"],
-                  ],
-                ],
-              ];
-            $("settingsfields").innerHTML =
-              selects
-                .map(
-                  ([k, label, opts]) =>
-                    `<label>${label}<select data-setting="${k}">${opts.map(([v, l]) => `<option value="${v}" ${s[k] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`,
-                )
-                .join("") +
-              [
-                ["sfx", "Volume dos efeitos", 0, 100, 1],
-                ["music", "Volume da música", 0, 100, 1],
-                ["fov", "Campo de visão", 60, 120, 1],
-                ["sensitivity", "Sensibilidade do mouse", 0.1, 5, 0.1],
-              ]
-                .map(
-                  ([k, label, min, max, step]) =>
-                    `<label>${label}: <output id="out-${k}">${s[k]}</output><input data-setting="${k}" type="range" min="${min}" max="${max}" step="${step}" value="${s[k]}"></label>`,
-                )
-                .join("") +
-              [
-                ["fps", "Mostrar FPS"],
-                ["numbers", "Números de dano"],
-                ["invert", "Inverter eixo Y"],
-              ]
-                .map(
-                  ([k, label]) =>
-                    `<label class="check"><input type="checkbox" data-setting="${k}" ${s[k] ? "checked" : ""}>${label}</label>`,
-                )
-                .join("");
-            $("settingsfields")
-              .querySelectorAll("[data-setting]")
-              .forEach(
-                (el) =>
-                  (el.oninput = () => {
-                    const k = el.dataset.setting;
-                    s[k] =
-                      el.type === "checkbox"
-                        ? el.checked
-                        : el.type === "range"
-                          ? Number(el.value)
-                          : el.value;
-                    if ($("out-" + k)) $("out-" + k).textContent = s[k];
-                    if (k === "graphics") {
-                      s.shadows = {
-                        low: "off",
-                        medium: "low",
-                        high: "medium",
-                        ultra: "high",
-                      }[s.graphics];
-                      s.vfx = s.graphics === "low" ? "low" : "high";
-                    }
-                    SettingsManager.save();
-                    if (["graphics", "shadows"].includes(k)) {
-                      SettingsManager.apply();
-                      if (k === "graphics") this.settings();
-                    } else {
-                      AudioManager.volumes();
-                      $("fps").classList.toggle("hidden", !s.fps);
-                    }
-                  }),
-              );
+            DR.SettingsUI.open();
+          },
+          pauseMenu() {
+            const online = NetGame.active,
+              K = DR.Keybinds;
+            $("pausescreen").classList.toggle("online", online);
+            $("pause-eyebrow").textContent = online ? "PARTIDA ONLINE · A HORDA NÃO PARA" : "SINAL INTERROMPIDO · PARTIDA PAUSADA";
+            $("pause-title").innerHTML = online ? "CUIDADO.<br />O JOGO CONTINUA." : "RESPIRE.<br />A HORDA ESPERA.";
+            $("pause-sub").textContent = online
+              ? "No multiplayer o mundo continua rodando enquanto este menu está aberto."
+              : `${maps[selectedMap].name} · ${{ easy: "Fácil", medium: "Médio", hard: "Difícil", nightmare: "Pesadelo" }[difficulty] || ""}`;
+            const t = Math.floor(elapsed);
+            $("pause-stats").innerHTML = [
+              [WaveManager.wave, "Onda"],
+              [player.kills, "Eliminações"],
+              [player.headshots, "Headshots"],
+              [`${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`, "Tempo"],
+            ].map(([v, l]) => `<div><strong>${v}</strong><span>${l}</span></div>`).join("");
+            $("pause-missions-key").textContent = K.label(K.code("missions"));
+            $("fallback").classList.toggle("hidden", touchMode || online);
           },
           scores() {
             let scores = [];
@@ -15593,7 +15581,7 @@ body.netgame #revivetouch{display:flex}
               r.tick = tick;
               const remaining = Math.max(0, Math.abs(r.targetOffset - offset));
               const pitch = 205 + Math.min(330, Math.max(0, 260 - remaining * 0.12));
-              AudioManager.tone(pitch, .032, "triangle", .042, 95);
+              AudioManager.tone(pitch, .032, "triangle", .042, 95, "ui");
             }
 
             if (t >= 1 && !r.revealed) {
@@ -15625,11 +15613,11 @@ body.netgame #revivetouch{display:flex}
                   return `<i style="--a:${angle}deg;--d:${distance}px;--delay:${delay}ms;--s:${size}px"></i>`;
                 }).join("");
                 overlay.appendChild(fx);
-                AudioManager.tone(523, .75, "sine", .13, 80);
-                AudioManager.tone(659, .82, "triangle", .11, 70);
-                AudioManager.tone(784, .95, "sine", .10, 65);
+                AudioManager.tone(523, .75, "sine", .13, 80, "ui");
+                AudioManager.tone(659, .82, "triangle", .11, 70, "ui");
+                AudioManager.tone(784, .95, "sine", .10, 65, "ui");
               } else {
-                AudioManager.tone(r.result.item.tier >= 4 ? 160 : 300, .48, "triangle", .18, 60);
+                AudioManager.tone(r.result.item.tier >= 4 ? 160 : 300, .48, "triangle", .18, 60, "ui");
               }
 
               $("reveal-message").textContent = r.result.item.tier === 6
@@ -16217,11 +16205,11 @@ body.netgame #revivetouch{display:flex}
           fallback = true;
           document.body.classList.remove("mouse-captured");
           $("lockhint").textContent =
-            "Modo compatível ativo: mova o mouse sobre a arena ou use as setas para olhar. P pausa.";
+            "Modo compatível ativo: mova o mouse sobre a arena ou use as setas para olhar. Esc abre o menu.";
           if (state === GameState.PLAYING) {
             $("world").focus({ preventScroll: true });
             UIManager.toast(
-              "Captura bloqueada pelo navegador. Use mouse/setas ou abra no Chrome/Edge. P pausa.",
+              "Captura bloqueada pelo navegador. Use mouse/setas ou abra no Chrome/Edge. Esc abre o menu.",
             );
           }
         }
@@ -16254,14 +16242,16 @@ body.netgame #revivetouch{display:flex}
               failed();
           }, 700);
         }
-        function pause() {
+        function pause(showMenu = true) {
           if (state !== GameState.PLAYING) return;
+          mouseFreed = false;
+          document.body.classList.remove("mouse-free");
           if (NetGame.active) {
             // The shared world cannot stop: open the menu over the running match.
             NetGame.menuOpen = true;
             mouse.down = mouse.aim = false;
             keys.clear();
-            UIManager.screen("pausescreen");
+            if (showMenu) UIManager.screen("pausescreen");
             unlock();
             return;
           }
@@ -16276,10 +16266,23 @@ body.netgame #revivetouch{display:flex}
           touchMove.x = 0;
           touchMove.y = 0;
           if (touchMode) resetTouchControls();
-          UIManager.screen("pausescreen");
+          if (showMenu) UIManager.screen("pausescreen");
           unlock();
         }
-        function resume(){NetGame.menuOpen=false;state=GameState.PLAYING;WeaponSystem.model.visible=true;fallback=false;UIManager.screen(null);$("lockhint").textContent=touchMode?"Arraste a direita para olhar · pinça alterna 1ª/3ª pessoa.":"Clique na arena para capturar o mouse. Esc ou P libera e pausa."}
+        // Esc inside the in-game menus: step back one level, and resume from the top level.
+        function inGameMenuBack() {
+          const inMatch = state === GameState.PAUSED || NetGame.menuOpen;
+          if (!inMatch) return false;
+          const open = [...document.querySelectorAll(".screen:not(.hidden)")].map((el) => el.id);
+          if (open.includes("settingsscreen")) { if (DR.SettingsUI?.capturing) return true; UIManager.screen("pausescreen"); return true; }
+          if (open.includes("missionscreen") || open.includes("indexscreen") || open.includes("helpscreen")) {
+            if (DR.MissionUI.from === "game") { DR.MissionUI.from = null; resume(); } else UIManager.screen("pausescreen");
+            return true;
+          }
+          if (open.includes("pausescreen")) { resume(); return true; }
+          return false;
+        }
+        function resume(){NetGame.menuOpen=false;state=GameState.PLAYING;WeaponSystem.model.visible=true;fallback=false;UIManager.screen(null);$("lockhint").textContent=touchMode?"Arraste a direita para olhar · pinça alterna 1ª/3ª pessoa.":"Clique na arena para capturar o mouse. Esc abre o menu."}
         function nextWave() {
           // In multiplayer only the host advances the wave; clients follow its "next" event.
           if (NetGame.active && !NetGame.host) return;
@@ -16396,7 +16399,7 @@ body.netgame #revivetouch{display:flex}
           fallback = true;
           resume();
           UIManager.toast(
-            "Mova o mouse sobre a arena ou use as setas para olhar. P pausa o jogo.",
+            "Mova o mouse sobre a arena ou use as setas para olhar. Esc abre o menu.",
           );
         };
         $("abandon").onclick = () => {
@@ -16405,18 +16408,23 @@ body.netgame #revivetouch{display:flex}
         };
         $("settingsbtn").onclick = () => openSettings("menu");
         $("pausesettings").onclick = () => openSettings("pausescreen");
-        $("settingsback").onclick = () => UIManager.screen(settingsReturn);
-        $("resetsettings").onclick = () => {
-          SettingsManager.data = { ...SettingsManager.defaults };
-          SettingsManager.save();
-          SettingsManager.apply();
-          UIManager.settings();
+        $("pausemissions").onclick = () => DR.MissionUI.open({ from: "pause" });
+        $("pausehelp").onclick = () => {
+          $("helpcontrols").innerHTML = DR.SettingsUI.helpHtml();
+          helpReturn = "pausescreen";
+          UIManager.screen("helpscreen");
         };
+        $("settingsback").onclick = () => UIManager.screen(settingsReturn);
         $("scoresbtn").onclick = () => {
           UIManager.scores();
           UIManager.screen("scoresscreen");
         };
-        $("helpbtn").onclick = () => UIManager.screen("helpscreen");
+        let helpReturn = null;
+        $("helpbtn").onclick = () => {
+          helpReturn = null;
+          $("helpcontrols").innerHTML = DR.SettingsUI.helpHtml();
+          UIManager.screen("helpscreen");
+        };
         $("exitbtn").onclick = () => {
           if (window.DeadRecoilNative?.quit) { window.DeadRecoilNative.quit(); return; }
           if (window.deadRecoilNative?.quit) { window.deadRecoilNative.quit(); return; }
@@ -16436,7 +16444,11 @@ body.netgame #revivetouch{display:flex}
         };
         document
           .querySelectorAll("[data-menu]")
-          .forEach((b) => (b.onclick = () => UIManager.menu()));
+          .forEach((b) => (b.onclick = () => {
+            if (b.closest("#helpscreen") && helpReturn) return UIManager.screen(helpReturn);
+            if (b.closest("#missionscreen, #indexscreen") && DR.MissionUI.leave()) return;
+            UIManager.menu();
+          }));
         $("retry").textContent = "Voltar ao preparo";
         $("retry").onclick = () => {
           if (DR.LobbyManager.lobby) {
@@ -16453,6 +16465,8 @@ body.netgame #revivetouch{display:flex}
             lockPending = false;
             hadPointerLock = true;
             fallback = false;
+            mouseFreed = false;
+            document.body.classList.remove("mouse-free");
             document.body.classList.add("mouse-captured");
             if (state !== GameState.PLAYING) unlock();
             return;
@@ -16460,7 +16474,7 @@ body.netgame #revivetouch{display:flex}
           document.body.classList.remove("mouse-captured");
           if (hadPointerLock) {
             hadPointerLock = false;
-            if (state === GameState.PLAYING) pause();
+            if (state === GameState.PLAYING && !mouseFreed && !NetGame.menuOpen) pause();
           }
         });
         document.addEventListener("pointerlockerror", () => {
@@ -16469,43 +16483,70 @@ body.netgame #revivetouch{display:flex}
         window.addEventListener("pointerdown", () => {
           if (state === GameState.DYING) DeathFX.skip();
         });
+        const defaultCodes = new Set(DR.Keybinds.actions.map((a) => a.def));
+        // Physical key/button → the default code gameplay reads. Unbound defaults do nothing;
+        // keys no action uses (arrows for the compatible look mode) pass through unchanged.
+        function inputCode(code) {
+          const c = DR.Keybinds.canon(code);
+          if (c) return c;
+          return defaultCodes.has(code) ? null : code;
+        }
+        function gameInput(code, down, repeat = false) {
+          const c = inputCode(code);
+          if (!c) return false;
+          if (c === "Mouse0") { mouse.down = down; return true; }
+          if (c === "Mouse2") { mouse.aim = down; return true; }
+          if (!down) { keys.delete(c); return true; }
+          keys.add(c);
+          if (repeat) return true;
+          if (c === "KeyR") PlayerController.reload();
+          if (c === "KeyQ") PlayerController.ability();
+          if (c === "KeyG") PlayerController.grenade();
+          if (/^Digit[1-5]$/.test(c)) PlayerController.switch(Number(c.slice(-1)) - 1);
+          if (c === "Space" && player.jump === 0) player.vy = 6;
+          return true;
+        }
+        let mouseFreed = false;
+        function freeMouse(on = !mouseFreed) {
+          if (state !== GameState.PLAYING || touchMode) return;
+          mouseFreed = on;
+          document.body.classList.toggle("mouse-free", on);
+          mouse.down = mouse.aim = false;
+          if (on) unlock();
+          else lock();
+        }
+        function openGameMissions() {
+          if (state !== GameState.PLAYING) return;
+          if (!NetGame.active) pause(false);
+          else {
+            NetGame.menuOpen = true;
+            mouse.down = mouse.aim = false;
+            keys.clear();
+            unlock();
+          }
+          DR.MissionUI.open({ from: "game" });
+        }
         window.addEventListener("keydown", (e) => {
+          if (DR.SettingsUI?.capturing) return;
           if (state === GameState.DYING && ["Space", "Enter", "Escape"].includes(e.code)) {
             DeathFX.skip();
             return;
           }
-          if (e.code === "Escape" || e.code === "KeyP") {
-            if (state === GameState.PLAYING) pause();
+          if (e.code === "Escape") {
+            if (state === GameState.PLAYING && !NetGame.menuOpen) pause();
+            else if (inGameMenuBack()) e.preventDefault();
             return;
           }
           if (state !== GameState.PLAYING || NetGame.menuOpen) return;
-          if (
-            [
-              "Space",
-              "ArrowUp",
-              "ArrowDown",
-              "ArrowLeft",
-              "ArrowRight",
-              "ControlLeft",
-              "Tab",
-              "Digit1",
-              "Digit2",
-              "Digit3",
-              "Digit4",
-              "Digit5",
-            ].includes(e.code)
-          )
+          const action = DR.Keybinds.action(e.code);
+          if (action === "freeMouse") { e.preventDefault(); if (!e.repeat) freeMouse(); return; }
+          if (action === "missions") { e.preventDefault(); if (!e.repeat) openGameMissions(); return; }
+          const c = inputCode(e.code);
+          if (c && (["Space", "Tab", "ControlLeft", "AltLeft"].includes(e.code) || e.code.startsWith("Arrow") || /^Digit[1-5]$/.test(e.code) || action))
             e.preventDefault();
-          keys.add(e.code);
-          if (e.repeat) return;
-          if (e.code === "KeyR") PlayerController.reload();
-          if (e.code === "KeyQ") PlayerController.ability();
-          if (e.code === "KeyG") PlayerController.grenade();
-          if (/^Digit[1-5]$/.test(e.code))
-            PlayerController.switch(Number(e.code.slice(-1)) - 1);
-          if (e.code === "Space" && player.jump === 0) player.vy = 6;
+          gameInput(e.code, true, e.repeat);
         });
-        window.addEventListener("keyup", (e) => keys.delete(e.code));
+        window.addEventListener("keyup", (e) => gameInput(e.code, false));
         window.addEventListener("blur", () => {
           keys.clear();
           mouse.down = false;
@@ -16515,10 +16556,9 @@ body.netgame #revivetouch{display:flex}
         document.addEventListener("visibilitychange", () => {
           if (document.hidden) pause();
         });
-        $("world").addEventListener("mousedown",(e)=>{if(state!==GameState.PLAYING)return;if(!document.pointerLockElement&&!lockPending&&!touchMode){mouse.down=false;mouse.aim=false;fallback=false;const capture=()=>lock();if(!document.fullscreenElement)enterFullscreen().finally(capture);else capture();return}if(e.button===0)mouse.down=true;if(e.button===2)mouse.aim=true});
+        $("world").addEventListener("mousedown",(e)=>{if(state!==GameState.PLAYING)return;if(!document.pointerLockElement&&!lockPending&&!touchMode){mouse.down=false;mouse.aim=false;fallback=false;const capture=()=>lock();if(!document.fullscreenElement)enterFullscreen().finally(capture);else capture();return}gameInput("Mouse"+e.button,true)});
         window.addEventListener("mouseup", (e) => {
-          if (e.button === 0) mouse.down = false;
-          if (e.button === 2) mouse.aim = false;
+          gameInput("Mouse" + e.button, false);
         });
         window.addEventListener("contextmenu", (e) => {
           if (state === GameState.PLAYING) e.preventDefault();
@@ -16543,7 +16583,7 @@ body.netgame #revivetouch{display:flex}
             dy = clamp(e.clientY - fallbackPointer.y, -80, 80);
             fallbackPointer = { x: e.clientX, y: e.clientY };
           }
-          const sensitivity = SettingsManager.data.sensitivity * 0.002;
+          const sensitivity = SettingsManager.data.sensitivity * 0.002 * (mouse.aim ? SettingsManager.data.adsSensitivity : 1);
           yaw -= dx * sensitivity;
           pitch = clamp(
             pitch - dy * sensitivity * (SettingsManager.data.invert ? -1 : 1),
@@ -16673,10 +16713,10 @@ body.netgame #revivetouch{display:flex}
           }
           const dx = e.clientX - lastLook.x,
             dy = e.clientY - lastLook.y,
-            sensitivity = SettingsManager.data.sensitivity;
+            sensitivity = SettingsManager.data.sensitivity * (mouse.aim ? SettingsManager.data.adsSensitivity : 1);
           yaw -= dx * 0.0052 * sensitivity;
           pitch = clamp(
-            pitch - dy * 0.0052 * (SettingsManager.data.invert ? -1 : 1),
+            pitch - dy * 0.0052 * (mouse.aim ? SettingsManager.data.adsSensitivity : 1) * (SettingsManager.data.invert ? -1 : 1),
             -1.45,
             1.45,
           );
@@ -16857,19 +16897,23 @@ body.netgame #revivetouch{display:flex}
             t.classList.add("show");
             clearTimeout(this.missionTimer);
             this.missionTimer = setTimeout(() => t.classList.add("hidden"), 4200);
-            AudioManager.tone(660, 0.18, "triangle", 0.2, 990);
-            setTimeout(() => AudioManager.tone(990, 0.3, "triangle", 0.18, 1320), 160);
+            AudioManager.tone(660, 0.18, "triangle", 0.2, 990, "ui");
+            setTimeout(() => AudioManager.tone(990, 0.3, "triangle", 0.18, 1320, "ui"), 160);
           },
           sound(kind) {
             if (kind === "reward") {
               AudioManager.coin();
-              AudioManager.tone(520, 0.25, "triangle", 0.2, 1040);
-              setTimeout(() => AudioManager.tone(780, 0.4, "triangle", 0.2, 1560), 180);
+              AudioManager.tone(520, 0.25, "triangle", 0.2, 1040, "ui");
+              setTimeout(() => AudioManager.tone(780, 0.4, "triangle", 0.2, 1560, "ui"), 180);
             }
           },
           localLevel: () => 1,
         };
         $("error-ok").onclick = () => $("errorscreen").classList.add("hidden");
+        DR.SettingsUI.init({
+          apply: () => SettingsManager.apply(),
+          fullscreen: (on) => (on ? enterFullscreen() : document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : Promise.resolve()),
+        });
         DR.LoginUI.init(App);
         DR.ProfileUI.init(App);
         DR.MissionUI.init(App);
@@ -16925,8 +16969,8 @@ body.netgame #revivetouch{display:flex}
               slowWindows = fps < 32 ? slowWindows + 1 : 0;
               fastWindows = fps > 41 ? fastWindows + 1 : 0;
               const ceiling = Math.min(devicePixelRatio,
-                { low: .68, medium: .85, high: 1.05, ultra: 1.25 }[SettingsManager.data.graphics]);
-              const floor = SettingsManager.data.graphics === "low" ? .58 : .66;
+                { low: .68, medium: .85, high: 1.05, ultra: 1.25 }[SettingsManager.data.graphics]) * SettingsManager.data.resolution;
+              const floor = Math.min(ceiling, SettingsManager.data.graphics === "low" ? .58 : .66);
               const next = slowWindows >= 2 ? Math.max(floor, renderScale - .1)
                          : fastWindows >= 4 ? Math.min(ceiling, renderScale + .05) : renderScale;
               if (Math.abs(next - renderScale) > .001) {
