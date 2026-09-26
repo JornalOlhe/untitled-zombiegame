@@ -1,6 +1,6 @@
 {
   "name": "dead-recoil-desktop",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "private": true,
   "description": "Dead Recoil desktop runtime for Windows",
   "main": "main.js",

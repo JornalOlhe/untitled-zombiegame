@@ -2992,7 +2992,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.21.0";
+        const GAME_VERSION = "0.22.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -15295,8 +15295,8 @@ body.netgame #revivetouch{display:flex}
           adaptiveSeconds = 0,
           slowWindows = 0,
           fastWindows = 0;
-        function frame(now) {
-          requestAnimationFrame(frame);
+        function frame(now, background = false) {
+          if (!background) requestAnimationFrame(frame);
           // Never cap 60 Hz gameplay at 58: that drops alternate vsync frames.
           if (nativeAndroid && state !== GameState.PLAYING && now - lastFrame < 1000 / 30 - 1) return;
           const wallDt = Math.max(0.001, (now - lastFrame) / 1000);
@@ -15477,6 +15477,7 @@ body.netgame #revivetouch{display:flex}
             n.el.style.opacity = Math.min(1, n.life * 2);
           }
           AudioManager.update();
+          if (background) return;
           renderer.autoClear = true;
           renderer.render(scene, camera);
           if (inWorld && WeaponSystem.model.visible) {
@@ -15487,6 +15488,18 @@ body.netgame #revivetouch{display:flex}
           }
         }
         requestAnimationFrame(frame);
+        // Online matches keep running while the window is hidden or minimized (the browser stops
+        // requestAnimationFrame there): step the simulation from a timer, without rendering, so the
+        // host keeps sending the world and guests keep their connection.
+        setInterval(() => {
+          if (!document.hidden || !NetGame.active || state !== GameState.PLAYING) return;
+          let remaining = Math.min(1, (performance.now() - lastFrame) / 1000);
+          while (remaining > 0.004) {
+            const step = Math.min(0.05, remaining);
+            frame(lastFrame + step * 1000, true);
+            remaining -= step;
+          }
+        }, 200);
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
