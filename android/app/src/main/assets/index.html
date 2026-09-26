@@ -2895,109 +2895,194 @@
           rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5];
         const requiresRerollConfirm = (tier) => tier === 5 || tier === 6;
         const classes = [
+          // Common
           {
-            name: "Berserker",
-            tier: 2,
-            color: "#b1443c",
-            ability: "Bloodlust",
-            cd: 25,
-            desc: "+30% de dano; recebe +20%. Overkills restauram 5 HP.",
-            active: "8s com +50% de velocidade e dano, sem gastar munição.",
+            key: "recruit", name: "Recruit", tier: 0, color: "#7b8588",
+            ability: "Field Aid", cd: 38,
+            desc: "Treinamento básico e equipamento padrão.",
+            active: "Recupera 20 HP.",
+            effects: {},
+            burst: { heal: 20 },
           },
           {
-            name: "Engineer",
-            tier: 2,
-            color: "#5489b4",
-            ability: "Torre automática",
-            cd: 30,
-            desc: "Lucky custa 30% menos. Ganha uma granada a cada duas ondas.",
-            active: "Uma torre protege sua posição por 15 segundos.",
-          },
-          {
-            name: "Medic",
-            tier: 1,
-            color: "#4b9d78",
-            ability: "Adrenalina",
-            cd: 30,
-            desc: "Regenera 1 HP/s após 5s sem dano. Vida temporária por onda, até +50.",
-            active: "Cura 40 HP e aumenta a velocidade em 25% por 5s.",
-          },
-          {
-            name: "Phantom",
-            tier: 3,
-            color: "#aaa168",
-            ability: "Invisibilidade",
-            cd: 35,
-            desc: "Headshots dobrados. Agachado é silencioso. Cada quinto disparo é crítico.",
-            active: "Fica invisível por 6 segundos, mesmo atirando.",
-          },
-          {
-            name: "Warlord",
-            tier: 4,
-            color: "#b57b43",
-            ability: "Supressão",
-            cd: 40,
-            desc: "+25% de dano. Cada 25 eliminações rende um ticket normal para o próximo preparo.",
-            active:
-              "10 segundos de dano dobrado e munição infinita, sem trocar a arma.",
-          },
-          {
-            name: "Recruta",
-            tier: 0,
-            color: "#7b8588",
-            ability: "Primeiros socorros",
-            cd: 40,
-            desc: "Sem bônus de dano ou equipamento raro. O ponto de partida de todo sobrevivente.",
-            active: "Recupera 15 HP.",
-          },
-          {
-            name: "Batedor",
-            tier: 0,
-            color: "#808c78",
-            ability: "Fôlego extra",
-            cd: 35,
+            key: "scout", name: "Scout", tier: 0, color: "#808c78",
+            ability: "Rush", cd: 34,
             desc: "+8% de velocidade de movimento.",
-            active: "Aumenta a velocidade em 25% por 4 segundos.",
+            active: "Aumenta a velocidade em 30% por 5 segundos.",
+            effects: { speed: 1.08 },
+            burst: { duration: 5, speed: 1.3 },
           },
           {
-            name: "Guardião",
-            tier: 1,
-            color: "#668277",
-            ability: "Resistência",
-            cd: 35,
-            desc: "Recebe 10% menos dano.",
+            key: "medic", name: "Medic", tier: 0, color: "#4b9d78",
+            ability: "Adrenaline", cd: 32,
+            desc: "Regenera 0,6 HP/s após 6 segundos sem receber dano.",
+            active: "Cura 30 HP e aumenta a velocidade por 5 segundos.",
+            effects: { regen: 0.6, regenDelay: 6 },
+            burst: { duration: 5, speed: 1.15, heal: 30 },
+          },
+
+          // Uncommon
+          {
+            key: "guardian", name: "Guardian", tier: 1, color: "#668277",
+            ability: "Fortify", cd: 34,
+            desc: "Recebe 12% menos dano.",
             active: "Reduz o dano recebido em 50% por 6 segundos.",
+            effects: { damageTaken: 0.88 },
+            burst: { duration: 6, damageTaken: 0.5 },
           },
           {
-            name: "Demolidor",
-            tier: 3,
-            color: "#aa7866",
-            ability: "Onda de choque",
-            cd: 35,
-            desc: "Granadas causam 50% mais dano. Começa com quatro granadas.",
-            active: "Explosão ao redor do jogador e uma granada adicional.",
+            key: "gunslinger", name: "Gunslinger", tier: 1, color: "#9a7954",
+            ability: "Quickdraw", cd: 30,
+            desc: "+12% de dano com todas as armas.",
+            active: "Dano +40% e velocidade +15% por 6 segundos.",
+            effects: { damage: 1.12 },
+            burst: { duration: 6, damage: 1.4, speed: 1.15 },
           },
           {
-            name: "Ceifador",
-            tier: 5,
-            color: "#c44459",
-            ability: "Eclipse",
-            cd: 45,
-            desc: "Classe mítica: +60% de dano e 3 HP por eliminação.",
-            active:
-              "8 segundos com dano dobrado, +35% de velocidade e 70% de resistência.",
+            key: "engineer", name: "Engineer", tier: 1, color: "#5489b4",
+            ability: "Sentry", cd: 30,
+            desc: "Lucky Spin custa 30% menos e recebe uma granada a cada duas ondas.",
+            active: "Instala uma torre automática durante 15 segundos.",
+            effects: { luckyCost: 0.7, waveGrenadeEvery: 2 },
+            burst: { turret: 15 },
+          },
+
+          // Rare
+          {
+            key: "berserker", name: "Berserker", tier: 2, color: "#b1443c",
+            ability: "Bloodlust", cd: 25,
+            desc: "+30% de dano; recebe 15% mais dano. Overkills restauram 5 HP.",
+            active: "Dano e velocidade +50% com munição infinita por 8 segundos.",
+            effects: { damage: 1.3, damageTaken: 1.15, overkillHeal: 5 },
+            burst: { duration: 8, damage: 1.5, speed: 1.5, infiniteAmmo: true },
           },
           {
-            name: "Arconte",
-            tier: 6,
-            color: "#f28a35",
-            ability: "Última Aurora",
-            cd: 55,
-            desc: "Classe divina: +75% de dano, +15% de velocidade e recuperação de 4 HP por eliminação.",
-            active:
-              "9 segundos de sobrecarga: dano ×2,5, resistência de 75% e recarga instantânea.",
+            key: "phantom", name: "Phantom", tier: 2, color: "#827da8",
+            ability: "Vanish", cd: 34,
+            desc: "Headshots +75%, agachado é silencioso e cada quinto tiro é crítico.",
+            active: "Fica invisível durante 7 segundos, mesmo ao atirar.",
+            effects: { headshot: 1.75, critEvery: 5, critMult: 2, silentCrouch: true },
+            burst: { duration: 7, invisible: true },
+          },
+          {
+            key: "demolitionist", name: "Demolitionist", tier: 2, color: "#aa7866",
+            ability: "Shockwave", cd: 34,
+            desc: "Granadas causam 60% mais dano e começa com quatro granadas.",
+            active: "Detona uma onda de choque e recebe uma granada.",
+            effects: { grenadeDamage: 1.6, startGrenades: 4 },
+            burst: { blast: 260, blastRadius: 9, grenades: 1 },
+          },
+
+          // Epic
+          {
+            key: "vanguard", name: "Vanguard", tier: 3, color: "#8d64c5",
+            ability: "Overrun", cd: 32,
+            desc: "+38% de dano e 18% de resistência.",
+            active: "Dano +70% e resistência de 45% por 8 segundos.",
+            effects: { damage: 1.38, damageTaken: 0.82 },
+            burst: { duration: 8, damage: 1.7, damageTaken: 0.55 },
+          },
+          {
+            key: "revenant", name: "Revenant", tier: 3, color: "#9c4c78",
+            ability: "Rebirth", cd: 36,
+            desc: "+42% de dano e recupera 2 HP por eliminação.",
+            active: "Cura 45 HP, aumenta o dano em 80% e a velocidade por 8 segundos.",
+            effects: { damage: 1.42, killHeal: 2 },
+            burst: { duration: 8, damage: 1.8, speed: 1.25, heal: 45 },
+          },
+          {
+            key: "stormcaller", name: "Stormcaller", tier: 3, color: "#507fb5",
+            ability: "Tempest", cd: 35,
+            desc: "+45% de dano e +10% de velocidade.",
+            active: "Explode uma tempestade e dobra o dano por 8 segundos.",
+            effects: { damage: 1.45, speed: 1.1 },
+            burst: { duration: 8, damage: 2, blast: 320, blastRadius: 10 },
+          },
+
+          // Legendary
+          {
+            key: "warlord", name: "Warlord", tier: 4, color: "#b57b43",
+            ability: "Suppression", cd: 40,
+            desc: "+55% de dano. Cada 25 eliminações concede um reroll normal.",
+            active: "Dano dobrado e munição infinita durante 10 segundos.",
+            effects: { damage: 1.55, ticketEvery: 25 },
+            burst: { duration: 10, damage: 2, infiniteAmmo: true },
+          },
+          {
+            key: "juggernaut", name: "Juggernaut", tier: 4, color: "#9b6e4c",
+            ability: "Unbroken", cd: 42,
+            desc: "+40% de dano e 35% de resistência permanente.",
+            active: "75% de resistência e +65% de dano por 10 segundos.",
+            effects: { damage: 1.4, damageTaken: 0.65 },
+            burst: { duration: 10, damage: 1.65, damageTaken: 0.25 },
+          },
+          {
+            key: "deadeye", name: "Deadeye", tier: 4, color: "#c59a45",
+            ability: "Killshot", cd: 38,
+            desc: "+60% de dano, headshots +100% e cada terceiro tiro é crítico.",
+            active: "Dano ×2,25 durante 9 segundos.",
+            effects: { damage: 1.6, headshot: 2, critEvery: 3, critMult: 2 },
+            burst: { duration: 9, damage: 2.25 },
+          },
+
+          // Mythic
+          {
+            key: "reaper", name: "Reaper", tier: 5, color: "#c44459",
+            ability: "Eclipse", cd: 44,
+            desc: "+75% de dano e recupera 4 HP por eliminação.",
+            active: "Dano ×2,4, velocidade +35% e 72% de resistência por 9 segundos.",
+            effects: { damage: 1.75, killHeal: 4 },
+            burst: { duration: 9, damage: 2.4, speed: 1.35, damageTaken: 0.28 },
+          },
+          {
+            key: "voidwalker", name: "Voidwalker", tier: 5, color: "#7547bd",
+            ability: "Voidshift", cd: 42,
+            desc: "+82% de dano, +15% de velocidade e 25% de resistência.",
+            active: "Fica invisível com dano ×2,3 e velocidade +45% por 9 segundos.",
+            effects: { damage: 1.82, speed: 1.15, damageTaken: 0.75 },
+            burst: { duration: 9, damage: 2.3, speed: 1.45, invisible: true },
+          },
+          {
+            key: "bloodlord", name: "Bloodlord", tier: 5, color: "#a5233f",
+            ability: "Crimson Reign", cd: 45,
+            desc: "+90% de dano e recupera 6 HP por eliminação.",
+            active: "Dano ×2,5, cura 60 HP e concede munição infinita por 9 segundos.",
+            effects: { damage: 1.9, killHeal: 6 },
+            burst: { duration: 9, damage: 2.5, heal: 60, infiniteAmmo: true },
+          },
+
+          // Divine
+          {
+            key: "archon", name: "Archon", tier: 6, color: "#f28a35",
+            ability: "Final Dawn", cd: 52,
+            desc: "+105% de dano, +18% de velocidade e recupera 6 HP por eliminação.",
+            active: "Dano ×2,8, 80% de resistência e recarga instantânea por 10 segundos.",
+            effects: { damage: 2.05, speed: 1.18, killHeal: 6 },
+            burst: { duration: 10, damage: 2.8, damageTaken: 0.2, instantReload: true },
+          },
+          {
+            key: "seraph", name: "Seraph", tier: 6, color: "#f5c45b",
+            ability: "Ascension", cd: 50,
+            desc: "+95% de dano, 45% de resistência e regeneração constante.",
+            active: "Restaura toda a vida; dano ×2,6 e 85% de resistência por 10 segundos.",
+            effects: { damage: 1.95, damageTaken: 0.55, regen: 2, regenDelay: 2 },
+            burst: { duration: 10, damage: 2.6, damageTaken: 0.15, fullHeal: true },
+          },
+          {
+            key: "deathless", name: "Deathless", tier: 6, color: "#ff5a36",
+            ability: "Extinction", cd: 55,
+            desc: "+120% de dano, 40% de resistência e recupera 8 HP por eliminação.",
+            active: "Dano triplo, 90% de resistência, velocidade +50% e munição infinita por 10 segundos.",
+            effects: { damage: 2.2, damageTaken: 0.6, killHeal: 8 },
+            burst: { duration: 10, damage: 3, damageTaken: 0.1, speed: 1.5, infiniteAmmo: true },
           },
         ];
+        const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
+        const classOf = () => classes[selectedClass] || classes[0];
+        const classEffects = () => classOf().effects || {};
+        const classBurst = () =>
+          player?.activeUntil > simulationTime ? classOf().burst || {} : {};
+
         const maps = [
           {
             name: "City Ruins",
@@ -3215,7 +3300,7 @@
         weaponFill.position.set(-0.35, 0.15, 0.15);
         camera.add(weaponFill);
         let state = GameState.MENU,
-          selectedClass = 5,
+          selectedClass = 0,
           selectedMap = 0,
           mode = "classic",
           difficulty = "medium",
@@ -4946,28 +5031,18 @@
           return candidates[0] || null;
         }
         function weaponDamage(w) {
-          const passive =
-            selectedClass === 0
-              ? 1.3
-              : selectedClass === 4
-                ? 1.25
-                : selectedClass === 9
-                  ? 1.6
-                  : 1;
-          const active =
-            player.activeUntil > simulationTime
-              ? selectedClass === 0
-                ? 1.5
-                : [4, 9].includes(selectedClass)
-                  ? 2
-                  : 1
+          const effects = classEffects();
+          const burst = classBurst();
+          const critical =
+            effects.critEvery && player.shots % effects.critEvery === 0
+              ? effects.critMult || 2
               : 1;
           return (
             w.damage *
             rarityMult[w.tier] *
-            passive *
-            active *
-            (selectedClass === 3 && player.shots % 5 === 0 ? 2 : 1)
+            (effects.damage || 1) *
+            (burst.damage || 1) *
+            critical
           );
         }
         const BloodFX = {
@@ -6280,7 +6355,8 @@
               coins: 0,
               normal: 2,
               lucky: 0,
-              classId: 5,
+              classId: 0,
+              classRosterVersion: 2,
               weaponId: 1,
               classPity: 0,
               weaponPity: 0,
@@ -6323,7 +6399,8 @@
             } catch {}
           }
           cost(lucky) {
-            return lucky ? (this.data.classId === 1 ? 105 : 150) : 50;
+            const discount = classes[this.data.classId]?.effects?.luckyCost || 1;
+            return lucky ? Math.round(150 * discount) : 50;
           }
           reward(coins = 0, normal = 0, lucky = 0) {
             for (const [key, amount] of Object.entries({
@@ -6945,14 +7022,14 @@
             if (head) player.headshots++;
             const reward = z.boss ? z.boss.coins : head ? 8 : 5;
             Progression.reward(Math.round(reward * diff[difficulty].coins));
-            if (selectedClass === 0 && overkill)
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + 5);
-            if (selectedClass === 4 && player.waveKills % 25 === 0) {
+            const classFx = classEffects();
+            const heal = (overkill ? classFx.overkillHeal || 0 : 0) + (classFx.killHeal || 0);
+            if (heal)
+              player.hp = Math.min(player.maxhp + player.bonus, player.hp + heal);
+            if (classFx.ticketEvery && player.waveKills % classFx.ticketEvery === 0) {
               Progression.reward(0, 1);
-              UIManager.toast("25 eliminações: +1 reroll normal.");
+              UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
             }
-            if (selectedClass === 9)
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + 3);
             if (z.type === 9 && this.list.length < 80)
               for (let i = 0; i < 3; i++)
                 this.spawn(
@@ -6986,8 +7063,7 @@
               this.flowClock = 0.5;
             }
             HordeAI.prepare();
-            const invisible =
-              selectedClass === 3 && player.activeUntil > simulationTime;
+            const invisible = !!classBurst().invisible;
 
             for (const z of [...this.list]) {
               if (z.dead) continue;
@@ -7006,7 +7082,7 @@
               to.y = 0;
               const dist = to.length();
               const silent =
-                selectedClass === 3 && keys.has("ControlLeft") && dist > 9;
+                classEffects().silentCrouch && keys.has("ControlLeft") && dist > 9;
               HordeAI.sense(z, dt, dist);
               const active = !(invisible || silent);
               let speed = z.speed * (z.buff > simulationTime ? 1.45 : 1);
@@ -7383,13 +7459,14 @@
             );
             this.total = this.remaining;
             this.spawnClock = 0.3;
-            if (selectedClass === 2) {
-              player.bonus = Math.min(50, player.bonus + 10);
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + 10);
+            const classFx = classEffects();
+            if (classFx.waveHp) {
+              player.bonus = Math.min(classFx.waveHpCap || 50, player.bonus + classFx.waveHp);
+              player.hp = Math.min(player.maxhp + player.bonus, player.hp + classFx.waveHp);
             }
-            if (selectedClass === 1 && this.wave % 2 === 0) {
+            if (classFx.waveGrenadeEvery && this.wave % classFx.waveGrenadeEvery === 0) {
               player.grenades++;
-              UIManager.toast("Engineer: +1 granada.");
+              UIManager.toast(`${classOf().name}: +1 granada.`);
             }
             this.bossPending = this.wave % 5 === 0;
             UIManager.announce(
@@ -7556,7 +7633,7 @@
             if (seen.has(z)) continue;
             seen.add(z);
             const head = h.object.userData.head;
-            const mult = head ? (w.head || 2) * (selectedClass === 3 ? 2 : 1) : 1;
+            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) : 1;
             ZombieManager.hit(z, damage * mult, head, h.point, w);
             end = h.point;
             remaining--;
@@ -7616,7 +7693,7 @@
               normal: Progression.data.normal,
               lucky: Progression.data.lucky,
               pity: 0,
-              grenades: selectedClass === 8 ? 4 : 2,
+              grenades: classEffects().startGrenades || 2,
               cooldown: 0,
               activeUntil: 0,
               lastDamage: -99,
@@ -7667,14 +7744,8 @@
           hurt(amount) {
             if (state !== GameState.PLAYING) return;
             const resistance =
-              (selectedClass === 0 ? 1.2 : selectedClass === 7 ? 0.9 : 1) *
-              (player.activeUntil > simulationTime
-                ? selectedClass === 7
-                  ? 0.5
-                  : selectedClass === 9
-                    ? 0.3
-                    : 1
-                : 1);
+              (classEffects().damageTaken || 1) *
+              (classBurst().damageTaken || 1);
             player.hp -= amount * resistance;
             player.lastDamage = simulationTime;
             hurtUntil = simulationTime + 0.45;
@@ -7703,42 +7774,42 @@
           ability() {
             if (simulationTime < player.cooldown || state !== GameState.PLAYING)
               return;
-            const c = classes[selectedClass];
+            const c = classOf();
+            const burst = c.burst || {};
             player.cooldown = simulationTime + c.cd;
             AudioManager.tone(400, 0.45, "sine", 0.3, 1000);
             UIManager.toast(c.ability);
-            if (selectedClass === 0) player.activeUntil = simulationTime + 8;
-            if (selectedClass === 1) {
+            if (burst.duration)
+              player.activeUntil = simulationTime + burst.duration;
+            if (burst.heal)
+              player.hp = Math.min(player.maxhp + player.bonus, player.hp + burst.heal);
+            if (burst.fullHeal)
+              player.hp = player.maxhp + player.bonus;
+            if (burst.turret) {
               const g = new THREE.Group();
               box(g, 0, 0.4, 0, 0.7, 0.8, 0.7, 0x485861);
               box(g, 0, 0.9, 0, 0.5, 0.3, 0.9, 0x61747e);
               g.position.copy(player.pos);
               g.position.y = 0;
               scene.add(g);
-              turrets.push({ group: g, end: simulationTime + 15, next: 0 });
+              turrets.push({ group: g, end: simulationTime + burst.turret, next: 0 });
             }
-            if (selectedClass === 2) {
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + 40);
-              player.activeUntil = simulationTime + 5;
-            }
-            if (selectedClass === 3) player.activeUntil = simulationTime + 6;
-            if (selectedClass === 4) player.activeUntil = simulationTime + 10;
-            if (selectedClass === 5)
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + 15);
-            if (selectedClass === 6) player.activeUntil = simulationTime + 4;
-            if (selectedClass === 7) player.activeUntil = simulationTime + 6;
-            if (selectedClass === 8) {
-              player.grenades++;
+            if (burst.grenades)
+              player.grenades += burst.grenades;
+            if (burst.blast)
               explosion(
                 player.pos.clone(),
-                9,
-                240,
+                burst.blastRadius || 9,
+                burst.blast,
                 false,
-                0xffad55,
+                rarityColors[c.tier],
                 WeaponSystem.current(),
               );
+            if (burst.instantReload) {
+              for (const weapon of player.inventory)
+                if (weapon && weapon.mag !== Infinity) weapon.ammo = weapon.mag;
+              reloadEnd = 0;
             }
-            if (selectedClass === 9) player.activeUntil = simulationTime + 8;
           },
           grenade() {
             if (player.grenades <= 0) {
@@ -7750,7 +7821,7 @@
               "grenade",
               player.pos.clone(),
               forward(),
-              selectedClass === 8 ? 240 : 160,
+              160 * (classEffects().grenadeDamage || 1),
               {
                 cluster: false,
               },
@@ -7864,13 +7935,7 @@
               AudioManager.meleeSwing();
               return;
             }
-            if (
-              !(
-                [0, 4].includes(selectedClass) &&
-                player.activeUntil > simulationTime
-              ) &&
-              w.ammo !== Infinity
-            )
+            if (!classBurst().infiniteAmmo && w.ammo !== Infinity)
               w.ammo--;
             AudioManager.shot(w);
             recoil = w.kind === "antimaterial" ? 2 : 1;
@@ -7980,8 +8045,15 @@
               this.meleeStrike = null;
               this.strike(strike.weapon, strike.damage, strike.reach);
             }
-            if (selectedClass === 2 && simulationTime - player.lastDamage > 5)
-              player.hp = Math.min(player.maxhp + player.bonus, player.hp + dt);
+            const passiveClass = classEffects();
+            if (
+              passiveClass.regen &&
+              simulationTime - player.lastDamage > (passiveClass.regenDelay || 5)
+            )
+              player.hp = Math.min(
+                player.maxhp + player.bonus,
+                player.hp + passiveClass.regen * dt,
+              );
             if (
               this.curseUntil > simulationTime &&
               simulationTime >= this.nextCurse
@@ -8004,20 +8076,12 @@
             }
             let speed =
               5.6 *
-              (selectedClass === 6 ? 1.08 : 1) *
+              (classEffects().speed || 1) *
+              (classBurst().speed || 1) *
               (keys.has("ShiftLeft") ? 1.4 : 1) *
               (keys.has("ControlLeft") || keys.has("ControlRight") ? 0.55 : 1) *
               (mouse.aim ? 0.65 : 1) *
               (w?.modelId === 2 ? 1.15 : 1);
-            if (player.activeUntil > simulationTime)
-              speed *=
-                selectedClass === 0
-                  ? 1.5
-                  : [2, 6].includes(selectedClass)
-                    ? 1.25
-                    : selectedClass === 9
-                      ? 1.35
-                      : 1;
             const crouched =
               keys.has("ControlLeft") || keys.has("ControlRight");
             const traveled = this.motion.step(
@@ -9773,7 +9837,21 @@
         LoadoutEconomy.prototype.load = function () {
           let saved = {}; try { saved = JSON.parse(this.storage.getItem(this.key) || "{}") || {}; } catch {}
           economyLoad.call(this);
-          this.data.classSlots = Array.isArray(saved.classSlots) ? saved.classSlots : Array.isArray(saved.ownedClasses) ? saved.ownedClasses : [this.data.classId, null];
+          const legacyClasses = saved.classRosterVersion !== 2;
+          const migrateClass = (id) =>
+            legacyClasses && Number.isInteger(id) ? legacyClassOrder[id] ?? id : id;
+          this.data.classId = migrateClass(
+            Number.isInteger(saved.classId) ? saved.classId : this.data.classId,
+          );
+          const savedClassSlots = Array.isArray(saved.classSlots)
+            ? saved.classSlots
+            : Array.isArray(saved.ownedClasses)
+              ? saved.ownedClasses
+              : [this.data.classId, null];
+          this.data.classSlots = savedClassSlots.map((id) =>
+            id == null ? null : migrateClass(id),
+          );
+          this.data.classRosterVersion = 2;
           this.data.weaponSlots = Array.isArray(saved.weaponSlots) ? saved.weaponSlots : Array.isArray(saved.ownedWeapons) ? saved.ownedWeapons : [this.data.weaponId, null];
           // Grandfather in anyone who already had a second weapon slot filled under the old
           // fixed-2-slots system, so they don't lose access to a weapon they already stored.
