@@ -1962,6 +1962,13 @@
         background: linear-gradient(145deg, #6d5929c9, #1b1710e0) !important;
         border-color: #e5c56a80 !important;
       }
+      #weaponabilitytouch {
+        --size: clamp(58px, 9vw, 74px) !important;
+        right: max(calc(env(safe-area-inset-right) + 282px), 35vw);
+        bottom: max(calc(env(safe-area-inset-bottom) + 26px), 9vh);
+        background: linear-gradient(145deg, #31516cc9, #0e1821e0) !important;
+        border-color: #80d9ff70 !important;
+      }
       #grenadetouch {
         --size: clamp(58px, 9vw, 74px) !important;
         right: max(calc(env(safe-area-inset-right) + 214px), 27.5vw);
@@ -2079,11 +2086,12 @@
         html.native-android #jumptouch { right:max(23px,env(safe-area-inset-right)) !important; bottom:max(119px,calc(env(safe-area-inset-bottom) + 100px)) !important; }
         html.native-android #rtouch { right:max(105px,calc(env(safe-area-inset-right) + 86px)) !important; bottom:max(15px,env(safe-area-inset-bottom)) !important; }
         html.native-android #switchtouch { right:max(169px,calc(env(safe-area-inset-right) + 150px)) !important; bottom:max(15px,env(safe-area-inset-bottom)) !important; }
-        html.native-android #sprinttouch, html.native-android #crouchtouch, html.native-android #qtouch, html.native-android #grenadetouch { display:none !important; }
-        html.native-android #touch.more-open #crouchtouch, html.native-android #touch.more-open #qtouch, html.native-android #touch.more-open #grenadetouch { display:flex !important; }
+        html.native-android #sprinttouch, html.native-android #crouchtouch, html.native-android #qtouch, html.native-android #grenadetouch, html.native-android #weaponabilitytouch { display:none !important; }
+        html.native-android #touch.more-open #crouchtouch, html.native-android #touch.more-open #qtouch, html.native-android #touch.more-open #grenadetouch, html.native-android #touch.more-open #weaponabilitytouch { display:flex !important; }
         html.native-android #qtouch { right:max(84px,calc(env(safe-area-inset-right) + 72px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; bottom:auto !important; }
         html.native-android #grenadetouch { right:max(144px,calc(env(safe-area-inset-right) + 130px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; bottom:auto !important; }
-        html.native-android #crouchtouch { right:max(204px,calc(env(safe-area-inset-right) + 188px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; left:auto !important; bottom:auto !important; }
+        html.native-android #weaponabilitytouch { right:max(204px,calc(env(safe-area-inset-right) + 188px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; bottom:auto !important; }
+        html.native-android #crouchtouch { right:max(264px,calc(env(safe-area-inset-right) + 246px)) !important; top:max(56px,calc(env(safe-area-inset-top) + 52px)) !important; left:auto !important; bottom:auto !important; }
         html.native-android #moretouch { right:max(72px,calc(env(safe-area-inset-right) + 60px)); top:max(9px,env(safe-area-inset-top)); }
         html.native-android #pausetouch { --size:clamp(38px,10vh,46px) !important; }
         html.native-android #movezone { width:41%; top:26%; height:74%; }
@@ -2986,6 +2994,9 @@ body.netgame #revivetouch{display:flex}
       <button id="qtouch" class="touch-btn touch-special" aria-label="Usar skill">
         <span class="touch-icon">✦</span><span class="touch-label">SKILL</span><small id="skilltouchcd">PRONTO</small>
       </button>
+      <button id="weaponabilitytouch" class="touch-btn touch-special" aria-label="Habilidade da arma">
+        <span class="touch-icon">◆</span><span class="touch-label">ARMA</span>
+      </button>
       <button id="grenadetouch" class="touch-btn touch-special" aria-label="Lançar granada">
         <span class="touch-icon">◉</span><span class="touch-label">GRANADA</span><small id="grenadetouchcount">0</small>
       </button>
@@ -3042,7 +3053,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.24.0";
+        const GAME_VERSION = "0.25.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -3066,6 +3077,7 @@ body.netgame #revivetouch{display:flex}
             "Lendário",
             "Mítico",
             "Divino",
+            "Secreta",
           ],
           rarityColors = [
             "#9E9E9E",
@@ -3075,197 +3087,151 @@ body.netgame #revivetouch{display:flex}
             "#F5B942",
             "#F02F8A",
             "#FF7A1A",
+            "#DDF6FF",
           ],
-          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5];
-        const requiresRerollConfirm = (tier) => tier === 5 || tier === 6;
+          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5, 18];
+        const requiresRerollConfirm = (tier) => tier >= 5;
         const classes = [
-          // Common
-          {
-            key: "recruit", name: "Recruit", tier: 0, color: "#7b8588",
-            ability: "Field Aid", cd: 38,
-            desc: "Treinamento básico e equipamento padrão.",
-            active: "Recupera 20 HP.",
-            effects: {},
-            burst: { heal: 20 },
-          },
-          {
-            key: "scout", name: "Scout", tier: 0, color: "#808c78",
-            ability: "Rush", cd: 34,
-            desc: "+8% de velocidade de movimento.",
-            active: "Aumenta a velocidade em 30% por 5 segundos.",
-            effects: { speed: 1.08 },
-            burst: { duration: 5, speed: 1.3 },
-          },
-          {
-            key: "medic", name: "Medic", tier: 0, color: "#4b9d78",
-            ability: "Adrenaline", cd: 32,
-            desc: "Regenera 0,6 HP/s após 6 segundos sem receber dano.",
-            active: "Cura 30 HP e aumenta a velocidade por 5 segundos.",
-            effects: { regen: 0.6, regenDelay: 6 },
-            burst: { duration: 5, speed: 1.15, heal: 30 },
-          },
-
-          // Uncommon
-          {
-            key: "guardian", name: "Guardian", tier: 1, color: "#668277",
-            ability: "Fortify", cd: 34,
-            desc: "Recebe 12% menos dano.",
-            active: "Reduz o dano recebido em 50% por 6 segundos.",
-            effects: { damageTaken: 0.88 },
-            burst: { duration: 6, damageTaken: 0.5 },
-          },
-          {
-            key: "gunslinger", name: "Gunslinger", tier: 1, color: "#9a7954",
-            ability: "Quickdraw", cd: 30,
-            desc: "+12% de dano com todas as armas.",
-            active: "Dano +40% e velocidade +15% por 6 segundos.",
-            effects: { damage: 1.12 },
-            burst: { duration: 6, damage: 1.4, speed: 1.15 },
-          },
-          {
-            key: "engineer", name: "Engineer", tier: 1, color: "#5489b4",
-            ability: "Sentry", cd: 30,
-            desc: "Lucky Spin custa 30% menos e recebe uma granada a cada duas ondas.",
-            active: "Instala uma torre automática durante 15 segundos.",
-            effects: { luckyCost: 0.7, waveGrenadeEvery: 2 },
-            burst: { turret: 15 },
-          },
-
-          // Rare
-          {
-            key: "berserker", name: "Berserker", tier: 2, color: "#b1443c",
-            ability: "Bloodlust", cd: 25,
-            desc: "+30% de dano; recebe 15% mais dano. Overkills restauram 5 HP.",
-            active: "Dano e velocidade +50% com munição infinita por 8 segundos.",
-            effects: { damage: 1.3, damageTaken: 1.15, overkillHeal: 5 },
-            burst: { duration: 8, damage: 1.5, speed: 1.5, infiniteAmmo: true },
-          },
-          {
-            key: "phantom", name: "Phantom", tier: 2, color: "#827da8",
-            ability: "Vanish", cd: 34,
-            desc: "Headshots +75%, agachado é silencioso e cada quinto tiro é crítico.",
-            active: "Fica invisível durante 7 segundos, mesmo ao atirar.",
-            effects: { headshot: 1.75, critEvery: 5, critMult: 2, silentCrouch: true },
-            burst: { duration: 7, invisible: true },
-          },
-          {
-            key: "demolitionist", name: "Demolitionist", tier: 2, color: "#aa7866",
-            ability: "Shockwave", cd: 34,
-            desc: "Granadas causam 60% mais dano e começa com quatro granadas.",
-            active: "Detona uma onda de choque e recebe uma granada.",
-            effects: { grenadeDamage: 1.6, startGrenades: 4 },
-            burst: { blast: 260, blastRadius: 9, grenades: 1 },
-          },
-
-          // Epic
-          {
-            key: "vanguard", name: "Vanguard", tier: 3, color: "#8d64c5",
-            ability: "Overrun", cd: 32,
-            desc: "+38% de dano e 18% de resistência.",
-            active: "Dano +70% e resistência de 45% por 8 segundos.",
-            effects: { damage: 1.38, damageTaken: 0.82 },
-            burst: { duration: 8, damage: 1.7, damageTaken: 0.55 },
-          },
-          {
-            key: "revenant", name: "Revenant", tier: 3, color: "#9c4c78",
-            ability: "Rebirth", cd: 36,
-            desc: "+42% de dano e recupera 2 HP por eliminação.",
-            active: "Cura 45 HP, aumenta o dano em 80% e a velocidade por 8 segundos.",
-            effects: { damage: 1.42, killHeal: 2 },
-            burst: { duration: 8, damage: 1.8, speed: 1.25, heal: 45 },
-          },
-          {
-            key: "stormcaller", name: "Stormcaller", tier: 3, color: "#507fb5",
-            ability: "Tempest", cd: 35,
-            desc: "+45% de dano e +10% de velocidade.",
-            active: "Explode uma tempestade e dobra o dano por 8 segundos.",
-            effects: { damage: 1.45, speed: 1.1 },
-            burst: { duration: 8, damage: 2, blast: 320, blastRadius: 10 },
-          },
-
-          // Legendary
-          {
-            key: "warlord", name: "Warlord", tier: 4, color: "#b57b43",
-            ability: "Suppression", cd: 40,
-            desc: "+55% de dano. Cada 25 eliminações concede um reroll normal.",
-            active: "Dano dobrado e munição infinita durante 10 segundos.",
-            effects: { damage: 1.55, ticketEvery: 25 },
-            burst: { duration: 10, damage: 2, infiniteAmmo: true },
-          },
-          {
-            key: "juggernaut", name: "Juggernaut", tier: 4, color: "#9b6e4c",
-            ability: "Unbroken", cd: 42,
-            desc: "+40% de dano e 35% de resistência permanente.",
-            active: "75% de resistência e +65% de dano por 10 segundos.",
-            effects: { damage: 1.4, damageTaken: 0.65 },
-            burst: { duration: 10, damage: 1.65, damageTaken: 0.25 },
-          },
-          {
-            key: "deadeye", name: "Deadeye", tier: 4, color: "#c59a45",
-            ability: "Killshot", cd: 38,
-            desc: "+60% de dano, headshots +100% e cada terceiro tiro é crítico.",
-            active: "Dano ×2,25 durante 9 segundos.",
-            effects: { damage: 1.6, headshot: 2, critEvery: 3, critMult: 2 },
-            burst: { duration: 9, damage: 2.25 },
-          },
-
-          // Mythic
-          {
-            key: "reaper", name: "Reaper", tier: 5, color: "#c44459",
-            ability: "Eclipse", cd: 44,
-            desc: "+75% de dano e recupera 4 HP por eliminação.",
-            active: "Dano ×2,4, velocidade +35% e 72% de resistência por 9 segundos.",
-            effects: { damage: 1.75, killHeal: 4 },
-            burst: { duration: 9, damage: 2.4, speed: 1.35, damageTaken: 0.28 },
-          },
-          {
-            key: "voidwalker", name: "Voidwalker", tier: 5, color: "#7547bd",
-            ability: "Voidshift", cd: 42,
-            desc: "+82% de dano, +15% de velocidade e 25% de resistência.",
-            active: "Fica invisível com dano ×2,3 e velocidade +45% por 9 segundos.",
-            effects: { damage: 1.82, speed: 1.15, damageTaken: 0.75 },
-            burst: { duration: 9, damage: 2.3, speed: 1.45, invisible: true },
-          },
-          {
-            key: "bloodlord", name: "Bloodlord", tier: 5, color: "#a5233f",
-            ability: "Crimson Reign", cd: 45,
-            desc: "+90% de dano e recupera 6 HP por eliminação.",
-            active: "Dano ×2,5, cura 60 HP e concede munição infinita por 9 segundos.",
-            effects: { damage: 1.9, killHeal: 6 },
-            burst: { duration: 9, damage: 2.5, heal: 60, infiniteAmmo: true },
-          },
-
-          // Divine
-          {
-            key: "archon", name: "Archon", tier: 6, color: "#f28a35",
-            ability: "Final Dawn", cd: 52,
-            desc: "+105% de dano, +18% de velocidade e recupera 6 HP por eliminação.",
-            active: "Dano ×2,8, 80% de resistência e recarga instantânea por 10 segundos.",
-            effects: { damage: 2.05, speed: 1.18, killHeal: 6 },
-            burst: { duration: 10, damage: 2.8, damageTaken: 0.2, instantReload: true },
-          },
-          {
-            key: "seraph", name: "Seraph", tier: 6, color: "#f5c45b",
-            ability: "Ascension", cd: 50,
-            desc: "+95% de dano, 45% de resistência e regeneração constante.",
-            active: "Restaura toda a vida; dano ×2,6 e 85% de resistência por 10 segundos.",
-            effects: { damage: 1.95, damageTaken: 0.55, regen: 2, regenDelay: 2 },
-            burst: { duration: 10, damage: 2.6, damageTaken: 0.15, fullHeal: true },
-          },
-          {
-            key: "deathless", name: "Deathless", tier: 6, color: "#ff5a36",
-            ability: "Extinction", cd: 55,
-            desc: "+120% de dano, 40% de resistência e recupera 8 HP por eliminação.",
-            active: "Dano triplo, 90% de resistência, velocidade +50% e munição infinita por 10 segundos.",
-            effects: { damage: 2.2, damageTaken: 0.6, killHeal: 8 },
-            burst: { duration: 10, damage: 3, damageTaken: 0.1, speed: 1.5, infiniteAmmo: true },
-          },
+          // IDs 0–20 preserve existing saves. New roster additions use 21+.
+          { key:"recruit", name:"Recruit", tier:0, color:"#7b8588",
+            ability:"Field Aid", cd:30,
+            desc:"Classe inicial, sem bônus passivo.",
+            active:"Recupera 10 HP.",
+            effects:{}, burst:{ heal:10 } },
+          { key:"scout", name:"Scout", tier:0, color:"#808c78",
+            ability:"Rush", cd:30,
+            desc:"+10% de velocidade.",
+            active:"Velocidade total passa para +30% por 5 segundos.",
+            effects:{ speed:1.10 }, burst:{ duration:5, speedTotal:1.30 } },
+          { key:"medic", name:"Medic", tier:0, color:"#4b9d78",
+            ability:null, cd:0, passiveOnly:true,
+            desc:"Após 5 s sem sofrer dano, regenera 0,5 HP/s. Receber dano reinicia a espera.",
+            active:"Passiva — não possui habilidade ativa.",
+            effects:{ regen:0.5, regenDelay:5 }, burst:{} },
+          { key:"guardian", name:"Guardian", tier:1, color:"#668277",
+            ability:"Fortify", cd:30,
+            desc:"Recebe 10% menos dano.",
+            active:"Redução total passa para 30% por 10 segundos.",
+            effects:{ damageTaken:0.90 }, burst:{ duration:10, damageTakenTotal:0.70 } },
+          { key:"gunslinger", name:"Gunslinger", tier:0, color:"#9a7954",
+            ability:"Quickdraw", cd:30,
+            desc:"+5% de dano com armas de médio/longo alcance.",
+            active:"O bônus de longo alcance passa para +10% por 10 segundos.",
+            effects:{ longRangeDamage:1.05 }, burst:{ duration:10, longRangeDamageTotal:1.10 } },
+          { key:"engineer", name:"Engineer", tier:1, color:"#5489b4",
+            ability:"Overclock", cd:30,
+            desc:"+10% de dano com armas de curto alcance e recebe 5% menos dano.",
+            active:"Por 10 s: +20% de dano de curto alcance e 10% menos dano recebido.",
+            effects:{ shortRangeDamage:1.10, damageTaken:0.95 },
+            burst:{ duration:10, shortRangeDamageTotal:1.20, damageTakenTotal:0.90 } },
+          { key:"berserker", name:"Berserker", tier:2, color:"#b1443c",
+            ability:"Endless Mag", cd:30,
+            desc:"+20% de dano com todas as armas, mas recebe 10% mais dano de qualquer fonte.",
+            active:"Munição infinita por 5 segundos, sem alterar a cadência.",
+            effects:{ damage:1.20, damageTaken:1.10 }, burst:{ duration:5, infiniteAmmo:true } },
+          { key:"phantom", name:"Phantom", tier:2, color:"#827da8",
+            ability:"Vanish", cd:30,
+            desc:"Sem passiva separada.",
+            active:"Por 10 s, fica invisível enquanto estiver agachado; zumbis ignoram e desviam do jogador.",
+            effects:{}, burst:{ duration:10, crouchInvisible:true } },
+          { key:"demolitionist", name:"Demolitionist", tier:2, color:"#aa7866",
+            ability:"High Explosive", cd:30,
+            desc:"+30% de dano com granadas e bazucas.",
+            active:"O bônus explosivo passa para +50% por 10 segundos.",
+            effects:{ explosiveDamage:1.30 }, burst:{ duration:10, explosiveDamageTotal:1.50 } },
+          { key:"vanguard", name:"Vanguard", tier:3, color:"#8d64c5",
+            ability:"Bulwark", cd:30,
+            desc:"+20% de dano e recebe 15% menos dano.",
+            active:"Por 10 s, mantém +20% de dano e passa a receber 50% menos dano.",
+            effects:{ damage:1.20, damageTaken:0.85 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+          { key:"revenant", name:"Revenant", tier:3, color:"#9c4c78",
+            ability:"Soul Feast", cd:30,
+            desc:"+30% de dano e +10% de velocidade.",
+            active:"Durante 10 s, cada eliminação recupera 1 HP.",
+            effects:{ damage:1.30, speed:1.10 }, burst:{ duration:10, killHeal:1 } },
+          { key:"stormcaller", name:"Storm Caller", tier:3, color:"#507fb5",
+            ability:"Tempest", cd:30,
+            desc:"+50% de dano, +10% de velocidade, mas recebe 20% mais dano de qualquer fonte.",
+            active:"Por 10 s: velocidade total +20%. Headshot kill tem 20% de chance de causar um raio de 50% do dano do tiro em ~5 m.",
+            effects:{ damage:1.50, speed:1.10, damageTaken:1.20 },
+            burst:{ duration:10, speedTotal:1.20, stormHeadshot:true, stormChance:0.20, stormScale:0.50, stormRadius:5 } },
+          { key:"warlord", name:"Warlord", tier:4, color:"#b57b43",
+            ability:"Iron Rule", cd:30,
+            desc:"+50% de dano. Recupera 10 HP a cada 25 eliminações.",
+            active:"Recebe 50% menos dano por 10 segundos.",
+            effects:{ damage:1.50, healEvery:25, healAmount:10 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+          { key:"juggernaut", name:"Juggernaut", tier:4, color:"#9b6e4c",
+            ability:"Unbroken", cd:30,
+            desc:"+30% de dano, recebe 30% menos dano e tem +10% de velocidade.",
+            active:"Por 10 s: dano total +60%, velocidade total +20% e mantém 30% de redução.",
+            effects:{ damage:1.30, damageTaken:0.70, speed:1.10 },
+            burst:{ duration:10, damageTotal:1.60, speedTotal:1.20 } },
+          { key:"deadeye", name:"Deadeye", tier:4, color:"#c59a45",
+            ability:"Killshot", cd:30,
+            desc:"De +0% a +50% de dano conforme a distância; headshots recebem +100% de dano adicional.",
+            active:"Por 10 s, +60% de dano adicional, somando com distância e headshot.",
+            effects:{ distanceDamageMax:0.50, headshot:2 }, burst:{ duration:10, damageTotal:1.60 } },
+          { key:"reaper", name:"Reaper", tier:6, color:"#ff7a3d",
+            ability:"Gravebound", cd:15, requiredKills:5, excludeBossKills:true, summonAllies:5,
+            desc:"+30% de dano e +30% de velocidade. Chefes/minibosses não contam para a invocação.",
+            active:"Com 5 eliminações válidas, invoca 5 zumbis aliados do chão. As 5 kills são consumidas; máximo 5 aliados.",
+            effects:{ damage:1.30, speed:1.30 }, burst:{} },
+          { key:"voidwalker", name:"Void Walker", tier:5, color:"#7547bd",
+            ability:"Voidshift", cd:30,
+            desc:"+75% de dano, +20% de velocidade e recebe 20% menos dano.",
+            active:"Por 10 s: dano total +100%, velocidade total +50% e mantém 20% de redução.",
+            effects:{ damage:1.75, speed:1.20, damageTaken:0.80 },
+            burst:{ duration:10, damageTotal:2.00, speedTotal:1.50 } },
+          { key:"vampire", name:"Vampire", tier:5, color:"#9e2447",
+            ability:null, cd:0, passiveOnly:true,
+            desc:"+30% de dano, +30% de vida máxima e recupera 3 HP por eliminação.",
+            active:"Passiva — não possui habilidade ativa.",
+            effects:{ damage:1.30, maxHp:1.30, killHeal:3 }, burst:{} },
+          { key:"archon", name:"Archon", tier:5, color:"#e66cae",
+            ability:"Ascendant Form", cd:30,
+            desc:"+50% de dano, +50% de vida máxima e recebe 50% menos dano.",
+            active:"Por 10 s: +100% dano, +100% vida máxima, +100% velocidade e 80% de redução de dano.",
+            effects:{ damage:1.50, maxHp:1.50, damageTaken:0.50 },
+            burst:{ duration:10, damageTotal:2.00, maxHpTotal:2.00, speedTotal:2.00, damageTakenTotal:0.20 } },
+          { key:"serafim", name:"Serafim", tier:6, color:"#ffd96a",
+            ability:"Ascension", cd:30, requiredKills:50,
+            desc:"+80% de dano, recebe 30% menos dano e regenera 5 HP/s após 5 s sem sofrer dano.",
+            active:"A cada 50 eliminações: por 10 s, +100% dano, +30% velocidade e 80% de redução; regeneração permanece 5 HP/s.",
+            effects:{ damage:1.80, damageTaken:0.70, regen:5, regenDelay:5 },
+            burst:{ duration:10, damageTotal:2.00, speedTotal:1.30, damageTakenTotal:0.20 } },
+          { key:"deathless", name:"Deathless", tier:6, color:"#ff5a36",
+            ability:null, cd:0, passiveOnly:true,
+            desc:"+100% de dano e +50% de vida máxima. Uma vez por partida, ressuscita com 50% da própria vida máxima.",
+            active:"Passiva — 1 ressurreição por partida.",
+            effects:{ damage:2.00, maxHp:1.50, reviveOnce:true }, burst:{} },
+          { key:"sharpshooter", name:"Sharpshooter", tier:1, color:"#5b9ac7",
+            ability:"Eagle Step", cd:30,
+            desc:"+15% de dano apenas com Bow, Stormpiercer e Wraithpiercer.",
+            active:"Por 10 s, o bônus com arcos é substituído por +20% e o salto fica 10% mais alto.",
+            effects:{ bowDamage:1.15 }, burst:{ duration:10, bowDamageTotal:1.20, jumpTotal:1.10 } },
+          { key:"archangel", name:"Archangel", tier:7, color:"#dff8ff",
+            ability:"Heavenly Flight", cd:30, requiredKills:100, secretFlight:"angel",
+            desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Auréola e duas asas exclusivas.",
+            active:"A cada 100 eliminações, libera 30 s de voo no Q. As kills são consumidas, não acumula carga e depois há 30 s de cooldown.",
+            effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
+            burst:{ duration:30, flight:"angel" } },
+          { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
+            ability:"Infernal Flight", cd:30, requiredKills:100, secretFlight:"demon",
+            desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Chifres e cauda demoníaca exclusivos.",
+            active:"A cada 100 eliminações, libera 30 s de voo no Q. A cauda gira como hélice; kills zeram, sem cargas acumuladas, e há 30 s de cooldown.",
+            effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
+            burst:{ duration:30, flight:"demon" } },
         ];
         const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
         const classOf = () => classes[selectedClass] || classes[0];
         const classEffects = () => classOf().effects || {};
         const classBurst = () =>
           player?.activeUntil > simulationTime ? classOf().burst || {} : {};
+        const classValue = (key, fallback = 1) => {
+          const burst = classBurst(), effects = classEffects();
+          const totalKey = key + "Total";
+          return burst[totalKey] ?? effects[key] ?? fallback;
+        };
 
         const maps = [
           {
@@ -5023,7 +4989,44 @@ body.netgame #revivetouch{display:flex}
             ) => A.tube(gun, pos, r, l, c, k, axis, glow);
             let muzzle = -0.87;
             if (w.kind === "melee") {
-              // The Divine spear stretches the same blade shape into a long lance with an
+              if (w.trident) {
+                const obsidian = 0x211a20, infernal = 0xe32121, bone = 0x8e6656;
+                t([0, -0.01, -0.48], 0.026, 1.22, obsidian, "steel", "z", 0x360000);
+                for (const z of [-0.18, -0.48, -0.78])
+                  A.ring(gun, [0, -0.01, z], 0.043, bone);
+                A.link(gun, [-0.19, -0.01, -1.02], [0.19, -0.01, -1.02], 0.025, 0.018, bone, "steel");
+                for (const [x, lean] of [[-0.18,-0.04],[0,0],[0.18,0.04]]) {
+                  A.link(gun, [x, -0.01, -1.01], [x + lean, 0.015, -1.39], 0.025, 0.012, obsidian, "steel");
+                  const tip=A.ellipsoid(gun,[x + lean,0.015,-1.405],[0.035,0.035,0.085],infernal,"steel",infernal);
+                  tip.rotation.x=Math.PI/2;
+                }
+                const core=A.ellipsoid(gun,[0,0,-0.96],[0.09,0.07,0.09],infernal,"steel",infernal);
+                for(const side of[-1,1]) {
+                  A.link(gun,[side*.07,0,-.92],[side*.17,.015,-.82],.018,.009,bone,"steel");
+                  A.link(gun,[side*.17,.015,-.82],[side*.23,0,-.94],.017,.008,obsidian,"steel");
+                }
+                parts.core=core;
+                muzzle=-1.42;
+              } else if (w.specter) {
+                const gold=0xd9ae55, ivory=0xeaf6ff, holy=0x62d9ff;
+                const core=A.ellipsoid(gun,[0,0,-0.56],[0.09,0.06,0.12],holy,"steel",holy);
+                A.ring(gun,[0,0,-0.56],0.14,gold).rotation.x=Math.PI/2;
+                for(const side of[-1,1]) {
+                  A.link(gun,[0,0,-.55],[side*.16,0,-.78],.028,.013,gold,"steel");
+                  A.link(gun,[side*.16,0,-.78],[side*.12,0,-1.08],.034,.012,ivory,"steel",holy);
+                  A.link(gun,[side*.12,0,-1.08],[side*.02,0,-1.28],.028,.009,gold,"steel");
+                  for(let j=0;j<3;j++) {
+                    const feather=A.ellipsoid(gun,[side*(.19+j*.055),-.015,-.73+j*.12],[.055,.018,.14],ivory,"cloth",holy);
+                    feather.rotation.z=side*(.45+j*.08);
+                  }
+                }
+                A.link(gun,[0,0,-.44],[0,0,-.12],.032,.014,gold,"steel");
+                A.ellipsoid(gun,[0,0,-.08],[.04,.04,.11],holy,"steel",holy);
+                parts.core=core;
+                parts.specter=true;
+                muzzle=-1.3;
+              } else {
+// The Divine spear stretches the same blade shape into a long lance with an
               // extended haft; the knife shrinks it into a short, fast sidearm blade.
               const spear = !!w.spear,
                 knife = !!w.knife,
@@ -5043,37 +5046,8 @@ body.netgame #revivetouch{display:flex}
                   bevelThickness: 0.003,
                   bevelSegments: 1,
                   steps: 1,
-                }),
-                A.mat(
-                  spear ? 0xffe7a8 : knife ? 0x8f97a1 : 0xb9c7c9,
-                  "steel",
-                  spear ? 0x6b4a12 : 0,
-                ),
-              );
-              blade.position.set(0, 0.04, -0.24);
-              blade.rotation.z = -0.12;
-              blade.scale.y = stretch;
-              gun.add(blade);
-              t(
-                [0, -0.14 * stretch, -0.23],
-                spear ? 0.032 : 0.042,
-                0.28 * stretch,
-                polymer,
-                "polymer",
-                "y",
-              );
-              b([0, 0.01, -0.23], [0.2, 0.025, 0.075], steel);
-              for (let i = 0; i < 6; i++)
-                A.tube(
-                  gun,
-                  [0, -0.24 + i * 0.036 * stretch, -0.23],
-                  0.045,
-                  0.008,
-                  0x5f6967,
-                  "polymer",
-                  "y",
-                );
-              muzzle = spear ? -0.55 : knife ? -0.14 : -0.25;
+    
+              }
             } else {
               const long = w.kind === "antimaterial",
                 energy = ["laser", "rail", "quantum", "fire", "ice", "bow"].includes(
@@ -5469,8 +5443,19 @@ body.netgame #revivetouch{display:flex}
             parts.rightHand = hand(0.03, -0.19, 0.02, false);
             parts.leftHand = hand(-0.045, -0.115, -0.48, true);
             if (w.kind === "melee") {
-              parts.rightHand.position.set(0, -0.16, -0.22);
-              parts.leftHand.visible = false;
+              if (w.trident) {
+                parts.rightHand.position.set(0.075, -0.16, -0.22);
+                parts.leftHand.position.set(-0.055, -0.105, -0.62);
+                parts.leftHand.visible = true;
+                parts.rightHand.rotation.x = -0.18;
+                parts.leftHand.rotation.x = -0.28;
+              } else if (w.specter) {
+                parts.rightHand.visible = false;
+                parts.leftHand.visible = false;
+              } else {
+                parts.rightHand.position.set(0, -0.16, -0.22);
+                parts.leftHand.visible = false;
+              }
             }
             parts.leftBase = parts.leftHand.position.clone();
             parts.muzzle = muzzle;
@@ -6185,8 +6170,8 @@ body.netgame #revivetouch{display:flex}
             return traveled;
           }
         }
-        // A blade hits one nearby enemy in front of the player, never through solid cover.
-        function meleeTarget(origin, direction, range, targets, isBlocked) {
+        // A blade hits nearby enemies in front of the player, never through solid cover.
+        function meleeTargets(origin, direction, range, targets, isBlocked) {
           const candidates = [];
           for (const target of targets) {
             if (target.dead) continue;
@@ -6200,7 +6185,10 @@ body.netgame #revivetouch{display:flex}
             candidates.push({ target, point, distance });
           }
           candidates.sort((a, b) => a.distance - b.distance);
-          return candidates[0] || null;
+          return candidates;
+        }
+        function meleeTarget(origin, direction, range, targets, isBlocked) {
+          return meleeTargets(origin, direction, range, targets, isBlocked)[0] || null;
         }
         function weaponDamage(w) {
           const effects = classEffects();
@@ -6209,13 +6197,16 @@ body.netgame #revivetouch{display:flex}
             effects.critEvery && player.shots % effects.critEvery === 0
               ? effects.critMult || 2
               : 1;
-          return (
-            w.damage *
-            rarityMult[w.tier] *
-            (effects.damage || 1) *
-            (burst.damage || 1) *
-            critical
-          );
+          let multiplier = classValue("damage", 1);
+          const isBow = w.kind === "bow";
+          const isShort = w.cat === 0;
+          const isLong = w.cat === 1 || w.cat === 2;
+          const isExplosive = w.kind === "grenade" || w.kind === "missile";
+          if (isBow) multiplier *= burst.bowDamageTotal ?? effects.bowDamage ?? 1;
+          if (isShort) multiplier *= burst.shortRangeDamageTotal ?? effects.shortRangeDamage ?? 1;
+          if (isLong) multiplier *= burst.longRangeDamageTotal ?? effects.longRangeDamage ?? 1;
+          if (isExplosive) multiplier *= burst.explosiveDamageTotal ?? effects.explosiveDamage ?? 1;
+          return w.damage * rarityMult[w.tier] * multiplier * critical;
         }
         const BloodFX = {
           drops: [],
@@ -8186,6 +8177,38 @@ body.netgame #revivetouch{display:flex}
               freeze: { slow: 0.85, duration: 2 },
               ability: "Congela quase por completo: o alvo mal se move.",
             },
+            // Secret — prototype geometry is generated in ArsenalArt until final Blender GLBs land.
+            {
+              modelId: 26,
+              name: "Demonic Fury",
+              cat: 0,
+              tier: 7,
+              kind: "melee",
+              spear: true,
+              trident: true,
+              damage: 70,
+              rate: 0.48,
+              mag: Infinity,
+              reload: 0,
+              range: 4.8,
+              chargeTime: 0.28,
+              ability: "Tridente de duas mãos: estocada e arremesso. O modelo final terá retorno animado e a interação secreta do Archdemon em voo.",
+            },
+            {
+              modelId: 27,
+              name: "Angelic Specter",
+              cat: 0,
+              tier: 7,
+              kind: "melee",
+              specter: true,
+              multiHit: 5,
+              damage: 58,
+              rate: 0.38,
+              mag: Infinity,
+              reload: 0,
+              range: 4.2,
+              ability: "Arma espectral flutuante: alterna cortes e pode atingir vários zumbis no arco. Habilidades especiais usam a forma orbital.",
+            },
           ],
           model: new THREE.Group(),
           flash: null,
@@ -8261,6 +8284,16 @@ body.netgame #revivetouch{display:flex}
             const target = aiming
               ? new V(0, -0.105, -0.36)
               : new V(0.255, -0.24, -0.42);
+            if (w.specter) {
+              const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
+                orbit = simulationTime * (spinning ? 8.5 : 0.7),
+                radius = spinning ? 0.22 : 0.07;
+              target.set(
+                0.48 + Math.sin(orbit) * radius,
+                0.01 + Math.sin(orbit * 1.7) * (spinning ? 0.12 : 0.055),
+                -0.66 + Math.cos(orbit) * radius,
+              );
+            }
             this.kickVelocity +=
               (-this.kick * 170 - this.kickVelocity * 23) * dt;
             this.kick += this.kickVelocity * dt;
@@ -8284,6 +8317,10 @@ body.netgame #revivetouch{display:flex}
               swayX * 0.3,
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
+            if (w.specter) {
+              this.model.rotation.y += Math.sin(simulationTime * 0.8) * 0.003;
+              this.model.rotation.z += Math.sin(simulationTime * 1.15) * 0.006;
+            }
             this.parts.leftHand.position.copy(this.parts.leftBase);
             this.parts.leftHand.rotation.set(0, 0, 0);
             const since = simulationTime - lastShot;
@@ -8402,13 +8439,14 @@ body.netgame #revivetouch{display:flex}
             this.catalogs = { class: classCatalog, weapon: weaponCatalog };
             this.storage = storage;
             this.random = random;
+            // Secret uses one shared tier rate for classes and weapons.
             this.rates = {
-              normal: [64.95, 23, 8, 3, 0.9, 0.1, 0.05],
-              lucky: [0, 0, 0, 59, 37, 3, 1],
+              normal: [64.94, 23, 8, 3, 0.9, 0.1, 0.05, 0.01],
+              lucky: [0, 0, 0, 58.9, 37, 3, 1, 0.1],
             };
             this.spinCosts = { normal: 50, lucky: 250 };
             this.pityCaps = { mythic: 75, divine: 150 };
-            this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000];
+            this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000, 250000];
             // Price to own N weapon inventory slots, indexed by N (index 0 unused, slot 1 is free).
             this.weaponSlotPrices = [null, 0, 6000, 18000, 45000, 90000];
             this.key = "deadrecoil.loadout.v2";
@@ -9290,10 +9328,33 @@ body.netgame #revivetouch{display:flex}
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               const reward = z.boss ? z.boss.coins : head ? 8 : 5;
               Progression.reward(Math.round(reward * diff[difficulty].coins));
-              const classFx = classEffects();
-              const heal = (overkill ? classFx.overkillHeal || 0 : 0) + (classFx.killHeal || 0);
+              const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
+              const heal =
+                (overkill ? classFx.overkillHeal || 0 : 0) +
+                (classFx.killHeal || 0) +
+                (burstFx.killHeal || 0);
               if (heal)
                 player.hp = Math.min(player.maxhp + player.bonus, player.hp + heal);
+              if (classFx.healEvery && player.kills % classFx.healEvery === 0) {
+                player.hp = Math.min(player.maxhp + player.bonus, player.hp + (classFx.healAmount || 0));
+                UIManager.toast(`${classFx.healEvery} eliminações: +${classFx.healAmount || 0} HP.`);
+              }
+              if (cls.requiredKills && !(cls.excludeBossKills && z.boss)) {
+                const wasReady = (player.classCharge || 0) >= cls.requiredKills;
+                player.classCharge = Math.min(cls.requiredKills, (player.classCharge || 0) + 1);
+                if (!wasReady && player.classCharge >= cls.requiredKills)
+                  UIManager.toast(`${cls.ability} pronta — pressione Q.`);
+              }
+              if (burstFx.stormHeadshot && head && Math.random() < (burstFx.stormChance || 0.2)) {
+                const radius = burstFx.stormRadius || 5,
+                  shock = weaponDamage(w || WeaponSystem.current()) * (burstFx.stormScale || 0.5);
+                ParticleSystem.emit(z.group.position.clone().add(new V(0, 1.1, 0)), 0x78c8ff, 45, 4);
+                for (const other of [...ZombieManager.list]) {
+                  if (other.dead || other === z) continue;
+                  if (other.group.position.distanceTo(z.group.position) <= radius)
+                    ZombieManager.hit(other, shock, false, other.group.position.clone().add(new V(0, 1, 0)), null, true);
+                }
+              }
               if (classFx.ticketEvery && player.waveKills % classFx.ticketEvery === 0) {
                 Progression.reward(0, 1);
                 UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
@@ -9335,7 +9396,11 @@ body.netgame #revivetouch{display:flex}
               this.flowClock = 0.5;
             }
             HordeAI.prepare();
-            const invisible = !!classBurst().invisible;
+            const activeBurst = classBurst();
+            const invisible =
+              !!activeBurst.invisible ||
+              (!!activeBurst.crouchInvisible &&
+                (keys.has("ControlLeft") || keys.has("ControlRight")));
 
             for (const z of [...this.list]) {
               if (z.dead) continue;
@@ -11971,8 +12036,11 @@ body.netgame #revivetouch{display:flex}
             if (seen.has(z)) continue;
             seen.add(z);
             const head = h.object.userData.head;
-            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) : 1;
-            ZombieManager.hit(z, damage * mult, head, h.point, w);
+            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) : 1,
+              distanceBonus = classEffects().distanceDamageMax
+                ? 1 + classEffects().distanceDamageMax * clamp(h.distance / Math.max(1, w.range), 0, 1)
+                : 1;
+            ZombieManager.hit(z, damage * mult * distanceBonus, head, h.point, w);
             end = h.point;
             remaining--;
           }
@@ -11991,6 +12059,281 @@ body.netgame #revivetouch{display:flex}
           if (w.kind === "double" && w.ammo === 0 && first)
             explosion(end, 3.5, damage, false, 0xcb7be7, w);
         }
+        // Reaper v25 pre-model: five allied infected emerge from the ground and seek hostiles.
+        const ReaperAllies = {
+          list: [],
+          clear() {
+            for (const a of this.list) scene.remove(a.group);
+            this.list.length = 0;
+          },
+          summon(count = 5) {
+            if (this.list.length) {
+              UIManager.toast("Os 5 aliados atuais ainda estão vivos.");
+              return false;
+            }
+            for (let i = 0; i < Math.min(5, count); i++) {
+              const g = new THREE.Group(),
+                angle = (i / Math.max(1, count)) * Math.PI * 2,
+                radius = 1.7 + (i % 2) * 0.4;
+              VisualArt.ellipsoid(g,[0,1.05,0],[.23,.42,.18],0x526350,"cloth");
+              VisualArt.ellipsoid(g,[0,1.58,0],[.17,.21,.16],0x85927b,"skin");
+              for (const side of [-1,1]) {
+                VisualArt.link(g,[side*.18,1.3,0],[side*.28,.78,.02],.07,.045,0x485949,"cloth");
+                VisualArt.link(g,[side*.11,.72,0],[side*.13,.12,.02],.09,.065,0x3d4741,"cloth");
+              }
+              const x=player.pos.x+Math.cos(angle)*radius,
+                z=player.pos.z+Math.sin(angle)*radius,
+                floor=MapManager.groundAt(x,z,0.2,player.pos.y);
+              g.position.set(x,floor-1.5,z);
+              scene.add(g);
+              this.list.push({
+                group:g, hp:75, damage:18, speed:3.2,
+                floor, rise:simulationTime+0.85, nextHit:0, nextHurt:0,
+              });
+              ParticleSystem.emit(new V(x,floor+.05,z),0x6f4d38,22,2.2);
+            }
+            UIManager.toast("5 zumbis aliados emergiram do chão.");
+            return true;
+          },
+          update(dt) {
+            for (let i=this.list.length-1;i>=0;i--) {
+              const a=this.list[i], g=a.group;
+              if (simulationTime<a.rise) {
+                const p=1-clamp((a.rise-simulationTime)/.85,0,1);
+                g.position.y=a.floor-1.5+p*1.5;
+                g.rotation.y+=dt*2;
+                continue;
+              }
+              g.position.y=a.floor;
+              let target=null,best=Infinity;
+              for(const z of ZombieManager.list){
+                if(z.dead) continue;
+                const d=g.position.distanceToSquared(z.group.position);
+                if(d<best){best=d;target=z;}
+              }
+              if(target){
+                const dist=Math.sqrt(best), dir=target.group.position.clone().sub(g.position); dir.y=0;
+                if(dist>1.25 && dir.lengthSq()>0.001){
+                  dir.normalize();
+                  g.position.addScaledVector(dir,Math.min(a.speed*dt,Math.max(0,dist-1.1)));
+                  g.lookAt(target.group.position.x,g.position.y,target.group.position.z);
+                } else if(simulationTime>=a.nextHit){
+                  a.nextHit=simulationTime+.7;
+                  ZombieManager.hit(target,a.damage,false,target.group.position.clone().add(new V(0,1,0)),null,true);
+                  AudioManager.meleeImpact();
+                }
+                if(dist<1.45 && simulationTime>=a.nextHurt){
+                  a.nextHurt=simulationTime+.9;
+                  a.hp-=10;
+                }
+              }
+              if(a.hp<=0){
+                ParticleSystem.emit(g.position.clone().add(new V(0,1,0)),0x5b2c28,26,2.5);
+                scene.remove(g);
+                this.list.splice(i,1);
+              }
+            }
+          },
+        };
+
+        // Secret weapon abilities. F on keyboard / ARMA on touch.
+        // The 5 s hellfire lifetime is a v25 prototype value; final infernal duration is intentionally tuneable.
+        const SecretWeaponSkills = {
+          cooldown: 0,
+          tridentReady: 0,
+          spinUntil: 0,
+          nextSpinHit: 0,
+          throws: [],
+          fires: [],
+          reset() {
+            this.cooldown = this.tridentReady = this.spinUntil = this.nextSpinHit = 0;
+            for (const fx of this.throws) scene.remove(fx.group);
+            for (const f of this.fires) {
+              scene.remove(f.mesh);
+              f.mesh.geometry?.dispose?.();
+              f.mesh.material?.dispose?.();
+            }
+            this.throws.length = this.fires.length = 0;
+          },
+          readyText(w = WeaponSystem.current()) {
+            if (!w?.specter && !w?.trident) return "";
+            if (w.specter && classBurst().flight === "angel") return "F · LANÇAR · SEM CD NO VOO";
+            const left = Math.max(0, this.cooldown - simulationTime);
+            return left > 0 ? `F · ARMA ${left.toFixed(1)}s` : "F · HABILIDADE DA ARMA";
+          },
+          use() {
+            if (state !== GameState.PLAYING || NetGame.down || NetGame.dead) return;
+            const w = WeaponSystem.current();
+            if (!w?.specter && !w?.trident) {
+              UIManager.toast("Esta arma não possui habilidade própria.");
+              return;
+            }
+            const flight = classBurst().flight;
+            if (w.specter) {
+              if (flight === "angel") {
+                this.throwSpecter(w);
+                return;
+              }
+              if (simulationTime < this.cooldown) {
+                UIManager.toast(`Espectro: ${Math.ceil(this.cooldown - simulationTime)}s de recarga.`);
+                return;
+              }
+              this.spinUntil = simulationTime + 5;
+              this.nextSpinHit = simulationTime;
+              this.cooldown = simulationTime + 30;
+              UIManager.toast("Angelic Specter · rotação por 5 segundos.");
+              AudioManager.tone(720,.35,"sine",.22,1250,"weapons");
+              return;
+            }
+            if (simulationTime < this.tridentReady) return;
+            this.tridentReady = simulationTime + Math.max(.48, w.rate || .48);
+            this.throwTrident(w, flight === "demon");
+          },
+          rayTarget(maxDistance = 34) {
+            const origin = player.pos.clone(),
+              dir = CameraRig.aim().normalize();
+            raycaster.set(origin, dir);
+            raycaster.far = maxDistance;
+            scene.updateMatrixWorld(true);
+            const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
+              wh = raycaster.intersectObjects(MapManager.walls)[0];
+            if (zh && (!wh || zh.distance < wh.distance)) {
+              return {
+                origin, dir, point: zh.point.clone(),
+                zombie: zh.object.userData.zombie,
+                head: !!zh.object.userData.head,
+              };
+            }
+            if (wh) return { origin, dir, point: wh.point.clone(), zombie:null, head:false };
+            const point = origin.clone().addScaledVector(dir,maxDistance);
+            const floor = MapManager.groundAt(point.x,point.z,.2,origin.y + 20);
+            point.y = Number.isFinite(floor) ? floor + .08 : Math.max(.08, point.y);
+            return { origin, dir, point, zombie:null, head:false };
+          },
+          makeThrow(from, to, style) {
+            const g = new THREE.Group(), infernal = style === "trident",
+              c = infernal ? 0xe32121 : 0x71ddff,
+              metal = infernal ? 0x211a20 : 0xd9ae55;
+            if (infernal) {
+              VisualArt.link(g,[0,0,.42],[0,0,-.42],.035,.025,metal,"steel");
+              VisualArt.link(g,[-.16,0,-.4],[.16,0,-.4],.025,.018,metal,"steel");
+              for(const x of[-.16,0,.16])
+                VisualArt.link(g,[x,0,-.4],[x,0,-.72],.025,.008,c,"steel",c);
+            } else {
+              VisualArt.ellipsoid(g,[0,0,0],[.11,.045,.18],c,"steel",c);
+              VisualArt.ring(g,[0,0,0],.18,metal).rotation.x=Math.PI/2;
+              for(const side of[-1,1]) {
+                VisualArt.link(g,[0,0,0],[side*.22,0,-.34],.027,.009,metal,"steel");
+                VisualArt.ellipsoid(g,[side*.25,0,-.4],[.06,.025,.2],0xf0fbff,"steel",c).rotation.z=side*.45;
+              }
+            }
+            g.position.copy(from);
+            scene.add(g);
+            this.throws.push({
+              group:g, from:from.clone(), to:to.clone(), start:simulationTime,
+              duration:style==="specter"?.72:.82, style,
+            });
+          },
+          throwTrident(w, infernalFlight = false) {
+            const hit = this.rayTarget(38);
+            this.makeThrow(hit.origin, hit.point, "trident");
+            AudioManager.meleeSwing();
+            if (hit.zombie && !hit.zombie.dead) {
+              if (infernalFlight) {
+                ZombieManager.hit(
+                  hit.zombie,
+                  Math.max(hit.zombie.hp + 1, weaponDamage(w) * 4),
+                  hit.head,
+                  hit.point,
+                  w,
+                  true,
+                );
+              } else {
+                const mult = hit.head ? (w.head || 2) * (classEffects().headshot || 1) : 1;
+                ZombieManager.hit(hit.zombie, weaponDamage(w) * 1.45 * mult, hit.head, hit.point, w, true);
+              }
+            } else if (infernalFlight) {
+              const damage = weaponDamage(w) * .65;
+              explosion(hit.point.clone(),5,damage,false,0xff2b18,w);
+              this.addHellfire(hit.point,damage*.18,w);
+            } else {
+              ParticleSystem.emit(hit.point,0xe32121,14,2);
+            }
+          },
+          addHellfire(point, tickDamage, weapon) {
+            const mesh = new THREE.Mesh(
+              new THREE.RingGeometry(.6,5,36),
+              new THREE.MeshBasicMaterial({
+                color:0xff2a12, transparent:true, opacity:.34,
+                side:THREE.DoubleSide, depthWrite:false,
+              }),
+            );
+            mesh.rotation.x=-Math.PI/2;
+            mesh.position.copy(point);
+            mesh.position.y+=.035;
+            scene.add(mesh);
+            this.fires.push({
+              mesh, pos:point.clone(), end:simulationTime+5,
+              next:simulationTime, damage:tickDamage, weapon,
+            });
+          },
+          throwSpecter(w) {
+            const hit = this.rayTarget(30),
+              from = hit.origin.clone(), to = hit.point.clone();
+            this.makeThrow(from,to,"specter");
+            AudioManager.tone(880,.16,"sine",.16,1320,"weapons");
+            const segment = new THREE.Line3(from,to),
+              closest = new V();
+            for(const z of [...ZombieManager.list]) {
+              if(z.dead) continue;
+              const center=z.group.position.clone().add(new V(0,Math.min(1.2,z.size||1),0));
+              segment.closestPointToPoint(center,true,closest);
+              if(center.distanceTo(closest) <= Math.max(.65,(z.size||1)*.58))
+                ZombieManager.hit(z,weaponDamage(w),false,closest.clone(),w,true);
+            }
+          },
+          update(dt) {
+            const w = WeaponSystem.current();
+            if (this.spinUntil > simulationTime && w?.specter) {
+              if (simulationTime >= this.nextSpinHit) {
+                this.nextSpinHit = simulationTime + .25;
+                const damage = weaponDamage(w) * .62;
+                for(const z of [...ZombieManager.list]) {
+                  if(z.dead) continue;
+                  if(z.group.position.distanceTo(player.pos) <= 3.6)
+                    ZombieManager.hit(z,damage,false,z.group.position.clone().add(new V(0,1,0)),w,true);
+                }
+                ParticleSystem.emit(player.pos.clone().add(new V(0,.25,0)),0x70dcff,10,3.5);
+              }
+            }
+            for(let i=this.throws.length-1;i>=0;i--) {
+              const fx=this.throws[i],
+                p=clamp((simulationTime-fx.start)/fx.duration,0,1),
+                outbound=p<.52 ? p/.52 : 1-(p-.52)/.48,
+                ease=outbound*outbound*(3-2*outbound);
+              fx.group.position.lerpVectors(fx.from,fx.to,ease);
+              fx.group.rotation.z += dt*(fx.style==="specter"?18:9);
+              fx.group.rotation.y += dt*(fx.style==="specter"?12:5);
+              if(p>=1){scene.remove(fx.group);this.throws.splice(i,1);}
+            }
+            for(let i=this.fires.length-1;i>=0;i--) {
+              const f=this.fires[i];
+              if(simulationTime>=f.end){
+                scene.remove(f.mesh);f.mesh.geometry.dispose();f.mesh.material.dispose();
+                this.fires.splice(i,1);continue;
+              }
+              f.mesh.material.opacity=.18+.18*Math.sin(simulationTime*9);
+              if(simulationTime>=f.next){
+                f.next=simulationTime+.5;
+                ParticleSystem.emit(f.pos.clone().add(new V(rand(-2.5,2.5),.15,rand(-2.5,2.5))),0xff381d,16,2.6);
+                for(const z of [...ZombieManager.list])
+                  if(!z.dead && z.group.position.distanceTo(f.pos)<=5)
+                    ZombieManager.hit(z,f.damage,false,z.group.position.clone().add(new V(0,.8,0)),f.weapon,true);
+              }
+            }
+          },
+        };
+
         // PlayerController: collision, combat, class abilities, health and input.
         const PlayerController = {
           curseUntil: 0,
@@ -12024,6 +12367,8 @@ body.netgame #revivetouch{display:flex}
             GrenadeThrow.cancel();
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
+            ReaperAllies.clear();
+            SecretWeaponSkills.reset();
             for (const n of damageNumbers) n.el.remove();
             damageNumbers.length = 0;
 
@@ -12055,7 +12400,13 @@ body.netgame #revivetouch{display:flex}
               vy: 0,
               ground: 0,
               stepOffset: 0,
+              baseMaxHp: d.hp,
+              classCharge: 0,
+              reviveUsed: false,
+              flightDescentUntil: 0,
             };
+            player.maxhp = Math.round(player.baseMaxHp * classValue("maxHp", 1));
+            player.hp = player.maxhp;
             // Bring every weapon in an owned slot into the run, not just the one
             // last equipped in the Armory — number keys switch between them mid-match.
             normalizeLoadoutState(Progression.data);
@@ -12107,15 +12458,21 @@ body.netgame #revivetouch{display:flex}
           hurt(amount, fromNet = false) {
             if (!fromNet && NetGame.hurtRemote(amount)) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
-            const resistance =
-              (classEffects().damageTaken || 1) *
-              (classBurst().damageTaken || 1);
+            const resistance = classValue("damageTaken", 1);
             player.hp -= amount * resistance;
             player.lastDamage = simulationTime;
             hurtUntil = simulationTime + 0.45;
             shake = 0.22;
             AudioManager.tone(85, 0.1, "triangle", 0.4, 35);
             if (player.hp <= 0) {
+              if (classEffects().reviveOnce && !player.reviveUsed && !NetGame.active) {
+                player.reviveUsed = true;
+                player.hp = Math.max(1, Math.round(player.maxhp * 0.5));
+                player.lastDamage = simulationTime;
+                UIManager.announce("DEATHLESS", "Você voltou com metade da vida.", 2.2);
+                ParticleSystem.emit(player.pos.clone(), 0xff5a36, 80, 5);
+                return;
+              }
               player.hp = 0;
               if (NetGame.active && NetGame.goDown()) return;
               this.end(false);
@@ -12140,12 +12497,34 @@ body.netgame #revivetouch{display:flex}
             if (simulationTime < player.cooldown || state !== GameState.PLAYING)
               return;
             const c = classOf();
+            if (!c.ability || c.passiveOnly) {
+              UIManager.toast("Esta classe funciona apenas com passivas.");
+              return;
+            }
+            if (c.requiredKills && (player.classCharge || 0) < c.requiredKills) {
+              UIManager.toast(`Habilidade: ${player.classCharge || 0}/${c.requiredKills} eliminações.`);
+              return;
+            }
+            if (c.summonAllies && ReaperAllies.list.length) {
+              UIManager.toast("Você já tem 5 zumbis aliados vivos.");
+              return;
+            }
             const burst = c.burst || {};
-            player.cooldown = simulationTime + c.cd;
+            if (c.requiredKills) player.classCharge = Math.max(0, (player.classCharge || 0) - c.requiredKills);
+            player.cooldown = simulationTime + (c.cd || 30);
             AudioManager.tone(400, 0.45, "sine", 0.3, 1000);
             UIManager.toast(c.ability);
             if (burst.duration)
               player.activeUntil = simulationTime + burst.duration;
+            if (burst.flight) {
+              player.jump = Math.max(player.jump || 0, 2.4);
+              player.vy = 0;
+            }
+            if (burst.maxHpTotal) {
+              const ratio = player.maxhp > 0 ? player.hp / player.maxhp : 1;
+              player.maxhp = Math.round(player.baseMaxHp * burst.maxHpTotal);
+              player.hp = Math.min(player.maxhp, Math.max(1, player.maxhp * ratio));
+            }
             if (burst.heal)
               player.hp = Math.min(player.maxhp + player.bonus, player.hp + burst.heal);
             if (burst.fullHeal)
@@ -12175,6 +12554,7 @@ body.netgame #revivetouch{display:flex}
                 if (weapon && weapon.mag !== Infinity) weapon.ammo = weapon.mag;
               reloadEnd = 0;
             }
+            if (c.summonAllies) ReaperAllies.summon(c.summonAllies);
           },
           grenade() {
             if (player.grenades <= 0) {
@@ -12189,12 +12569,18 @@ body.netgame #revivetouch{display:flex}
                 right = new V(Math.cos(yaw), 0, -Math.sin(yaw)),
                 from = player.pos.clone().addScaledVector(dir, 0.45).addScaledVector(right, 0.18);
               from.y -= 0.12;
-              spawnProjectile("grenade", from, dir, 160 * (classEffects().grenadeDamage || 1), { cluster: false });
+              spawnProjectile(
+                "grenade",
+                from,
+                dir,
+                160 * (classBurst().explosiveDamageTotal ?? classEffects().explosiveDamage ?? classEffects().grenadeDamage ?? 1),
+                { cluster: false },
+              );
             });
           },
           strike(w, damage, reach = Math.min(w.range, 2.6)) {
             scene.updateMatrixWorld(true);
-            const hit = meleeTarget(
+            const hits = meleeTargets(
               player.pos,
               forward(),
               reach,
@@ -12206,11 +12592,10 @@ body.netgame #revivetouch{display:flex}
                   .intersectObjects(MapManager.walls)
                   .some((h) => h.distance < distance - 0.06);
               },
-            );
-            if (hit) {
+            ).slice(0, w.multiHit || 1);
+            for (const hit of hits)
               ZombieManager.hit(hit.target, damage, false, hit.point, w);
-              AudioManager.meleeImpact();
-            }
+            if (hits.length) AudioManager.meleeImpact();
           },
           // Divine spear: a quick click is a longer-reach poke; holding the attack button
           // charges a throw that releases a piercing spear projectile.
@@ -12419,6 +12804,14 @@ body.netgame #revivetouch{display:flex}
               this.strike(strike.weapon, strike.damage, strike.reach);
             }
             const passiveClass = classEffects();
+            const desiredMaxHp = Math.round(
+              (player.baseMaxHp || player.maxhp) * classValue("maxHp", 1),
+            );
+            if (desiredMaxHp !== player.maxhp) {
+              const ratio = player.maxhp > 0 ? player.hp / player.maxhp : 1;
+              player.maxhp = desiredMaxHp;
+              player.hp = Math.min(player.maxhp + player.bonus, Math.max(1, player.maxhp * ratio));
+            }
             if (
               passiveClass.regen &&
               simulationTime - player.lastDamage > (passiveClass.regenDelay || 5)
@@ -12449,8 +12842,7 @@ body.netgame #revivetouch{display:flex}
             }
             let speed =
               5.6 *
-              (classEffects().speed || 1) *
-              (classBurst().speed || 1) *
+              classValue("speed", 1) *
               (keys.has("ShiftLeft") ? 1.4 : 1) *
               (keys.has("ControlLeft") || keys.has("ControlRight") ? 0.55 : 1) *
               (mouse.aim ? 0.65 : 1) *
@@ -12484,9 +12876,21 @@ body.netgame #revivetouch{display:flex}
               player.vy = Math.max(player.vy, 3.4);
               player.onLadder = true;
             } else player.onLadder = false;
-            player.vy -= 16 * dt;
-            feet += player.vy * dt;
-            if (feet < ground) feet = ground;
+            const flying = !!classBurst().flight;
+            if (flying) {
+              const up =
+                (keys.has("Space") ? 1 : 0) -
+                (keys.has("ControlLeft") || keys.has("ControlRight") ? 1 : 0);
+              player.vy = up * 4.2;
+              feet += player.vy * dt;
+              feet = clamp(feet, ground + 1.8, ground + 10);
+              player.flightDescentUntil = simulationTime + 2.5;
+            } else {
+              const gravity = player.flightDescentUntil > simulationTime ? 3.2 : 16;
+              player.vy -= gravity * dt;
+              feet += player.vy * dt;
+              if (feet < ground) feet = ground;
+            }
             player.ground = ground;
             player.jump = Math.max(0, feet - ground);
             if (player.jump === 0) {
@@ -12539,6 +12943,8 @@ body.netgame #revivetouch{display:flex}
             CameraRig.update(dt);
             Account.update();
             HordeAI.update(dt);
+            ReaperAllies.update(dt);
+            SecretWeaponSkills.update(dt);
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
           },
@@ -12696,15 +13102,19 @@ body.netgame #revivetouch{display:flex}
                 ParticleSystem.emit(p.pos, p.acid ? 0x71854a : 0xb076ff, 10, 2);
                 if (p.acid) HordeAI.acid(p.pos);
               } else if (p.kind === "quantum" || p.kind === "spear") {
-                if (hit)
+                if (hit) {
+                  const tridentHead =
+                    !!p.weapon?.trident &&
+                    p.pos.y > hit.group.position.y + Math.max(1, hit.size || 1) * 1.25;
                   ZombieManager.hit(
                     hit,
-                    p.damage,
-                    false,
+                    p.damage * (tridentHead ? 2 : 1),
+                    tridentHead,
                     p.pos,
                     p.weapon,
                     true,
                   );
+                }
                 else
                   ParticleSystem.emit(
                     p.pos,
@@ -15215,6 +15625,53 @@ body.netgame #revivetouch{display:flex}
             if(s.outerwear==="ballistic_vest"){A.block(chest,[0,.24,.175],[.5,.44,.10],0x252d2a,"cloth");A.block(chest,[0,.30,.235],[.28,.22,.035],0x485047,"polymer");for(let x=-1;x<=1;x++)A.block(chest,[x*.13,.11,.235],[.10,.15,.05],0x353d36,"cloth")}
             if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.30,0],[.063,.095,.055],0x1f2422,"cloth");
             if(s.footwear==="reinforced_boots")for(const knee of knees)A.block(knee,[0,-.36,.065],[.17,.19,.31],0x191d1c,"polymer");
+            let secretAccessories = null;
+            if (cls === 22) {
+              const gold = 0xd6ad55, holy = 0x74dcff, feather = 0xf3fbff;
+              const halo = A.pivot(head, 0, 0, 0);
+              const haloRing = A.ring(halo, [0, 0.43, 0], 0.235, gold);
+              haloRing.rotation.x = Math.PI / 2;
+              A.ellipsoid(halo, [0, 0.43, 0], [0.045, 0.045, 0.045], holy, "steel", holy);
+              const wings = [];
+              for (const side of [-1, 1]) {
+                const wing = A.pivot(chest, side * 0.19, 0.39, -0.13);
+                A.link(wing, [0, 0, 0], [side * 0.56, 0.1, -0.08], 0.04, 0.024, gold, "steel");
+                A.link(wing, [side * 0.34, 0.06, -0.05], [side * 0.72, -0.18, -0.12], 0.026, 0.015, gold, "steel");
+                for (let j = 0; j < 7; j++) {
+                  const x = side * (0.2 + j * 0.075),
+                    y = 0.08 - j * 0.055,
+                    ftr = A.ellipsoid(wing, [x, y, -0.08 - j * 0.006], [0.07, 0.022, 0.23], feather, "cloth", j < 2 ? holy : 0);
+                  ftr.rotation.z = side * (0.58 + j * 0.055);
+                }
+                wings.push(wing);
+              }
+              secretAccessories = { type:"angel", halo, left:wings[0], right:wings[1] };
+            } else if (cls === 23) {
+              const obsidian = 0x211a20, infernal = 0xe32121, horn = 0x5a3732;
+              const horns = [];
+              for (const side of [-1, 1]) {
+                const h = A.pivot(head, side * 0.085, 0.245, -0.02);
+                A.link(h, [0,0,0], [side * 0.12,0.13,-0.025], 0.055, 0.036, horn, "steel");
+                A.link(h, [side*.12,.13,-.025], [side*.2,.22,.025], .045,.022,obsidian,"steel");
+                A.link(h, [side*.2,.22,.025], [side*.16,.31,.08], .031,.008,infernal,"steel",infernal);
+                horns.push(h);
+              }
+              const tail = A.pivot(hips, 0, 0.06, -0.14), tailPoints = [];
+              let prev = new V(0,0,0);
+              for (let j=0;j<7;j++) {
+                const next = new V(Math.sin(j*.55)*.08, -.04-j*.045, -.16-j*.14);
+                A.link(tail, [prev.x,prev.y,prev.z], [next.x,next.y,next.z], .052-j*.004, .034-j*.003, j%2?horn:obsidian, "steel");
+                A.ellipsoid(tail,[next.x,next.y,next.z],[.065,.05,.07],j%2?obsidian:horn,"steel",j>4?0x350000:0);
+                tailPoints.push(next); prev=next;
+              }
+              const tip=tailPoints[tailPoints.length-1], rotor=A.pivot(tail,tip.x,tip.y,tip.z);
+              for(let j=0;j<3;j++){
+                const a=j*Math.PI*2/3;
+                A.link(rotor,[0,0,0],[Math.cos(a)*.28,Math.sin(a)*.28,0],.035,.012,obsidian,"steel");
+                A.ellipsoid(rotor,[Math.cos(a)*.3,Math.sin(a)*.3,0],[.08,.035,.04],infernal,"steel",infernal);
+              }
+              secretAccessories = { type:"demon", horns, tail, rotor };
+            }
             const gun = new THREE.Group(),
               parts = ArsenalArt.build(weapon, gun);
             parts.rightHand.visible = false;
@@ -15234,6 +15691,10 @@ body.netgame #revivetouch{display:flex}
               elbows,
               gun,
               parts,
+              classId: cls,
+              secretAccessories,
+              specterWeapon: !!weapon?.specter,
+              tridentWeapon: !!weapon?.trident,
               blend: 0,
             };
             return g;
@@ -15282,6 +15743,53 @@ body.netgame #revivetouch{display:flex}
               r.arms[i].rotation.z = i === 0 ? 0.5 : -0.5;
             }
             r.gun.rotation.z = Math.sin(t * 1.7) * 0.006;
+            if (r.specterWeapon) {
+              const orbit = t * 0.75;
+              r.gun.position.set(
+                0.48 + Math.sin(orbit) * 0.08,
+                0.28 + Math.sin(orbit * 1.6) * 0.07,
+                0.18 + Math.cos(orbit) * 0.07,
+              );
+              r.gun.rotation.y = Math.PI + Math.sin(orbit) * 0.3;
+              r.gun.rotation.z = Math.sin(t * 2.4) * 0.28;
+              r.arms[1].rotation.x = -0.25 + Math.sin(t * 2.4) * 0.22;
+              r.elbows[1].rotation.x = -0.45;
+            } else if (r.tridentWeapon) {
+              r.gun.position.set(0.02, 0.2, 0.34);
+              r.arms[0].rotation.x = -0.82;
+              r.elbows[0].rotation.x = -1.05;
+              r.arms[0].rotation.z = 0.34;
+              r.arms[1].rotation.x = -0.42;
+              r.elbows[1].rotation.x = -0.72;
+              r.arms[1].rotation.z = -0.26;
+            }
+            if (r.secretAccessories) {
+              const secret = r.secretAccessories,
+                flying =
+                  state === GameState.PLAYING &&
+                  r.classId === selectedClass &&
+                  !!classBurst().flight;
+              if (secret.type === "angel") {
+                secret.halo.position.y = Math.sin(t * 1.4) * 0.018;
+                const flap = Math.sin(t * (flying ? 9 : 2.1)) * (flying ? 0.34 : 0.08);
+                secret.left.rotation.y = 0.22 + flap;
+                secret.right.rotation.y = -0.22 - flap;
+                secret.left.rotation.z = -0.08 - flap * 0.35;
+                secret.right.rotation.z = 0.08 + flap * 0.35;
+              } else if (secret.type === "demon") {
+                const targetRaise = flying ? -1.05 : 0;
+                secret.tail.rotation.x += (targetRaise - secret.tail.rotation.x) * (1 - Math.exp(-dt * 7));
+                secret.rotor.rotation.z += dt * (flying ? 26 : 1.4);
+                if (flying) {
+                  r.arms[0].rotation.x = 0.08;
+                  r.elbows[0].rotation.x = -0.15;
+                  r.arms[1].rotation.x = 0.08;
+                  r.elbows[1].rotation.x = -0.15;
+                  r.arms[0].rotation.z = 0.18;
+                  r.arms[1].rotation.z = -0.18;
+                }
+              }
+            }
             if (reloading) {
               r.elbows[0].rotation.x = -1.1 + Math.sin(t * 6) * 0.4;
               r.gun.rotation.z = 0.18;
@@ -16751,9 +17259,10 @@ body.netgame #revivetouch{display:flex}
           if (repeat) return true;
           if (c === "KeyR") PlayerController.reload();
           if (c === "KeyQ") PlayerController.ability();
+          if (c === "KeyF") SecretWeaponSkills.use();
           if (c === "KeyG") PlayerController.grenade();
           if (/^Digit[1-5]$/.test(c)) PlayerController.switch(Number(c.slice(-1)) - 1);
-          if (c === "Space" && player.jump === 0) player.vy = 6;
+          if (c === "Space" && player.jump === 0) player.vy = 6 * classValue("jump", 1);
           return true;
         }
         let mouseFreed = false;
@@ -17028,9 +17537,10 @@ body.netgame #revivetouch{display:flex}
           $("moretouch").setAttribute("aria-expanded", String(open));
         };
         bindTapButton("qtouch", () => PlayerController.ability());
+        bindTapButton("weaponabilitytouch", () => SecretWeaponSkills.use());
         bindTapButton("rtouch", () => PlayerController.reload());
         bindTapButton("grenadetouch", () => PlayerController.grenade());
-        bindTapButton("jumptouch", () => { if (player.jump === 0) player.vy = 6; });
+        bindTapButton("jumptouch", () => { if (player.jump === 0) player.vy = 6 * classValue("jump", 1); });
         bindTapButton("switchtouch", () => {
           for (let i = 1; i <= player.inventory.length; i++) {
             const slot = (player.slot + i) % player.inventory.length;
