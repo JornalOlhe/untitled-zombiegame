@@ -12036,8 +12036,11 @@ body.netgame #revivetouch{display:flex}
             if (seen.has(z)) continue;
             seen.add(z);
             const head = h.object.userData.head;
-            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) : 1;
-            ZombieManager.hit(z, damage * mult, head, h.point, w);
+            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) : 1,
+              distanceBonus = classEffects().distanceDamageMax
+                ? 1 + classEffects().distanceDamageMax * clamp(h.distance / Math.max(1, w.range), 0, 1)
+                : 1;
+            ZombieManager.hit(z, damage * mult * distanceBonus, head, h.point, w);
             end = h.point;
             remaining--;
           }
@@ -12566,7 +12569,13 @@ body.netgame #revivetouch{display:flex}
                 right = new V(Math.cos(yaw), 0, -Math.sin(yaw)),
                 from = player.pos.clone().addScaledVector(dir, 0.45).addScaledVector(right, 0.18);
               from.y -= 0.12;
-              spawnProjectile("grenade", from, dir, 160 * (classEffects().grenadeDamage || 1), { cluster: false });
+              spawnProjectile(
+                "grenade",
+                from,
+                dir,
+                160 * (classBurst().explosiveDamageTotal ?? classEffects().explosiveDamage ?? classEffects().grenadeDamage ?? 1),
+                { cluster: false },
+              );
             });
           },
           strike(w, damage, reach = Math.min(w.range, 2.6)) {
@@ -17253,7 +17262,7 @@ body.netgame #revivetouch{display:flex}
           if (c === "KeyF") SecretWeaponSkills.use();
           if (c === "KeyG") PlayerController.grenade();
           if (/^Digit[1-5]$/.test(c)) PlayerController.switch(Number(c.slice(-1)) - 1);
-          if (c === "Space" && player.jump === 0) player.vy = 6;
+          if (c === "Space" && player.jump === 0) player.vy = 6 * classValue("jump", 1);
           return true;
         }
         let mouseFreed = false;
@@ -17531,7 +17540,7 @@ body.netgame #revivetouch{display:flex}
         bindTapButton("weaponabilitytouch", () => SecretWeaponSkills.use());
         bindTapButton("rtouch", () => PlayerController.reload());
         bindTapButton("grenadetouch", () => PlayerController.grenade());
-        bindTapButton("jumptouch", () => { if (player.jump === 0) player.vy = 6; });
+        bindTapButton("jumptouch", () => { if (player.jump === 0) player.vy = 6 * classValue("jump", 1); });
         bindTapButton("switchtouch", () => {
           for (let i = 1; i <= player.inventory.length; i++) {
             const slot = (player.slot + i) % player.inventory.length;
