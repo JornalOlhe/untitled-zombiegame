@@ -6,17 +6,17 @@ Jogo de sobrevivência em primeira pessoa para Android e Windows, com ondas, map
 
 ### Android
 
-Baixe `DeadRecoil.apk` na última release. A v0.8.0 já consulta novas releases automaticamente; quando a v9 assinada estiver publicada, ela detecta a nova versão, baixa o APK e pede apenas a confirmação do Android para instalar.
+Baixe `DeadRecoil-v25.apk` na última release. O jogo consulta novas releases automaticamente; quando existe uma versão maior, baixa o APK oficial e abre a atualização do Android. A instalação por cima exige a mesma assinatura da versão instalada.
 
 ### Windows
 
-Baixe `DeadRecoil-Windows.exe` na última release e execute diretamente. É uma versão portátil: não precisa de Node, navegador, `.bat` ou instalação obrigatória.
+Baixe `DeadRecoil-Setup-0.25.0.exe` na última release e instale uma vez. A partir do setup, o próprio jogo detecta novas releases, baixa o próximo instalador, valida o SHA-256, instala em silêncio e reabre a versão nova; não depende mais do executável portátil antigo.
 
 Controles principais: `WASD` para mover, mouse para mirar e atirar, `R` para recarregar, `Esc` para pausar e `F11` ou `Alt+Enter` para alternar tela cheia.
 
 ## Armory
 
-O Armory usa dois tipos de spin. O Normal Spin custa 50 moedas e soma +1 nos pities; o Lucky Spin tem custo base de 250 moedas, soma +2 e entrega somente Épico, Lendário, Mítico ou Divino: 59% / 37% / 3% / 1%. Armas e classes possuem pities separados: 75 garante Mítico ou Divino no próprio giro que atinge o limite, e 150 garante Divino. Um Mítico reseta apenas o pity Mítico; um Divino reseta os dois. A roleta mantém a sequência longa, near-miss visual e encaixe final no centro sem alterar o resultado real. Todos os resultados entram diretamente no loadout e resultados Divinos recebem uma celebração própria. O único aviso acontece antes de um novo giro quando o item equipado é Mítico ou Divino.
+O Armory usa dois tipos de spin. O Normal Spin custa 50 moedas e soma +1 nos pities; o Lucky Spin tem custo base de 250 moedas, soma +2 e entrega Épico, Lendário, Mítico, Divino ou Secreto. Na v25 a chance protótipo de Secreto é 0,01% no Normal e 0,10% no Lucky, igual para classes e armas. Armas e classes possuem pities separados: 75 garante Mítico ou superior e 150 garante Divino ou superior. Um Mítico reseta apenas o pity Mítico; Divino/Secreto resetam os dois. A roleta mantém a sequência longa, near-miss visual e encaixe final no centro sem alterar o resultado real.
 
 ## Online (contas, missões e multiplayer)
 
@@ -35,7 +35,7 @@ Testes: `tests/ui-smoke.cjs`, `tests/monsters-smoke.cjs`, `tests/deathkill-smoke
 
 ## Builds
 
-A `main` está preparada como v0.12.0 QA. A v11 publica EXE portátil para Windows e APK de QA para Android; a release Android estável continua exigindo a mesma assinatura da instalação estável anterior.
+A `main` acompanha a release atual. A v25 publica um instalador NSIS para Windows e um APK para Android, ambos validados pelos workflows antes da publicação.
 
 ## Desenvolvimento
 
@@ -50,4 +50,4 @@ Consulte `UPDATES.md` para o fluxo de atualização e assinatura.
 
 Ao abrir o jogo, Android e Windows consultam as releases do GitHub. Se existir uma versão com tag maior que a instalada, o jogo mostra uma confirmação antes de qualquer download: **"Sua versão está desatualizada. Baixar a versão mais recente agora?"**.
 
-No Android, releases estáveis com o asset `DeadRecoil.apk` são baixadas e verificadas dentro do app antes de abrir o instalador. Releases QA/prerelease abrem o asset oficial no GitHub, pois o Android só permite atualização por cima quando a assinatura é a mesma. No Windows, o botão abre diretamente o `DeadRecoil-Windows.exe` da release mais recente.
+No Android, o APK oficial é baixado e verificado antes de abrir o instalador; atualização por cima exige a mesma assinatura. No Windows instalado pelo setup, o jogo baixa `DeadRecoil-Setup-<versão>.exe`, verifica o SHA-256 informado pelo GitHub, executa o instalador silencioso e reabre a nova versão.
