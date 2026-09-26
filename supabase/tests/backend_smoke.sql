@@ -50,6 +50,26 @@ begin
     if sqlerrm <> 'insufficient_funds' then raise; end if;
   end;
 
+  -- Duplicate weapons are valid instances: buying a second slot creates a Machete,
+  -- and replacing it with the same weapon id as slot 0 must keep both copies.
+  perform set_config('role', 'postgres', true);
+  update public.profiles set coins = 100000 where id = a;
+  perform set_config('role', 'authenticated', true);
+  r := public.economy_buy_slot(gen_random_uuid());
+  assert (r -> 'profile' ->> 'weaponSlotsOwned')::int = 2, 'second weapon slot purchased';
+  assert (r -> 'profile' -> 'weaponSlots' ->> 1) = '0', 'new weapon slot starts with Machete';
+
+  perform set_config('role', 'postgres', true);
+  update public.profiles set pending_weapon = (select item_id::int from public.player_inventory where user_id = a and item_type = 'weapon' and slot = 0) where id = a;
+  perform set_config('role', 'authenticated', true);
+  r := public.economy_equip('weapon', 1, 'replace', gen_random_uuid());
+  assert (r -> 'profile' -> 'weaponSlots' ->> 0) = (r -> 'profile' -> 'weaponSlots' ->> 1), 'same weapon id can exist in two slots';
+  assert (r -> 'profile' ->> 'weaponSlot')::int = 1, 'exact duplicate slot is equipped';
+  assert (select count(*) from public.player_inventory where user_id = a and item_type = 'weapon' and item_id = (r -> 'profile' -> 'weaponSlots' ->> 0)) = 2,
+    'database stores two rows for duplicate weapon copies';
+  assert (select count(*) from public.player_inventory where user_id = a and item_type = 'weapon' and equipped) = 1,
+    'only one duplicate weapon row is marked equipped';
+
   -- ── A: solo run, capped rewards, missions ──
   r := public.run_start('classic', 0, 'medium', null, gen_random_uuid());
   run := (r ->> 'run')::uuid;
