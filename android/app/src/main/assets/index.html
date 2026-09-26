@@ -4358,6 +4358,24 @@
               if (r.props.trident) r.props.trident.rotation.x = -r.arms[0].rotation.x - r.upper.rotation.x + 0.1;
               if (r.props.shield) r.props.shield.rotation.x = -r.arms[1].rotation.x - r.upper.rotation.x;
             }
+            if (st !== "crawler" && z.group) {
+              // Lean into turns, breathe when idle and keep the head locked on the player.
+              const yaw = z.group.rotation.y,
+                yawRate = dt > 0 ? Math.atan2(Math.sin(yaw - (z.lastYaw ?? yaw)), Math.cos(yaw - (z.lastYaw ?? yaw))) / dt : 0;
+              z.lastYaw = yaw;
+              z.turnLean = (z.turnLean || 0) + (clamp(-yawRate * 0.07, -0.22, 0.22) - (z.turnLean || 0)) * Math.min(1, dt * 6);
+              r.body.rotation.z += z.turnLean * (0.4 + mb);
+              const idle = 1 - mb;
+              r.upper.rotation.x += Math.sin(t * 1.7 + r.base) * 0.035 * idle;
+              r.upper.position.y = Math.sin(t * 1.7 + r.base) * 0.012 * idle;
+              if (player) {
+                const dx = player.pos.x - z.group.position.x,
+                  dz = player.pos.z - z.group.position.z,
+                  rel = Math.atan2(Math.sin(Math.atan2(dx, dz) - yaw), Math.cos(Math.atan2(dx, dz) - yaw));
+                r.neck.rotation.y += (clamp(rel, -0.7, 0.7) * 0.8 - r.neck.rotation.y) * Math.min(1, dt * 5);
+              }
+            }
+            r.root.position.z = 0;
             for (let i = 0; i < r.tail.length; i++) {
               r.tail[i].rotation.y = Math.sin(t * 0.9 - i * 0.55) * 0.16;
               r.tail[i].rotation.x = (i === 0 ? -0.75 : 0.12) + Math.sin(t * 0.7 - i * 0.4) * 0.05;
@@ -4366,6 +4384,7 @@
               const attack = (simulationTime - z.swingStart) / 0.65;
               if (attack >= 0 && attack < 1) {
                 const swipe = Math.sin(attack * Math.PI);
+                r.root.position.z = swipe * 0.16;
                 if (st === "crawler") r.arms.forEach((a) => (a.rotation.x -= swipe * 0.8));
                 else {
                   r.arms[0].rotation.x -= swipe * 1.1;
@@ -5740,6 +5759,7 @@
             scene.add(this.group);
             this.obstacles = [];
             this.walls = [];
+            WorldProps.begin();
             this.spawns = this.spawnSets[index].map((p) => p.slice());
             this.spawnCursor = 0;
             const m = maps[index];
@@ -5821,23 +5841,13 @@
               ]) {
                 this.solid(x, 0.65, z, 2, 1.2, 4, 0x48514a);
                 box(this.group, x, 1.4, z, 1.65, 0.6, 2, 0x30454d);
+                WorldProps.collider(x, z, 1.65, 2, 1.7);
                 for (const dz of [-1.25, 1.25])
                   for (const dx of [-1, 1])
                     sphere(this.group, x + dx, 0.4, z + dz, 0.35, 0x111719);
               }
               for (let z = -27; z < 35; z += 18) {
-                cylinder(this.group, 6, 2.8, z, 0.08, 5.6, 0x222f37);
-                box(
-                  this.group,
-                  5.5,
-                  5.5,
-                  z,
-                  1.4,
-                  0.16,
-                  0.4,
-                  0xffb86b,
-                  0xffaa45,
-                );
+                WorldProps.lampPost(6, z, -1);
                 const l = new THREE.PointLight(0xffa052, 1, 12, 2);
                 l.position.set(5.4, 5, z);
                 this.group.add(l);
@@ -5872,18 +5882,9 @@
                   this.spawns.some((s) => Math.hypot(x - s[0], z - s[1]) < 4)
                 )
                   continue;
-                this.solid(x, 2.5, z, 0.85, 5, 0.85, 0x39413a);
-                const crown = sphere(
-                  this.group,
-                  x,
-                  5.5,
-                  z,
-                  rand(2, 3.4),
-                  0x203e34,
-                );
-                crown.scale.y *= 1.6;
-                if (i % 4 === 0)
-                  this.solid(x + 1, 0.45, z + 1, 1.8, 0.9, 1.2, 0x46534a);
+                if (Math.hypot(x, z) < 6.5) continue;
+                WorldProps.tree(x, z, rand(0.9, 1.25), i % 3 ? "leafDark" : "pine");
+                if (i % 4 === 0) WorldProps.rock(x + 1.3, z + 1.3, 1.4, 0.9, "mossy");
               }
               for (let i = 0; i < 20; i++)
                 box(
@@ -5955,8 +5956,8 @@
               for (let i = 0; i < 18; i++) {
                 const x = rand(-30, 30),
                   z = rand(-30, 30);
-                if (Math.hypot(x, z - 10) < 8) continue;
-                this.solid(x, 0.65, z, rand(1, 3), 1.3, rand(1, 3), 0xa7c5ce);
+                if (Math.hypot(x, z - 10) < 8 || Math.hypot(x, z) < 6.5) continue;
+                WorldProps.rock(x, z, rand(1.2, 2.4), rand(0.9, 1.3), "ice");
               }
             }
             if (index === 0) {
@@ -6001,25 +6002,37 @@
               0x668a9b,
             );
             moon.castShadow = false;
+            WorldProps.finish(index);
             this.validateSpawns();
             this.makeGrid();
             WorldArt.build(index);
           },
           solid(x, y, z, w, h, d, color) {
             const m = box(this.group, x, y, z, w, h, d, color);
-            this.obstacles.push({ x, z, w: w / 2, d: d / 2, h });
+            this.obstacles.push({ x, z, w: w / 2, d: d / 2, h, top: y + h / 2 });
             this.walls.push(m);
             return m;
           },
-          collides(x, z, r = 0.4) {
+          // Anything whose top is within STEP of your feet can be walked onto — no invisible walls.
+          STEP: 0.5,
+          collides(x, z, r = 0.4, feet = 0) {
             if (Math.abs(x) > 34.8 - r || Math.abs(z) > 34.8 - r) return true;
+            const limit = feet + this.STEP;
             return this.obstacles.some(
-              (o) => Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r,
+              (o) => o.top > limit && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r,
             );
           },
-          move(pos, dx, dz, r = 0.4) {
-            if (!this.collides(pos.x + dx, pos.z, r)) pos.x += dx;
-            if (!this.collides(pos.x, pos.z + dz, r)) pos.z += dz;
+          // Height of the surface under (x, z) that someone with feet at `feet` can stand on.
+          groundAt(x, z, r = 0.3, feet = 0) {
+            const limit = feet + this.STEP;
+            let g = 0;
+            for (const o of this.obstacles)
+              if (o.top <= limit && o.top > g && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) g = o.top;
+            return g;
+          },
+          move(pos, dx, dz, r = 0.4, feet = 0) {
+            if (!this.collides(pos.x + dx, pos.z, r, feet)) pos.x += dx;
+            if (!this.collides(pos.x, pos.z + dz, r, feet)) pos.z += dz;
           },
           validateSpawns() {
             this.spawns = this.spawns.map(([sx, sz]) => {
@@ -7065,6 +7078,7 @@
           weapon = null,
         ) {
           ParticleSystem.emit(pos, color, 65, 6);
+          PhysicsProps.impulse(pos, radius * 1.8, 11);
           AudioManager.noise(0.4, 0.9);
           AudioManager.tone(80, 0.35, "sawtooth", 0.5, 20);
           if (enemy) {
@@ -7351,6 +7365,13 @@
           kill(z, head = false, overkill = false, w = null) {
             if (z.dead) return;
             z.dead = true;
+            if (z.rig.voxel && !z.boss && head) {
+              const away = z.group.position.clone().sub(player.pos);
+              away.y = 0;
+              away.normalize();
+              PhysicsProps.fling(z.rig.head, new V(away.x * 4 + rand(-1, 1), rand(5, 7.5), away.z * 4 + rand(-1, 1)), rand(8, 14));
+              BloodFX.emit(z.rig.neck.getWorldPosition(new V()), 26);
+            }
             this.list.splice(this.list.indexOf(z), 1);
             this.hitMeshes = this.hitMeshes.filter(
               (m) => m.userData.zombie !== z,
@@ -7416,6 +7437,7 @@
 
             for (const z of [...this.list]) {
               if (z.dead) continue;
+              if (z.dropping) continue;
               if (
                 z.burnUntil > simulationTime &&
                 simulationTime >= (z.burnTickAt || 0)
@@ -7503,6 +7525,7 @@
                     if (before.distanceToSquared(pos) > 0.000001) z.stuckAt = 0;
                   }
                 } else z.stuckAt = 0;
+                if (z.boss?.kind !== "necro") pos.y += (MapManager.groundAt(pos.x, pos.z, 0.2, 0) - pos.y) * Math.min(1, dt * 12);
               }
               if (
                 active &&
@@ -7537,7 +7560,7 @@
                 dist < 2.5
               ) {
                 const away = player.pos.clone().sub(pos).normalize();
-                MapManager.move(player.pos, away.x * dt * 7, away.z * dt * 7);
+                MapManager.move(player.pos, away.x * dt * 7, away.z * dt * 7, 0.4, (player.ground || 0) + player.jump);
               }
               if (z.boss) {
                 const phase =
@@ -8010,6 +8033,10 @@
               z.lastSwing = z.swingStart;
             }
             const fwd = new V(Math.sin(z.group.rotation.y), 0, Math.cos(z.group.rotation.y));
+            if (walking && t > (z.pushAt || 0)) {
+              z.pushAt = t + 0.15;
+              PhysicsProps.impulse(pos, 1.5 * z.size, 4);
+            }
             if (kind === "mutant" && walking && t > z.trailAt) {
               // Mutant slime trail: puddles last 10 s and burn anyone standing in them.
               z.trailAt = t + 0.4;
@@ -8092,11 +8119,101 @@
                   const away = player.pos.clone().sub(pos);
                   away.y = 0;
                   away.normalize();
-                  MapManager.move(player.pos, away.x * 2.6, away.z * 2.6);
+                  for (let i = 0; i < 6; i++) MapManager.move(player.pos, away.x * 0.45, away.z * 0.45, 0.4, (player.ground || 0) + player.jump);
                   shake = Math.max(shake, 0.45);
                 }
               }
             }
+          },
+          // Boss drop after the intro: a telegraph grows on the landing spot, the boss falls out of
+          // the sky and slams down — shockwave, damage, knockback and flung props.
+          startDrop(z, target) {
+            const t = simulationTime,
+              demon = z.boss.kind === "demon",
+              color = demon ? 0xff2010 : 0x7fdcff,
+              dur = 1.6;
+            z.dropping = { start: t, dur, target: target.clone(), height: 48 };
+            z.rig.cinematic = true;
+            const radius = 5;
+            const zone = this.groundPlane(color, 0.5, "glow");
+            zone.position.set(target.x, 0.08, target.z);
+            zone.scale.setScalar(radius * 2);
+            const core = this.groundPlane(color, 0.7, null);
+            core.position.set(target.x, 0.09, target.z);
+            this.add(zone, dur + 0.1, (it) => {
+              const k = 1 - it.life / it.max;
+              zone.material.opacity = 0.3 + 0.25 * Math.sin(k * 40);
+            });
+            this.add(core, dur + 0.05, (it) => {
+              const k = 1 - it.life / it.max;
+              core.scale.setScalar(Math.max(0.01, radius * 2 * k));
+              core.material.opacity = 0.45 + 0.25 * k;
+            });
+            this.ring(target, radius, color, dur);
+            AudioManager.tone(900, dur, "sine", 0.12, 120);
+            UIManager.announce("CUIDADO!", `${z.name} está caindo — saia do círculo`, 1.4);
+          },
+          updateDrops(dt) {
+            const t = simulationTime;
+            for (const z of ZombieManager.list) {
+              const d = z.dropping;
+              if (!d) continue;
+              const k = Math.min(1, (t - d.start) / d.dur),
+                r = z.rig;
+              z.group.position.set(d.target.x, d.height * (1 - k * k), d.target.z);
+              r.arms[0].rotation.x = r.arms[1].rotation.x = -2.8 + k * 1.2;
+              r.legs[0].rotation.x = -0.6 * (1 - k);
+              r.legs[1].rotation.x = 0.4 * (1 - k);
+              r.upper.rotation.x = 0.3 * k;
+              if (Math.random() < 0.9)
+                ParticleSystem.emit(z.group.position.clone().add(new V(rand(-1, 1), 1, rand(-1, 1))), z.boss.kind === "demon" ? 0xff4a10 : 0xeaf6ff, 3, 1.5);
+              if (k >= 1) this.land(z);
+            }
+          },
+          land(z) {
+            const t = simulationTime,
+              pos = z.group.position,
+              r = z.rig,
+              demon = z.boss.kind === "demon",
+              radius = 5,
+              dmg = diff[difficulty].damage;
+            z.dropping = null;
+            r.cinematic = false;
+            pos.y = 0;
+            r.upper.rotation.set(0, 0, 0);
+            for (const leg of r.legs) leg.rotation.set(0, 0, 0);
+            z.rootedUntil = t + 0.8;
+            z.attack = t + 1.2;
+            z.special = t + 2;
+            z.throwAt = t + 3.5;
+            z.frostAt = t + 5;
+            z.landedAt = t;
+            shake = Math.max(shake, 0.9);
+            MonsterAudio.play("land", { volume: 1.8 });
+            this.ring(pos, radius * 1.9, demon ? 0xff5020 : 0xbdeeff, 0.9);
+            this.ring(pos, radius * 1.2, 0xffffff, 0.6);
+            for (let i = 0; i < 36; i++) {
+              const a = (i / 36) * Math.PI * 2;
+              ParticleSystem.emit(pos.clone().add(new V(Math.cos(a) * 2.2, 0.3, Math.sin(a) * 2.2)), demon ? (i % 2 ? 0xff5a1e : 0x5a3a2a) : i % 2 ? 0xffffff : 0x9fdcff, 5, 7);
+            }
+            CombatFX.mark(pos, demon ? 0x1a0806 : 0x9ab8c8, 5.5);
+            PhysicsProps.impulse(pos, 12, 15);
+            const dist = Math.hypot(player.pos.x - pos.x, player.pos.z - pos.z);
+            if (dist < radius) {
+              PlayerController.hurt(30 * dmg);
+              const away = player.pos.clone().sub(pos);
+              away.y = 0;
+              if (away.lengthSq() < 0.01) away.set(1, 0, 0);
+              away.normalize();
+              for (let i = 0; i < 8; i++) MapManager.move(player.pos, away.x * 0.5, away.z * 0.5, 0.4, (player.ground || 0) + (player.jump || 0));
+              player.vy = 5;
+            }
+            if (!demon && dist < 10) {
+              player.slowUntil = t + 3;
+              player.slowFactor = 0.5;
+              MonsterAudio.play("frost", { volume: 1 });
+            }
+            UIManager.announce(z.name.toUpperCase(), "BOSS · Fase 1", 2.2);
           },
           startThrow(z, dist) {
             const t = simulationTime,
@@ -8146,6 +8263,7 @@
           },
           update(dt) {
             const t = simulationTime;
+            this.updateDrops(dt);
             for (let i = this.items.length - 1; i >= 0; i--) {
               const it = this.items[i];
               it.life -= dt;
@@ -8200,6 +8318,7 @@
                   th.mesh.position.y = 0.6 * th.z.size;
                   ParticleSystem.emit(th.mesh.position.clone(), 0xff5a1e, 26, 4);
                   CombatFX.mark(th.mesh.position, 0x2a0f0a, 1.4);
+                  PhysicsProps.impulse(th.mesh.position, 4, 9);
                 }
               } else if (th.phase === "stuck") {
                 if (th.timer > 0.55) {
@@ -8223,66 +8342,52 @@
           },
         };
 
-        // Boss intro cinematics (≤ 5 s): the Demon rises from his throne and rips his trident out
-        // of the ground; the Yeti bursts out of his den in a blizzard and roars.
+        // Boss intro cinematics (≤ 5 s). They play in an arena built far outside the map: the Demon
+        // rises from his throne in hell, rips his trident out of the ground and leaps into the sky;
+        // the Yeti bursts out of his den in a blizzard, roars and leaps. Control then returns to the
+        // player and the boss comes crashing down in the middle of the map on a telegraphed spot.
         const BossIntro = {
           active: null,
+          ARENA: new V(0, 0, -1600),
           ease: (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k)),
           seg(time, a, b) {
             return this.ease((time - a) / (b - a));
           },
-          findStage(z, clearance) {
-            const look = forward();
-            look.y = 0;
-            if (look.lengthSq() < 0.001) look.set(0, 0, -1);
-            look.normalize();
-            for (const dist of [13, 11, 15, 9, 17, 7])
-              for (const a of [0, 0.4, -0.4, 0.8, -0.8, 1.3, -1.3]) {
-                const dir = look.clone().applyAxisAngle(new V(0, 1, 0), a),
-                  p = player.pos.clone().addScaledVector(dir, dist);
-                p.y = 0;
-                if (Math.abs(p.x) > 33 || Math.abs(p.z) > 33) continue;
-                if (MapManager.collides(p.x, p.z, clearance)) continue;
-                const back = dir.clone().negate();
-                let clear = true;
-                for (let k = 2; k <= 11.5; k += 1.5) {
-                  const c = p.clone().addScaledVector(back, k);
-                  if (MapManager.collides(c.x, c.z, 0.35)) {
-                    clear = false;
-                    break;
-                  }
-                }
-                if (clear) return p;
+          landingSpot(clearance) {
+            for (let r = 0; r <= 26; r += 1.5)
+              for (let i = 0; i < Math.max(1, Math.round(r * 2.2)); i++) {
+                const a = (i / Math.max(1, Math.round(r * 2.2))) * Math.PI * 2,
+                  x = Math.cos(a) * r,
+                  z = Math.sin(a) * r;
+                if (!MapManager.collides(x, z, clearance)) return new V(x, 0, z);
               }
-            return z.group.position.clone();
+            return new V(0, 0, 0);
           },
           start(z) {
             MonsterFX.init();
-            const kind = z.boss.kind,
-              pos = this.findStage(z, kind === "yeti" ? 3.6 : 2.8);
-            z.group.position.copy(pos);
-            const toPlayer = player.pos.clone().sub(pos);
-            toPlayer.y = 0;
-            z.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-            z.rig.cinematic = true;
+            const kind = z.boss.kind;
             const stage = new THREE.Group();
-            stage.position.copy(pos);
-            stage.rotation.y = z.group.rotation.y;
+            stage.position.copy(this.ARENA);
             scene.add(stage);
+            z.group.position.copy(this.ARENA);
+            z.group.rotation.y = 0;
+            z.rig.cinematic = true;
             this.active = {
               z,
               kind,
               stage,
               time: 0,
-              duration: 4.9,
+              duration: 5,
               fov: camera.fov,
               sounds: [],
               flags: {},
+              fog: scene.fog ? { color: scene.fog.color.clone(), density: scene.fog.density } : null,
+              background: scene.background ? scene.background.clone() : null,
               light: this.glow(kind === "demon" ? 0xff3a14 : 0xff2020),
             };
             stage.add(this.active.light);
-            if (kind === "demon") this.buildThrone(this.active);
-            else this.buildDen(this.active);
+            if (kind === "demon") this.buildHell(this.active);
+            else this.buildMountain(this.active);
             document.body.classList.add("cinematic");
             announcementEnd = 0;
             $("announcement").style.opacity = 0;
@@ -8298,8 +8403,6 @@
             if (this.active) this.finish(true);
             document.body.classList.remove("cinematic");
           },
-          // Additive glow sprite used instead of a real light: adding lights would force every
-          // shader in the scene to recompile and hitch on phones.
           glow(color) {
             const sprite = new THREE.Sprite(
               new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
@@ -8312,43 +8415,62 @@
             });
             return sprite;
           },
-          block(parent, size, pos, material) {
-            const m = new THREE.Mesh(unitBox, material);
+          block(parent, size, pos, kind, rotY = 0) {
+            const m = new THREE.Mesh(unitBox, typeof kind === "string" ? PropKit.mat(kind) : kind);
             m.scale.set(size[0], size[1], size[2]);
             m.position.set(pos[0], pos[1], pos[2]);
+            m.rotation.y = rotY;
             m.castShadow = m.receiveShadow = true;
             parent.add(m);
             return m;
           },
-          buildThrone(a) {
+          setSky(a, color, density) {
+            if (scene.fog) {
+              scene.fog.color.set(color);
+              scene.fog.density = density;
+            }
+            scene.background = new THREE.Color(color);
+          },
+          buildHell(a) {
             const g = a.stage,
               z = a.z,
               S = z.size,
               P = VoxelMonsters.P;
-            const stone = VoxelMonsters.flat(0x2e2424),
-              dark = VoxelMonsters.flat(0x1a1414),
-              lava = VoxelMonsters.flat(0x5a0c06, 0xff3a12),
-              gold = VoxelMonsters.flat(0x6b4a1e, 0x3a1a00);
+            this.setSky(a, 0x220605, 0.035);
+            // Scorched ground with lava rivers, obsidian spires and bone piles.
+            const batch = PropKit.batch();
+            PropKit.add(batch, "hellrock", [0, -0.25, 4], [90, 0.5, 90], null, 0.5);
+            for (const [x, zz, w, d] of [[-7, 6, 2.2, 40], [8, 3, 2.6, 40], [0, 16, 40, 2.4], [-14, -2, 30, 1.8]])
+              PropKit.add(batch, "lava", [x, 0.02, zz], [w, 0.06, d], null, 1);
+            for (let i = 0; i < 22; i++) {
+              const ang = rand(0, Math.PI * 2),
+                r = rand(9, 24),
+                h = rand(3, 11);
+              PropKit.add(batch, "hellrock", [Math.cos(ang) * r, h / 2, Math.sin(ang) * r - 4], [rand(0.8, 2), h, rand(0.8, 2)], [0, rand(0, 3), 0], 0.8);
+            }
+            for (let i = 0; i < 10; i++)
+              PropKit.add(batch, "bone", [rand(-6, 6), 0.12, rand(-1, 8)], [rand(0.3, 0.9), 0.12, 0.14], [0, rand(0, 3), 0], 2);
+            PropKit.build(batch, g);
+            // Throne.
             const hip = z.rig.hipY * S,
               seatTop = hip - (z.rig.shape.lw * P * S) / 2,
               back = -(z.rig.shape.td * P * S) / 2 - 0.28;
-            this.block(g, [2.4, seatTop, 1.7], [0, seatTop / 2, 0.15], stone);
-            this.block(g, [2.6, 0.18, 1.9], [0, seatTop - 0.05, 0.15], dark);
-            this.block(g, [2.7, 3.6, 0.5], [0, seatTop + 1.7, back], stone);
-            this.block(g, [0.18, 3.2, 0.52], [-0.75, seatTop + 1.7, back + 0.01], lava);
-            this.block(g, [0.18, 3.2, 0.52], [0.75, seatTop + 1.7, back + 0.01], lava);
+            this.block(g, [2.4, seatTop, 1.7], [0, seatTop / 2, 0.15], "hellrock");
+            this.block(g, [2.7, 3.6, 0.5], [0, seatTop + 1.7, back], "hellrock");
+            this.block(g, [0.18, 3.2, 0.52], [-0.75, seatTop + 1.7, back + 0.01], "lava");
+            this.block(g, [0.18, 3.2, 0.52], [0.75, seatTop + 1.7, back + 0.01], "lava");
             for (const [x, h] of [[-1.15, 1.2], [-0.55, 1.7], [0, 2.2], [0.55, 1.7], [1.15, 1.2]]) {
-              this.block(g, [0.3, h, 0.3], [x, seatTop + 3.5 + h / 2, back], dark);
-              this.block(g, [0.16, 0.35, 0.16], [x, seatTop + 3.5 + h + 0.12, back], lava);
+              this.block(g, [0.3, h, 0.3], [x, seatTop + 3.5 + h / 2, back], "hellrock");
+              this.block(g, [0.16, 0.35, 0.16], [x, seatTop + 3.5 + h + 0.12, back], "lava");
             }
             for (const side of [-1, 1]) {
-              this.block(g, [0.42, 0.5, 1.6], [side * 1.25, seatTop + 0.25, 0.2], dark);
+              this.block(g, [0.42, 0.5, 1.6], [side * 1.25, seatTop + 0.25, 0.2], "hellrock");
               VoxelMonsters.box(g, "01", "head", [0.46, 0.46, 0.46], [side * 1.25, seatTop + 0.73, 0.75]);
-              this.block(g, [0.5, seatTop + 0.3, 0.5], [side * 1.25, (seatTop + 0.3) / 2, 0.8], gold);
+              this.block(g, [0.5, seatTop + 0.3, 0.5], [side * 1.25, (seatTop + 0.3) / 2, 0.8], "bone");
             }
-            this.block(g, [3.6, 0.2, 3.2], [0, 0.1, 0.5], dark);
+            this.block(g, [3.6, 0.2, 3.2], [0, 0.1, 0.5], "hellrock");
             const scorch = MonsterFX.groundPlane(0xff2a08, 0.35, "glow");
-            scorch.scale.setScalar(7);
+            scorch.scale.setScalar(8);
             scorch.position.set(0, 0.22, 1.2);
             g.add(scorch);
             a.scorch = scorch;
@@ -8362,57 +8484,67 @@
             a.groundTrident = tri;
             if (z.rig.props.trident) z.rig.props.trident.visible = false;
             a.light.position.set(0, hip + 2.2, 1.2);
+            a.embers = this.particles(g, 500, 0xff6a20, 0.08, [-12, 12], [0, 10], [-8, 14]);
           },
-          buildDen(a) {
+          buildMountain(a) {
             const g = a.stage;
-            const rock = VoxelMonsters.flat(0x4f5a66),
-              rockDark = VoxelMonsters.flat(0x2a3038),
-              snow = VoxelMonsters.flat(0xf1f7ff),
-              ice = VoxelMonsters.flat(0xbfe8ff, 0x1a3a50),
-              cave = VoxelMonsters.flat(0x06080b);
+            this.setSky(a, 0xb9cbd9, 0.03);
+            const batch = PropKit.batch();
+            PropKit.add(batch, "snow", [0, -0.25, 4], [90, 0.5, 90], null, 0.5);
             for (const side of [-1, 1]) {
-              this.block(g, [1.7, 4.8, 4.6], [side * 2.75, 2.4, -2.9], rock);
-              this.block(g, [1.9, 0.5, 4.8], [side * 2.75, 4.95, -2.9], snow);
-              this.block(g, [0.9, 2.2, 1.2], [side * 3.9, 1.1, -0.9], rockDark);
+              PropKit.add(batch, "stone", [side * 2.75, 2.4, -2.9], [1.7, 4.8, 4.6]);
+              PropKit.add(batch, "snow", [side * 2.75, 4.95, -2.9], [1.9, 0.5, 4.8]);
+              PropKit.add(batch, "stone", [side * 3.9, 1.1, -0.9], [0.9, 2.2, 1.2]);
             }
-            this.block(g, [7.4, 1.5, 4.9], [0, 5.2, -3], rock);
-            this.block(g, [7.8, 0.6, 5.2], [0, 6.15, -3], snow);
-            this.block(g, [3.4, 1.2, 2.4], [0.4, 6.9, -3.4], snow);
-            this.block(g, [7.4, 5.8, 0.8], [0, 2.9, -5.4], cave);
-            this.block(g, [3.9, 0.08, 4.6], [0, 0.04, -2.9], cave);
+            PropKit.add(batch, "stone", [0, 5.2, -3], [7.4, 1.5, 4.9]);
+            PropKit.add(batch, "snow", [0, 6.15, -3], [7.8, 0.6, 5.2]);
+            PropKit.add(batch, "snow", [0.4, 6.9, -3.4], [3.4, 1.2, 2.4]);
             for (let i = 0; i < 9; i++) {
               const x = -1.9 + i * 0.48,
                 h = 0.5 + ((i * 37) % 7) * 0.12;
-              this.block(g, [0.16, h, 0.16], [x, 4.45 - h / 2, -0.7], ice);
+              PropKit.add(batch, "ice", [x, 4.45 - h / 2, -0.7], [0.16, h, 0.16]);
             }
-            for (const [x, zz, w] of [[-3, 1.2, 2.4], [2.6, 1.6, 2], [0, 2.8, 3.6], [-1.6, 3.6, 1.6]])
-              this.block(g, [w, 0.35, w * 0.8], [x, 0.17, zz], snow);
+            for (let i = 0; i < 14; i++) {
+              const ang = rand(0.5, Math.PI * 2 - 0.5) + Math.PI / 2,
+                r = rand(11, 26),
+                h = rand(6, 16);
+              PropKit.add(batch, "stone", [Math.cos(ang) * r, h / 2, Math.sin(ang) * r - 6], [rand(4, 8), h, rand(4, 8)], [0, rand(0, 3), 0], 0.4);
+              PropKit.add(batch, "snow", [Math.cos(ang) * r, h + 0.3, Math.sin(ang) * r - 6], [rand(4, 8), 0.6, rand(4, 8)], [0, rand(0, 3), 0], 0.4);
+            }
+            PropKit.build(batch, g);
+            const back = this.block(g, [7.4, 5.8, 0.8], [0, 2.9, -5.4], VoxelMonsters.flat(0x06080b));
+            this.block(g, [3.9, 0.08, 4.6], [0, 0.04, -2.9], VoxelMonsters.flat(0x06080b));
+            back.castShadow = false;
+            // Pines around the den (reuse the map prop builder inside the arena).
+            const pines = PropKit.batch();
+            for (const [x, zz, s] of [[-7, 2, 1.1], [7.5, 1, 1.2], [-9, -4, 1.3], [9.5, -5, 1], [-5, 8, 0.9], [6, 9, 1.05]]) {
+              const H = 3.4 * s;
+              PropKit.add(pines, "bark", [x, H / 2, zz], [0.7 * s, H, 0.7 * s]);
+              for (let i = 0; i < 4; i++) PropKit.add(pines, "snowPine", [x, H * 0.55 + i * 0.95 * s, zz], [(3.4 - i * 0.75) * s, s, (3.4 - i * 0.75) * s]);
+            }
+            PropKit.build(pines, g);
             a.light.position.set(0, 2.6, -1.4);
-            a.z.group.position.addScaledVector(new V(Math.sin(a.stage.rotation.y), 0, Math.cos(a.stage.rotation.y)), -3.2);
+            a.z.group.position.copy(this.ARENA).add(new V(0, 0, -3.2));
             a.startPos = a.z.group.position.clone();
-            // Blizzard: wind-driven snow around the den, plus whiter, denser fog.
-            const count = 900,
-              geo = new THREE.BufferGeometry(),
+            a.snow = this.particles(g, 1100, 0xffffff, 0.09, [-12, 12], [0, 10], [-8, 14]);
+            a.sounds.push(MonsterAudio.play("blizzard", { volume: 1.1, loop: true, fadeIn: 0.5 }));
+          },
+          particles(parent, count, color, size, xr, yr, zr) {
+            const geo = new THREE.BufferGeometry(),
               arr = new Float32Array(count * 3);
             for (let i = 0; i < count; i++) {
-              arr[i * 3] = rand(-9, 9);
-              arr[i * 3 + 1] = rand(0, 9);
-              arr[i * 3 + 2] = rand(-6, 12);
+              arr[i * 3] = rand(...xr);
+              arr[i * 3 + 1] = rand(...yr);
+              arr[i * 3 + 2] = rand(...zr);
             }
             geo.setAttribute("position", new THREE.BufferAttribute(arr, 3));
-            const snowPts = new THREE.Points(
+            const pts = new THREE.Points(
               geo,
-              new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.95, depthWrite: false }),
+              new THREE.PointsMaterial({ color, size, transparent: true, opacity: 0.95, depthWrite: false, blending: color === 0xffffff ? THREE.NormalBlending : THREE.AdditiveBlending }),
             );
-            snowPts.frustumCulled = false;
-            g.add(snowPts);
-            a.snow = snowPts;
-            if (scene.fog) {
-              a.fog = { color: scene.fog.color.clone(), density: scene.fog.density };
-              scene.fog.color.set(0xcfdce8);
-              scene.fog.density = a.fog.density * 1.5 + 0.005;
-            }
-            a.sounds.push(MonsterAudio.play("blizzard", { volume: 0.9, loop: true, fadeIn: 0.6 }));
+            pts.frustumCulled = false;
+            parent.add(pts);
+            return pts;
           },
           camera(a, from, to, k, lookAt, shakeAmount) {
             const local = new V().lerpVectors(from, to, this.ease(k)),
@@ -8427,81 +8559,112 @@
             if (!a) return;
             a.time += dt;
             const tt = a.time,
-              z = a.z,
-              r = z.rig,
-              S = z.size;
+              r = a.z.rig,
+              S = a.z.size;
             WeaponSystem.model.visible = false;
             if (a.kind === "demon") this.demon(a, tt, dt, r, S);
             else this.yeti(a, tt, dt, r, S);
-            if (a.snow) {
-              const arr = a.snow.geometry.attributes.position.array;
-              for (let i = 0; i < arr.length; i += 3) {
-                arr[i] += dt * (9 + (i % 7));
-                arr[i + 1] -= dt * (2.5 + (i % 5) * 0.4);
-                arr[i + 2] += dt * 1.5;
-                if (arr[i] > 9) arr[i] -= 18;
-                if (arr[i + 1] < 0) arr[i + 1] += 9;
-                if (arr[i + 2] > 12) arr[i + 2] -= 18;
-              }
-              a.snow.geometry.attributes.position.needsUpdate = true;
-            }
+            if (a.snow) this.drift(a.snow, dt, 9, -2.5);
+            if (a.embers) this.drift(a.embers, dt, 1.2, 2.2);
             if (tt >= a.duration) this.finish(false);
           },
-          demon(a, tt, dt, r, S) {
-            const seated = 1 - this.seg(tt, 1.0, 2.0),
-              [armR, armL] = r.arms;
-            if (!a.flags.sound && tt > 0.55) {
-              a.flags.sound = true;
-              a.sounds.push(MonsterAudio.play("demon", { volume: 1 }));
+          drift(pts, dt, wind, fall) {
+            const arr = pts.geometry.attributes.position.array;
+            for (let i = 0; i < arr.length; i += 3) {
+              arr[i] += dt * (wind + (i % 7));
+              arr[i + 1] += dt * (fall - (i % 5) * 0.3 * Math.sign(fall));
+              arr[i + 2] += dt * 1.5;
+              if (arr[i] > 12) arr[i] -= 24;
+              if (arr[i + 1] < 0) arr[i + 1] += 10;
+              if (arr[i + 1] > 10) arr[i + 1] -= 10;
+              if (arr[i + 2] > 14) arr[i + 2] -= 22;
             }
-            // 0-1.0 seated and breathing, 1.0-2.0 rises, 2.0-2.7 steps to the trident,
-            // 2.7-3.3 rips it out, 3.3-4.9 raises it with a roar.
-            const step = this.seg(tt, 2.0, 2.7);
-            r.root.position.z = step * 0.95 / S;
-            r.legs[0].rotation.x = -Math.PI / 2 * seated + Math.sin(step * Math.PI) * 0.5;
-            r.legs[1].rotation.x = -Math.PI / 2 * seated - Math.sin(step * Math.PI) * 0.4;
+            pts.geometry.attributes.position.needsUpdate = true;
+          },
+          // Leap pose + launch shared by both bosses: crouch, explode upward, camera tilts to follow.
+          leap(a, tt, r, S, t0, t1) {
+            const crouch = this.seg(tt, t0, t0 + 0.35) * (1 - this.seg(tt, t0 + 0.35, t0 + 0.45)),
+              flying = Math.max(0, tt - (t0 + 0.4));
+            r.body.position.y = r.hipY - crouch * r.hipY * 0.35;
+            r.upper.rotation.x += crouch * 0.4;
+            r.legs[0].rotation.x = -crouch * 0.9 + (flying ? 0.5 : 0);
+            r.legs[1].rotation.x = -crouch * 0.9 + (flying ? -0.3 : 0);
+            if (flying) {
+              r.arms[0].rotation.x = -2.9;
+              r.arms[1].rotation.x = -2.9;
+              r.upper.rotation.x = -0.15;
+            }
+            if (!a.flags.launch && flying > 0) {
+              a.flags.launch = true;
+              a.launchFrom = a.z.group.position.clone();
+              a.sounds.push(MonsterAudio.play("leap", { volume: 1.4 }));
+              shake = 0.5;
+              ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 0.2, 0)), a.kind === "demon" ? 0xff5a1e : 0xffffff, 70, 7);
+            }
+            if (a.launchFrom) {
+              const h = flying * flying * 14 + flying * 10;
+              a.z.group.position.y = a.launchFrom.y + h;
+              if (Math.random() < 0.8)
+                ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 0.4, 0)), a.kind === "demon" ? 0xff4a10 : 0xe8f4ff, 4, 1.2);
+            }
+            return flying;
+          },
+          demon(a, tt, dt, r, S) {
+            const seated = 1 - this.seg(tt, 0.8, 1.7),
+              [armR, armL] = r.arms;
+            if (!a.flags.sound && tt > 0.4) {
+              a.flags.sound = true;
+              a.sounds.push(MonsterAudio.play("demon", { volume: 1.5 }));
+            }
+            // 0-0.8 seated, 0.8-1.7 rises, 1.7-2.3 steps to the trident, 2.3-2.8 rips it out,
+            // 2.8-3.7 roars, 3.7-5 crouches and leaps into the sky.
+            const step = this.seg(tt, 1.7, 2.3);
+            r.root.position.z = (step * 0.95) / S;
+            r.legs[0].rotation.x = (-Math.PI / 2) * seated + Math.sin(step * Math.PI) * 0.5;
+            r.legs[1].rotation.x = (-Math.PI / 2) * seated - Math.sin(step * Math.PI) * 0.4;
             r.body.position.y = r.hipY + Math.sin(tt * 2.2) * 0.01 * seated;
-            const riseLean = Math.sin(this.seg(tt, 1.0, 2.0) * Math.PI) * 0.45;
+            const riseLean = Math.sin(this.seg(tt, 0.8, 1.7) * Math.PI) * 0.45;
             r.upper.rotation.x = riseLean + (seated > 0.99 ? Math.sin(tt * 2.2) * 0.02 : 0);
             r.neck.rotation.x = -riseLean * 0.6;
-            const grab = this.seg(tt, 2.1, 2.7),
-              raise = this.seg(tt, 2.75, 3.35),
-              roar = this.seg(tt, 3.3, 3.7);
+            const grab = this.seg(tt, 1.8, 2.35),
+              raise = this.seg(tt, 2.35, 2.85),
+              roar = this.seg(tt, 2.8, 3.1) * (1 - this.seg(tt, 3.6, 3.8));
             armR.rotation.x = -0.35 * seated - grab * 1.0 - raise * 1.9;
             armR.rotation.z = -0.15;
-            armL.rotation.x = -0.35 * seated + roar * -0.9;
+            armL.rotation.x = -0.35 * seated - roar * 0.9;
             armL.rotation.z = 0.1 + roar * 0.9;
-            if (tt > 3.3) {
+            if (tt > 2.8) {
               r.neck.rotation.x = -0.45 * roar + Math.sin(tt * 30) * 0.02 * roar;
               r.upper.rotation.x = -0.18 * roar;
             }
-            if (!a.flags.grab && tt >= 2.75) {
+            if (!a.flags.grab && tt >= 2.35) {
               a.flags.grab = true;
               a.groundTrident.visible = false;
               if (r.props.trident) r.props.trident.visible = true;
               ParticleSystem.emit(a.stage.localToWorld(new V(-0.9, 0.2, 2.35)), 0xff5a14, 60, 5);
-              CombatFX.mark(a.stage.localToWorld(new V(-0.9, 0, 2.35)), 0x2a0c08, 1.6);
               shake = 0.3;
             }
+            const flying = tt > 3.7 ? this.leap(a, tt, r, S, 3.7, 5) : 0;
             if (r.props.trident) r.props.trident.rotation.x = -armR.rotation.x - r.upper.rotation.x + 0.1;
-            a.light.intensity = 1.2 + Math.sin(tt * 9) * 0.5 + (tt > 3.3 ? 5 * (1 - this.seg(tt, 3.4, 4.6)) : 0);
-            if (tt > 3.35 && Math.random() < 0.6)
+            a.light.intensity = 1.2 + Math.sin(tt * 9) * 0.5 + (tt > 2.8 ? 5 * (1 - this.seg(tt, 2.9, 4.1)) : 0);
+            if (tt > 2.85 && tt < 3.8 && Math.random() < 0.6)
               ParticleSystem.emit(a.stage.localToWorld(new V(rand(-1.8, 1.8), rand(0.1, 0.6), rand(0, 2.5))), 0xff4410, 3, 2.6);
-            if (!a.flags.title && tt >= 3.35) {
+            if (!a.flags.title && tt >= 2.85) {
               a.flags.title = true;
               $("cinebars").classList.add("show-title");
             }
-            const shaking = tt > 3.3 && tt < 4.3 ? 1.1 : tt > 1.0 && tt < 1.4 ? 0.4 : 0;
-            this.camera(a, new V(2.4, 1.4, 10.5), new V(0.9, 2.2, 6.6), tt / 4.4, new V(0, 1.6 + this.seg(tt, 1, 2.2) * 1.4, 0.6), shaking);
-            if (a.scorch) a.scorch.material.opacity = 0.25 + 0.15 * Math.sin(tt * 6) + (tt > 3.3 ? 0.25 : 0);
+            const shaking = tt > 2.8 && tt < 3.7 ? 1.1 : tt > 0.8 && tt < 1.2 ? 0.4 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            const look = new V(0, 1.6 + this.seg(tt, 0.8, 2) * 1.4, 0.6);
+            if (flying) look.y = a.stage.worldToLocal(a.z.group.position.clone()).y + 2.5 * S;
+            this.camera(a, new V(2.4, 1.4, 10.5), new V(0.9, 2.2, 6.6), Math.min(1, tt / 3.8), look, shaking);
+            if (a.scorch) a.scorch.material.opacity = 0.25 + 0.15 * Math.sin(tt * 6) + (tt > 2.8 ? 0.25 : 0);
           },
           yeti(a, tt, dt, r, S) {
-            const out = this.seg(tt, 1.1, 2.6),
-              dir = new V(Math.sin(a.stage.rotation.y), 0, Math.cos(a.stage.rotation.y));
-            // 0-1.1 eyes in the dark, 1.1-2.6 stomps out of the den, 2.6-4.3 roars, then drops.
-            a.z.group.position.copy(a.startPos).addScaledVector(dir, out * 3.6);
+            const out = this.seg(tt, 0.9, 2.2);
+            // 0-0.9 eyes in the dark, 0.9-2.2 stomps out of the den, 2.2-3.5 roars, 3.5-5 leaps away.
+            if (!a.launchFrom) a.z.group.position.copy(a.startPos).add(new V(0, 0, out * 3.6));
             const walkT = tt * 5.2,
-              moving = tt > 1.1 && tt < 2.6;
+              moving = tt > 0.9 && tt < 2.2;
             r.legs[0].rotation.x = moving ? Math.sin(walkT) * 0.55 : 0;
             r.legs[1].rotation.x = moving ? -Math.sin(walkT) * 0.55 : 0;
             r.body.position.y = r.hipY + (moving ? Math.abs(Math.sin(walkT)) * 0.05 : 0);
@@ -8509,32 +8672,33 @@
               shake = Math.max(shake, 0.2);
               ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 0.2, 0)), 0xffffff, 14, 2.2);
             }
-            const roar = this.seg(tt, 2.6, 3.0),
-              calm = this.seg(tt, 4.2, 4.8),
+            const roar = this.seg(tt, 2.2, 2.6),
+              calm = this.seg(tt, 3.3, 3.6),
               [armR, armL] = r.arms;
-            const crouch = 1 - this.seg(tt, 0.2, 1.4);
+            const crouch = 1 - this.seg(tt, 0.2, 1.2);
             r.upper.rotation.x = 0.45 * crouch + (moving ? 0.25 : 0) - 0.3 * roar * (1 - calm) + 0.2 * calm;
             r.neck.rotation.x = -0.35 * crouch - 0.55 * roar * (1 - calm) + Math.sin(tt * 40) * 0.03 * roar * (1 - calm);
             armR.rotation.x = moving ? -0.4 - Math.sin(walkT) * 0.6 : -0.3 - 2.3 * roar * (1 - calm);
             armL.rotation.x = moving ? -0.4 + Math.sin(walkT) * 0.6 : -0.3 - 2.3 * roar * (1 - calm);
             armR.rotation.z = -0.2 - 0.6 * roar * (1 - calm);
             armL.rotation.z = 0.2 + 0.6 * roar * (1 - calm);
-            if (!a.flags.roar && tt >= 2.6) {
+            if (!a.flags.roar && tt >= 2.2) {
               a.flags.roar = true;
-              a.sounds.push(MonsterAudio.play("roar", { volume: 1 }));
+              a.sounds.push(MonsterAudio.play("roar", { volume: 1.6 }));
               for (let i = 0; i < 24; i++) {
                 const ang = (i / 24) * Math.PI * 2;
                 ParticleSystem.emit(a.z.group.position.clone().add(new V(Math.cos(ang) * 2, 1.5, Math.sin(ang) * 2)), 0xffffff, 4, 6);
               }
             }
-            if (!a.flags.title && tt >= 2.8) {
+            if (!a.flags.title && tt >= 2.4) {
               a.flags.title = true;
               $("cinebars").classList.add("show-title");
             }
-            a.light.intensity = tt < 1.2 ? 2.5 + Math.sin(tt * 14) * 1.2 : Math.max(0, 2.5 - (tt - 1.2) * 2);
-            const shaking = tt > 2.6 && tt < 4.1 ? 1.3 : 0;
+            const flying = tt > 3.5 ? this.leap(a, tt, r, S, 3.5, 5) : 0;
+            a.light.intensity = tt < 1 ? 2.5 + Math.sin(tt * 14) * 1.2 : Math.max(0, 2.5 - (tt - 1) * 2);
+            const shaking = tt > 2.2 && tt < 3.4 ? 1.3 : flying > 0 && flying < 0.25 ? 1.4 : 0;
             const eye = a.stage.worldToLocal(a.z.group.position.clone()).add(new V(0, 2.2 + roar * 0.6, 0));
-            this.camera(a, new V(-1.6, 2.3, 11.5), new V(0.3, 1.7, 7.2), tt / 4.5, eye, shaking);
+            this.camera(a, new V(-1.6, 2.3, 11.5), new V(0.3, 1.7, 7.2), Math.min(1, tt / 3.6), eye, shaking);
           },
           finish(aborted) {
             const a = this.active;
@@ -8544,55 +8708,679 @@
             if (!a) return;
             camera.fov = a.fov;
             camera.updateProjectionMatrix();
-            const r = a.z.rig;
-            r.cinematic = false;
+            for (const s of a.sounds) s?.stop(aborted ? 0.1 : a.kind === "yeti" ? 1.2 : 0.8);
+            MonsterFX.dispose(a.stage);
+            a.stage.traverse((o) => {
+              if (o.isPoints) {
+                o.geometry.dispose();
+                o.material.dispose();
+              } else if (o.isMesh && o.userData.propBatch) o.geometry.dispose();
+            });
+            if (a.fog && scene.fog) {
+              scene.fog.color.copy(a.fog.color);
+              scene.fog.density = a.fog.density;
+            }
+            if (a.background) scene.background = a.background;
+            const z = a.z,
+              r = z.rig;
             r.root.position.set(0, 0, 0);
+            r.body.position.y = r.hipY;
             r.body.rotation.set(0, 0, 0);
             r.upper.rotation.set(0, 0, 0);
             r.neck.rotation.set(0, 0, 0);
-            for (const arm of r.arms) arm.rotation.set(0, 0, 0);
-            if (a.kind === "demon" && r.props.trident) r.props.trident.visible = true;
-            if (a.kind === "demon") {
-              // Settle the demon where he stepped to.
-              const d = new V(Math.sin(a.stage.rotation.y), 0, Math.cos(a.stage.rotation.y));
-              a.z.group.position.addScaledVector(d, 0.95);
-            }
-            for (const s of a.sounds) s?.stop(aborted ? 0.1 : 1.6);
-            const stage = a.stage,
-              fog = a.fog,
-              snow = a.snow;
-            if (aborted) {
-              MonsterFX.dispose(stage);
-              if (fog && scene.fog) {
-                scene.fog.color.copy(fog.color);
-                scene.fog.density = fog.density;
-              }
+            if (r.props.trident) r.props.trident.visible = true;
+            if (aborted || z.dead) {
+              r.cinematic = false;
               return;
             }
-            // Stage sinks into the ground and the blizzard/fog fade back to the map's weather.
-            scene.remove(stage);
-            const fade = MonsterFX.add(stage, 2.6, (it, dt) => {
-              const k = 1 - it.life / it.max;
-              stage.position.y = -Math.pow(k, 1.6) * 7;
-              if (snow) snow.material.opacity = 0.95 * (1 - k);
-              if (fog && scene.fog) {
-                scene.fog.color.lerp(fog.color, Math.min(1, dt * 2.2));
-                scene.fog.density += (fog.density - scene.fog.density) * Math.min(1, dt * 2.2);
-                if (it.life <= dt) {
-                  scene.fog.color.copy(fog.color);
-                  scene.fog.density = fog.density;
+            // Drop the boss out of the sky onto the middle of the map.
+            const target = this.landingSpot(z.boss.kind === "yeti" ? 2.4 : 2),
+              toPlayer = player.pos.clone().sub(target);
+            z.group.position.set(target.x, 48, target.z);
+            z.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+            MonsterFX.startDrop(z, target);
+          },
+        };
+
+        // ---------------------------------------------------------------------------------------
+        // World kit: pixel-art textures, merged voxel props (trees, lamp posts, rocks, crates,
+        // barriers), climbable terrain helpers, physics props and medkits.
+        // ---------------------------------------------------------------------------------------
+        const PropKit = {
+          textures: new Map(),
+          materials: new Map(),
+          seed: 1,
+          rnd() {
+            this.seed = (this.seed * 16807) % 2147483647;
+            return (this.seed - 1) / 2147483646;
+          },
+          // 16x16 pixel textures painted procedurally in the same style as the monster skins.
+          texture(kind) {
+            if (this.textures.has(kind)) return this.textures.get(kind);
+            const N = 16,
+              canvas = document.createElement("canvas");
+            canvas.width = canvas.height = N;
+            const c = canvas.getContext("2d");
+            this.seed = [...kind].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) % 2147483646 + 1;
+            const R = () => this.rnd();
+            const px = (x, y, rgb) => {
+              c.fillStyle = `rgb(${rgb[0] | 0},${rgb[1] | 0},${rgb[2] | 0})`;
+              c.fillRect(x, y, 1, 1);
+            };
+            const jitter = (rgb, a) => rgb.map((v) => Math.max(0, Math.min(255, v + (R() - 0.5) * a)));
+            const fill = (base, amount) => {
+              for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, jitter(base, amount));
+            };
+            const dots = (col, count, amount = 20) => {
+              for (let i = 0; i < count; i++) px((R() * N) | 0, (R() * N) | 0, jitter(col, amount));
+            };
+            switch (kind) {
+              case "bark":
+                for (let x = 0; x < N; x++) {
+                  const shade = x % 4 === 0 ? 0.72 : x % 4 === 2 ? 1.08 : 0.92;
+                  for (let y = 0; y < N; y++) px(x, y, jitter([92 * shade, 64 * shade, 40 * shade], 16));
+                }
+                dots([46, 30, 20], 14, 10);
+                break;
+              case "leaf":
+              case "leafDark":
+              case "pine": {
+                const base = kind === "leaf" ? [62, 118, 52] : kind === "leafDark" ? [34, 78, 44] : [30, 70, 58];
+                fill(base, 34);
+                dots(base.map((v) => v * 0.55), 34, 12);
+                dots(base.map((v) => Math.min(255, v * 1.35)), 18, 14);
+                break;
+              }
+              case "snow":
+                fill([232, 240, 248], 18);
+                dots([196, 214, 232], 16, 12);
+                break;
+              case "snowPine":
+                fill([30, 70, 58], 30);
+                for (let y = 0; y < 5; y++) for (let x = 0; x < N; x++) if (y < 3 || R() < 0.5) px(x, y, jitter([232, 240, 248], 16));
+                dots([225, 235, 245], 10, 10);
+                break;
+              case "ice":
+                fill([176, 218, 238], 22);
+                for (let i = 0; i < 5; i++) {
+                  let x = (R() * N) | 0;
+                  for (let y = 0; y < N; y++) {
+                    px(x, y, [235, 248, 255]);
+                    if (R() < 0.3) x = (x + (R() < 0.5 ? 1 : N - 1)) % N;
+                  }
+                }
+                break;
+              case "stone":
+              case "mossy":
+              case "hellrock": {
+                const base = kind === "hellrock" ? [46, 34, 34] : [112, 116, 118];
+                fill(base, 30);
+                for (let y = 0; y < N; y += 5 + ((R() * 2) | 0)) for (let x = 0; x < N; x++) if (R() < 0.8) px(x, y, base.map((v) => v * 0.6));
+                if (kind === "mossy") for (let i = 0; i < 40; i++) px((R() * N) | 0, (R() * 7) | 0, jitter([66, 108, 52], 26));
+                if (kind === "hellrock")
+                  for (let i = 0; i < 3; i++) {
+                    let x = (R() * N) | 0;
+                    for (let y = 0; y < N; y++) {
+                      px(x, y, [230, 70 + R() * 50, 20]);
+                      x = (x + (R() < 0.5 ? 1 : N - 1)) % N;
+                    }
+                  }
+                break;
+              }
+              case "lava":
+                fill([220, 70, 18], 50);
+                dots([255, 190, 60], 30, 30);
+                dots([120, 20, 10], 20, 20);
+                break;
+              case "concrete":
+                fill([150, 150, 144], 24);
+                dots([110, 110, 106], 18, 12);
+                break;
+              case "barrier":
+                fill([164, 162, 150], 20);
+                for (let y = 3; y < 6; y++) for (let x = 0; x < N; x++) px(x, y, ((x + y) >> 2) % 2 ? [225, 180, 40] : [30, 30, 30]);
+                dots([120, 118, 110], 14, 12);
+                break;
+              case "crate":
+                fill([150, 104, 60], 20);
+                for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+                  if (x < 2 || y < 2 || x > 13 || y > 13) px(x, y, jitter([98, 64, 36], 12));
+                  else if (y === 5 || y === 10) px(x, y, jitter([112, 76, 42], 10));
+                  if (Math.abs(x - y) < 1 && x > 1 && x < 14) px(x, y, jitter([104, 70, 40], 10));
+                }
+                break;
+              case "metal":
+                fill([78, 84, 92], 18);
+                for (let x = 0; x < N; x++) {
+                  px(x, 0, [120, 126, 134]);
+                  px(x, N - 1, [44, 48, 54]);
+                }
+                for (const [x, y] of [[2, 2], [13, 2], [2, 13], [13, 13]]) px(x, y, [160, 166, 172]);
+                break;
+              case "lamp":
+                fill([255, 214, 140], 20);
+                break;
+              case "barrel":
+              case "toxic":
+                fill(kind === "barrel" ? [160, 40, 34] : [70, 128, 60], 22);
+                for (const y of [2, 3, 12, 13]) for (let x = 0; x < N; x++) px(x, y, [60, 60, 64]);
+                if (kind === "toxic") for (const [x, y] of [[7, 7], [8, 7], [7, 8], [8, 8], [6, 9], [9, 9], [7, 6], [8, 6]]) px(x, y, [230, 220, 60]);
+                break;
+              case "cone":
+                fill([236, 108, 24], 20);
+                for (let y = 6; y < 9; y++) for (let x = 0; x < N; x++) px(x, y, jitter([240, 240, 236], 10));
+                break;
+              case "trash":
+                fill([58, 78, 66], 18);
+                for (let x = 0; x < N; x += 3) for (let y = 2; y < N; y++) px(x, y, [40, 56, 46]);
+                break;
+              case "medkit":
+                fill([236, 236, 232], 12);
+                for (let y = 3; y < 13; y++) for (let x = 6; x < 10; x++) px(x, y, [210, 30, 36]);
+                for (let y = 6; y < 10; y++) for (let x = 3; x < 13; x++) px(x, y, [210, 30, 36]);
+                for (let x = 0; x < N; x++) {
+                  px(x, 0, [180, 180, 176]);
+                  px(x, N - 1, [150, 150, 146]);
+                }
+                break;
+              case "bone":
+                fill([214, 204, 180], 20);
+                dots([160, 146, 120], 12, 12);
+                break;
+              default:
+                fill([128, 128, 128], 20);
+            }
+            const t = new THREE.CanvasTexture(canvas);
+            t.magFilter = THREE.NearestFilter;
+            t.minFilter = THREE.LinearFilter;
+            t.generateMipmaps = false;
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.encoding = THREE.sRGBEncoding;
+            this.textures.set(kind, t);
+            return t;
+          },
+          mat(kind) {
+            if (this.materials.has(kind)) return this.materials.get(kind);
+            const glow = { lamp: 0xffc070, lava: 0xff4a10, ice: 0x0a2a3a }[kind];
+            const m = new THREE.MeshStandardMaterial({
+              map: this.texture(kind),
+              roughness: kind === "metal" ? 0.55 : kind === "ice" ? 0.25 : 0.92,
+              metalness: kind === "metal" ? 0.35 : 0,
+              emissive: glow ? new THREE.Color(glow) : new THREE.Color(0),
+              emissiveMap: glow ? this.texture(kind) : null,
+              emissiveIntensity: kind === "lamp" ? 1.4 : kind === "lava" ? 1.1 : glow ? 0.5 : 0,
+            });
+            this.materials.set(kind, m);
+            return m;
+          },
+          batch() {
+            return new Map();
+          },
+          // Queue one textured box. Texture tiles at `density` pixels-blocks per metre (16px each).
+          add(batch, kind, pos, size, rot = null, density = 1) {
+            if (!batch.has(kind)) batch.set(kind, []);
+            batch.get(kind).push({ pos, size, rot, density });
+          },
+          // Merge every queued box of a material into one mesh: hundreds of props, a handful of draws.
+          build(batch, parent) {
+            const meshes = [],
+              m4 = new THREE.Matrix4(),
+              q = new THREE.Quaternion(),
+              e = new THREE.Euler(),
+              one = new V(1, 1, 1);
+            for (const [kind, boxes] of batch) {
+              const pos = [],
+                nor = [],
+                uv = [],
+                idx = [];
+              let offset = 0;
+              for (const b of boxes) {
+                const [w, h, d] = b.size,
+                  g = new THREE.BoxGeometry(w, h, d),
+                  faceDims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]],
+                  uvA = g.attributes.uv;
+                for (let i = 0; i < uvA.count; i++) {
+                  const f = Math.floor(i / 4);
+                  uvA.setXY(i, uvA.getX(i) * faceDims[f][0] * b.density, uvA.getY(i) * faceDims[f][1] * b.density);
+                }
+                e.set(...(b.rot || [0, 0, 0]));
+                m4.compose(new V(...b.pos), q.setFromEuler(e), one);
+                g.applyMatrix4(m4);
+                pos.push(...g.attributes.position.array);
+                nor.push(...g.attributes.normal.array);
+                uv.push(...uvA.array);
+                for (const i of g.index.array) idx.push(i + offset);
+                offset += g.attributes.position.count;
+                g.dispose();
+              }
+              const geo = new THREE.BufferGeometry();
+              geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+              geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+              geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+              geo.setIndex(idx);
+              geo.computeBoundingSphere();
+              const mesh = new THREE.Mesh(geo, this.mat(kind));
+              mesh.castShadow = !["lamp", "lava"].includes(kind);
+              mesh.receiveShadow = true;
+              mesh.userData.propBatch = true;
+              parent.add(mesh);
+              meshes.push(mesh);
+            }
+            return meshes;
+          },
+        };
+
+        // Static map dressing built in voxel style. Colliders carry their top height, so anything
+        // low enough can be stepped or jumped onto — no invisible walls around small props.
+        const WorldProps = {
+          soft: null,
+          hard: null,
+          begin() {
+            this.soft = PropKit.batch();
+            this.hard = PropKit.batch();
+          },
+          collider(x, z, w, d, top) {
+            MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: top, top });
+          },
+          free(x, z, r) {
+            if (Math.abs(x) > 33 - r || Math.abs(z) > 33 - r) return false;
+            if (MapManager.obstacles.some((o) => Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r)) return false;
+            if (MapManager.spawns.some((s) => Math.hypot(x - s[0], z - s[1]) < 4.5)) return false;
+            if (Math.hypot(x, z - 10) < 3.5) return false; // player start
+            if (Math.hypot(x, z) < 6.5) return false; // keep the boss landing zone clear
+            return true;
+          },
+          spot(r, tries = 40, area = 31) {
+            for (let i = 0; i < tries; i++) {
+              const x = rand(-area, area),
+                z = rand(-area, area);
+              if (this.free(x, z, r)) return [x, z];
+            }
+            return null;
+          },
+          tree(x, z, s = 1, style = "leaf") {
+            const H = (3.2 + rand(0, 1.4)) * s,
+              T = 0.8 * s;
+            PropKit.add(this.hard, "bark", [x, H / 2, z], [T, H, T]);
+            this.collider(x, z, T, T, H + 3);
+            if (style === "pine" || style === "snowPine") {
+              for (let i = 0; i < 4; i++) {
+                const w = (3.4 - i * 0.75) * s,
+                  y = H * 0.55 + i * 0.95 * s;
+                PropKit.add(this.soft, style, [x, y, z], [w, 1.0 * s, w]);
+              }
+              PropKit.add(this.soft, style === "snowPine" ? "snow" : style, [x, H * 0.55 + 4 * 0.95 * s, z], [0.7 * s, 0.9 * s, 0.7 * s]);
+            } else {
+              const c = 3.2 * s;
+              PropKit.add(this.soft, style, [x, H + 0.4 * s, z], [c, 1.8 * s, c]);
+              PropKit.add(this.soft, style, [x, H + 1.7 * s, z], [c * 0.72, 1.2 * s, c * 0.72]);
+              PropKit.add(this.soft, style, [x + rand(-0.5, 0.5) * s, H - 0.5 * s, z + rand(-0.5, 0.5) * s], [c * 0.8, 0.8 * s, c * 0.8]);
+            }
+          },
+          lampPost(x, z, side = -1) {
+            PropKit.add(this.hard, "metal", [x, 0.25, z], [0.45, 0.5, 0.45]);
+            PropKit.add(this.hard, "metal", [x, 3, z], [0.18, 6, 0.18]);
+            PropKit.add(this.hard, "metal", [x + side * 0.55, 5.9, z], [1.25, 0.16, 0.2]);
+            PropKit.add(this.soft, "lamp", [x + side * 1.0, 5.72, z], [0.55, 0.2, 0.34]);
+            this.collider(x, z, 0.45, 0.45, 6);
+          },
+          // Rock clusters: low ones can simply be walked onto, taller ones need a jump.
+          rock(x, z, size = 1, top = 0.45, kind = "stone") {
+            const n = 2 + ((Math.random() * 3) | 0);
+            PropKit.add(this.hard, kind, [x, top / 2, z], [size, top, size * rand(0.8, 1.2)], [0, rand(0, 1.5), 0]);
+            for (let i = 0; i < n; i++) {
+              const s = size * rand(0.35, 0.6),
+                h = top * rand(0.35, 0.75);
+              PropKit.add(this.hard, kind, [x + rand(-0.6, 0.6) * size, h / 2, z + rand(-0.6, 0.6) * size], [s, h, s], [0, rand(0, 1.5), 0]);
+            }
+            this.collider(x, z, size * 0.95, size * 0.95, top);
+          },
+          crate(x, z, s = 0.9, y = 0, kind = "crate") {
+            PropKit.add(this.hard, kind, [x, y + s / 2, z], [s, s, s], null, 1 / s);
+            this.collider(x, z, s, s, y + s);
+          },
+          // A staircase of crates up to a height so players can climb onto something taller.
+          crateStairs(x, z, dirX, dirZ, steps = 3) {
+            for (let i = 0; i < steps; i++) {
+              const cx = x + dirX * i * 0.95,
+                cz = z + dirZ * i * 0.95;
+              for (let j = 0; j <= i; j++) PropKit.add(this.hard, "crate", [cx, j * 0.5 + 0.25, cz], [0.95, 0.5, 0.95], null, 2);
+              this.collider(cx, cz, 0.95, 0.95, (i + 1) * 0.5);
+            }
+          },
+          barrier(x, z, rotY = 0) {
+            const along = Math.abs(Math.sin(rotY)) > 0.5;
+            PropKit.add(this.hard, "barrier", [x, 0.42, z], [2.4, 0.84, 0.55], [0, rotY, 0]);
+            PropKit.add(this.hard, "barrier", [x, 0.14, z], [2.4, 0.28, 0.85], [0, rotY, 0]);
+            this.collider(x, z, along ? 0.85 : 2.4, along ? 2.4 : 0.85, 0.84);
+          },
+          log(x, z, len = 3.5, rotY = 0) {
+            const along = Math.abs(Math.sin(rotY)) > 0.5;
+            PropKit.add(this.hard, "bark", [x, 0.28, z], [len, 0.56, 0.56], [0, rotY, 0]);
+            this.collider(x, z, along ? 0.6 : len, along ? len : 0.6, 0.56);
+          },
+          scatter(count, fn, r) {
+            for (let i = 0; i < count; i++) {
+              const p = this.spot(r);
+              if (p) fn(p[0], p[1]);
+            }
+          },
+          finish(index) {
+            // Every map: low rocks to hop across and crate stairs up onto cover.
+            if (index === 0) {
+              for (const z of [-30, -16, -2, 12, 26]) this.tree(rand(-9.5, -8.6), z + rand(-1, 1), 0.85, "leaf");
+              for (const [x, z, r] of [[-3, 4, 0], [3.5, -4, 0], [12, 5, Math.PI / 2], [-12, -5, Math.PI / 2]]) this.barrier(x, z, r);
+              this.crateStairs(-4.2, -12.2, 0, 1, 3);
+              this.crateStairs(8.7, 16, 0, -1, 3);
+              this.scatter(10, (x, z) => this.rock(x, z, rand(0.7, 1.3), rand(0.3, 0.45)), 1);
+              this.scatter(4, (x, z) => this.rock(x, z, rand(1.2, 1.7), rand(0.8, 1.1)), 1.5);
+            } else if (index === 1) {
+              this.scatter(8, (x, z) => this.crate(x, z, rand(0.45, 0.5)), 0.8);
+              this.scatter(6, (x, z) => {
+                this.crate(x, z, 0.9);
+                this.crate(x + 0.95, z, 0.45);
+              }, 1.6);
+              this.scatter(6, (x, z) => this.rock(x, z, rand(0.7, 1.1), rand(0.3, 0.45), "concrete"), 1);
+            } else if (index === 2) {
+              this.scatter(14, (x, z) => this.rock(x, z, rand(0.7, 1.2), rand(0.3, 0.45), "mossy"), 1);
+              this.scatter(6, (x, z) => this.rock(x, z, rand(1.3, 1.9), rand(0.8, 1.2), "mossy"), 1.6);
+              this.scatter(6, (x, z) => this.log(x, z, rand(2.8, 4), pick([0, Math.PI / 2])), 2.2);
+            } else if (index === 3) {
+              this.scatter(10, (x, z) => this.crate(x, z, rand(0.45, 0.5), 0, "metal"), 0.8);
+              this.crateStairs(-10, -14.2, 0, -1, 3);
+              this.crateStairs(10, 12.2, 0, 1, 3);
+              this.scatter(4, (x, z) => this.crate(x, z, 0.95, 0, "metal"), 1);
+            } else if (index === 4) {
+              this.scatter(12, (x, z) => this.tree(x, z, rand(0.8, 1.1), "snowPine"), 2);
+              this.scatter(12, (x, z) => this.rock(x, z, rand(0.7, 1.2), rand(0.3, 0.45), "snow"), 1);
+              this.scatter(5, (x, z) => this.rock(x, z, rand(1.2, 1.8), rand(0.8, 1.2), "ice"), 1.5);
+            }
+            const hard = PropKit.build(this.hard, MapManager.group);
+            MapManager.walls.push(...hard);
+            PropKit.build(this.soft, MapManager.group);
+            this.soft = this.hard = null;
+            PhysicsProps.populate(index);
+            Medkits.clear();
+          },
+        };
+
+        // Lightweight rigid props: pushed by the player, flung by explosions, boss stomps and
+        // landings. Barrels and cones tip over and roll; everything settles and sleeps.
+        const PhysicsProps = {
+          items: [],
+          defs: {
+            barrel: { r: 0.32, h: 0.9, mass: 1, tex: "barrel", shape: "cyl" },
+            toxic: { r: 0.32, h: 0.9, mass: 1, tex: "toxic", shape: "cyl" },
+            cone: { r: 0.2, h: 0.62, mass: 0.3, tex: "cone", shape: "cone" },
+            trash: { r: 0.3, h: 0.8, mass: 0.7, tex: "trash", shape: "cyl" },
+            box: { r: 0.25, h: 0.5, mass: 0.6, tex: "crate", shape: "box" },
+          },
+          geometry: {},
+          debris: [],
+          // Detach a mesh into world space and let it fly (headshot kills pop the head off).
+          fling(mesh, vel, spin = 8, life = 4) {
+            mesh.updateMatrixWorld(true);
+            const wp = new V(),
+              wq = new THREE.Quaternion(),
+              ws = new V();
+            mesh.matrixWorld.decompose(wp, wq, ws);
+            mesh.parent?.remove(mesh);
+            mesh.position.copy(wp);
+            mesh.quaternion.copy(wq);
+            mesh.scale.copy(ws);
+            scene.add(mesh);
+            this.debris.push({ mesh, vel, spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin, life, half: ws.y * 0.5 });
+          },
+          updateDebris(dt) {
+            for (let i = this.debris.length - 1; i >= 0; i--) {
+              const d = this.debris[i],
+                m = d.mesh;
+              d.life -= dt;
+              d.vel.y -= 20 * dt;
+              m.position.addScaledVector(d.vel, dt);
+              m.rotateOnWorldAxis(d.spinAxis, d.spin * dt);
+              const g = MapManager.groundAt(m.position.x, m.position.z, 0.1, m.position.y) + d.half;
+              if (m.position.y < g) {
+                m.position.y = g;
+                d.vel.y = Math.abs(d.vel.y) > 2 ? -d.vel.y * 0.35 : 0;
+                d.vel.x *= 0.7;
+                d.vel.z *= 0.7;
+                d.spin *= 0.6;
+                if (Math.random() < 0.4) BloodFX.emit(m.position.clone(), 4);
+              }
+              if (d.life < 0.6) m.scale.multiplyScalar(Math.pow(0.02, dt));
+              if (d.life <= 0) {
+                scene.remove(m);
+                this.debris.splice(i, 1);
+              }
+            }
+          },
+          geo(shape) {
+            if (!this.geometry[shape])
+              this.geometry[shape] =
+                shape === "cone"
+                  ? new THREE.CylinderGeometry(0.06, 0.2, 0.62, 8)
+                  : shape === "cyl"
+                    ? new THREE.CylinderGeometry(1, 1, 1, 10)
+                    : new THREE.BoxGeometry(1, 1, 1);
+            return this.geometry[shape];
+          },
+          clear() {
+            for (const p of this.items) {
+              p.group.parent?.remove(p.group);
+            }
+            this.items = [];
+          },
+          spawn(kind, x, z, y = 0) {
+            const d = this.defs[kind],
+              group = new THREE.Group(),
+              tilt = new THREE.Group(),
+              mesh = new THREE.Mesh(this.geo(d.shape), PropKit.mat(d.tex));
+            if (d.shape === "cyl") mesh.scale.set(d.r, d.h, d.r);
+            if (d.shape === "box") mesh.scale.set(d.h, d.h, d.h);
+            mesh.castShadow = mesh.receiveShadow = true;
+            if (d.shape === "cone") {
+              const base = new THREE.Mesh(this.geo("box"), PropKit.mat("cone"));
+              base.scale.set(0.46, 0.05, 0.46);
+              base.position.y = -0.29;
+              base.castShadow = true;
+              mesh.add(base);
+            }
+            tilt.add(mesh);
+            group.add(tilt);
+            group.position.set(x, y, z);
+            group.rotation.y = rand(0, 6.28);
+            MapManager.group.add(group);
+            const p = { kind, d, group, tilt, mesh, pos: group.position, vel: new V(), spin: 0, angle: 0, target: 0, axis: new V(1, 0, 0), roll: 0, awake: true };
+            this.pose(p);
+            this.items.push(p);
+            return p;
+          },
+          populate(index) {
+            this.clear();
+            const counts = [
+              { barrel: 5, cone: 8, trash: 3, box: 4 },
+              { box: 8, trash: 4, barrel: 2 },
+              { barrel: 3, box: 4 },
+              { toxic: 7, box: 6, cone: 3 },
+              { barrel: 6, box: 6, cone: 2 },
+            ][index];
+            for (const [kind, n] of Object.entries(counts))
+              for (let i = 0; i < n; i++) {
+                const s = WorldProps.spot(0.7);
+                if (s) this.spawn(kind, s[0], s[1]);
+              }
+          },
+          pose(p) {
+            const k = p.angle / (Math.PI / 2),
+              up = p.d.h / 2,
+              side = p.d.r;
+            p.tilt.position.y = up + (side - up) * Math.min(1, Math.max(0, k));
+            p.tilt.quaternion.setFromAxisAngle(p.axis, p.angle);
+            if (p.roll) p.mesh.rotation.y = p.roll;
+          },
+          knock(p, dir) {
+            if (p.d.shape === "box" || p.target) return;
+            p.axis.set(dir.z, 0, -dir.x).normalize();
+            p.axis.applyAxisAngle(new V(0, 1, 0), -p.group.rotation.y);
+            p.target = Math.PI / 2;
+          },
+          impulse(center, radius, force) {
+            for (const p of this.items) {
+              const dx = p.pos.x - center.x,
+                dz = p.pos.z - center.z,
+                dist = Math.hypot(dx, dz);
+              if (dist > radius) continue;
+              const k = 1 - dist / radius,
+                dir = dist > 0.01 ? new V(dx / dist, 0, dz / dist) : new V(rand(-1, 1), 0, rand(-1, 1)).normalize(),
+                push = (force * k) / p.d.mass;
+              p.vel.x += dir.x * push;
+              p.vel.z += dir.z * push;
+              p.vel.y += push * 0.55;
+              p.spin += rand(-1, 1) * push * 1.5;
+              p.awake = true;
+              if (push > 2.2) this.knock(p, dir);
+            }
+          },
+          update(dt) {
+            this.updateDebris(dt);
+            if (!this.items.length) return;
+            const feet = player ? (player.ground || 0) + (player.jump || 0) : 0,
+              pv = PlayerController.motion;
+            for (const p of this.items) {
+              if (player) {
+                const dx = p.pos.x - player.pos.x,
+                  dz = p.pos.z - player.pos.z,
+                  dist = Math.hypot(dx, dz),
+                  reach = p.d.r + 0.42;
+                if (dist < reach && feet < p.pos.y + p.d.h * 0.8) {
+                  const nx = dist > 0.001 ? dx / dist : 1,
+                    nz = dist > 0.001 ? dz / dist : 0,
+                    speed = Math.hypot(pv.vx, pv.vz);
+                  p.pos.x = player.pos.x + nx * reach;
+                  p.pos.z = player.pos.z + nz * reach;
+                  p.vel.x = nx * speed * 1.1;
+                  p.vel.z = nz * speed * 1.1;
+                  p.awake = true;
+                  if (speed > 6.5 && p.d.mass < 0.8) this.knock(p, new V(nx, 0, nz));
                 }
               }
-            });
-            fade.onClear = () => {
-              if (fog && scene.fog) {
-                scene.fog.color.copy(fog.color);
-                scene.fog.density = fog.density;
+              if (!p.awake) continue;
+              p.vel.y -= 20 * dt;
+              const nx = p.pos.x + p.vel.x * dt,
+                nz = p.pos.z + p.vel.z * dt;
+              if (MapManager.collides(nx, p.pos.z, p.d.r, p.pos.y)) p.vel.x *= -0.45;
+              else p.pos.x = nx;
+              if (MapManager.collides(p.pos.x, nz, p.d.r, p.pos.y)) p.vel.z *= -0.45;
+              else p.pos.z = nz;
+              p.pos.y += p.vel.y * dt;
+              const ground = MapManager.groundAt(p.pos.x, p.pos.z, p.d.r * 0.5, p.pos.y);
+              if (p.pos.y <= ground) {
+                p.pos.y = ground;
+                p.vel.y = p.vel.y < -3 ? -p.vel.y * 0.3 : 0;
+                const friction = p.target && p.d.shape !== "box" ? 1.6 : 5;
+                p.vel.x *= Math.exp(-friction * dt);
+                p.vel.z *= Math.exp(-friction * dt);
+                p.spin *= Math.exp(-4 * dt);
               }
-            };
-            a.z.special = simulationTime + 2;
-            a.z.attack = simulationTime + 0.8;
-            UIManager.announce(a.z.name.toUpperCase(), "BOSS · Fase 1", 2.2);
+              p.group.rotation.y += p.spin * dt;
+              const speedH = Math.hypot(p.vel.x, p.vel.z);
+              if (p.target) p.roll += (speedH / Math.max(0.1, p.d.r)) * dt;
+              p.angle += (p.target - p.angle) * Math.min(1, dt * 7);
+              this.pose(p);
+              if (speedH < 0.05 && Math.abs(p.vel.y) < 0.05 && Math.abs(p.target - p.angle) < 0.01 && p.pos.y <= ground + 0.001) p.awake = false;
+            }
+          },
+        };
+
+        // Medkits: one drops somewhere on the map every 30 s (max 3 waiting). Some land on top of
+        // climbable cover, so reaching them is part of the fun.
+        const Medkits = {
+          items: [],
+          nextAt: 30,
+          interval: 30,
+          healFraction: 0.35,
+          clear() {
+            for (const m of this.items) MapManager.group.remove(m.group);
+            this.items = [];
+            this.nextAt = (typeof simulationTime === "number" ? simulationTime : 0) + this.interval;
+          },
+          place() {
+            const high = MapManager.obstacles.filter((o) => o.top > 0.5 && o.top < 1.8 && o.w < 3 && o.d < 3);
+            if (high.length && Math.random() < 0.35) {
+              const o = pick(high);
+              if (Math.hypot(o.x - player.pos.x, o.z - player.pos.z) > 6) return [o.x, o.top, o.z];
+            }
+            for (let i = 0; i < 60; i++) {
+              const x = rand(-30, 30),
+                z = rand(-30, 30);
+              if (MapManager.collides(x, z, 0.6) || Math.hypot(x - player.pos.x, z - player.pos.z) < 8) continue;
+              return [x, MapManager.groundAt(x, z, 0.3, 0), z];
+            }
+            return null;
+          },
+          spawn() {
+            const p = this.place();
+            if (!p) return null;
+            const group = new THREE.Group(),
+              kit = new THREE.Group();
+            group.position.set(p[0], p[1], p[2]);
+            const body = new THREE.Mesh(unitBox, PropKit.mat("medkit"));
+            body.scale.set(0.62, 0.42, 0.42);
+            body.castShadow = true;
+            const handle = new THREE.Mesh(unitBox, PropKit.mat("metal"));
+            handle.scale.set(0.24, 0.08, 0.1);
+            handle.position.y = 0.25;
+            kit.add(body, handle);
+            kit.position.y = 0.55;
+            group.add(kit);
+            const beam = new THREE.Mesh(
+              VisualArt.geometries.cylinder,
+              new THREE.MeshBasicMaterial({ color: 0x5cff8a, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }),
+            );
+            beam.scale.set(0.32, 7, 0.32);
+            beam.position.y = 3.5;
+            const halo = new THREE.Sprite(
+              new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0x6dff92, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }),
+            );
+            halo.scale.setScalar(1.6);
+            halo.position.y = 0.55;
+            group.add(beam, halo);
+            MapManager.group.add(group);
+            const item = { group, kit, beam, halo, pos: group.position, born: simulationTime };
+            this.items.push(item);
+            UIManager.toast("Um medkit apareceu no mapa!");
+            return item;
+          },
+          update(dt) {
+            if (!player) return;
+            if (simulationTime >= this.nextAt) {
+              this.nextAt = simulationTime + this.interval;
+              if (this.items.length < 3) this.spawn();
+            }
+            const feet = (player.ground || 0) + (player.jump || 0),
+              max = player.maxhp + player.bonus;
+            for (let i = this.items.length - 1; i >= 0; i--) {
+              const m = this.items[i],
+                t = simulationTime - m.born;
+              m.kit.rotation.y += dt * 1.6;
+              m.kit.position.y = 0.55 + Math.sin(t * 2.6) * 0.1;
+              m.beam.material.opacity = 0.12 + 0.08 * Math.sin(t * 3);
+              m.halo.material.opacity = 0.55 + 0.25 * Math.sin(t * 3.4);
+              const d = Math.hypot(player.pos.x - m.pos.x, player.pos.z - m.pos.z);
+              if (d < 1.1 && Math.abs(feet - m.pos.y) < 1.1 && player.hp < max) {
+                const heal = Math.min(max - player.hp, Math.round(player.maxhp * this.healFraction));
+                player.hp += heal;
+                UIManager.number(`+${heal}`, m.pos.clone().add(new V(0, 1.2, 0)), "#6dff92");
+                UIManager.toast(`Medkit: +${heal} de vida`);
+                ParticleSystem.emit(m.pos.clone().add(new V(0, 0.6, 0)), 0x6dff92, 26, 2.5);
+                MonsterAudio.play("medkit", { volume: 1.2 });
+                m.beam.material.dispose();
+                m.halo.material.dispose();
+                MapManager.group.remove(m.group);
+                this.items.splice(i, 1);
+              }
+            }
           },
         };
 
@@ -8765,6 +9553,8 @@
             ZombieManager.clear();
             BossIntro.abort();
             MonsterFX.clear();
+            for (const d of PhysicsProps.debris) scene.remove(d.mesh);
+            PhysicsProps.debris.length = 0;
             ParticleSystem.clear();
             CombatFX.clear();
             BloodFX.clear();
@@ -8800,6 +9590,8 @@
               waveKills: 0,
               jump: 0,
               vy: 0,
+              ground: 0,
+              stepOffset: 0,
             };
             // Bring every weapon in an owned slot into the run, not just the one
             // last equipped in the Armory — number keys switch between them mid-match.
@@ -8838,6 +9630,7 @@
             AudioManager.init();
             MonsterAudio.preload();
             MonsterFX.init();
+            Medkits.clear();
             WaveManager.start();
             CameraRig.reset();fallback=false;document.body.classList.remove("mouse-captured");
           },
@@ -9193,12 +9986,22 @@
               speed,
               dt,
               crouched,
-              (pos, dx, dz) => MapManager.move(pos, dx, dz),
+              (pos, dx, dz) => MapManager.move(pos, dx, dz, 0.4, (player.ground || 0) + player.jump),
             );
             const fallingVelocity = player.vy,
               wasAirborne = player.jump > 0;
+            // Absolute feet height; the ground can be a rock, crate or car roof.
+            let feet = (player.ground || 0) + player.jump;
+            const ground = MapManager.groundAt(player.pos.x, player.pos.z, 0.28, feet);
+            if (!wasAirborne && ground > feet) {
+              player.stepOffset = (player.stepOffset || 0) + (ground - feet);
+              feet = ground;
+            }
             player.vy -= 16 * dt;
-            player.jump = Math.max(0, player.jump + player.vy * dt);
+            feet += player.vy * dt;
+            if (feet < ground) feet = ground;
+            player.ground = ground;
+            player.jump = Math.max(0, feet - ground);
             if (player.jump === 0) {
               player.vy = 0;
               if (wasAirborne)
@@ -9207,7 +10010,8 @@
                   Math.abs(fallingVelocity) * 0.005,
                 );
             }
-            player.pos.y = this.motion.eye + player.jump;
+            player.stepOffset = (player.stepOffset || 0) * Math.exp(-14 * dt);
+            player.pos.y = this.motion.eye + (player.ground || 0) + player.jump - player.stepOffset;
             camera.position.copy(player.pos);
             const reducedMotion = matchMedia(
               "(prefers-reduced-motion: reduce)",
@@ -9793,6 +10597,13 @@
                 Math.PI * 2,
               );
               c.fill();
+            }
+            c.fillStyle = "#6dff92";
+            for (const m of Medkits.items) {
+              const mx = (m.pos.x + 37) * k,
+                mz = (m.pos.z + 37) * k;
+              c.fillRect(mx - 1.5, mz - 4, 3, 8);
+              c.fillRect(mx - 4, mz - 1.5, 8, 3);
             }
             c.save();
             c.translate((player.pos.x + 37) * k, (player.pos.z + 37) * k);
@@ -10515,7 +11326,7 @@
             camera.position.y = Math.max(0.22, camera.position.y);
             if (this.avatar) {
               this.avatar.visible = distance > 0.6;
-              this.avatar.position.set(player.pos.x, 0, player.pos.z);
+              this.avatar.position.set(player.pos.x, (player.ground || 0) + player.jump, player.pos.z);
               this.avatar.rotation.y = yaw + Math.PI;
               Survivor.animate(
                 this.avatar,
@@ -12078,6 +12889,8 @@
               if (state === GameState.PLAYING) updateProjectiles(dt);
               if (state === GameState.PLAYING) WaveManager.update(dt);
               if (state === GameState.PLAYING) MonsterFX.update(dt);
+              if (state === GameState.PLAYING) PhysicsProps.update(dt);
+              if (state === GameState.PLAYING) Medkits.update(dt);
               UIManager.hud(dt);
             }
           } else if (state === GameState.SHOP) {
@@ -12210,6 +13023,10 @@
             MonsterFX,
             MonsterAudio,
             BossIntro,
+            PhysicsProps,
+            Medkits,
+            WorldProps,
+            AudioManager,
             MapManager,
             UIManager,
             SettingsManager,

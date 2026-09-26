@@ -29,7 +29,8 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
     await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 30000 });
     assert.ok(await page.evaluate(() => !!window.DR_VOXEL_ATLAS && Object.keys(window.DR_VOXEL_ATLAS.atlases).length === 10), 'voxel atlas data must load');
-    assert.ok(await page.evaluate(() => ['roar', 'blizzard', 'demon', 'trident', 'frost'].every(k => window.DR_MONSTER_SFX?.[k])), 'boss SFX data must load');
+    const SFX = ['roar', 'blizzard', 'demon', 'trident', 'frost', 'land', 'leap', 'medkit'];
+    assert.ok(await page.evaluate(names => names.every(k => window.DR_MONSTER_SFX?.[k]), SFX), 'boss SFX data must load');
 
     // Boss schedule: Demon every 20, Yeti on other multiples of 10, QB/Mutant alternate on the rest of the 5s.
     const schedule = await page.evaluate(() => [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(w => DeadRecoilTest.WaveManager.bossFor(w)));
@@ -48,6 +49,97 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       const start = await page.evaluate(() => DeadRecoilTest.time);
       await page.waitForFunction(([s0, d]) => DeadRecoilTest.time >= s0 + d, [start, seconds], { timeout: 60000 });
     };
+    // Sound: every effect decodes, and playing one produces real signal on the SFX bus.
+    const audio = await page.evaluate(async names => {
+      const T = DeadRecoilTest, ctx = T.AudioManager.ctx;
+      if (ctx.state !== 'running') await ctx.resume();
+      const durations = {};
+      for (const n of names) durations[n] = (await T.MonsterAudio.load(n))?.duration || 0;
+      const an = ctx.createAnalyser();
+      an.fftSize = 2048;
+      T.AudioManager.sfxGain.connect(an);
+      T.MonsterAudio.play('roar', { volume: 1.6 });
+      const buf = new Float32Array(an.fftSize);
+      let peak = 0;
+      for (let i = 0; i < 12; i++) {
+        await new Promise(r => setTimeout(r, 60));
+        an.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (const v of buf) sum += v * v;
+        peak = Math.max(peak, Math.sqrt(sum / buf.length));
+      }
+      return { state: ctx.state, durations, peak };
+    }, SFX);
+    console.log('audio:', JSON.stringify(audio));
+    assert.equal(audio.state, 'running');
+    for (const n of SFX) assert.ok(audio.durations[n] > 0.4, `sound ${n} must decode`);
+    assert.ok(audio.peak > 0.005, `roar must be audible on the SFX bus (rms ${audio.peak})`);
+
+    // Map dressing: climbable rocks/crates exist and the boss landing zone is clear.
+    const props = await page.evaluate(() => {
+      const M = DeadRecoilTest.MapManager;
+      return { low: M.obstacles.filter(o => o.top <= 0.5).length, mid: M.obstacles.filter(o => o.top > 0.5 && o.top <= 1.8).length, physics: DeadRecoilTest.PhysicsProps.items.length, centerFree: !M.collides(0, 0, 2.4) };
+    });
+    console.log('props:', JSON.stringify(props));
+    assert.ok(props.low >= 6 && props.mid >= 4 && props.physics >= 10 && props.centerFree, 'map must have climbable props, physics props and a clear centre');
+    if (shots) {
+      await page.evaluate(() => { const T = DeadRecoilTest; T.WaveManager.remaining = 0; T.ZombieManager.clear(); T.ZombieManager.spawn(0, null, new THREE.Vector3(-30, 0, -30)).speed = 0; });
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: 'test-results/world-props.png' });
+    }
+
+    // Climbing: walk onto a low block, then jump onto a taller one.
+    const climb = await page.evaluate(() => {
+      const T = DeadRecoilTest, M = T.MapManager;
+      T.WaveManager.remaining = 0;
+      T.ZombieManager.clear();
+      T.ZombieManager.spawn(0, null, new THREE.Vector3(-30, 0, -30)).speed = 0; // keeps the wave (and the game) running
+      T.player.pos.set(20, 1.7, -2);
+      T.player.ground = 0; T.player.jump = 0; T.player.vy = 0;
+      M.obstacles.push({ x: 21.3, z: -2, w: 0.5, d: 0.8, h: 0.45, top: 0.45 }, { x: 22.4, z: -2, w: 0.5, d: 0.8, h: 1.1, top: 1.1 });
+      return M.collides(21.3, -2, 0.4, 0) === false && M.collides(22.4, -2, 0.4, 0) === true;
+    });
+    assert.ok(climb, 'low props must be passable, tall ones must block');
+    await page.evaluate(() => { DeadRecoilTest.setTime(DeadRecoilTest.time); });
+    await page.keyboard.down('KeyD');
+    await page.waitForFunction(() => DeadRecoilTest.player.ground >= 0.44, null, { timeout: 60000 });
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => DeadRecoilTest.player.ground >= 1.09, null, { timeout: 60000 });
+    await page.keyboard.up('KeyD');
+    console.log('climb: ground', await page.evaluate(() => DeadRecoilTest.player.ground));
+
+    // Medkits: one drops every 30 s and heals part of the health bar.
+    const kit = await page.evaluate(() => {
+      const T = DeadRecoilTest;
+      T.Medkits.nextAt = T.time;
+      return true;
+    });
+    await waitSim(0.2);
+    const heal = await page.evaluate(() => {
+      const T = DeadRecoilTest, m = T.Medkits.items[0];
+      if (!m) return null;
+      T.player.hp = 20;
+      T.player.pos.set(m.pos.x, 1.7 + m.pos.y, m.pos.z);
+      T.player.ground = m.pos.y; T.player.jump = 0;
+      return { before: 20, next: T.Medkits.nextAt - T.time };
+    });
+    assert.ok(heal && Math.abs(heal.next - 30) < 1, 'a medkit must spawn, next one 30 s later');
+    await waitSim(0.3);
+    const healed = await page.evaluate(() => ({ hp: DeadRecoilTest.player.hp, left: DeadRecoilTest.Medkits.items.length }));
+    assert.ok(healed.hp > 20 && healed.left === 0, 'medkit must heal and disappear');
+
+    // Physics: an explosion flings nearby props.
+    const flung = await page.evaluate(() => {
+      const T = DeadRecoilTest, P = T.PhysicsProps;
+      const b = P.spawn('barrel', -2, 30);
+      const before = b.pos.clone();
+      P.impulse(new THREE.Vector3(-3, 0, 30), 6, 11);
+      return { before: [before.x, before.z], vel: b.vel.length() };
+    });
+    await waitSim(0.5);
+    const after = await page.evaluate(() => { const b = DeadRecoilTest.PhysicsProps.items.at(-1); return [b.pos.x, b.pos.z, b.target]; });
+    assert.ok(flung.vel > 1 && after[0] > flung.before[0] + 0.3, 'barrel must be flung by the blast');
+
     const setup = async () => page.evaluate(() => {
       const T = DeadRecoilTest;
       T.MonsterFX.clear();
@@ -55,6 +147,9 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       T.WaveManager.bossPending = false;
       T.ZombieManager.clear();
       T.player.hp = T.player.maxhp = 1e9;
+      T.player.pos.set(0, 1.7, 10);
+      T.player.ground = 0; T.player.jump = 0; T.player.vy = 0;
+      T.ZombieManager.spawn(0, null, new THREE.Vector3(-32, 0, -32)).speed = 0;
     });
     await setup();
 
@@ -71,11 +166,19 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     for (const r of roster) assert.ok(r.voxel && r.hits >= 6, `type ${r.type} (${r.name}) must use a voxel rig`);
     assert.deepEqual(roster.map(r => r.key), ['03', '01', '02', '05', '07', '08']);
     await waitSim(0.9);
-    const moved = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.every(z => Math.abs(z.rig.legs[0].rotation.x) + Math.abs(z.rig.arms[0].rotation.x) > 0.05));
+    const moved = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.filter(z => z.speed > 0).every(z => Math.abs(z.rig.legs[0].rotation.x) + Math.abs(z.rig.arms[0].rotation.x) > 0.05));
     assert.ok(moved, 'voxel rigs must animate legs/arms');
     if (shots) await page.screenshot({ path: 'test-results/monsters-roster.png' });
-    const roster2 = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.map(z => z.group.position.z));
+    const roster2 = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.filter(z => z.speed > 0).map(z => z.group.position.z));
     assert.ok(roster2.every(z => z > 1.05), 'regular monsters must walk toward the player');
+    const popped = await page.evaluate(() => {
+      const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.speed > 0);
+      T.ZombieManager.kill(z, true);
+      return T.PhysicsProps.debris.length;
+    });
+    assert.ok(popped >= 1, 'headshot kill must pop the voxel head off');
+    await waitSim(0.3);
+    if (shots) await page.screenshot({ path: 'test-results/monsters-headpop.png' });
 
     // Minibosses and their abilities.
     await setup();
@@ -110,12 +213,21 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await setup();
     await page.evaluate(() => { DeadRecoilTest.MonsterFX.clear(); DeadRecoilTest.WaveManager.wave = 10; DeadRecoilTest.WaveManager.boss(); });
     assert.ok(await page.evaluate(() => DeadRecoilTest.BossIntro.active?.kind === 'yeti'), 'yeti intro must start');
-    for (const [t, name] of [[0.6, 'den'], [2.0, 'emerge'], [3.3, 'roar']]) {
-      await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time || 99) >= v, t, { timeout: 120000 });
+    assert.ok(await page.evaluate(() => DeadRecoilTest.ZombieManager.list.find(z => z.boss).group.position.distanceTo(DeadRecoilTest.player.pos) > 1000), 'intro must play far outside the map');
+    for (const [t, name] of [[0.6, 'den'], [1.8, 'emerge'], [2.9, 'roar'], [4.3, 'leap']]) {
+      await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time ?? 99) >= v, t, { timeout: 120000 });
       if (shots) await page.screenshot({ path: `test-results/monsters-yeti-intro-${name}.png` });
     }
     await page.waitForFunction(() => !DeadRecoilTest.BossIntro.active, null, { timeout: 120000 });
     assert.ok(await page.evaluate(() => !document.body.classList.contains('cinematic')), 'HUD must come back after the intro');
+    assert.ok(await page.evaluate(() => !!DeadRecoilTest.ZombieManager.list.find(z => z.boss).dropping), 'yeti must drop from the sky');
+    await waitSim(0.8);
+    if (shots) await page.screenshot({ path: 'test-results/monsters-yeti-drop.png' });
+    await page.waitForFunction(() => !DeadRecoilTest.ZombieManager.list.find(z => z.boss).dropping, null, { timeout: 120000 });
+    const yLand = await page.evaluate(() => { const p = DeadRecoilTest.ZombieManager.list.find(z => z.boss).group.position; return [p.x, p.y, p.z]; });
+    assert.ok(Math.hypot(yLand[0], yLand[2]) < 12 && yLand[1] < 0.6, `yeti must land near the map centre (${yLand})`);
+    await waitSim(0.2);
+    if (shots) await page.screenshot({ path: 'test-results/monsters-yeti-land.png' });
     await page.evaluate(() => {
       const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.boss);
       z.group.position.set(T.player.pos.x, 0, T.player.pos.z - 5);
@@ -129,11 +241,16 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await setup();
     await page.evaluate(() => { DeadRecoilTest.MonsterFX.clear(); DeadRecoilTest.WaveManager.wave = 20; DeadRecoilTest.WaveManager.boss(); });
     assert.ok(await page.evaluate(() => DeadRecoilTest.BossIntro.active?.kind === 'demon'), 'demon intro must start');
-    for (const [t, name] of [[0.5, 'throne'], [1.7, 'rise'], [3.0, 'grab'], [3.9, 'roar']]) {
-      await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time || 99) >= v, t, { timeout: 120000 });
+    for (const [t, name] of [[0.5, 'throne'], [1.4, 'rise'], [2.5, 'grab'], [3.3, 'roar'], [4.5, 'leap']]) {
+      await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time ?? 99) >= v, t, { timeout: 120000 });
       if (shots) await page.screenshot({ path: `test-results/monsters-demon-intro-${name}.png` });
     }
     await page.waitForFunction(() => !DeadRecoilTest.BossIntro.active, null, { timeout: 120000 });
+    await waitSim(0.9);
+    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-drop.png' });
+    await page.waitForFunction(() => !DeadRecoilTest.ZombieManager.list.find(z => z.boss).dropping, null, { timeout: 120000 });
+    await waitSim(0.15);
+    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-land.png' });
     const demon = await page.evaluate(() => {
       const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.boss);
       z.group.position.set(T.player.pos.x + 3, 0, T.player.pos.z - 14);
