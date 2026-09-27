@@ -9975,6 +9975,7 @@ body.netgame #revivetouch{display:flex}
               if (family) RunStats.families[family] = (RunStats.families[family] || 0) + 1;
               const enemy = !z.boss && ENEMY_KEYS[z.type];
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
+              ZombiePing.lastKill = simulationTime;
               const reward = z.boss ? z.boss.coins : head ? 8 : 5;
               Progression.reward(Math.round(reward * diff[difficulty].coins));
               const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
@@ -13061,6 +13062,7 @@ body.netgame #revivetouch{display:flex}
 
             selectedMap = Number(selectedMap);
             MapManager.build(selectedMap);
+            ZombiePing.reset();
             RunStats.reset(); // per-match counters (bosses, weapon families, Index kills) must not leak into the next match
             elapsed = 0;
             simulationTime = 0;
@@ -15134,6 +15136,44 @@ body.netgame #revivetouch{display:flex}
         // ── Per-run statistics reported to the server (missions + stats) ─────────────────────────
         const weaponFamily = (w) =>
           !w ? null : w.kind === "melee" ? "melee" : w.kind === "bow" ? "bow" : w.kind === "shotgun" ? "shotgun" : ["antimaterial", "rail"].includes(w.kind) ? "sniper" : w.kind === "missile" ? "explosive" : "rifle";
+        // Locator ping: after 10 s without a kill, every zombie flashes red twice every 3 s and
+        // shows through walls, so players can find the last stragglers. The voxel skin materials
+        // are shared, so the flash is a material toggle (no per-zombie cost).
+        const ZombiePing = {
+          lastKill: 0,
+          on: false,
+          IDLE: 10,
+          PERIOD: 3,
+          reset() {
+            this.lastKill = simulationTime;
+            if (this.on) this.set(false);
+          },
+          update() {
+            let on = false;
+            if (state === GameState.PLAYING && !BossIntro.active && ZombieManager.list.some((z) => !z.dead)) {
+              const idle = simulationTime - this.lastKill;
+              if (idle >= this.IDLE) {
+                const t = (idle - this.IDLE) % this.PERIOD;
+                on = t < 0.18 || (t > 0.38 && t < 0.56);
+              }
+            }
+            if (on !== this.on) this.set(on);
+          },
+          set(on) {
+            this.on = on;
+            for (const m of VoxelMonsters.matCache.values()) {
+              if (!m.map) continue;
+              m.depthTest = !on;
+              m.transparent = on; // drawn after the opaque walls, so it shows through them
+              if (on) {
+                m.userData.pingColor = m.userData.pingColor || m.color.getHex();
+                m.color.setHex(0xff2a20);
+              } else if (m.userData.pingColor !== undefined) m.color.setHex(m.userData.pingColor);
+              m.emissive.setHex(on ? 0xc00000 : 0x000000);
+              m.emissiveIntensity = on ? 1.2 : 1;
+            }
+          },
+        };
         // zombieTypes index → Index (bestiary) key on the server.
         const ENEMY_KEYS = ["zombie", "skeleton", "constructor", "swat", "screamer", "crawler", "brute", "stalker", "cyborg", "parasite_host", "tank", "parasite"];
         const RunStats = {
@@ -18658,6 +18698,7 @@ body.netgame #revivetouch{display:flex}
             n.el.style.opacity = Math.min(1, n.life * 2);
           }
           AudioManager.update();
+          ZombiePing.update();
           if (background) return;
           renderer.autoClear = true;
           renderer.render(scene, camera);
@@ -18684,6 +18725,7 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            ZombiePing,
             MonsterPortraits,
             GrenadeThrow,
             setPitch: (v) => (pitch = v),
