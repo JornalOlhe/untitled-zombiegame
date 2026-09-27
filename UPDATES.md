@@ -6,6 +6,7 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 
 - v25: roster de classes rebalanceado conforme a especificação final, nova raridade Secreta, Archangel e Archdemon com pré-modelos/animações de asas, auréola, chifres e cauda-hélice, Demonic Fury e Angelic Specter com pré-modelos e habilidades próprias, Reaper com 5 aliados que emergem do chão e sistema de voo das Secretas; Windows continua no instalador com atualização automática direta pelo próximo setup; Android usa `versionCode 25` / `0.25.0` e Windows usa `0.25.0`.
 - v26: som ambiente próprio em cada mapa (controlado pelo volume Ambiente), estatísticas por partida que não vazam mais para a partida seguinte e barra de atualização escondida por completo; Android usa `versionCode 26` / `0.26.0` e Windows usa `0.26.0`.
+- v27: todos os mapas com 100 m, Hospital e Floresta refeitos (MapDesigns[1] e [2]), árvores/carros/iglus do Blender, perseguição de qualquer distância, zumbis piscando através das paredes após 10 s sem kill, skins de Lab e Neve, foguete do Ciborgue, tiro saindo do cano, dispersão/recuo/luneta, flechas físicas e escada com estados; Android usa `versionCode 27` / `0.27.0` e Windows usa `0.27.0`.
 - v9: última release Android estável assinada com `DeadRecoil.apk`.
 - v10: build QA que introduziu o fluxo de atualização na inicialização para Android e Windows.
 - v11: build QA com a nova roleta de suspense, near-miss visual e animação Divina.

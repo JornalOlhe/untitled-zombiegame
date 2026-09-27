@@ -10500,13 +10500,17 @@ body.netgame #revivetouch{display:flex}
                 // wall, looping around a prop) takes a short detour to the side and re-plans.
                 z.progressClock = (z.progressClock || 0) + dt;
                 if (z.progressClock > 1.6) {
-                  if (z.progressDist !== undefined && dist > 2.8 && dist > z.progressDist - 0.5) {
+                  // Progress = steps left on the flow field (a corridor route may lead away first).
+                  const [pcx, pcz] = MapManager.worldToCell(pos.x, pos.z),
+                    pf = MapManager.flow?.[pcz * MapManager.gridSize + pcx];
+                  const metric = z.canSee || !(pf < 99999) ? dist : pf * MapManager.cell;
+                  if (z.progressDist !== undefined && dist > 2.8 && metric > z.progressDist - 0.5) {
                     z.detourSide = -(z.detourSide || 1);
                     const side = new V(-to.z, 0, to.x).normalize().multiplyScalar(z.detourSide).add(to.clone().normalize().multiplyScalar(0.25));
                     z.detourDir = MapManager.escapeDirection(pos, side.normalize());
                     z.detourUntil = simulationTime + 0.9;
                   }
-                  z.progressDist = dist;
+                  z.progressDist = metric;
                   z.progressClock = 0;
                 }
                 if (z.boss?.kind !== "necro") pos.y += (MapManager.groundAt(pos.x, pos.z, 0.2, 0) - pos.y) * Math.min(1, dt * 12);
