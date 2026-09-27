@@ -128,7 +128,8 @@
       $("profilechip").innerHTML = `<span class="chip-avatar">${esc((name || "?").slice(0, 2).toUpperCase())}</span>
         <span class="chip-body"><b>${esc(name)}</b><small>${signed ? `LVL ${level}` : "Toque para entrar"}</small><i class="chip-xp"><em style="width:${signed ? pct : 0}%"></em></i></span>
         <span class="chip-wallet"><b>◈ ${n(eco.coins)}</b><small>↻ ${n(eco.normal)} · ✦ ${n(eco.lucky)}</small></span>`;
-      $("accountbtn").querySelector("small").textContent = signed ? `@${p?.username || ""} · LVL ${level}` : "Entrar ou criar conta";
+      const accountBtn = $("accountbtn");
+      if (accountBtn) accountBtn.querySelector("small").textContent = signed ? `@${p?.username || ""} · LVL ${level}` : "Entrar ou criar conta";
     },
     async rename() {
       const value = $("rename-input").value.trim();

@@ -91,6 +91,32 @@
           font:600 13px/1.4 Arial,sans-serif;
         }
       }
+
+      /* v28 armory: video-style reveal burst, preferred item, locked slot prices, pity. */
+      .spin-burst{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden}
+      .spin-burst .flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 52%,color-mix(in srgb,var(--c) 85%,#fff) 0,color-mix(in srgb,var(--c) 45%,transparent) 22%,transparent 58%);animation:burst-flash .9s ease-out forwards}
+      .spin-burst.big .flash{animation-duration:1.6s}
+      .spin-burst .rays{position:absolute;left:50%;top:52%;width:180%;aspect-ratio:1;transform:translate(-50%,-50%);background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--c) 55%,transparent) 0 6deg,transparent 6deg 18deg);mask:radial-gradient(circle,#000 0,#000 18%,transparent 62%);-webkit-mask:radial-gradient(circle,#000 0,#000 18%,transparent 62%);animation:burst-rays 1.4s ease-out forwards}
+      .spin-burst.big .rays{animation-duration:2.4s}
+      .spin-burst b{position:absolute;left:calc(50% + var(--x));top:calc(52% + var(--y));width:26px;height:26px;transform:translate(-50%,-50%) scale(0);background:radial-gradient(circle,#fff 0,var(--c) 30%,transparent 70%);clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);animation:burst-star 1s var(--d) ease-out forwards}
+      @keyframes burst-flash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+      @keyframes burst-rays{0%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.4)}15%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) rotate(40deg) scale(1.1)}}
+      @keyframes burst-star{0%{transform:translate(-50%,-50%) scale(0) rotate(0)}40%{transform:translate(-50%,-50%) scale(calc(var(--s) * 1.4)) rotate(40deg)}100%{transform:translate(-50%,-50%) scale(0) rotate(90deg)}}
+      #classscreen.spinning #armory-identity h2{animation:spin-title .09s linear infinite alternate}
+      @keyframes spin-title{from{transform:translateY(-1px)}to{transform:translateY(1px)}}
+      .spin-btn.skip .label{letter-spacing:.3em!important}
+      .pref-chip{display:flex!important;align-items:center;gap:6px;width:100%;margin:0 0 8px!important;padding:7px 10px!important;border:1px solid var(--rarity)!important;border-radius:8px!important;background:color-mix(in srgb,var(--rarity) 14%,#0a1118)!important;color:#fff!important;font-size:11px!important;font-weight:800;text-align:left}
+      .pref-chip em,.rarity-item em.boost{font-style:normal;font-size:9px;padding:1px 5px;border-radius:99px;background:#ffe45a;color:#1a1400;font-weight:900}
+      .pref-chip small{margin-left:auto;font-size:8px;color:#b8c4cc;letter-spacing:.1em}
+      .pref-hint{margin:0 0 8px;font-size:9px;line-height:1.35;color:#7f8f9c}
+      .rarity-item.preferred{box-shadow:inset 0 0 0 1px #ffe45a,0 0 14px #ffe45a33!important}
+      .rarity-line.boosted span{color:#fff6c2}
+      .slot-card.locked{opacity:.78;border-style:dashed!important}
+      .slot-card.locked.next{opacity:1;border-color:#ffe45a88!important}
+      .slot-card .slot-price{font-size:22px!important;color:#ffe45a!important;letter-spacing:.04em}
+      .rarity-line{min-height:40px!important}
+      #armory-list{max-height:calc(100vh - 250px);overflow:auto}
+      .spin-btn.normal .label,.spin-btn.normal .cost{color:#06261f!important;text-shadow:0 1px 0 #ffffff80!important}
     </style>
 
     <style>
@@ -2555,10 +2581,8 @@ body.netgame #revivetouch{display:flex}
         <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>Solo ou multiplayer online</small><i>›</i></button>
         <button id="missionsbtn" class="home-item" type="button"><b>MISSÕES</b><small id="missionsbadge">Diárias, semanais e únicas</small><i>›</i></button>
         <button id="indexbtn" class="home-item" type="button"><b>ÍNDICE</b><small id="indexbadge">Bestiário e marcos de abate</small><i>›</i></button>
-        <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas, spins e slots</small><i>›</i></button>
-        <button id="classesbtn" class="home-item" type="button"><b>CLASSES</b><small>Habilidades do sobrevivente</small><i>›</i></button>
+        <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas, classes, spins e slots</small><i>›</i></button>
         <button id="customizebtn" class="home-item" type="button"><b>LOJA</b><small>Visual e equipamentos</small><i>›</i></button>
-        <button id="accountbtn" class="home-item" type="button"><b>PERFIL</b><small>Entrar ou criar conta</small><i>›</i></button>
         <button id="settingsbtn" class="home-item" type="button"><b>CONFIGURAÇÕES</b><small>Gráficos, áudio e controles</small><i>›</i></button>
         <div class="home-minor"><button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button></div>
       </nav>
@@ -2674,7 +2698,7 @@ body.netgame #revivetouch{display:flex}
           <button type="button" role="tab" data-mission-tab="weekly">SEMANAIS<i></i></button>
           <button type="button" role="tab" data-mission-tab="unique">ÚNICAS<i></i></button>
         </nav>
-        <div class="panel-actions"><button id="missions-index" class="ghost" type="button">ÍNDICE ›</button><button id="missions-refresh" class="ghost" type="button">↻</button></div>
+        <div class="panel-actions"><button id="missions-refresh" class="ghost" type="button">↻</button></div>
       </header>
       <p id="missions-offline" class="offline-banner hidden">OFFLINE · progresso será sincronizado quando a conexão voltar</p>
       <div id="mission-summary" class="mission-summary"></div>
@@ -3091,7 +3115,8 @@ body.netgame #revivetouch{display:flex}
             "#FF7A1A",
             "#DDF6FF",
           ],
-          rarityMult = [1, 1.4, 1.9, 2.7, 4.5, 8, 12.5, 18];
+          // v28 balance: rarity is an upgrade, not a multiplier that melts every enemy.
+          rarityMult = [1, 1.18, 1.38, 1.6, 1.85, 2.15, 2.5, 2.85];
         const requiresRerollConfirm = (tier) => tier >= 5;
         const classes = [
           // IDs 0–20 preserve existing saves. New roster additions use 21+.
@@ -3505,9 +3530,9 @@ body.netgame #revivetouch{display:flex}
           settingsReturn = "menu";
         const diff = {
           easy: { hp: 150, speed: 0.8, damage: 0.8, coins: 1, count: 0.8 },
-          medium: { hp: 100, speed: 1, damage: 1, coins: 1.5, count: 1 },
-          hard: { hp: 75, speed: 1.2, damage: 1.3, coins: 2, count: 1.2 },
-          nightmare: { hp: 60, speed: 1.35, damage: 1.6, coins: 3, count: 1.4 },
+          medium: { hp: 100, speed: 1, damage: 1, coins: 1.25, count: 1 },
+          hard: { hp: 75, speed: 1.2, damage: 1.3, coins: 1.5, count: 1.2 },
+          nightmare: { hp: 60, speed: 1.35, damage: 1.6, coins: 2, count: 1.4 },
         };
         let player = {
           pos: new V(0, 1.7, 10),
@@ -4283,6 +4308,10 @@ body.netgame #revivetouch{display:flex}
           styles: {
             "01": "zombie", "02": "crawler", "03": "zombie", "04": "quarterback", "05": "zombie",
             "06": "mutant", "07": "swat", "08": "constructor", "09": "yeti", "10": "demon",
+            // v28 bosses & minibosses
+            "11": "brute", "12": "brute", "13": "brute", "14": "hunter", "15": "armed", "16": "armed", "17": "armed",
+            "18": "hunter", "19": "brute", "20": "brute", "21": "brute", "22": "zombie", "23": "zombie", "24": "brute",
+            "25": "hunter", "26": "hunter",
           },
           // Body proportions in skin pixels (Minecraft-like: head 8, torso 8x4x12, limbs 4x4x12).
           shapes: {
@@ -4293,6 +4322,22 @@ body.netgame #revivetouch{display:flex}
             "07": { tw: 8, td: 5, th: 12, aw: 4, ah: 12, lw: 4, lh: 12, hs: 8, drop: 0 },
             "09": { tw: 12, td: 7, th: 12, aw: 6, ah: 16, lw: 5, lh: 9, hs: 8, drop: 2 },
             "10": { tw: 10, td: 5, th: 12, aw: 5, ah: 13, lw: 4, lh: 12, hs: 8, drop: 0 },
+            "11": { tw: 12, td: 7, th: 12, aw: 6, ah: 14, lw: 6, lh: 11, hs: 8, drop: 1 }, // Juggernaut
+            "12": { tw: 13, td: 8, th: 13, aw: 7, ah: 16, lw: 6, lh: 11, hs: 8, drop: 2 }, // Avalanche Titan
+            "13": { tw: 12, td: 7, th: 12, aw: 6, ah: 15, lw: 5, lh: 11, hs: 8, drop: 1 }, // Abomination
+            "14": { tw: 8, td: 4, th: 13, aw: 3, ah: 17, lw: 3, lh: 15, hs: 8, drop: 0 }, // Wendigo
+            "15": { tw: 11, td: 6, th: 12, aw: 5, ah: 13, lw: 5, lh: 11, hs: 8, drop: 1 }, // Butcher
+            "16": { tw: 8, td: 4, th: 12, aw: 4, ah: 12, lw: 4, lh: 12, hs: 8, drop: 0 }, // Surgeon
+            "17": { tw: 9, td: 5, th: 13, aw: 4, ah: 13, lw: 4, lh: 12, hs: 8, drop: 0 }, // Gravekeeper
+            "18": { tw: 9, td: 5, th: 12, aw: 4, ah: 13, lw: 4, lh: 12, hs: 8, drop: 0 }, // Stalker
+            "19": { tw: 10, td: 5, th: 12, aw: 5, ah: 11, lw: 5, lh: 11, hs: 8, drop: 0 }, // Roadblock
+            "20": { tw: 12, td: 7, th: 12, aw: 6, ah: 15, lw: 6, lh: 12, hs: 8, drop: 1 }, // Experiment Omega
+            "21": { tw: 11, td: 6, th: 12, aw: 6, ah: 14, lw: 5, lh: 11, hs: 8, drop: 1 }, // Frost Brute
+            "22": { tw: 8, td: 4, th: 12, aw: 4, ah: 12, lw: 4, lh: 12, hs: 8, drop: 0 }, // Patient Zero
+            "23": { tw: 9, td: 5, th: 12, aw: 4, ah: 13, lw: 4, lh: 12, hs: 8, drop: 0 }, // Plague Host
+            "24": { tw: 13, td: 7, th: 12, aw: 7, ah: 16, lw: 6, lh: 11, hs: 8, drop: 1 }, // The Wrecker
+            "25": { tw: 8, td: 4, th: 12, aw: 4, ah: 12, lw: 4, lh: 12, hs: 8, drop: 0 }, // Cryo Hunter
+            "26": { tw: 9, td: 5, th: 12, aw: 5, ah: 13, lw: 4, lh: 12, hs: 8, drop: 0 }, // Prototype X
           },
           ready() {
             return !!window.DR_VOXEL_ATLAS;
@@ -4657,6 +4702,139 @@ body.netgame #revivetouch{display:flex}
                 rig.upper.add(m);
               }
             }
+            // ---- v28 bosses: props and silhouettes from the UV-template previews.
+            const crystal = (parent, pos, size, rot = [0, 0, 0], tone = 0x9fe4ff) => {
+              const m = new THREE.Mesh(unitBox, this.flat(tone, 0x2a7ab8));
+              m.scale.set(size[0] * P, size[1] * P, size[2] * P);
+              m.position.set(pos[0] * P, pos[1] * P, pos[2] * P);
+              m.rotation.set(...rot);
+              m.castShadow = true;
+              parent.add(m);
+              return m;
+            };
+            const glowBox = (parent, pos, size, color, glow) => {
+              const m = new THREE.Mesh(unitBox, this.flat(color, glow));
+              m.scale.set(size[0] * P, size[1] * P, size[2] * P);
+              m.position.set(pos[0] * P, pos[1] * P, pos[2] * P);
+              m.castShadow = true;
+              parent.add(m);
+              return m;
+            };
+            if (key === "11" || key === "24") {
+              // Juggernaut / Wrecker: huge armoured shoulder plates.
+              for (const shoulder of rig.arms) this.box(shoulder, key, "torso", [s.aw * P * 1.45, 4 * P, s.aw * P * 1.45], [0, 1.6 * P, 0], mat);
+              if (key === "24") glowBox(rig.upper, [0, s.th + 1.5, -s.td / 2 - 1], [6, 4, 2], 0x3a3530, 0);
+            }
+            if (key === "12" || key === "21") {
+              // Ice crystals growing out of shoulders, back and forearms.
+              const big = key === "12" ? 1.35 : 1;
+              for (const [i, shoulder] of rig.arms.entries()) {
+                const sd = i ? 1 : -1;
+                crystal(shoulder, [sd * 1, 3, 0], [2 * big, 6 * big, 2 * big], [0.2, 0, sd * -0.35]);
+                crystal(shoulder, [sd * 2, 2, 1.5], [1.4 * big, 4.5 * big, 1.4 * big], [0.5, 0, sd * -0.7]);
+                crystal(shoulder, [sd * 2.6, -s.ah + 6, 0], [1.5, 3.5 * big, 1.5], [0, 0, sd * -1.1]);
+              }
+              if (key === "12")
+                for (const [x, y, rz] of [[-3, 4, 0.4], [0, 6, 0], [3, 4, -0.4], [-1.5, 1, 0.3], [2, 1.5, -0.2]])
+                  crystal(rig.upper, [x, s.th - 2 + y * 0.6, -s.td / 2 - 0.8], [2, 6, 2], [-0.5, 0, rz]);
+            }
+            if (key === "13" || key === "20") {
+              // Abomination / Omega: glowing green containment canisters on the back.
+              for (const x of key === "13" ? [-3, 0, 3] : [-3.2, -1.1, 1.1, 3.2]) {
+                glowBox(rig.upper, [x, s.th - 1, -s.td / 2 - 1.3], [1.9, 4.5, 1.9], 0x7dff3a, 0x3aff1a);
+                glowBox(rig.upper, [x, s.th + 1.6, -s.td / 2 - 1.3], [2.2, 0.8, 2.2], 0x2a2e30, 0);
+              }
+              if (key === "20") glowBox(rig.upper, [0, s.th * 0.55, s.td / 2 + 0.2], [5, 5, 0.6], 0x7dff3a, 0x4aff2a);
+            }
+            if (key === "14") {
+              // Wendigo antlers (bone) branching up and out, plus long claws.
+              const bone = this.flat(0xd8c8a8);
+              for (const sd of [-1, 1]) {
+                const seg = (x, y, z, w, h, rz) => {
+                  const m = new THREE.Mesh(unitBox, bone);
+                  m.scale.set(w * P, h * P, w * P);
+                  m.position.set(sd * x * P, (s.hs + y) * P, z * P);
+                  m.rotation.z = sd * rz;
+                  m.castShadow = true;
+                  rig.neck.add(m);
+                };
+                seg(3, 1.5, 0, 1.2, 4, -0.5);
+                seg(5, 5, 0, 1, 5, -0.3);
+                seg(4, 9, 0, 0.9, 4, 0.2);
+                seg(7.5, 7.5, 0, 0.8, 3.5, -0.9);
+                seg(6.5, 11.5, 0, 0.7, 3, -0.4);
+                seg(3, 7, 0.5, 0.7, 3, 0.6);
+              }
+              for (const hand of rig.hands)
+                for (const x of [-1, 0, 1]) {
+                  const c = new THREE.Mesh(unitBox, this.flat(0x2a1a14));
+                  c.scale.set(0.5 * P, 3.5 * P, 0.5 * P);
+                  c.position.set(x * P, -1.5 * P, 1 * P);
+                  c.rotation.x = 0.35;
+                  hand.add(c);
+                }
+            }
+            if (key === "15") {
+              // Butcher's cleaver in the right hand.
+              const cleaver = new THREE.Group();
+              glowBox(cleaver, [0, 0, 1], [1.2, 1.2, 5], 0x4a3020, 0);
+              glowBox(cleaver, [0, 3, 6.5], [0.7, 9, 8], 0xb8b8c0, 0);
+              glowBox(cleaver, [0, 6.8, 6.5], [0.8, 1.5, 8.2], 0x8a1a14, 0);
+              cleaver.position.set(0, -0.5 * P, 0);
+              handR.add(cleaver);
+              rig.props.weapon = cleaver;
+            }
+            if (key === "16") {
+              const saw = new THREE.Group();
+              glowBox(saw, [0, 0, 1.5], [0.8, 0.8, 4], 0x2a2e30, 0);
+              glowBox(saw, [0, 0.6, 5], [0.4, 2, 4.5], 0xd8dce0, 0);
+              handR.add(saw);
+              rig.props.weapon = saw;
+            }
+            if (key === "17") {
+              // Gravekeeper: a tall staff topped with a cross, a lantern hanging on a chain.
+              const staff = new THREE.Group();
+              glowBox(staff, [0, 2, 0], [1.1, 30, 1.1], 0x4a3624, 0);
+              glowBox(staff, [0, 16, 0], [6, 1.1, 1.1], 0x4a3624, 0);
+              glowBox(staff, [2.5, 12, 0], [0.4, 3, 0.4], 0x3a3a3a, 0);
+              const lantern = glowBox(staff, [2.5, 9.5, 0], [2.4, 3, 2.4], 0xffb050, 0xff8a20);
+              glowBox(staff, [2.5, 11.2, 0], [2.8, 0.5, 2.8], 0x222222, 0);
+              handR.add(staff);
+              staff.position.set(0, 0, 0.5 * P);
+              rig.props.weapon = staff;
+              rig.props.lantern = lantern;
+            }
+            if (key === "18") {
+              // Ghillie moss strands hanging from shoulders and head.
+              const moss = this.flat(0x4a5a26), moss2 = this.flat(0x2e3a18);
+              for (let i = 0; i < 10; i++) {
+                const m = new THREE.Mesh(unitBox, i % 2 ? moss : moss2);
+                m.scale.set(0.8 * P, rand(3, 6) * P, 0.8 * P);
+                m.position.set(rand(-s.tw / 2, s.tw / 2) * P, (s.th - rand(0, 3)) * P, (i % 2 ? 1 : -1) * (s.td / 2 + 0.3) * P);
+                rig.upper.add(m);
+              }
+            }
+            if (key === "23") {
+              // Plague Host: glowing pustules on the left arm and a toxin canister on the back.
+              const arm = rig.arms[1];
+              for (const [x, y, z, r] of [[1, -2, 1, 2.2], [0, -5, 1.5, 1.8], [1.5, -8, 0, 2], [0, 1, -1, 1.6]])
+                glowBox(arm, [x, y, z], [r, r, r], 0x9dff45, 0x3aa81a);
+              glowBox(rig.upper, [-2, s.th - 3, -s.td / 2 - 1], [2, 5, 2], 0x7dff3a, 0x3aff1a);
+            }
+            if (key === "25") {
+              for (const [i, shoulder] of rig.arms.entries()) crystal(shoulder, [(i ? 1 : -1) * 1, 2.5, 0], [1.5, 4, 1.5], [0.2, 0, (i ? -1 : 1) * 0.4], 0xdff6ff);
+              const spear = new THREE.Group();
+              crystal(spear, [0, 4, 0], [1, 22, 1], [0, 0, 0], 0x9fe4ff);
+              handR.add(spear);
+              rig.props.weapon = spear;
+            }
+            if (key === "26") {
+              // Prototype X: green coolant tubes along the mechanical left arm.
+              const arm = rig.arms[1];
+              glowBox(arm, [1.8, -4, 0], [1, 5, 1], 0x7dff3a, 0x3aff1a);
+              glowBox(arm, [1.8, -9, 0.5], [1, 3, 1], 0xb040ff, 0x7a1acc);
+              glowBox(rig.upper, [-3, s.th + 1, -1], [2, 4, 2], 0x7dff3a, 0x3aff1a);
+            }
             if (key === "07") {
               // The helmet is painted on the SWAT skin itself (no extra box, it doubled the face).
               // Shield strapped to the left forearm, baton in the right hand.
@@ -4869,12 +5047,61 @@ body.netgame #revivetouch{display:flex}
             }
             return g;
           },
+          // Boss overlays on top of the gait: roar/rage, slam wind-up, leap crouch + flight and the
+          // throwing wind-up (any style), so every ability has a readable pose.
+          bossPose(z, r, t) {
+            const now = simulationTime,
+              [armR, armL] = r.arms;
+            if (z.roarUntil > now) {
+              const k = Math.sin(clamp(1 - (z.roarUntil - now) / 1.1, 0, 1) * Math.PI);
+              armR.rotation.x = -0.6 - 1.6 * k;
+              armL.rotation.x = -0.6 - 1.6 * k;
+              armR.rotation.z = -0.3 - 0.7 * k;
+              armL.rotation.z = 0.3 + 0.7 * k;
+              r.upper.rotation.x = -0.25 * k;
+              r.neck.rotation.x = -0.55 * k + Math.sin(t * 40) * 0.03 * k;
+            }
+            if (z.slamState) {
+              const k = clamp((now - z.slamState.start) / (z.slamState.end - z.slamState.start), 0, 1),
+                up = k < 0.85 ? k / 0.85 : 1 - (k - 0.85) / 0.15;
+              armR.rotation.x = armL.rotation.x = -0.3 - 2.7 * up;
+              armR.rotation.z = -0.15;
+              armL.rotation.z = 0.15;
+              r.upper.rotation.x = -0.3 * up + (k > 0.85 ? 0.5 : 0);
+            }
+            if (z.leapState) {
+              const L = z.leapState,
+                tt = now - L.start;
+              if (tt < L.wind) {
+                const c = tt / L.wind;
+                r.body.position.y = r.hipY * (1 - 0.4 * c);
+                r.upper.rotation.x = 0.5 * c;
+                r.legs[0].rotation.x = r.legs[1].rotation.x = -1 * c;
+                armR.rotation.x = armL.rotation.x = 0.8 * c;
+              } else {
+                armR.rotation.set(-2.9, 0, -0.3);
+                armL.rotation.set(-2.9, 0, 0.3);
+                r.legs[0].rotation.x = 0.8;
+                r.legs[1].rotation.x = -0.3;
+                r.upper.rotation.x = -0.15;
+              }
+            }
+            if (z.throwWind && r.style !== "demon" && now < z.throwWind.release + 0.35) {
+              const k = clamp((now - z.throwWind.start) / (z.throwWind.release - z.throwWind.start), 0, 1);
+              armR.rotation.x = now < z.throwWind.release ? -0.4 - k * 2.5 : -1.2;
+              armR.rotation.z = -0.2;
+              r.upper.rotation.y = now < z.throwWind.release ? k * 0.45 : -0.35;
+              if (r.props.weapon) r.props.weapon.visible = now < z.throwWind.release;
+            } else if (r.props.weapon) r.props.weapon.visible = true;
+            if (r.props.lantern) r.props.lantern.material.emissiveIntensity = 1 + Math.sin(t * 7) * 0.3;
+            if (z.raging && Math.random() < 0.08) ParticleSystem.emit(z.group.position.clone().add(new V(rand(-0.4, 0.4), 1.6 * z.size, rand(-0.4, 0.4))), 0xff3a1a, 1, 1);
+          },
           animate(z, dt, moving) {
             const r = z.rig,
               st = r.style,
               _flash = z.flashMat && (z.flashMat.emissiveIntensity = z.flashUntil > simulationTime ? 0.55 * ((z.flashUntil - simulationTime) / 0.09) : 0),
-              heavy = st === "yeti" || st === "demon" || st === "mutant",
-              fast = st === "quarterback" || z.type === 1;
+              heavy = st === "yeti" || st === "demon" || st === "mutant" || st === "brute",
+              fast = st === "quarterback" || st === "hunter" || z.type === 1;
             z.moveBlend = (z.moveBlend || 0) + ((moving ? 1 : 0) - (z.moveBlend || 0)) * (1 - Math.exp(-dt * 7));
             const blitz = z.blitzUntil > simulationTime;
             z.anim += dt * (moving ? (blitz ? 13 : fast ? 9.5 : st === "crawler" ? 6 : heavy ? 3.4 : 4.4) : 1.3);
@@ -4905,7 +5132,7 @@ body.netgame #revivetouch{display:flex}
               r.legs[1].rotation.x = -s * stride;
               r.body.position.y = r.hipY + bounce * (fast ? 0.05 : heavy ? 0.035 : 0.025) * mb;
               r.body.rotation.z = Math.sin(t) * (heavy ? 0.045 : 0.025) * mb;
-              const lean = st === "quarterback" ? 0.34 : st === "yeti" ? 0.24 : st === "mutant" ? 0.14 : st === "demon" ? 0.07 : 0.1;
+              const lean = st === "quarterback" ? 0.34 : st === "yeti" ? 0.24 : st === "hunter" ? 0.3 : st === "brute" ? 0.18 : st === "mutant" ? 0.14 : st === "demon" ? 0.07 : 0.1;
               r.upper.rotation.x = lean * (0.4 + 0.6 * mb) + r.lean;
               r.upper.rotation.y = Math.sin(t) * (heavy ? 0.1 : 0.06) * mb;
               r.neck.rotation.x = -r.upper.rotation.x * 0.7 + Math.sin(t * 0.6) * 0.05;
@@ -4934,6 +5161,25 @@ body.netgame #revivetouch{display:flex}
                 armL.rotation.x = -0.55 + s * 0.3 * mb; // detonator swings low
                 armR.rotation.z = -0.05;
                 armL.rotation.z = 0.08;
+              } else if (st === "brute") {
+                // Heavy bosses: big pendulum arm swings, shoulders rolling with each step.
+                armR.rotation.x = -0.3 - s * 0.55 * mb;
+                armL.rotation.x = -0.3 + s * 0.55 * mb;
+                armR.rotation.z = -0.25 - bounce * 0.06;
+                armL.rotation.z = 0.25 + bounce * 0.06;
+                r.upper.rotation.y += s * 0.05 * mb;
+              } else if (st === "hunter") {
+                // Stalkers: hunched, claws hanging forward, quick twitchy reach.
+                armR.rotation.x = -0.75 + s * 0.35 * mb + Math.sin(t * 2.3) * 0.05;
+                armL.rotation.x = -0.75 - s * 0.35 * mb + Math.sin(t * 2.1 + 1) * 0.05;
+                armR.rotation.z = -0.18;
+                armL.rotation.z = 0.18;
+              } else if (st === "armed") {
+                // Weapon hand held ready in front, free arm swinging.
+                armR.rotation.x = -0.95 + Math.sin(t * 1.2) * 0.06;
+                armR.rotation.z = -0.1;
+                armL.rotation.x = -0.25 + s * 0.45 * mb;
+                armL.rotation.z = 0.12;
               } else if (st === "yeti") {
                 armR.rotation.x = -0.35 - s * 0.6 * mb;
                 armL.rotation.x = -0.35 + s * 0.6 * mb;
@@ -4955,6 +5201,7 @@ body.netgame #revivetouch{display:flex}
               }
               if (r.props.trident) r.props.trident.rotation.x = -r.arms[0].rotation.x - r.upper.rotation.x + 0.1;
               if (r.props.shield) r.props.shield.rotation.x = -r.arms[1].rotation.x - r.upper.rotation.x;
+              if (z.boss) this.bossPose(z, r, t);
             }
             if (st !== "crawler" && z.group) {
               // Lean into turns, breathe when idle and keep the head locked on the player.
@@ -4984,7 +5231,17 @@ body.netgame #revivetouch{display:flex}
                 const swipe = Math.sin(attack * Math.PI);
                 r.root.position.z = swipe * 0.16;
                 if (st === "crawler") r.arms.forEach((a) => (a.rotation.x -= swipe * 0.8));
-                else {
+                else if (z.boss && z.attackVariant === 1) {
+                  // Attack 2: two-handed overhead hammer blow.
+                  const up = attack < 0.45 ? attack / 0.45 : 1 - (attack - 0.45) / 0.55;
+                  r.arms.forEach((a) => (a.rotation.x = -0.4 - up * 2.5));
+                  r.upper.rotation.x += (attack < 0.45 ? -0.2 : 0.35) * swipe;
+                } else if (z.boss && z.attackVariant === 2) {
+                  // Attack 3: wide horizontal swipe.
+                  r.arms[0].rotation.x = -1.4;
+                  r.arms[0].rotation.z = -0.3 - swipe * 1.1;
+                  r.upper.rotation.y += (attack - 0.5) * 1.2;
+                } else {
                   r.arms[0].rotation.x -= swipe * 1.1;
                   r.arms[1].rotation.x -= swipe * (st === "swat" ? 0.2 : 0.8);
                   r.upper.rotation.x += swipe * 0.25;
@@ -6191,7 +6448,7 @@ body.netgame #revivetouch{display:flex}
             top.position.y = liquid.position.y + (H - 0.6) / 2;
             top.userData.disposableMaterial = true;
             g.add(top);
-            for (const y of [1.2, 4.2, 7.2, 9.6]) {
+            for (const y of [1.0, 3.3, 5.5].filter((y) => y < 0.9 + H)) {
               const ring = new THREE.Mesh(VisualArt.geometries.ring, VisualArt.mat(0x5c6670, "steel"));
               ring.rotation.x = Math.PI / 2;
               ring.scale.set(cap.r + 0.1, cap.r + 0.1, 1.6);
@@ -6203,10 +6460,10 @@ body.netgame #revivetouch{display:flex}
             g.add(light);
             // The specimen: the mutant rig, hanging limp in the liquid.
             const specimen = new THREE.Group();
-            specimen.position.set(0, 2.2, 0);
+            specimen.position.set(0, 1.25, 0);
             g.add(specimen);
             const rig = VoxelMonsters.available?.() !== false ? CreatureRig.create(specimen, 0, { kind: "mutant", voxel: "06", color: 0x6f9a4a }) : null;
-            specimen.scale.setScalar(2.1);
+            specimen.scale.setScalar(1.7);
             if (rig) {
               rig.arms?.forEach((a, i) => (a.rotation.x = 0.25 + i * 0.1, a.rotation.z = i ? -0.35 : 0.35));
               if (rig.neck) rig.neck.rotation.x = 0.55;
@@ -6228,7 +6485,22 @@ body.netgame #revivetouch{display:flex}
               g.add(b);
               bubbles.push(b);
             }
-            this.decor.push({ type: "specimen", specimen, bubbles, light, top: H, base: 2.2 });
+            const cracks = [];
+            for (let i = 0; i < 6; i++) {
+              // Crack decals on the glass, invisible until the Mutant starts breaking out.
+              const a = (i / 6) * Math.PI * 2 + 0.4,
+                c = new THREE.Mesh(VisualArt.geometries.plane, new THREE.MeshBasicMaterial({ map: MutantBreakout.crackTexture(), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+              c.userData.disposableMaterial = true;
+              c.position.set(Math.sin(a) * (cap.r + 0.02), 1.4 + (i % 3) * 1.1, Math.cos(a) * (cap.r + 0.02));
+              c.rotation.y = a;
+              c.scale.setScalar(rand(1.4, 2.2));
+              c.renderOrder = 6;
+              g.add(c);
+              cracks.push(c);
+            }
+            const decor = { type: "specimen", specimen, bubbles, light, top: H, base: 1.25, glass, liquid, lid: top, cracks, rig };
+            this.decor.push(decor);
+            MutantBreakout.tank = decor;
           },
           update(dt) {
             for (const o of this.decor) {
@@ -6246,6 +6518,8 @@ body.netgame #revivetouch{display:flex}
                 continue;
               }
               if (o.type === "specimen") {
+                if (o.broken) continue;
+                if (o.shake) o.specimen.position.x = Math.sin(menuTime * 40) * 0.05 * o.shake;
                 o.specimen.position.y = o.base + Math.sin(menuTime * 0.6) * 0.12;
                 o.specimen.rotation.y += dt * 0.05;
                 for (const b of o.bubbles) {
@@ -6433,8 +6707,271 @@ body.netgame #revivetouch{display:flex}
           if (isShort) multiplier *= burst.shortRangeDamageTotal ?? effects.shortRangeDamage ?? 1;
           if (isLong) multiplier *= burst.longRangeDamageTotal ?? effects.longRangeDamage ?? 1;
           if (isExplosive) multiplier *= burst.explosiveDamageTotal ?? effects.explosiveDamage ?? 1;
+          if (DevMode.on("infiniteDamage")) return 1e6;
           return w.damage * rarityMult[w.tier] * multiplier * critical;
         }
+        // Bosses and minibosses can't be melted: every hit is capped to a small slice of
+        // their max HP and a rolling 1 s window bounds the total damage per second, no
+        // matter how many pellets, burn ticks, beams or explosions land at once.
+        // Rank: 1 Miniboss I · 2 Miniboss II · 3 Boss I · 4 Boss II (strongest).
+        // Developer mode. The logo sequence D → E → A → D only *reveals* the menu, and only after the
+        // server confirms the signed-in UserId is on dev_whitelist. Account changes go through the
+        // dev_action RPC (validated server-side); match powers work only in solo runs of a
+        // whitelisted session.
+        const DevMode = {
+          allowed: false,
+          open: false,
+          seq: [],
+          lastClick: 0,
+          flags: { god: false, infiniteDamage: false, infiniteAmmo: false, noReload: false, infiniteAbility: false },
+          on(flag) {
+            return this.allowed && !NetGame.active && !!this.flags[flag];
+          },
+          infiniteDamage() {
+            return this.on("infiniteDamage");
+          },
+          attachLogo() {
+            const brand = document.querySelector("#menu .brand");
+            if (!brand || brand.dataset.dev) return;
+            brand.dataset.dev = "1";
+            // Each letter of "DEAD" becomes its own click target; the look is unchanged.
+            brand.innerHTML = `<span data-l="D0">D</span><span data-l="E">E</span><span data-l="A">A</span><span data-l="D1">D</span> <br />RECOIL`;
+            brand.addEventListener("click", (e) => {
+              const l = e.target?.dataset?.l;
+              this.press(l ? l[0] : "x");
+            });
+          },
+          press(letter) {
+            const now = performance.now(),
+              want = ["D", "E", "A", "D"];
+            if (now - this.lastClick > 2500) this.seq = [];
+            this.lastClick = now;
+            if (letter !== want[this.seq.length]) {
+              this.seq = letter === "D" ? ["D"] : [];
+              return;
+            }
+            this.seq.push(letter);
+            if (this.seq.length === want.length) {
+              this.seq = [];
+              this.unlock();
+            }
+          },
+          async refresh() {
+            this.allowed = false;
+            if (!Account.signedIn?.() || !DR.Backend?.isOnline?.()) return false;
+            try {
+              const r = await DR.DevRepository.status();
+              this.allowed = !!r?.dev;
+            } catch {
+              this.allowed = false;
+            }
+            return this.allowed;
+          },
+          async unlock() {
+            if (!(await this.refresh())) return; // silently ignored for everyone else
+            this.show();
+          },
+          toggle() {
+            if (!this.allowed) return;
+            this.open ? this.hide() : this.show();
+          },
+          hide() {
+            this.open = false;
+            $("devmenu")?.classList.add("hidden");
+          },
+          ensureUi() {
+            if ($("devmenu")) return;
+            const style = document.createElement("style");
+            style.textContent = `
+              #devmenu{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.72);backdrop-filter:blur(6px);font-family:inherit}
+              #devmenu.hidden{display:none}
+              #devmenu .dev-card{width:min(980px,94vw);max-height:90vh;overflow:auto;background:linear-gradient(160deg,#10161f,#0a0d12);border:1px solid #2c3a4c;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);padding:18px 20px;color:#dfe8f2}
+              #devmenu header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+              #devmenu header b{font-size:20px;letter-spacing:.2em;color:#7dffb0}
+              #devmenu header span{font-size:11px;letter-spacing:.14em;padding:3px 8px;border-radius:99px;background:#16301f;color:#7dffb0;border:1px solid #2f6b44}
+              #devmenu header button{margin-left:auto}
+              #devmenu .dev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+              #devmenu section{background:#0d131b;border:1px solid #1f2a38;border-radius:10px;padding:12px}
+              #devmenu h4{margin:0 0 8px;font-size:12px;letter-spacing:.2em;color:#8aa4c0}
+              #devmenu button,#devmenu select,#devmenu input{font:inherit;font-size:12px;border-radius:7px;border:1px solid #2b3a4d;background:#162131;color:#e6eef8;padding:6px 9px;margin:2px}
+              #devmenu button:hover{background:#1f3048;border-color:#4a6a90}
+              #devmenu button.on{background:#1b4a2e;border-color:#43b66e;color:#bfffd6}
+              #devmenu .row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:6px}
+              #devmenu input{width:90px}
+              #devmenu .dev-log{font-size:11px;color:#8fa3b8;min-height:16px;margin-top:8px}`;
+            document.head.appendChild(style);
+            const el = document.createElement("div");
+            el.id = "devmenu";
+            el.className = "hidden";
+            el.innerHTML = `<div class="dev-card" role="dialog" aria-label="Developer"><header><b>DEVELOPER</b><span>SERVER VERIFIED</span><button data-dev="close">FECHAR ✕</button></header><div class="dev-grid"></div><div class="dev-log" id="dev-log"></div></div>`;
+            document.body.appendChild(el);
+            el.addEventListener("click", (e) => {
+              const b = e.target.closest("[data-dev]");
+              if (b) this.act(b.dataset.dev, b);
+            });
+          },
+          show() {
+            this.ensureUi();
+            this.open = true;
+            this.render();
+            $("devmenu").classList.remove("hidden");
+            if (state === GameState.PLAYING) unlock?.();
+          },
+          log(msg) {
+            const l = $("dev-log");
+            if (l) l.textContent = msg;
+          },
+          render() {
+            const W = WeaponSystem.weapons,
+              roster = WaveManager.bossRoster,
+              opt = (list) => list.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+            const flag = (k, label) => `<button data-dev="flag:${k}" class="${this.flags[k] ? "on" : ""}">${label}</button>`;
+            $("devmenu").querySelector(".dev-grid").innerHTML = `
+              <section><h4>CONTA · SERVIDOR</h4>
+                <div class="row"><select id="dev-weapon">${opt(W.map((w, i) => [i, `${w.name} · ${rarityNames[w.tier]}`]))}</select><select id="dev-wslot">${opt([0, 1, 2, 3, 4].map((i) => [i, "Slot " + (i + 1)]))}</select><button data-dev="give-weapon">DAR ARMA</button></div>
+                <div class="row"><select id="dev-class">${opt(classes.map((c, i) => [i, `${c.name} · ${rarityNames[c.tier]}`]))}</select><select id="dev-cslot">${opt([0, 1, 2].map((i) => [i, "Slot " + (i + 1)]))}</select><button data-dev="give-class">DAR CLASSE</button></div>
+                <div class="row"><button data-dev="unlock-slots">DESBLOQUEAR TODOS OS SLOTS</button><button data-dev="reset-pity">ZERAR PITY</button></div>
+                <div class="row"><input id="dev-coins" type="number" min="0" placeholder="moedas" /><input id="dev-normal" type="number" min="0" placeholder="normal" /><input id="dev-lucky" type="number" min="0" placeholder="lucky" /><button data-dev="wallet">APLICAR</button></div>
+              </section>
+              <section><h4>PODERES · SOLO</h4>
+                <div class="row">${flag("god", "GOD MODE / INVENCÍVEL")}${flag("infiniteDamage", "DANO INFINITO")}</div>
+                <div class="row">${flag("infiniteAmmo", "MUNIÇÃO INFINITA")}${flag("noReload", "SEM RECARGA")}${flag("infiniteAbility", "HABILIDADE INFINITA")}</div>
+                <div class="row"><button data-dev="cooldowns">RESETAR COOLDOWNS</button></div>
+              </section>
+              <section><h4>INIMIGOS & ONDAS</h4>
+                <div class="row"><select id="dev-ztype">${opt(zombieTypes.map((t, i) => [i, t.name]))}</select><button data-dev="spawn-zombie">SPAWN ZUMBI</button></div>
+                <div class="row"><select id="dev-boss">${opt(Object.entries(roster).map(([k, b]) => [k, `${b.name} · ${b.title}`]))}</select><button data-dev="spawn-boss">SPAWN BOSS</button></div>
+                <div class="row"><button data-dev="wave-start">INICIAR ONDA</button><button data-dev="wave-next">AVANÇAR ONDA</button><button data-dev="wave-stop">PARAR ONDA</button><button data-dev="clear">LIMPAR INIMIGOS</button></div>
+              </section>
+              <section><h4>MAPAS & TESTES</h4>
+                <div class="row"><select id="dev-map">${opt(maps.map((m, i) => [i, m.name]))}</select><button data-dev="teleport">IR PARA O MAPA</button></div>
+                <div class="row"><button data-dev="fx">TESTAR PARTÍCULAS</button><button data-dev="anim">TESTAR ANIMAÇÕES</button></div>
+                <div class="row"><select id="dev-testweapon">${opt(W.map((w, i) => [i, w.name]))}</select><button data-dev="test-weapon">TESTAR ARMA</button></div>
+                <div class="row"><select id="dev-testclass">${opt(classes.map((c, i) => [i, c.name]))}</select><button data-dev="test-class">TESTAR CLASSE</button></div>
+              </section>`;
+          },
+          playing() {
+            if (state !== GameState.PLAYING && state !== GameState.PAUSED) {
+              this.log("Entre numa partida solo para usar isto.");
+              return false;
+            }
+            if (NetGame.active) {
+              this.log("Poderes de desenvolvedor só funcionam em partidas solo.");
+              return false;
+            }
+            return true;
+          },
+          async server(action, args) {
+            try {
+              const r = await Account.queue("dev", { action, args });
+              if (r?.profile) Account.apply(r.profile);
+              this.log("Servidor confirmou: " + action);
+              if (state === GameState.CLASS_SELECT) Armory.render();
+            } catch (e) {
+              this.log("Recusado: " + (e.message || e));
+            }
+          },
+          act(cmd, button) {
+            if (!this.allowed) return this.hide();
+            const val = (id) => $(id)?.value;
+            if (cmd === "close") return this.hide();
+            if (cmd.startsWith("flag:")) {
+              const k = cmd.slice(5);
+              this.flags[k] = !this.flags[k];
+              button.classList.toggle("on", this.flags[k]);
+              return this.log(`${k}: ${this.flags[k] ? "ON" : "OFF"}`);
+            }
+            if (cmd === "give-weapon") return this.server("give", { kind: "weapon", id: +val("dev-weapon"), slot: +val("dev-wslot") });
+            if (cmd === "give-class") return this.server("give", { kind: "class", id: +val("dev-class"), slot: +val("dev-cslot") });
+            if (cmd === "unlock-slots") return this.server("unlock_slots", {});
+            if (cmd === "reset-pity") return this.server("reset_pity", {});
+            if (cmd === "wallet") {
+              const args = {};
+              for (const k of ["coins", "normal", "lucky"]) if (val("dev-" + k) !== "") args[k] = Math.max(0, Math.floor(+val("dev-" + k)));
+              return this.server("set_wallet", args);
+            }
+            if (cmd === "teleport") {
+              if (NetGame.active) return this.log("Somente solo.");
+              this.hide();
+              selectedMap = +val("dev-map");
+              Account.run = null; // dev test runs are never reported
+              WeaponSystem.model.visible = true;
+              return PlayerController.start();
+            }
+            if (!this.playing()) return;
+            const ahead = player.pos.clone().add(new V(-Math.sin(yaw) * 6, -player.pos.y, -Math.cos(yaw) * 6));
+            if (cmd === "cooldowns") {
+              player.cooldown = 0;
+              return this.log("Cooldowns zerados.");
+            }
+            if (cmd === "spawn-zombie") return void ZombieManager.spawn(+val("dev-ztype"), null, ahead);
+            if (cmd === "spawn-boss") {
+              this.hide();
+              return void WaveManager.boss(val("dev-boss"));
+            }
+            if (cmd === "wave-start") return void (WaveManager.remaining || WaveManager.start());
+            if (cmd === "wave-next") {
+              ZombieManager.clear();
+              WaveManager.remaining = 0;
+              WaveManager.bossPending = false;
+              WaveManager.clearedAt = 0;
+              return void WaveManager.start();
+            }
+            if (cmd === "wave-stop") {
+              WaveManager.remaining = 0;
+              WaveManager.bossPending = false;
+              return this.log("Spawns parados.");
+            }
+            if (cmd === "clear") {
+              for (const z of [...ZombieManager.list]) if (!z.remote) ZombieManager.kill(z);
+              return this.log("Inimigos eliminados.");
+            }
+            if (cmd === "fx") {
+              explosion(ahead.clone(), 3, 0, false, 0xff8a2a);
+              BossKit.toxic(ahead.clone().add(new V(3, 0, 0)), 3, 0x8cff3c);
+              MonsterFX.frostPulse(ahead.clone().add(new V(-3, 0, 0)), 3);
+              return this.log("Explosão, nuvem tóxica e pulso de gelo.");
+            }
+            if (cmd === "anim") {
+              const z = ZombieManager.list.find((q) => q.boss && !q.remote);
+              if (!z) return this.log("Spawne um boss primeiro.");
+              const seq = [() => (z.roarUntil = simulationTime + 1.1), () => BossKit.slam(z), () => BossKit.leap(z), () => (z.swingStart = simulationTime), () => BossKit.rage(z)];
+              (this.animStep = ((this.animStep ?? -1) + 1) % seq.length), seq[this.animStep]();
+              return this.log("Animação " + (this.animStep + 1) + "/" + seq.length);
+            }
+            if (cmd === "test-weapon") {
+              player.inventory[player.slot] = WeaponSystem.weapons[+val("dev-testweapon")];
+              WeaponSystem.weapons[+val("dev-testweapon")].ammo = WeaponSystem.weapons[+val("dev-testweapon")].mag;
+              WeaponSystem.buildModel();
+              return this.log("Arma trocada só nesta partida.");
+            }
+            if (cmd === "test-class") {
+              selectedClass = +val("dev-testclass");
+              player.cooldown = 0;
+              return this.log("Classe de teste aplicada nesta partida.");
+            }
+          },
+        };
+        const BossArmor = {
+          HIT: [1, 0.05, 0.042, 0.032, 0.025],
+          WINDOW: [1, 0.1, 0.085, 0.065, 0.05],
+          rank(z) {
+            return z.boss ? z.boss.rank || (z.boss.major ? 3 : 1) : 0;
+          },
+          limit(z, damage) {
+            const rank = this.rank(z);
+            if (!rank || !(damage > 0) || DevMode.infiniteDamage?.()) return damage;
+            // Frozen minibosses take a heavy (but bounded) bonus; bosses a smaller one.
+            const frozen = z.frozenUntil > simulationTime ? (rank <= 2 ? 1.6 : 1.25) : 1;
+            damage = Math.min(damage, this.HIT[rank] * z.maxhp * frozen);
+            const now = simulationTime;
+            if (!z.dmgWin || now - z.dmgWin.t >= 1) z.dmgWin = { t: now, sum: 0 };
+            const room = Math.max(0, this.WINDOW[rank] * z.maxhp * frozen - z.dmgWin.sum);
+            damage = Math.min(damage, room);
+            z.dmgWin.sum += damage;
+            return damage;
+          },
+        };
         const BloodFX = {
           drops: [],
           mesh: null,
@@ -7687,18 +8224,16 @@ body.netgame #revivetouch{display:flex}
           }
           M.landscape = { inner: H - 1, peak: 34, snow: 0 };
         };
-        // MAP 4 — UNDERGROUND LAB (100 m, closed). One big research hall under a 12 m ceiling.
-        // Centre: a floor-to-ceiling containment capsule (glass, green liquid, the mutant specimen
-        // as decoration) inside a two-level ring — the ground ring with its control consoles and a
-        // wider balcony ring at 4.5 m reached by two curved staircases. Around it: chemical storage,
+        // MAP 4 — UNDERGROUND LAB (100 m, closed). One low research hall under a 7 m ceiling.
+        // Centre: a floor-to-ceiling containment capsule (glass, green liquid and the Mutant — Lab
+        // Miniboss I, who breaks out of it on wave 5) ringed by control consoles and research desks.
+        // Around it: chemical storage,
         // server rows, cryo pods, a surgery bay, generators, spills and damaged lighting.
         MapDesigns[3] = (M, H) => {
           const K = MapKit;
           K.seed = 4403;
-          const CEIL = 12,
-            RING_Y = 4.5,
-            R_IN = 8.5,
-            R_OUT = 19,
+          const CEIL = 7,
+            R_OUT = 12,
             CAPSULE_R = 3.4;
           M.playerStart = [0, 32];
           M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-46, -30], [46, 30], [30, -46], [-30, 46], [46, -30], [-46, 30]];
@@ -7719,7 +8254,7 @@ body.netgame #revivetouch{display:flex}
             const inX = x === 0 ? 0 : -Math.sign(x) * 1.05,
               inZ = z === 0 ? 0 : -Math.sign(z) * 1.05;
             K.soft("hazard", [x + inX, 0.5, z + inZ], [x === 0 ? w - 2 : 0.05, 1, x === 0 ? 0.05 : d], null, 1);
-            for (const y of [8.4, 9.1]) K.hard("metal", [x + inX * 1.3, y, z + inZ * 1.3], [x === 0 ? w - 3 : 0.35, 0.35, x === 0 ? 0.35 : d - 3]);
+            for (const y of [5.4, 6.0]) K.hard("metal", [x + inX * 1.3, y, z + inZ * 1.3], [x === 0 ? w - 3 : 0.35, 0.35, x === 0 ? 0.35 : d - 3]);
           }
           // Blast doors where the horde comes in.
           for (const [sx, sz] of M.spawns) {
@@ -7776,92 +8311,41 @@ body.netgame #revivetouch{display:flex}
             K.soft("screen", [x - Math.cos(a) * 0.46, 1.35, z - Math.sin(a) * 0.46], [1.5, 0.7, 0.05], [0.3 * 0, -a + Math.PI / 2, 0], 0);
             K.col(x, z, 1.6, 1.6, 1.1);
           }
-          // ---- Upper ring (balcony at 4.5 m): concentric bands of tangential segments; each
-          // collider has a base so the ground floor stays walkable underneath.
-          const bands = 4,
-            band = (R_OUT - R_IN) / bands;
-          for (let b = 0; b < bands; b++) {
-            const r0 = R_IN + b * band,
-              rm = r0 + band / 2,
-              n = Math.round((2 * Math.PI * rm) / 2.4);
-            for (let i = 0; i < n; i++) {
-              const a = (i / n) * Math.PI * 2,
-                x = Math.cos(a) * rm,
-                z = Math.sin(a) * rm,
-                seg = (2 * Math.PI * rm) / n + 0.05;
-              K.hard("labFloor", [x, RING_Y - 0.15, z], [band + 0.02, 0.3, seg], [0, -a, 0], 0.6);
-              const ca = Math.abs(Math.cos(a)),
-                sa = Math.abs(Math.sin(a));
-              M.obstacles.push({ x, z, w: (ca * band + sa * seg) * 0.42, d: (sa * band + ca * seg) * 0.42, h: 0.3, top: RING_Y, base: RING_Y - 0.4 });
-            }
-          }
-          // Railings (inner edge everywhere, outer edge except at the stair landings) + support columns.
-          const rail = (r, skip) => {
-            const n = Math.round((2 * Math.PI * r) / 1.6);
-            for (let i = 0; i < n; i++) {
-              const a = (i / n) * Math.PI * 2;
-              if (skip && skip.some((s) => Math.abs(Math.atan2(Math.sin(a - s), Math.cos(a - s))) < 0.22)) continue;
-              const x = Math.cos(a) * r,
-                z = Math.sin(a) * r;
-              K.soft("metal", [x, RING_Y + 0.55, z], [0.08, 1.1, 0.08]);
-              K.soft("hazard", [x, RING_Y + 1.05, z], [0.1, 0.08, 1.7], [0, -a, 0]);
-              M.obstacles.push({ x, z, w: 0.35, d: 0.35, h: 1.1, top: RING_Y + 1.1, base: RING_Y - 0.4 });
-            }
-          };
-          const landings = [Math.PI * 0.25, Math.PI * 1.25];
-          rail(R_IN, null);
-          rail(R_OUT, landings);
-          for (let i = 0; i < 12; i++) {
-            const a = (i / 12) * Math.PI * 2 + 0.13,
-              x = Math.cos(a) * (R_OUT - 0.6),
-              z = Math.sin(a) * (R_OUT - 0.6);
-            K.hard("metal", [x, RING_Y / 2, z], [0.5, RING_Y, 0.5]);
-            K.col(x, z, 0.6, 0.6, RING_Y - 0.35);
-          }
-          // Two curved staircases wrapping around the outside of the ring.
-          for (const landing of landings) {
-            const steps = 12,
-              r = R_OUT + 1.6;
-            for (let s = 0; s < steps; s++) {
-              const a = landing - (steps - 1 - s) * 0.075,
-                x = Math.cos(a) * r,
-                z = Math.sin(a) * r,
-                top = ((s + 1) * RING_Y) / steps;
-              K.hard("labFloor", [x, top / 2, z], [2.6, top, 1.55], [0, -a, 0], 0.6);
-              K.soft("hazard", [x, top + 0.01, z], [2.6, 0.02, 0.18], [0, -a, 0]);
-              M.obstacles.push({ x, z, w: 1.05, d: 1.05, h: top, top });
-            }
-            const lx = Math.cos(landing) * (R_OUT + 0.3),
-              lz = Math.sin(landing) * (R_OUT + 0.3);
-            K.hard("labFloor", [lx, RING_Y - 0.15, lz], [2.2, 0.3, 2.4], [0, -landing, 0]);
-            M.obstacles.push({ x: lx, z: lz, w: 1.1, d: 1.1, h: 0.3, top: RING_Y, base: RING_Y - 0.4 });
-          }
-          // Research stations on the balcony: desks with monitors, sample racks, documents, potions.
-          const potion = ["lightGreen", "signCyan", "lightAmber", "lightBlue"];
+          // ---- Research stations on the ground floor around the capsule (v28: the balcony ring and
+          // its stairs are gone, the hall is a single level under a lower ceiling).
           const potionOf = (i) => ["lightGreen", "lightAmber", "signRed"][i % 3];
-          for (let i = 0; i < 14; i++) {
-            const a = (i / 14) * Math.PI * 2 + 0.11;
-            if (landings.some((s) => Math.abs(Math.atan2(Math.sin(a - s), Math.cos(a - s))) < 0.35)) continue;
-            const r = R_OUT - 2.2,
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2 + 0.11;
+            if (Math.abs(Math.atan2(Math.sin(a - Math.PI / 2), Math.cos(a - Math.PI / 2))) < 0.45) continue; // walkway to the start
+            const r = 14,
               x = Math.cos(a) * r,
               z = Math.sin(a) * r,
               ry = -a + Math.PI / 2;
-            K.hard("white", [x, RING_Y + 0.42, z], [2.2, 0.08, 0.9], [0, ry, 0]);
-            for (const s of [-0.95, 0.95]) {
-              const [lx, lz] = K.at(x, z, ry, s, 0);
-              K.soft("metal", [lx, RING_Y + 0.2, lz], [0.06, 0.4, 0.8], [0, ry, 0]);
+            K.hard("white", [x, 0.92, z], [2.2, 0.08, 0.9], [0, ry, 0]);
+            for (const sd of [-0.95, 0.95]) {
+              const [lx, lz] = K.at(x, z, ry, sd, 0);
+              K.soft("metal", [lx, 0.45, lz], [0.06, 0.9, 0.8], [0, ry, 0]);
             }
             const broken = K.rnd() < 0.3;
             const [mx, mz] = K.at(x, z, ry, -0.4, 0.2);
-            K.soft(broken ? "windowBroken" : "screen", [mx, RING_Y + 0.8, mz], [0.8, 0.55, 0.05], [broken ? 0.9 : 0, ry, 0], 0);
-            K.soft("metal", [mx, RING_Y + 0.52, mz + 0.05], [0.12, 0.2, 0.08], [0, ry, 0]);
+            K.soft(broken ? "windowBroken" : "screen", [mx, 1.3, mz], [0.8, 0.55, 0.05], [broken ? 0.9 : 0, ry, 0], 0);
+            K.soft("metal", [mx, 1.02, mz + 0.05], [0.12, 0.2, 0.08], [0, ry, 0]);
             for (let v = 0; v < 4; v++) {
               const [vx, vz] = K.at(x, z, ry, 0.35 + v * 0.16, -0.15);
-              K.soft(potionOf(i + v), [vx, RING_Y + 0.56, vz], [0.08, 0.2, 0.08], null, 0);
+              K.soft(potionOf(i + v), [vx, 1.06, vz], [0.08, 0.2, 0.08], null, 0);
             }
             const [dx, dz] = K.at(x, z, ry, 0.5, 0.25);
-            K.soft("white", [dx, RING_Y + 0.47, dz], [0.3, 0.01, 0.42], [0, ry + 0.3, 0]);
-            M.obstacles.push({ x, z, w: 1.0, d: 1.0, h: 0.5, top: RING_Y + 0.5, base: RING_Y - 0.4 });
+            K.soft("white", [dx, 0.97, dz], [0.3, 0.01, 0.42], [0, ry + 0.3, 0]);
+            K.rotCol(x, z, ry, 2.2, 0.9, 1);
+          }
+          // Ceiling support columns (the old balcony pillars now hold the lowered ceiling).
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + 0.2,
+              x = Math.cos(a) * 20,
+              z = Math.sin(a) * 20;
+            K.hard("metal", [x, CEIL / 2, z], [0.7, CEIL, 0.7]);
+            K.soft("hazard", [x, 0.6, z], [0.75, 1.2, 0.75]);
+            K.col(x, z, 0.8, 0.8, CEIL);
           }
           // ---- Zones around the ring. North: chemical storage.
           for (let row = 0; row < 3; row++)
@@ -7908,7 +8392,7 @@ body.netgame #revivetouch{display:flex}
             K.hard("labWall", [-38.6, 1.1, z], [1.8, 2.2, 1.4]);
             K.col(-42, z, 5, 3.6, 4);
             K.col(-38.6, z, 1.8, 1.4, 2.2);
-            K.hard("metal", [-45, 7, z], [0.6, 10, 0.6]);
+            K.hard("metal", [-45, CEIL / 2, z], [0.6, CEIL, 0.6]);
           }
           // Spills: green / purple / yellow puddles near storage, servers and the capsule.
           for (const [x, z, k, s] of [[-18, -30, "lightGreen", 2.6], [4, -31, "signYellow", 1.8], [24, -8, "lightBlue", 1.6], [-10, 20, "lightGreen", 2.2], [12, 24, "signYellow", 1.4], [-26, 8, "lightGreen", 1.8], [-6, -24, "lightBlue", 1.2]])
@@ -9303,10 +9787,13 @@ body.netgame #revivetouch{display:flex}
               lucky: [0, 0, 0, 58.9, 37, 3, 1, 0.1],
             };
             this.spinCosts = { normal: 50, lucky: 250 };
-            this.pityCaps = { mythic: 75, divine: 150 };
+            // v28 pity: Mythic pity removed. Divine at 100, Secret at 300 (Normal +1, Lucky +2).
+            this.pityCaps = { divine: 100, secret: 300 };
             this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000, 250000];
             // Price to own N weapon inventory slots, indexed by N (index 0 unused, slot 1 is free).
-            this.weaponSlotPrices = [null, 0, 6000, 18000, 45000, 90000];
+            this.weaponSlotPrices = [null, 0, 15000, 45000, 120000, 300000];
+            // Price to own N class slots (slot 1 is free, the last one costs 1 000 000).
+            this.classSlotPrices = [null, 0, 150000, 1000000];
             this.key = "deadrecoil.loadout.v2";
             this.data = {
               coins: 0,
@@ -9316,11 +9803,12 @@ body.netgame #revivetouch{display:flex}
               classRosterVersion: 2,
               weaponId: 1,
               weaponSlot: 0,
-              classMythicPity: 0,
               classDivinePity: 0,
-              weaponMythicPity: 0,
+              classSecretPity: 0,
               weaponDivinePity: 0,
+              weaponSecretPity: 0,
               weaponSlotsOwned: 1,
+              classSlotsOwned: 1,
             };
           }
           load() {
@@ -9337,7 +9825,7 @@ body.netgame #revivetouch{display:flex}
                   const legacy = Number.isSafeInteger(saved[kind + "Pity"]) && saved[kind + "Pity"] >= 0
                     ? Math.min(saved[kind + "Pity"], 20)
                     : 0;
-                  for (const [suffix, cap] of [["MythicPity", this.pityCaps.mythic], ["DivinePity", this.pityCaps.divine]]) {
+                  for (const [suffix, cap] of [["DivinePity", this.pityCaps.divine], ["SecretPity", this.pityCaps.secret]]) {
                     const key = kind + suffix;
                     this.data[key] = Number.isSafeInteger(saved[key]) && saved[key] >= 0
                       ? Math.min(saved[key], cap)
@@ -9376,9 +9864,9 @@ body.netgame #revivetouch{display:flex}
             this.save();
           }
           drawTier(lucky, minimumTier = 0) {
-            let value = this.random() * 100,
-              tier = 5;
             const rates = this.rates[lucky ? "lucky" : "normal"];
+            let value = this.random() * 100,
+              tier = rates.length - 1;
             for (let i = 0; i < rates.length; i++) {
               value -= rates[i];
               if (value < 0) {
@@ -9389,27 +9877,35 @@ body.netgame #revivetouch{display:flex}
             return Math.max(minimumTier, tier);
           }
           pityState(kind, lucky) {
-            const mythicKey = kind + "MythicPity";
             const divineKey = kind + "DivinePity";
+            const secretKey = kind + "SecretPity";
             const points = lucky ? 2 : 1;
-            const mythic = Math.min(this.pityCaps.mythic, (this.data[mythicKey] || 0) + points);
-            const divine = Math.min(this.pityCaps.divine, (this.data[divineKey] || 0) + points);
+            const clampPity = (v, cap) => Math.min(cap, Math.max(0, Number.isSafeInteger(v) ? v : 0) + points);
+            const divine = clampPity(this.data[divineKey], this.pityCaps.divine);
+            const secret = clampPity(this.data[secretKey], this.pityCaps.secret);
             return {
-              mythicKey,
               divineKey,
-              mythic,
+              secretKey,
               divine,
-              minimumTier: divine >= this.pityCaps.divine ? 6 : mythic >= this.pityCaps.mythic ? 5 : 0,
+              secret,
+              minimumTier: secret >= this.pityCaps.secret ? 7 : divine >= this.pityCaps.divine ? 6 : 0,
             };
           }
           commitPity(pity, tier) {
-            if (tier >= 6) {
-              this.data[pity.mythicKey] = 0;
-              this.data[pity.divineKey] = 0;
-            } else {
-              this.data[pity.mythicKey] = tier >= 5 ? 0 : pity.mythic;
-              this.data[pity.divineKey] = pity.divine;
+            // Secret resets both counters, Divine resets only the Divine counter.
+            this.data[pity.secretKey] = tier >= 7 ? 0 : pity.secret;
+            this.data[pity.divineKey] = tier >= 6 ? 0 : pity.divine;
+          }
+          // Preferred item inside the drawn rarity weighs 1.5x (same rule as the server).
+          pick(eligible, pref) {
+            const n = eligible.length,
+              wanted = eligible.find((e) => e.id === pref);
+            if (wanted && n > 1) {
+              if (this.random() < 1.5 / (n + 0.5)) return wanted;
+              const rest = eligible.filter((e) => e !== wanted);
+              return rest[Math.min(rest.length - 1, Math.floor(this.random() * rest.length))];
             }
+            return eligible[Math.min(n - 1, Math.floor(this.random() * n))];
           }
           roll(kind, lucky, payment) {
             if (!this.catalogs[kind] || !["ticket", "coins"].includes(payment))
@@ -9554,7 +10050,7 @@ body.netgame #revivetouch{display:flex}
                 })
                 .join("");
               $(kind + "-result").textContent =
-                this.messages[kind] + ` Mythic Pity: ${d[kind + "MythicPity"]}/75 · Divine Pity: ${d[kind + "DivinePity"]}/150.`;
+                this.messages[kind] + ` Divine Pity: ${d[kind + "DivinePity"]}/100 · Secret Pity: ${d[kind + "SecretPity"]}/300.`;
               const catalog = this.economy.catalogs[kind];
               $(kind === "class" ? "classcards" : "weaponcards").innerHTML =
                 catalog
@@ -9568,7 +10064,7 @@ body.netgame #revivetouch{display:flex}
                   .join("");
             }
             $("roll-rates").innerHTML =
-              `<table class="chance-table"><thead><tr><th>Raridade</th><th>Normal</th><th>Lucky</th></tr></thead><tbody>${rarityNames.map((name, i) => `<tr><td style="color:${rarityColors[i]}">${name}</td><td>${this.economy.rates.normal[i]}%</td><td>${this.economy.rates.lucky[i]}%</td></tr>`).join("")}</tbody></table><p class="hint">Pity independente para classes e armas: Normal soma +1 e Lucky soma +2. Ao atingir 75, o próprio giro garante Mítico ou Divino; ao atingir 150, garante Divino. Mítico natural reseta apenas o pity Mítico; Divino reseta ambos. Compras diretas não mudam o pity.</p>`;
+              `<table class="chance-table"><thead><tr><th>Raridade</th><th>Normal</th><th>Lucky</th></tr></thead><tbody>${rarityNames.map((name, i) => `<tr><td style="color:${rarityColors[i]}">${name}</td><td>${this.economy.rates.normal[i]}%</td><td>${this.economy.rates.lucky[i]}%</td></tr>`).join("")}</tbody></table><p class="hint">Pity independente para classes e armas: Normal soma +1 e Lucky soma +2. Ao atingir 100, o giro garante Divino; ao atingir 300, garante Secreto. Divino reseta o pity Divino; Secreto reseta ambos.</p>`;
             $("classcontinue").disabled = this.busy;
             $("classscreen")
               .querySelectorAll("[data-roll]")
@@ -10131,7 +10627,7 @@ body.netgame #revivetouch{display:flex}
             if (!boss) VoxelMonsters.dress(rig, selectedMap);
             const scaling =
                 mode === "infinite"
-                  ? Math.pow(1.12, WaveManager.wave - 1)
+                  ? Math.pow(1.085, WaveManager.wave - 1)
                   : 1 + 0.08 * (WaveManager.wave - 1),
               hp = boss ? boss.hp : t.hp * scaling;
             const z = {
@@ -10224,6 +10720,7 @@ body.netgame #revivetouch{display:flex}
               this.list.some((other) => other !== z && !other.boss)
             )
               damage *= 0.35;
+            damage = BossArmor.limit(z, damage);
             const before = z.hp;
             if (z.remote) {
               if (NetGame.applyingRemote) return;
@@ -10323,7 +10820,8 @@ body.netgame #revivetouch{display:flex}
               const enemy = !z.boss && ENEMY_KEYS[z.type];
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               ZombiePing.lastKill = simulationTime;
-              const reward = z.boss ? z.boss.coins : head ? 8 : 5;
+              // v28 economy (mirrors the server report): 2 coins per kill, +1 on headshots.
+              const reward = z.boss ? z.boss.coins : head ? 3 : 2;
               Progression.reward(Math.round(reward * diff[difficulty].coins));
               const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
               const heal =
@@ -10405,7 +10903,7 @@ body.netgame #revivetouch{display:flex}
                 NetGame.drivePuppet(z, dt);
                 continue;
               }
-              if (z.dropping) continue;
+              if (z.dropping || z.rig?.cinematic) continue;
               NetGame.aim(z);
               try {
               if (
@@ -10515,8 +11013,13 @@ body.netgame #revivetouch{display:flex}
                 }
                 if (z.boss?.kind !== "necro") pos.y += (MapManager.groundAt(pos.x, pos.z, 0.2, 0) - pos.y) * Math.min(1, dt * 12);
               }
+              // Height gap between the target's feet and the zombie's feet: nobody swings at a
+              // player standing on a roof, a car or the top of a staircase above them.
+              const rise = player.pos.y - 1.6 - pos.y,
+                reachUp = 1.05 + (z.boss ? z.size * 0.55 : z.size * 0.15),
+                inReach = rise < reachUp && rise > -1.6;
               if (
-                active &&
+                active && inReach &&
                 dist < 1.5 + z.size * 0.25 &&
                 simulationTime > z.attack
               ) {
@@ -10526,7 +11029,7 @@ body.netgame #revivetouch{display:flex}
               }
               if (z.strikeAt && simulationTime >= z.strikeAt) {
                 z.strikeAt = 0;
-                if (active && dist < 1.7 + z.size * 0.25)
+                if (active && inReach && dist < 1.7 + z.size * 0.25)
                   PlayerController.hurt(
                     (z.boss
                       ? 23
@@ -10559,36 +11062,6 @@ body.netgame #revivetouch{display:flex}
                 }
                 if (z.boss.kind === "necro")
                   pos.y = 0.7 + Math.sin(simulationTime * 2) * 0.3;
-                if (
-                  z.boss.kind === "abomination" &&
-                  !z.split &&
-                  z.hp < z.maxhp * 0.5
-                ) {
-                  z.split = true;
-                  for (let i = 0; i < 3; i++)
-                    this.spawn(
-                      6,
-                      {
-                        name: "Fragmento da Abominação",
-                        hp: 3000,
-                        size: 1.6,
-                        speed: 2.1,
-                        color: 0x99736c,
-                        coins: 80,
-                        kind: "fragment",
-                      },
-                      new V(
-                        clamp(pos.x + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
-                        0,
-                        clamp(pos.z + rand(-4, 4), -MapManager.half + 5, MapManager.half - 5),
-                      ),
-                    );
-                  UIManager.announce(
-                    "A HORDA SE DIVIDE",
-                    "Três fragmentos despertaram",
-                    2,
-                  );
-                }
               }
               if (z.boss?.voxel) MonsterFX.bossTick(z, dt, dist, walking, active);
               if (active && simulationTime > z.special) {
@@ -10915,6 +11388,8 @@ body.netgame #revivetouch{display:flex}
             document.body.appendChild(bars);
           },
           clear() {
+            BossKit.clear();
+            MutantBreakout.reset();
             for (const it of this.items) {
               it.onClear?.();
               this.dispose(it.mesh);
@@ -10958,6 +11433,7 @@ body.netgame #revivetouch{display:flex}
           },
           damagePlayer(amount) {
             if (NetGame.hurtRemote(amount)) return;
+            if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             player.hp -= amount;
             player.lastDamage = simulationTime;
@@ -11014,7 +11490,8 @@ body.netgame #revivetouch{display:flex}
             return it;
           },
           bossTick(z, dt, dist, walking, active) {
-            const kind = z.boss.kind,
+            const b = z.boss,
+              has = (ability) => !!b.abilities?.includes(ability),
               t = simulationTime,
               pos = z.group.position,
               d = diff[difficulty].damage;
@@ -11025,6 +11502,12 @@ body.netgame #revivetouch{display:flex}
               z.blitzAt ??= t + 3;
               z.drainAt ??= 0;
               z.trailAt ??= 0;
+              z.slamAt ??= t + 2.5;
+              z.leapAt ??= t + 4.5;
+              z.summonAt ??= t + 7;
+              z.rocketAt ??= t + 3;
+              z.toxicAt ??= t + 5;
+              z.graveAt ??= t + 4;
               z.lastSwing = z.swingStart;
             }
             const fwd = new V(Math.sin(z.group.rotation.y), 0, Math.cos(z.group.rotation.y));
@@ -11032,23 +11515,36 @@ body.netgame #revivetouch{display:flex}
               z.pushAt = t + 0.15;
               PhysicsProps.impulse(pos, 1.5 * z.size, 4);
             }
-            if (kind === "mutant" && walking && t > z.trailAt) {
-              // Mutant slime trail: puddles last 10 s and burn anyone standing in them.
+            BossKit.rage(z);
+            const cd = z.raging ? 0.7 : 1,
+              busy = !!(z.leapState || z.slamState || z.throwWind);
+            if (has("trail") && walking && t > z.trailAt) {
+              // Slime / blood / acid trail: puddles last 10 s and burn anyone standing in them.
               z.trailAt = t + 0.4;
               const r = 0.62 * z.size,
                 p = pos.clone().addScaledVector(fwd, -0.75 * z.size);
-              this.addPuddle(p, r);
-              NetGame.fx("puddle", { x: +p.x.toFixed(2), z: +p.z.toFixed(2), r: +r.toFixed(2) });
+              this.addPuddle(p, r, b.trail);
+              NetGame.fx("puddle", { x: +p.x.toFixed(2), z: +p.z.toFixed(2), r: +r.toFixed(2), t: b.trail });
             }
-            if (kind === "yeti") {
-              if (active && t >= z.frostAt) {
-                // Frost pulse every 5 s: everyone near the yeti is slowed.
-                z.frostAt = t + 5;
-                this.frostPulse(pos, 9);
-                NetGame.fx("frost", { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), r: 9 });
-              }
+            if (has("frost") && active && t >= z.frostAt) {
+              // Frost pulse: everyone near the boss is slowed.
+              z.frostAt = t + 5 * cd;
+              const r = b.rank <= 2 ? 6 : 9;
+              this.frostPulse(pos, r);
+              NetGame.fx("frost", { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), r });
             }
-            if (kind === "demon") {
+            if (has("toxic") && active && t >= z.toxicAt && dist < 13) {
+              z.toxicAt = t + 7 * cd;
+              BossKit.toxic(pos, 7, b.fx || 0x8cff3c);
+              NetGame.fx("bk", { a: "toxic", x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), r: 7, c: b.fx || 0x8cff3c });
+            }
+            if (has("grave") && active && t >= z.graveAt && dist < 14) {
+              z.graveAt = t + 9 * cd;
+              BossKit.grave(pos, 8);
+              NetGame.fx("bk", { a: "grave", x: +pos.x.toFixed(2), z: +pos.z.toFixed(2), r: 8 });
+              BossKit.summon(z, 2, 1);
+            }
+            if (has("drain")) {
               const drainRadius = 8;
               if (!z.drainRing || z.drainRing.life <= 0) {
                 const m = this.groundPlane(0xff1e10, 0.18, "glow");
@@ -11060,31 +11556,33 @@ body.netgame #revivetouch{display:flex}
                 });
               }
               if (active && dist < drainRadius && t >= z.drainAt) {
-                // Life drain: the demon siphons health from anyone inside its aura.
+                // Life drain: the demon siphons health from anyone inside its aura (healing is
+                // bounded so the aura can't undo a whole fight).
                 z.drainAt = t + 0.3;
                 const amount = 2.4 * d;
                 this.damagePlayer(amount);
-                z.hp = Math.min(z.maxhp, z.hp + amount * 6);
+                z.hp = Math.min(z.maxhp, z.hp + amount * 2.5);
                 const chest = pos.clone().add(new V(0, 2.2, 0)),
                   me = player.pos.clone().add(new V(0, -0.35, 0));
                 ParticleSystem.line(me, chest, 0xff2020, 0.14);
                 ParticleSystem.emit(me, 0xff3a2a, 3, 0.9);
               }
-              if (z.swingStart !== z.lastSwing) {
-                // Melee telegraph: red circle where the trident will land.
-                z.lastSwing = z.swingStart;
-                this.circle(pos.clone().addScaledVector(fwd, 1.3 * z.size), 1.25 * z.size, 0xff1a10, 0.5, 0.75);
-              }
-              if (active && !z.throwWind && t >= z.throwAt && dist > 3 && dist < 34) this.startThrow(z, dist);
-              if (z.throwWind && !z.throwWind.released && t >= z.throwWind.release) this.releaseThrow(z);
             }
-            if (kind === "quarterback") {
-              if (active && t >= z.blitzAt && dist > 4 && dist < 22) {
+            if (z.swingStart !== z.lastSwing) {
+              // Melee telegraph: a circle where the swing will land.
+              z.lastSwing = z.swingStart;
+              z.attackVariant = (z.attackVariant + 1 + Math.floor(Math.random() * 2)) % 3 || 0;
+              this.circle(pos.clone().addScaledVector(fwd, 1.3 * z.size), 1.25 * z.size, b.kind === "demon" ? 0xff1a10 : 0xff5a3a, 0.5, 0.6);
+            }
+            if (has("throw") && active && !busy && t >= z.throwAt && dist > 3 && dist < 34) this.startThrow(z, dist);
+            if (z.throwWind && !z.throwWind.released && t >= z.throwWind.release) this.releaseThrow(z);
+            if (has("blitz")) {
+              if (active && !busy && t >= z.blitzAt && dist > 4 && dist < 22) {
                 // Blitz: a short burst sprint that tackles the player on contact.
                 z.blitzUntil = t + 1.4;
-                z.blitzAt = t + 5.5;
+                z.blitzAt = t + 5.5 * cd;
                 z.tackled = false;
-                UIManager.toast("BLITZ! O Quarterback está avançando!");
+                UIManager.toast(`INVESTIDA! ${z.name} está avançando!`);
                 AudioManager.tone(140, 0.35, "sawtooth", 0.25, 60);
               }
               if (z.blitzUntil > t) {
@@ -11101,13 +11599,36 @@ body.netgame #revivetouch{display:flex}
                 }
               }
             }
+            if (has("slam") && active && !busy && t >= z.slamAt && dist < 3.4 + z.size * 1.3) {
+              z.slamAt = t + 6.5 * cd;
+              BossKit.slam(z);
+            }
+            if (has("leap") && active && !busy && t >= z.leapAt && dist > 6 && dist < 26) {
+              z.leapAt = t + 9 * cd;
+              BossKit.leap(z);
+            }
+            if (z.leapState) BossKit.updateLeap(z, dt);
+            if (has("summon") && active && t >= z.summonAt) {
+              z.summonAt = t + 14 * cd;
+              BossKit.summon(z, b.rank >= 3 ? 3 : 2);
+            }
+            if (has("rockets") && active && t >= z.rocketAt && dist > 5 && dist < 30 && z.canSee !== false) {
+              z.rocketAt = t + (b.rank >= 4 ? 5 : 7) * cd;
+              CyborgRockets.telegraph(z);
+              if (b.rank >= 4) z.rocketSecond = t + 0.45;
+            }
+            if (z.rocketSecond && t >= z.rocketSecond) {
+              z.rocketSecond = 0;
+              CyborgRockets.telegraph(z);
+            }
           },
-          addPuddle(p, r) {
-            const m = this.groundPlane(0x7dff2e, 0.8, "blood", false);
+          addPuddle(p, r, type = "acid") {
+            const color = { acid: 0x7dff2e, blood: 0x8a0f0f, toxic: 0x9aff3a }[type] || 0x7dff2e;
+            const m = this.groundPlane(color, 0.8, "blood", false);
             m.position.set(p.x + rand(-0.15, 0.15), 0.05 + Math.random() * 0.01, p.z + rand(-0.15, 0.15));
             m.rotation.z = rand(0, 6.28);
             scene.add(m);
-            this.puddles.push({ mesh: m, pos: p.clone(), r, life: 10, grow: 0 });
+            this.puddles.push({ mesh: m, pos: p.clone(), r, life: 10, grow: 0, type, spark: type === "blood" ? 0xb01010 : 0x9dff45 });
             while (this.puddles.length > 48) this.dispose(this.puddles.shift().mesh);
           },
           // Area slow around the yeti. Each client checks only its own (real) player.
@@ -11133,7 +11654,7 @@ body.netgame #revivetouch{display:flex}
           startDrop(z, target) {
             const t = simulationTime,
               demon = z.boss.kind === "demon",
-              color = demon ? 0xff2010 : 0x7fdcff,
+              color = demon ? 0xff2010 : z.boss.fx || 0x7fdcff,
               dur = 1.6;
             z.dropping = { start: t, dur, target: target.clone(), height: 48 };
             z.rig.cinematic = true;
@@ -11191,11 +11712,12 @@ body.netgame #revivetouch{display:flex}
             z.landedAt = t;
             shake = Math.max(shake, 0.9);
             MonsterAudio.play("land", { volume: 1.8 });
-            this.ring(pos, radius * 1.9, demon ? 0xff5020 : 0xbdeeff, 0.9);
+            const tone = z.boss.fx || 0xbdeeff;
+            this.ring(pos, radius * 1.9, demon ? 0xff5020 : tone, 0.9);
             this.ring(pos, radius * 1.2, 0xffffff, 0.6);
             for (let i = 0; i < 36; i++) {
               const a = (i / 36) * Math.PI * 2;
-              ParticleSystem.emit(pos.clone().add(new V(Math.cos(a) * 2.2, 0.3, Math.sin(a) * 2.2)), demon ? (i % 2 ? 0xff5a1e : 0x5a3a2a) : i % 2 ? 0xffffff : 0x9fdcff, 5, 7);
+              ParticleSystem.emit(pos.clone().add(new V(Math.cos(a) * 2.2, 0.3, Math.sin(a) * 2.2)), demon ? (i % 2 ? 0xff5a1e : 0x5a3a2a) : i % 2 ? 0x8a8078 : tone, 5, 7);
             }
             CombatFX.mark(pos, demon ? 0x1a0806 : 0x9ab8c8, 5.5);
             PhysicsProps.impulse(pos, 12, 15);
@@ -11209,12 +11731,12 @@ body.netgame #revivetouch{display:flex}
               for (let i = 0; i < 8; i++) MapManager.move(player.pos, away.x * 0.5, away.z * 0.5, 0.4, (player.ground || 0) + (player.jump || 0));
               player.vy = 5;
             }
-            if (!demon && dist < 10) {
+            if (z.boss.abilities?.includes("frost") && dist < 10) {
               player.slowUntil = t + 3;
               player.slowFactor = 0.5;
               MonsterAudio.play("frost", { volume: 1 });
             }
-            UIManager.announce(z.name.toUpperCase(), "BOSS · Fase 1", 2.2);
+            UIManager.announce(z.name.toUpperCase(), `${z.boss.title || "BOSS"} · Fase 1`, 2.2);
           },
           startThrow(z, dist, presetDirs = null, presetLength = null) {
             const t = simulationTime,
@@ -11238,12 +11760,11 @@ body.netgame #revivetouch{display:flex}
               pos = z.group.position;
             w.released = true;
             if (z.rig.props.trident) z.rig.props.trident.visible = false;
-            MonsterAudio.play("trident", { volume: 1 });
+            MonsterAudio.play("trident", { volume: 1, rate: z.boss.kind === "demon" ? 1 : 0.8 });
             for (const dir of w.dirs) {
               // Outer group aims along the flight path; the inner trident spins around its shaft.
               const mesh = new THREE.Group(),
-                spin = VoxelMonsters.trident();
-              spin.position.y = -12 * VoxelMonsters.P;
+                spin = BossKit.projectile(z);
               mesh.add(spin);
               mesh.scale.setScalar(z.size);
               mesh.rotation.order = "YXZ";
@@ -11252,7 +11773,7 @@ body.netgame #revivetouch{display:flex}
               const start = pos.clone().addScaledVector(dir, 1).add(new V(0, 1.1 * z.size, 0));
               mesh.position.copy(start);
               scene.add(mesh);
-              this.throws.push({ z, mesh, spin, dir, start, travelled: 0, length: w.length, phase: "fly", timer: 0, hit: false });
+              this.throws.push({ z, mesh, spin, dir, start, travelled: 0, length: w.length, phase: "fly", timer: 0, hit: false, color: z.boss.fx || 0xff6a2a, returns: ["trident", "icespear", "cleaver"].includes(z.boss.projectile || "trident") });
             }
           },
           finishThrow(z) {
@@ -11265,6 +11786,8 @@ body.netgame #revivetouch{display:flex}
           },
           update(dt) {
             const t = simulationTime;
+            BossKit.update(dt);
+            MutantBreakout.update(dt);
             this.updateDrops(dt);
             for (let i = this.items.length - 1; i >= 0; i--) {
               const it = this.items[i];
@@ -11284,7 +11807,7 @@ body.netgame #revivetouch{display:flex}
               p.mesh.scale.setScalar(p.r * 2.4 * (0.5 + 0.5 * p.grow));
               p.mesh.material.opacity = 0.8 * Math.min(1, p.life / 2);
               if (Math.random() < dt * 1.5)
-                ParticleSystem.emit(p.pos.clone().add(new V(rand(-0.4, 0.4), 0.05, rand(-0.4, 0.4))), 0x9dff45, 1, 0.5);
+                ParticleSystem.emit(p.pos.clone().add(new V(rand(-0.4, 0.4), 0.05, rand(-0.4, 0.4))), p.spark || 0x9dff45, 1, 0.5);
               if (Math.hypot(player.pos.x - p.pos.x, player.pos.z - p.pos.z) < p.r) inAcid = true;
               if (p.life <= 0) {
                 this.dispose(p.mesh);
@@ -11304,7 +11827,7 @@ body.netgame #revivetouch{display:flex}
                 th.travelled += step;
                 th.mesh.position.addScaledVector(th.dir, step);
                 th.spin.rotation.y += dt * 14;
-                if (Math.random() < 0.7) ParticleSystem.emit(th.mesh.position.clone(), 0xff6a2a, 2, 0.6);
+                if (Math.random() < 0.7) ParticleSystem.emit(th.mesh.position.clone(), th.color, 2, 0.6);
                 const dx = player.pos.x - th.mesh.position.x,
                   dz = player.pos.z - th.mesh.position.z;
                 if (!th.hit && Math.hypot(dx, dz) < 1.1) {
@@ -11318,8 +11841,16 @@ body.netgame #revivetouch{display:flex}
                   th.timer = 0;
                   th.mesh.rotation.x = Math.PI / 2 + 0.55;
                   th.mesh.position.y = 0.6 * th.z.size;
-                  ParticleSystem.emit(th.mesh.position.clone(), 0xff5a1e, 26, 4);
+                  ParticleSystem.emit(th.mesh.position.clone(), th.color, 26, 4);
                   CombatFX.mark(th.mesh.position, 0x2a0f0a, 1.4);
+                  if (!th.returns) {
+                    // Debris and boulders shatter on impact instead of flying back.
+                    shake = Math.max(shake, 0.25);
+                    this.dispose(th.mesh);
+                    this.throws.splice(i, 1);
+                    this.finishThrow(th.z);
+                    continue;
+                  }
                   PhysicsProps.impulse(th.mesh.position, 4, 9);
                 }
               } else if (th.phase === "stuck") {
@@ -11348,6 +11879,399 @@ body.netgame #revivetouch{display:flex}
         // rises from his throne in hell, rips his trident out of the ground and leaps into the sky;
         // the Yeti bursts out of his den in a blizzard, roars and leaps. Control then returns to the
         // player and the boss comes crashing down in the middle of the map on a telegraphed spot.
+        // Shared boss/miniboss abilities: ground slam, leap, summons, toxic and grave pulses, rage,
+        // thrown projectiles and the short miniboss intro. The host runs the AI; every visual goes
+        // out through NetGame.fx("bk") and each client applies damage only to its own player.
+        const BossKit = {
+          pending: [],
+          later(delay, fn) {
+            this.pending.push({ at: simulationTime + delay, fn });
+          },
+          update(dt) {
+            for (let i = this.pending.length - 1; i >= 0; i--) {
+              const p = this.pending[i];
+              if (simulationTime < p.at) continue;
+              this.pending.splice(i, 1);
+              try { p.fn(); } catch (e) { console.warn(e); }
+            }
+          },
+          clear() {
+            this.pending = [];
+          },
+          localHit(pos, radius) {
+            const me = NetGame.realPos();
+            return !NetGame.down && Math.hypot(me.x - pos.x, me.z - pos.z) < radius;
+          },
+          shortIntro(z) {
+            // Minibosses: a short, readable entrance — ground burst, roar, a beat to react.
+            const t = simulationTime;
+            z.rootedUntil = t + 1.3;
+            z.roarUntil = t + 1.2;
+            z.attack = Math.max(z.attack || 0, t + 1.6);
+            const c = z.boss.fx || 0xffffff;
+            MonsterFX.ring(z.group.position, 5 * z.size, c, 0.8);
+            for (let i = 0; i < 22; i++) {
+              const a = (i / 22) * Math.PI * 2;
+              ParticleSystem.emit(z.group.position.clone().add(new V(Math.cos(a) * 1.4, 0.2, Math.sin(a) * 1.4)), i % 2 ? c : 0x6a5a4a, 3, 4);
+            }
+            shake = Math.max(shake, 0.35);
+          },
+          rage(z) {
+            if (z.raging || z.hp > z.maxhp * 0.4 || z.dead) return;
+            z.raging = true;
+            z.speed *= 1.22;
+            const t = simulationTime;
+            z.roarUntil = t + 1.1;
+            z.rootedUntil = Math.max(z.rootedUntil || 0, t + 0.9);
+            UIManager.announce(z.name.toUpperCase(), "FÚRIA", 1.6);
+            this.rageFx(z.group.position, z.size);
+            BossVoice.play(z, "rage");
+            NetGame.fx("bk", { a: "rage", id: z.netId, x: +z.group.position.x.toFixed(2), z: +z.group.position.z.toFixed(2), s: z.size });
+          },
+          rageFx(pos, size) {
+            MonsterFX.ring(pos, 6 * size, 0xff2a14, 0.9);
+            MonsterFX.circle(pos, 2.5 * size, 0xff2a14, 0.9, 0.5);
+            for (let i = 0; i < 26; i++) ParticleSystem.emit(pos.clone().add(new V(rand(-1, 1), rand(0.5, 2.5) * size, rand(-1, 1))), 0xff3a1a, 2, 3);
+            shake = Math.max(shake, 0.5);
+          },
+          // Overhead smash: arms up (rooted), telegraphed circle, impact after 0.9 s.
+          slam(z) {
+            const t = simulationTime,
+              warn = 0.9,
+              r = 2.6 + z.size * 1.1,
+              c = z.boss.fx || 0xff5a3a,
+              fwd = new V(Math.sin(z.group.rotation.y), 0, Math.cos(z.group.rotation.y)),
+              at = z.group.position.clone().addScaledVector(fwd, 0.9 * z.size);
+            z.slamState = { start: t, end: t + warn };
+            z.rootedUntil = t + warn + 0.45;
+            z.attack = Math.max(z.attack || 0, t + warn + 0.6);
+            this.mark(at, r, c, warn);
+            NetGame.fx("bk", { a: "mark", x: +at.x.toFixed(2), z: +at.z.toFixed(2), r: +r.toFixed(2), c, w: warn, dmg: 26 * (z.boss.rank >= 3 ? 1.2 : 1) });
+            this.later(warn, () => {
+              z.slamState = null;
+              if (z.dead) return;
+              this.impact(at, r, c, 26 * (z.boss.rank >= 3 ? 1.2 : 1));
+            });
+          },
+          mark(at, r, color, warn) {
+            MonsterFX.circle(at, r, color, warn, 0.45);
+            MonsterFX.ring(at, r, color, warn);
+          },
+          impact(at, r, color, damage) {
+            MonsterFX.ring(at, r * 1.6, color, 0.7);
+            MonsterFX.ring(at, r, 0xffffff, 0.45);
+            CombatFX.mark(at, 0x1a1410, r * 0.9);
+            PhysicsProps.impulse(at, r + 2, 11);
+            for (let i = 0; i < 28; i++) {
+              const a = (i / 28) * Math.PI * 2;
+              ParticleSystem.emit(at.clone().add(new V(Math.cos(a) * r * 0.5, 0.2, Math.sin(a) * r * 0.5)), i % 2 ? color : 0x7a6a5a, 4, 6);
+            }
+            MonsterAudio.play("land", { volume: 1.1, rate: 1.1 });
+            const me = NetGame.realPos(),
+              dist = Math.hypot(me.x - at.x, me.z - at.z);
+            shake = Math.max(shake, dist < r * 2.5 ? 0.6 : 0.25);
+            if (this.localHit(at, r)) {
+              MonsterFX.damagePlayer(damage * diff[difficulty].damage);
+              const away = new V(me.x - at.x, 0, me.z - at.z);
+              if (away.lengthSq() < 0.01) away.set(1, 0, 0);
+              away.normalize();
+              for (let i = 0; i < 6; i++) MapManager.move(player.pos, away.x * 0.45, away.z * 0.45, 0.4, (player.ground || 0) + (player.jump || 0));
+              player.vy = 4;
+            }
+          },
+          // Leap: crouch, arc onto the target's position, land with a slam.
+          leap(z) {
+            const t = simulationTime,
+              from = z.group.position.clone(),
+              target = player.pos.clone();
+            target.y = 0;
+            // Land on a free spot, a little short of the player.
+            const dir = target.clone().sub(from);
+            dir.y = 0;
+            const len = dir.length();
+            if (len < 0.5) return;
+            dir.normalize();
+            let to = from.clone().addScaledVector(dir, Math.max(0, len - 1.2));
+            for (let k = 0; k < 8 && MapManager.collides(to.x, to.z, 0.6 * z.size); k++) to.addScaledVector(dir, -1.2);
+            to.y = MapManager.groundAt(to.x, to.z, 0.2, 0);
+            const r = 2.4 + z.size * 0.9,
+              c = z.boss.fx || 0xffb040;
+            z.leapState = { start: t, wind: 0.5, air: 0.85, from, to, r, c, landed: false };
+            z.rootedUntil = t + 2;
+            this.mark(to, r, c, 1.35);
+            NetGame.fx("bk", { a: "mark", x: +to.x.toFixed(2), z: +to.z.toFixed(2), r: +r.toFixed(2), c, w: 1.35, dmg: 30 });
+            UIManager.toast(`${z.name} vai saltar — saia do círculo!`);
+          },
+          updateLeap(z, dt) {
+            const L = z.leapState,
+              k = (simulationTime - L.start - L.wind) / L.air,
+              pos = z.group.position;
+            if (k < 0) return; // crouching (animation reads z.leapState)
+            if (k < 1) {
+              pos.x = L.from.x + (L.to.x - L.from.x) * k;
+              pos.z = L.from.z + (L.to.z - L.from.z) * k;
+              pos.y = L.from.y + (L.to.y - L.from.y) * k + 6 * k * (1 - k) * (1 + z.size * 0.3);
+              z.group.rotation.y = Math.atan2(L.to.x - L.from.x, L.to.z - L.from.z);
+              return;
+            }
+            if (!L.landed) {
+              L.landed = true;
+              pos.copy(L.to);
+              this.impact(L.to, L.r, L.c, 30);
+              z.rootedUntil = simulationTime + 0.55;
+              z.leapState = null;
+            }
+          },
+          summon(z, count = 2, typeHint = null) {
+            if (NetGame.active && !NetGame.host) return;
+            const map = selectedMap,
+              type = typeHint ?? [0, 0, 1, 11, 0][map] ?? 0;
+            let made = 0;
+            for (let i = 0; i < count && ZombieManager.list.length < 80; i++) {
+              const a = (i / count) * Math.PI * 2 + rand(0, 1),
+                p = z.group.position.clone().add(new V(Math.cos(a) * 2.6, 0, Math.sin(a) * 2.6));
+              if (MapManager.collides(p.x, p.z, 0.4)) continue;
+              ZombieManager.spawn(type, null, p);
+              ParticleSystem.emit(p.clone().add(new V(0, 0.3, 0)), z.boss.fx || 0x9a8a7a, 16, 3);
+              made++;
+            }
+            if (made) {
+              z.roarUntil = simulationTime + 0.8;
+              UIManager.toast(`${z.name} chamou reforços!`);
+              BossVoice.play(z, "ability");
+            }
+          },
+          toxic(pos, r, color) {
+            MonsterFX.circle(pos, r, color, 1.4, 0.4);
+            MonsterFX.ring(pos, r, color, 0.9);
+            for (let i = 0; i < 40; i++) ParticleSystem.emit(pos.clone().add(new V(rand(-r, r) * 0.7, rand(0.2, 1.8), rand(-r, r) * 0.7)), color, 1, 1.2);
+            if (this.localHit(pos, r)) {
+              MonsterFX.damagePlayer(9 * diff[difficulty].damage);
+              player.slowUntil = simulationTime + 1.6;
+              player.slowFactor = 0.65;
+              UIManager.toast("Nuvem tóxica! Saia da área.");
+            }
+          },
+          grave(pos, r) {
+            MonsterFX.ring(pos, r, 0x7a4aff, 0.9);
+            MonsterFX.circle(pos, r * 0.7, 0x2a1440, 1.1, 0.5);
+            for (let i = 0; i < 24; i++) ParticleSystem.emit(pos.clone().add(new V(rand(-r, r) * 0.6, 0.2, rand(-r, r) * 0.6)), 0xffb050, 1, 2);
+            if (this.localHit(pos, r)) {
+              player.slowUntil = simulationTime + 2;
+              player.slowFactor = 0.55;
+              UIManager.toast("A lanterna do Gravekeeper te prende!");
+            }
+          },
+          remote(m, z) {
+            const pos = new V(m.x, 0, m.z);
+            if (m.a === "mark") {
+              this.mark(pos, m.r, m.c, m.w);
+              this.later(m.w, () => this.impact(pos, m.r, m.c, m.dmg || 26));
+            } else if (m.a === "toxic") this.toxic(pos, m.r, m.c);
+            else if (m.a === "grave") this.grave(pos, m.r);
+            else if (m.a === "rage") {
+              this.rageFx(pos, m.s || 1.5);
+              if (z) { z.raging = true; z.roarUntil = simulationTime + 1.1; }
+            } else if (m.a === "breakout") MutantBreakout.start(null, m);
+          },
+          // Thrown projectile mesh; the inner group spins around its long axis.
+          projectile(z) {
+            const P = VoxelMonsters.P,
+              kind = z.boss.projectile || "trident",
+              g = new THREE.Group();
+            if (kind === "trident") {
+              const tri = VoxelMonsters.trident();
+              tri.position.y = -12 * P;
+              g.add(tri);
+              return g;
+            }
+            const key = z.boss.voxel;
+            if (kind === "cleaver") {
+              VoxelMonsters.box(g, key, "torso", [1.2 * P, 12 * P, 1.2 * P], [0, -6 * P, 0], VoxelMonsters.flat(0x4a3020));
+              VoxelMonsters.box(g, key, "torso", [8 * P, 10 * P, 0.8 * P], [3 * P, 4 * P, 0], VoxelMonsters.flat(0xb8b8c0));
+              VoxelMonsters.box(g, key, "torso", [2 * P, 10 * P, 0.9 * P], [7 * P, 4 * P, 0], VoxelMonsters.flat(0x8a1a14));
+            } else if (kind === "icespear") {
+              VoxelMonsters.box(g, key, "torso", [1.6 * P, 28 * P, 1.6 * P], [0, 0, 0], VoxelMonsters.flat(0x9fe4ff, 0x3a9ad8));
+              VoxelMonsters.box(g, key, "torso", [3 * P, 5 * P, 3 * P], [0, 15 * P, 0], VoxelMonsters.flat(0xdff6ff, 0x6fd2ff)).rotation.y = Math.PI / 4;
+            } else if (kind === "boulder") {
+              VoxelMonsters.box(g, key, "torso", [14 * P, 12 * P, 13 * P], [0, 0, 0]);
+              for (const [x, y, zz] of [[6, 4, 2], [-5, 5, -3], [2, -6, 5]])
+                VoxelMonsters.box(g, key, "torso", [5 * P, 7 * P, 5 * P], [x * P, y * P, zz * P], VoxelMonsters.flat(0xbfe8ff, 0x3a8ac8));
+            } else {
+              // Debris: a chunk of wall with rebar.
+              VoxelMonsters.box(g, key, "torso", [12 * P, 9 * P, 8 * P], [0, 0, 0], VoxelMonsters.flat(0x7a7470));
+              VoxelMonsters.box(g, key, "torso", [0.8 * P, 16 * P, 0.8 * P], [3 * P, 3 * P, 0], VoxelMonsters.flat(0x5a3a2a));
+            }
+            return g;
+          },
+        };
+        // Boss voices: ElevenLabs-generated lines per boss when available (monster-sfx.js keys
+        // "<kind>_<event>"), otherwise the shared roars pitched per archetype.
+        const BossVoice = {
+          last: 0,
+          play(z, event = "intro") {
+            if (!z?.boss) return;
+            const t = performance.now();
+            if (t - this.last < 900) return;
+            this.last = t;
+            const sfx = window.DR_MONSTER_SFX || {},
+              own = `${z.boss.kind}_${event}`;
+            if (sfx[own]) return MonsterAudio.play(own, { volume: 1.3 });
+            const voice = z.boss.voice || (z.boss.kind === "demon" ? "demon" : "brute");
+            const map = { brute: ["roar", 0.85], scream: ["demon", 1.25], whisper: ["demon", 1.45], robot: ["roar", 1.35], demon: ["demon", 1] },
+              [name, rate] = map[voice] || map.brute;
+            return MonsterAudio.play(name, { volume: event === "rage" ? 1.4 : 1.1, rate: rate * (z.boss.rank >= 3 ? 0.92 : 1.05) });
+          },
+        };
+        // Lab Miniboss I: the specimen in the central tank breaks out of the glass — cracks spread,
+        // the glass bursts into shards, the green liquid floods the floor and burns, the Mutant
+        // falls out, gets up and the fight starts.
+        const MutantBreakout = {
+          tank: null,
+          active: null,
+          _crack: null,
+          crackTexture() {
+            if (this._crack) return this._crack;
+            const c = document.createElement("canvas");
+            c.width = c.height = 128;
+            const g = c.getContext("2d");
+            g.strokeStyle = "rgba(235,255,245,0.95)";
+            g.lineWidth = 2;
+            const branch = (x, y, a, len, depth) => {
+              if (depth > 4 || len < 5) return;
+              const nx = x + Math.cos(a) * len, ny = y + Math.sin(a) * len;
+              g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
+              branch(nx, ny, a + (Math.random() - 0.5) * 0.9, len * 0.7, depth + 1);
+              if (Math.random() < 0.6) branch(nx, ny, a + (Math.random() < 0.5 ? -1 : 1) * rand(0.5, 1.1), len * 0.55, depth + 1);
+            };
+            for (let i = 0; i < 9; i++) branch(64, 64, (i / 9) * Math.PI * 2 + Math.random() * 0.4, rand(16, 26), 0);
+            this._crack = new THREE.CanvasTexture(c);
+            return this._crack;
+          },
+          start(data, remoteMsg = null) {
+            const tank = this.tank;
+            if (!tank || tank.broken) return null;
+            let z = null;
+            if (data) {
+              // Host / solo: spawn the real boss hidden inside the tank.
+              const toStart = player.pos.clone();
+              toStart.y = 0;
+              const dir = toStart.lengthSq() > 0.1 ? toStart.normalize() : new V(0, 0, 1);
+              z = ZombieManager.spawn(6, data, dir.clone().multiplyScalar(1.2));
+              z.group.visible = false;
+              z.rig.cinematic = true;
+              z.rootedUntil = simulationTime + 4.2;
+              z.attack = simulationTime + 4.5;
+              z.breakout = { dir };
+              NetGame.fx("bk", { a: "breakout", id: z.netId, dx: +dir.x.toFixed(3), dz: +dir.z.toFixed(3) });
+            }
+            const dir = data ? z.breakout.dir : new V(remoteMsg.dx, 0, remoteMsg.dz);
+            if (!z && remoteMsg?.id) z = NetGame.zmap?.get(remoteMsg.id) || null;
+            this.active = { z, dir, time: 0, flags: {} };
+            tank.shake = 0;
+            UIManager.announce("ALERTA DE CONTENÇÃO", "O espécime está acordando…", 2.2);
+            return z;
+          },
+          update(dt) {
+            const a = this.active,
+              tank = this.tank;
+            if (!a || !tank) return;
+            a.time += dt;
+            const t = a.time,
+              z = a.z;
+            // 0-1.6 s: the specimen thrashes, cracks spread with glass creaks.
+            if (t < 1.6) {
+              tank.shake = Math.min(1, t / 0.6);
+              for (const [i, c] of tank.cracks.entries()) c.material.opacity = clamp((t - i * 0.22) / 0.4, 0, 0.9);
+              if (!a.flags["creak" + Math.floor(t / 0.45)]) {
+                a.flags["creak" + Math.floor(t / 0.45)] = true;
+                AudioManager.tone(rand(1800, 2600), 0.12, "square", 0.05, 900, "effects");
+                shake = Math.max(shake, 0.12);
+              }
+              if (tank.rig?.arms) tank.rig.arms.forEach((arm, i) => (arm.rotation.x = -0.4 - Math.abs(Math.sin(t * 9 + i)) * 1.2));
+              tank.light.intensity = 3 + Math.sin(t * 30) * 1.5;
+            }
+            // 1.6 s: the glass bursts.
+            if (t >= 1.6 && !a.flags.burst) {
+              a.flags.burst = true;
+              tank.broken = true;
+              tank.glass.visible = tank.liquid.visible = tank.lid.visible = false;
+              tank.specimen.visible = false;
+              for (const c of tank.cracks) c.visible = false;
+              for (const b of tank.bubbles) b.visible = false;
+              tank.light.intensity = 1.2;
+              AudioManager.noise?.(0.5, 0.6);
+              for (let i = 0; i < 5; i++) AudioManager.tone(rand(2200, 3600), 0.25, "triangle", 0.07, 400, "effects");
+              shake = Math.max(shake, 0.7);
+              for (let i = 0; i < 90; i++) {
+                const ang = rand(0, Math.PI * 2),
+                  p = new V(Math.cos(ang) * 3.3, rand(0.8, 5), Math.sin(ang) * 3.3);
+                ParticleSystem.emit(p, i % 3 ? 0xcff8ee : 0x7dff6a, 1, rand(3, 7));
+              }
+              // Glass shards flung out as physical pieces.
+              for (let i = 0; i < 14; i++) {
+                const ang = rand(0, Math.PI * 2),
+                  shard = new THREE.Mesh(unitBox, VoxelMonsters.flat(0xbfeee0, 0x2a6a50));
+                shard.scale.set(rand(0.15, 0.4), rand(0.3, 0.8), 0.04);
+                shard.position.set(Math.cos(ang) * 3.3, rand(1, 4.5), Math.sin(ang) * 3.3);
+                scene.add(shard);
+                PhysicsProps.fling(shard, new V(Math.cos(ang) * rand(3, 7), rand(2, 5), Math.sin(ang) * rand(3, 7)), rand(6, 14), 4);
+              }
+              // The liquid floods out and burns.
+              const flood = MonsterFX.groundPlane(0x47ff6a, 0.75, "blood", false);
+              flood.position.set(0, 0.04, 0);
+              MonsterFX.add(flood, 9, (it) => {
+                const age = it.max - it.life;
+                flood.scale.setScalar(Math.min(1, age / 1.1) * 15);
+                flood.material.opacity = 0.75 * Math.min(1, it.life / 2);
+              });
+              for (let i = 0; i < 8; i++) {
+                const ang = (i / 8) * Math.PI * 2;
+                MonsterFX.addPuddle(new V(Math.cos(ang) * 4.6, 0, Math.sin(ang) * 4.6), 1.1, "acid");
+              }
+              if (z) {
+                z.group.visible = true;
+                z.group.position.copy(a.dir.clone().multiplyScalar(2.2));
+                z.group.rotation.y = Math.atan2(a.dir.x, a.dir.z);
+              }
+              BossVoice.play(z, "intro");
+            }
+            // 1.6-2.3 s: falls face-first out of the tank; 2.3-3.4 s gets up; 3.4-4.2 s roars.
+            if (z && !z.dead && t >= 1.6) {
+              const r = z.rig,
+                fall = clamp((t - 1.6) / 0.35, 0, 1),
+                rise = clamp((t - 2.4) / 1.0, 0, 1),
+                out = clamp((t - 1.6) / 0.6, 0, 1);
+              z.group.position.copy(a.dir.clone().multiplyScalar(2.2 + out * 3.0));
+              r.root.rotation.x = 1.35 * fall * (1 - rise);
+              r.root.position.y = Math.sin(fall * Math.PI) * 0.25 * (1 - rise);
+              r.arms.forEach((arm) => (arm.rotation.x = -1.4 * (1 - rise) - (t > 3.4 ? 2.2 * Math.sin(clamp((t - 3.4) / 0.8, 0, 1) * Math.PI) : 0)));
+              r.neck.rotation.x = t > 3.4 ? -0.5 * Math.sin(clamp((t - 3.4) / 0.8, 0, 1) * Math.PI) : 0;
+              if (fall >= 1 && !a.flags.thud) {
+                a.flags.thud = true;
+                MonsterAudio.play("land", { volume: 1 });
+                ParticleSystem.emit(z.group.position.clone().add(new V(0, 0.2, 0)), 0x7dff6a, 30, 4);
+              }
+              if (t >= 3.4 && !a.flags.title) {
+                a.flags.title = true;
+                UIManager.announce(z.boss.name.toUpperCase(), z.boss.title, 2.6);
+                MonsterFX.ring(z.group.position, 6, 0x7dff6a, 0.9);
+                shake = Math.max(shake, 0.4);
+              }
+            }
+            if (t >= 4.2) {
+              if (z) {
+                z.rig.cinematic = false;
+                z.rig.root.rotation.set(0, 0, 0);
+                z.rig.root.position.set(0, 0, 0);
+              }
+              this.active = null;
+            }
+          },
+          reset() {
+            this.active = null;
+          },
+        };
         const BossIntro = {
           active: null,
           ARENA: new V(0, 0, -1600),
@@ -11501,23 +12425,33 @@ body.netgame #revivetouch{display:flex}
             if (z - halfW > 13) return true; // behind the camera start
             return false;
           },
+          // Den arena for Boss I / Boss II intros, themed per map (the yeti keeps the snowy den).
+          THEMES: {
+            snow: { sky: 0xb9cbd9, fog: 0.03, ground: "snow", rock: "stone", cap: "snow", spike: "ice", tree: ["bark", "snowPine"], dust: 0xffffff, sound: "blizzard" },
+            city: { sky: 0x2e2a26, fog: 0.035, ground: "concrete", rock: "concrete", cap: "rubble", spike: "metal", tree: ["carBurnt", null], dust: 0xffa050 },
+            hospital: { sky: 0x1c1f22, fog: 0.04, ground: "plaster", rock: "concrete", cap: "plaster", spike: "metal", tree: ["metal", null], dust: 0xc8d0c8 },
+            forest: { sky: 0x0b120d, fog: 0.045, ground: "mossy", rock: "stone", cap: "leafDark", spike: "bark", tree: ["bark", "leafDark"], dust: 0x9aa860 },
+            lab: { sky: 0x08120c, fog: 0.04, ground: "metal", rock: "metal", cap: "toxic", spike: "lightGreen", tree: ["metal", null], dust: 0x7dff6a },
+          },
           buildMountain(a) {
-            const g = a.stage;
-            this.setSky(a, 0xb9cbd9, 0.03);
+            const g = a.stage,
+              T = this.THEMES[a.z.boss.theme] || this.THEMES.snow,
+              snowy = T === this.THEMES.snow;
+            this.setSky(a, T.sky, T.fog);
             const batch = PropKit.batch();
-            PropKit.add(batch, "snow", [0, -0.25, 4], [90, 0.5, 90], null, 0.5);
+            PropKit.add(batch, T.ground, [0, -0.25, 4], [90, 0.5, 90], null, 0.5);
             for (const side of [-1, 1]) {
-              PropKit.add(batch, "stone", [side * 2.75, 2.4, -2.9], [1.7, 4.8, 4.6]);
-              PropKit.add(batch, "snow", [side * 2.75, 4.95, -2.9], [1.9, 0.5, 4.8]);
-              PropKit.add(batch, "stone", [side * 3.9, 1.1, -0.9], [0.9, 2.2, 1.2]);
+              PropKit.add(batch, T.rock, [side * 2.75, 2.4, -2.9], [1.7, 4.8, 4.6]);
+              PropKit.add(batch, T.cap, [side * 2.75, 4.95, -2.9], [1.9, 0.5, 4.8]);
+              PropKit.add(batch, T.rock, [side * 3.9, 1.1, -0.9], [0.9, 2.2, 1.2]);
             }
-            PropKit.add(batch, "stone", [0, 5.2, -3], [7.4, 1.5, 4.9]);
-            PropKit.add(batch, "snow", [0, 6.15, -3], [7.8, 0.6, 5.2]);
-            PropKit.add(batch, "snow", [0.4, 6.9, -3.4], [3.4, 1.2, 2.4]);
+            PropKit.add(batch, T.rock, [0, 5.2, -3], [7.4, 1.5, 4.9]);
+            PropKit.add(batch, T.cap, [0, 6.15, -3], [7.8, 0.6, 5.2]);
+            PropKit.add(batch, T.cap, [0.4, 6.9, -3.4], [3.4, 1.2, 2.4]);
             for (let i = 0; i < 9; i++) {
               const x = -1.9 + i * 0.48,
                 h = 0.5 + ((i * 37) % 7) * 0.12;
-              PropKit.add(batch, "ice", [x, 4.45 - h / 2, -0.7], [0.16, h, 0.16]);
+              PropKit.add(batch, T.spike, [x, 4.45 - h / 2, -0.7], [0.16, h, 0.16]);
             }
             for (let i = 0, placed = 0; placed < 14 && i < 400; i++) {
               const ang = rand(0.5, Math.PI * 2 - 0.5) + Math.PI / 2,
@@ -11530,26 +12464,30 @@ body.netgame #revivetouch{display:flex}
               if (!this.clearOfCamera(x, zz, Math.hypot(w, d) / 2)) continue;
               placed++;
               const rot = [0, rand(0, 3), 0];
-              PropKit.add(batch, "stone", [x, h / 2, zz], [w, h, d], rot, 0.4);
-              PropKit.add(batch, "snow", [x, h + 0.3, zz], [w + 0.2, 0.6, d + 0.2], rot, 0.4);
+              PropKit.add(batch, T.rock, [x, h / 2, zz], [w, h, d], rot, 0.4);
+              PropKit.add(batch, T.cap, [x, h + 0.3, zz], [w + 0.2, 0.6, d + 0.2], rot, 0.4);
             }
             PropKit.build(batch, g);
             const back = this.block(g, [7.4, 5.8, 0.8], [0, 2.9, -5.4], VoxelMonsters.flat(0x06080b));
             this.block(g, [3.9, 0.08, 4.6], [0, 0.04, -2.9], VoxelMonsters.flat(0x06080b));
             back.castShadow = false;
-            // Pines around the den (reuse the map prop builder inside the arena).
             const pines = PropKit.batch();
-            for (const [x, zz, s] of [[-7, 2, 1.1], [7.5, 1, 1.2], [-9, -4, 1.3], [9.5, -5, 1], [-5, 8, 0.9], [6, 9, 1.05]]) {
-              const H = 3.4 * s;
-              PropKit.add(pines, "bark", [x, H / 2, zz], [0.7 * s, H, 0.7 * s]);
-              for (let i = 0; i < 4; i++) PropKit.add(pines, "snowPine", [x, H * 0.55 + i * 0.95 * s, zz], [(3.4 - i * 0.75) * s, s, (3.4 - i * 0.75) * s]);
+            for (const [x, zz, sc] of [[-7, 2, 1.1], [7.5, 1, 1.2], [-9, -4, 1.3], [9.5, -5, 1], [-5, 8, 0.9], [6, 9, 1.05]]) {
+              const H = 3.4 * sc;
+              if (T.tree[1]) {
+                PropKit.add(pines, T.tree[0], [x, H / 2, zz], [0.7 * sc, H, 0.7 * sc]);
+                for (let i = 0; i < 4; i++) PropKit.add(pines, T.tree[1], [x, H * 0.55 + i * 0.95 * sc, zz], [(3.4 - i * 0.75) * sc, sc, (3.4 - i * 0.75) * sc]);
+              } else PropKit.add(pines, T.tree[0], [x, 0.7 * sc, zz], [3.8 * sc, 1.4 * sc, 1.8 * sc], [0, rand(0, 3), 0]);
             }
             PropKit.build(pines, g);
             a.light.position.set(0, 2.6, -1.4);
+            if (!snowy) a.light.material.color.set(a.z.boss.fx || 0xff2020);
             a.z.group.position.copy(this.ARENA).add(new V(0, 0, -3.2));
             a.startPos = a.z.group.position.clone();
-            a.snow = this.particles(g, 1100, 0xffffff, 0.09, [-12, 12], [0, 10], [-8, 14]);
-            a.sounds.push(MonsterAudio.play("blizzard", { volume: 1.1, loop: true, fadeIn: 0.5 }));
+            if (snowy) {
+              a.snow = this.particles(g, 1100, 0xffffff, 0.09, [-12, 12], [0, 10], [-8, 14]);
+              a.sounds.push(MonsterAudio.play("blizzard", { volume: 1.1, loop: true, fadeIn: 0.5 }));
+            } else a.embers = this.particles(g, 420, T.dust, 0.07, [-12, 12], [0, 10], [-8, 14]);
           },
           particles(parent, count, color, size, xr, yr, zr) {
             const geo = new THREE.BufferGeometry(),
@@ -11728,7 +12666,7 @@ body.netgame #revivetouch{display:flex}
             r.body.position.y = r.hipY + (moving ? Math.abs(Math.sin(walkT)) * 0.05 : 0);
             if (moving && Math.sin(walkT) * Math.sin(walkT - dt * 5.2) < 0) {
               shake = Math.max(shake, 0.2);
-              ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 0.2, 0)), 0xffffff, 14, 2.2);
+              ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 0.2, 0)), (this.THEMES[a.z.boss.theme] || this.THEMES.snow).dust, 14, 2.2);
             }
             const roar = this.seg(tt, 2.2, 2.6),
               calm = this.seg(tt, 3.3, 3.6),
@@ -11750,10 +12688,10 @@ body.netgame #revivetouch{display:flex}
               lines.classList.remove("show");
               void lines.offsetWidth;
               lines.classList.add("show");
-              a.sounds.push(MonsterAudio.play("roar", { volume: 1.6 }));
+              a.sounds.push(a.kind === "yeti" ? MonsterAudio.play("roar", { volume: 1.6 }) : BossVoice.play(a.z, "intro"));
               for (let i = 0; i < 24; i++) {
                 const ang = (i / 24) * Math.PI * 2;
-                ParticleSystem.emit(a.z.group.position.clone().add(new V(Math.cos(ang) * 2, 1.5, Math.sin(ang) * 2)), 0xffffff, 4, 6);
+                ParticleSystem.emit(a.z.group.position.clone().add(new V(Math.cos(ang) * 2, 1.5, Math.sin(ang) * 2)), a.kind === "yeti" ? 0xffffff : a.z.boss.fx || 0xffffff, 4, 6);
               }
             }
             if (!a.flags.title && tt >= 2.4) {
@@ -12997,33 +13935,73 @@ body.netgame #revivetouch{display:flex}
             RunStats.waveStarted();
             NetGame.hostEvent("wave", { n: this.wave, mut: MutationManager.current?.id || null });
           },
-          // Demon every 20 waves, Yeti on the other multiples of 10, and the Quarterback /
-          // Mutant minibosses alternating on the remaining multiples of 5 (5, 15, 25, 35...).
+          // v28 roster: every map has its own four-step hierarchy.
+          //   Miniboss I (waves 5, 25, 45…) < Miniboss II (15, 35…) < Boss I (10, 30…) < Boss II (20, 40…).
+          // HP, coins and the BossArmor caps grow with the rank; abilities come from BossKit.
           bossRoster: {
-            demon: { name: "Demônio", title: "SENHOR DO INFERNO", voxel: "10", kind: "demon", hp: 16000, size: 2, speed: 1.45, color: 0x9b2a20, coins: 500, lucky: 2, drop: 3, intro: true },
-            yeti: { name: "Yeti", title: "O TERROR DA NEVASCA", voxel: "09", kind: "yeti", hp: 9000, size: 2.1, speed: 1.35, color: 0xdfe9f2, coins: 300, lucky: 1, normal: 2, intro: true },
-            quarterback: { name: "Quarterback", title: "MINI-BOSS", voxel: "04", kind: "quarterback", hp: 2800, size: 1.35, speed: 3.3, color: 0x9b2a2a, coins: 100, normal: 1 },
-            mutant: { name: "Mutante", title: "MINI-BOSS", voxel: "06", kind: "mutant", hp: 3400, size: 1.4, speed: 1.55, color: 0x6f9a4a, coins: 110, normal: 1 },
+            // City
+            quarterback: { name: "Quarterback", title: "MINI-BOSS I · CIDADE", voxel: "04", kind: "quarterback", rank: 1, hp: 3000, size: 1.35, speed: 3.3, color: 0x9b2a2a, coins: 40, normal: 1, abilities: ["blitz"], fx: 0xd9b37a },
+            roadblock: { name: "Roadblock", title: "MINI-BOSS II · CIDADE", voxel: "19", kind: "roadblock", rank: 2, hp: 4200, size: 1.45, speed: 2.3, color: 0xff7a1a, coins: 60, normal: 1, abilities: ["blitz", "slam"], fx: 0xff8a1e, voice: "brute" },
+            juggernaut: { name: "Juggernaut", title: "BOSS I · CIDADE", voxel: "11", kind: "juggernaut", rank: 3, hp: 9500, size: 1.85, speed: 1.55, color: 0x6c6258, coins: 120, normal: 2, lucky: 1, abilities: ["slam", "leap"], intro: true, theme: "city", fx: 0xffb040, voice: "brute" },
+            wrecker: { name: "The Wrecker", title: "BOSS II · CIDADE", voxel: "24", kind: "wrecker", rank: 4, hp: 15000, size: 2.1, speed: 1.4, color: 0x7a6a48, coins: 200, lucky: 2, drop: 3, abilities: ["slam", "leap", "throw", "summon"], projectile: "debris", intro: true, theme: "city", fx: 0xffc02a, voice: "brute" },
+            // Hospital
+            surgeon: { name: "The Surgeon", title: "MINI-BOSS I · HOSPITAL", voxel: "16", kind: "surgeon", rank: 1, hp: 3000, size: 1.25, speed: 2.7, color: 0x3a9a90, coins: 40, normal: 1, abilities: ["blitz", "trail"], trail: "blood", fx: 0xc01818, voice: "whisper" },
+            patient_zero: { name: "Patient Zero", title: "MINI-BOSS II · HOSPITAL", voxel: "22", kind: "patient_zero", rank: 2, hp: 4200, size: 1.3, speed: 2.2, color: 0xc9a38c, coins: 60, normal: 1, abilities: ["summon", "trail"], trail: "acid", fx: 0x8cff3c, voice: "scream" },
+            butcher: { name: "The Butcher", title: "BOSS I · HOSPITAL", voxel: "15", kind: "butcher", rank: 3, hp: 9500, size: 1.8, speed: 1.6, color: 0xb07a6a, coins: 120, normal: 2, lucky: 1, abilities: ["throw", "slam"], projectile: "cleaver", intro: true, theme: "hospital", fx: 0xc01818, voice: "brute" },
+            plague_host: { name: "Plague Host", title: "BOSS II · HOSPITAL", voxel: "23", kind: "plague_host", rank: 4, hp: 15000, size: 1.95, speed: 1.4, color: 0x7a8a4a, coins: 200, lucky: 2, drop: 3, abilities: ["trail", "toxic", "summon"], trail: "acid", intro: true, theme: "hospital", fx: 0x8cff3c, voice: "scream" },
+            // Dark forest
+            forest_stalker: { name: "Stalker", title: "MINI-BOSS I · FLORESTA", voxel: "18", kind: "forest_stalker", rank: 1, hp: 3000, size: 1.3, speed: 3.1, color: 0x4a5a2a, coins: 40, normal: 1, abilities: ["leap", "blitz"], fx: 0x8a9a4a, voice: "whisper" },
+            gravekeeper: { name: "Gravekeeper", title: "MINI-BOSS II · FLORESTA", voxel: "17", kind: "gravekeeper", rank: 2, hp: 4200, size: 1.4, speed: 1.9, color: 0x3a4658, coins: 60, normal: 1, abilities: ["summon", "grave"], fx: 0xffb050, voice: "whisper" },
+            wendigo: { name: "Wendigo", title: "BOSS I · FLORESTA", voxel: "14", kind: "wendigo", rank: 3, hp: 9500, size: 1.9, speed: 2.25, color: 0x5a3a2a, coins: 120, normal: 2, lucky: 1, abilities: ["leap", "blitz"], intro: true, theme: "forest", fx: 0xd8c8a8, voice: "scream" },
+            demon: { name: "Demônio", title: "BOSS II · FLORESTA", voxel: "10", kind: "demon", rank: 4, hp: 15000, size: 2, speed: 1.45, color: 0x9b2a20, coins: 200, lucky: 2, drop: 3, abilities: ["drain", "throw"], projectile: "trident", intro: true, fx: 0xff3a14 },
+            // Underground lab
+            mutant: { name: "Mutante", title: "MINI-BOSS I · LABORATÓRIO", voxel: "06", kind: "mutant", rank: 1, hp: 3000, size: 1.4, speed: 1.6, color: 0x6f9a4a, coins: 40, normal: 1, abilities: ["trail"], trail: "acid", fx: 0x8cff3c },
+            prototype_x: { name: "Prototype X", title: "MINI-BOSS II · LABORATÓRIO", voxel: "26", kind: "prototype_x", rank: 2, hp: 4200, size: 1.35, speed: 2.5, color: 0x9a8a8a, coins: 60, normal: 1, abilities: ["rockets", "blitz"], fx: 0xb040ff, voice: "robot" },
+            abomination: { name: "Abomination", title: "BOSS I · LABORATÓRIO", voxel: "13", kind: "abomination", rank: 3, hp: 9500, size: 1.85, speed: 1.5, color: 0xa87a6a, coins: 120, normal: 2, lucky: 1, abilities: ["slam", "trail", "summon"], trail: "acid", intro: true, theme: "lab", fx: 0x9dff45, voice: "brute" },
+            omega: { name: "Experiment Omega", title: "BOSS II · LABORATÓRIO", voxel: "20", kind: "omega", rank: 4, hp: 15000, size: 2.1, speed: 1.35, color: 0x8a8a8a, coins: 200, lucky: 2, drop: 3, abilities: ["rockets", "toxic", "slam"], intro: true, theme: "lab", fx: 0x6dff3a, voice: "robot" },
+            // Snow
+            frost_brute: { name: "Frost Brute", title: "MINI-BOSS I · NEVE", voxel: "21", kind: "frost_brute", rank: 1, hp: 3000, size: 1.45, speed: 2, color: 0xaab8c8, coins: 40, normal: 1, abilities: ["slam", "frost"], fx: 0x9fe4ff, voice: "brute" },
+            cryo_hunter: { name: "Cryo Hunter", title: "MINI-BOSS II · NEVE", voxel: "25", kind: "cryo_hunter", rank: 2, hp: 4200, size: 1.3, speed: 2.8, color: 0xcfd8e0, coins: 60, normal: 1, abilities: ["throw", "leap"], projectile: "icespear", fx: 0x9fe4ff, voice: "whisper" },
+            yeti: { name: "Yeti", title: "BOSS I · NEVE", voxel: "09", kind: "yeti", rank: 3, hp: 9500, size: 2.1, speed: 1.35, color: 0xdfe9f2, coins: 120, normal: 2, lucky: 1, abilities: ["frost", "slam"], intro: true, fx: 0x9fe4ff },
+            avalanche_titan: { name: "Avalanche Titan", title: "BOSS II · NEVE", voxel: "12", kind: "avalanche_titan", rank: 4, hp: 15000, size: 2.2, speed: 1.3, color: 0x8aa8c8, coins: 200, lucky: 2, drop: 3, abilities: ["frost", "slam", "throw", "leap"], projectile: "boulder", intro: true, theme: "snow", fx: 0x9fe4ff, voice: "brute" },
           },
-          bossFor(wave) {
-            if (wave % 20 === 0) return "demon";
-            if (wave % 10 === 0) return "yeti";
-            return Math.floor(wave / 10) % 2 === 0 ? "quarterback" : "mutant";
+          mapRosters: [
+            ["quarterback", "roadblock", "juggernaut", "wrecker"],
+            ["surgeon", "patient_zero", "butcher", "plague_host"],
+            ["forest_stalker", "gravekeeper", "wendigo", "demon"],
+            ["mutant", "prototype_x", "abomination", "omega"],
+            ["frost_brute", "cryo_hunter", "yeti", "avalanche_titan"],
+          ],
+          rankFor(wave) {
+            if (wave % 20 === 0) return 4;
+            if (wave % 10 === 0) return 3;
+            return Math.floor(wave / 10) % 2 === 0 ? 1 : 2;
           },
-          boss() {
-            const id = this.bossFor(this.wave),
+          bossFor(wave, map = selectedMap) {
+            return (this.mapRosters[map] || this.mapRosters[0])[this.rankFor(wave) - 1];
+          },
+          boss(forceId = null) {
+            const id = forceId || this.bossFor(this.wave),
               base = this.bossRoster[id],
-              major = this.wave % 10 === 0,
-              since = Math.max(0, this.wave - (id === "demon" ? 20 : id === "yeti" ? 10 : 5));
-            const data = { ...base, hp: Math.round(base.hp * (1 + since * (major ? 0.06 : 0.05))), major };
+              rank = base.rank,
+              major = rank >= 3,
+              since = Math.max(0, this.wave - [0, 5, 15, 10, 20][rank]);
+            const data = { ...base, id, hp: Math.round(base.hp * (1 + since * (major ? 0.05 : 0.04))), major };
+            if (id === "mutant" && selectedMap === 3 && MutantBreakout.tank && !MutantBreakout.tank.broken) {
+              const z = MutantBreakout.start(data);
+              if (z) return z;
+            }
             const z = ZombieManager.spawn(6, data);
             if (data.intro && VoxelMonsters.ready()) {
               BossIntro.start(z);
               NetGame.fx("intro", { id: z.netId });
+            } else {
+              UIManager.announce(data.name.toUpperCase(), data.title, 3);
+              BossKit.shortIntro(z);
             }
-            else
-              UIManager.announce(major ? "BOSS INCOMING" : "MINI-BOSS", data.name, 3);
+            if (!data.intro) BossVoice.play(z, "intro");
             AudioManager.tone(65, 1.5, "sawtooth", 0.5, 32);
+            return z;
           },
           update(dt) {
             if (BossDeath.active) return;
@@ -13061,9 +14039,6 @@ body.netgame #revivetouch{display:flex}
               // Wave cleared: pay out, short breather, and the next wave starts by itself.
               if (!this.clearedAt) {
                 this.clearedAt = simulationTime;
-                Progression.reward(
-                  Math.round(20 * this.wave * diff[difficulty].coins * MutationManager.rewardMultiplier()),
-                );
                 MutationManager.finishWave();
                 RunStats.waveCleared();
                 UIManager.announce(`ONDA ${this.wave} LIMPA`, `Onda ${this.wave + 1} chegando…`, 2.4);
@@ -13524,6 +14499,7 @@ body.netgame #revivetouch{display:flex}
           },
           hurt(amount, fromNet = false) {
             if (!fromNet && NetGame.hurtRemote(amount)) return;
+            if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             const resistance = classValue("damageTaken", 1);
             player.hp -= amount * resistance;
@@ -13549,6 +14525,10 @@ body.netgame #revivetouch{display:flex}
             const w = WeaponSystem.current();
             if (!w || w.ammo === Infinity || w.ammo === w.mag || reloadEnd)
               return;
+            if (DevMode.on("noReload")) {
+              w.ammo = w.mag;
+              return;
+            }
             reloadEnd = simulationTime + w.reload;
             AudioManager.tone(180, 0.12, "square", 0.12, 80, "weapons");
           },
@@ -13561,6 +14541,7 @@ body.netgame #revivetouch{display:flex}
             WeaponSystem.buildModel();
           },
           ability() {
+            if (DevMode.on("infiniteAbility")) player.cooldown = 0;
             if (simulationTime < player.cooldown || state !== GameState.PLAYING)
               return;
             const c = classOf();
@@ -13757,7 +14738,7 @@ body.netgame #revivetouch{display:flex}
               AudioManager.meleeSwing();
               return;
             }
-            if (!classBurst().infiniteAmmo && w.ammo !== Infinity)
+            if (!classBurst().infiniteAmmo && !DevMode.on("infiniteAmmo") && w.ammo !== Infinity)
               w.ammo--;
             AudioManager.shot(w);
             recoil = w.kind === "antimaterial" ? 2 : 1;
@@ -14716,6 +15697,10 @@ body.netgame #revivetouch{display:flex}
             CharacterStyle.data = { ...CharacterStyle.defaults, ...(profile.cosmetics || {}) };
             CharacterStyle.owned = ["standard", ...new Set(Array.isArray(profile.ownedCosmetics) ? profile.ownedCosmetics : [])];
             normalizeLoadoutState(Progression.economy.data);
+            if (this.userId !== DevMode.checkedFor) {
+              DevMode.checkedFor = this.userId;
+              DevMode.refresh();
+            }
             try {
               localStorage.setItem(this.profileCacheKey(this.userId), JSON.stringify(profile));
             } catch {}
@@ -14854,11 +15839,15 @@ body.netgame #revivetouch{display:flex}
             const run = () => {
               switch (path) {
                 case "roll":
-                  return DR.InventoryRepository.roll(data.kind, data.lucky, data.payment, request);
+                  return DR.InventoryRepository.roll(data.kind, data.lucky, data.payment, request, data.pref);
                 case "equip":
                   return DR.InventoryRepository.equip(data.kind, data.slot, data.action, request);
                 case "slot/buy":
                   return DR.InventoryRepository.buySlot(request);
+                case "classslot/buy":
+                  return DR.InventoryRepository.buyClassSlot(request);
+                case "dev":
+                  return DR.DevRepository.action(data.action, data.args || {}, request);
                 case "cosmetic/buy":
                   return DR.InventoryRepository.buyCosmetic(data.id, request);
                 case "preferences":
@@ -15255,7 +16244,7 @@ body.netgame #revivetouch{display:flex}
         const BossDeath = {
           active: null,
           wants(z) {
-            return !!(z.boss && z.rig?.voxel && (z.boss.kind === "demon" || z.boss.kind === "yeti"));
+            return !!(z.boss && z.rig?.voxel && (z.boss.kind === "demon" || z.boss.kind === "yeti" || z.boss.rank >= 3));
           },
           start(z) {
             if (this.active) this.finish();
@@ -15275,12 +16264,14 @@ body.netgame #revivetouch{display:flex}
             z.group.rotation.y = root.rotation.y;
             z.rig.cinematic = true;
             if (z.contact) z.contact.visible = false;
-            this.active = { z, kind: z.boss.kind, root, pos, time: 0, duration: z.boss.kind === "demon" ? 5.2 : 4.6, flags: {}, meshes: [], lights: [] };
-            if (z.boss.kind === "demon") this.buildHands(this.active);
-            else this.buildSnowball(this.active);
+            const kind = z.boss.kind === "demon" || z.boss.kind === "yeti" ? z.boss.kind : "collapse";
+            this.active = { z, kind, root, pos, time: 0, duration: kind === "demon" ? 5.2 : kind === "yeti" ? 4.6 : 4.2, flags: {}, meshes: [], lights: [] };
+            if (kind === "demon") this.buildHands(this.active);
+            else if (kind === "yeti") this.buildSnowball(this.active);
             document.body.classList.add("cinematic", "bossdeath");
             const b = $("killcambanner");
-            b.textContent = z.boss.kind === "demon" ? "DEMÔNIO BANIDO" : "YETI ESMAGADO";
+            b.textContent = kind === "demon" ? "DEMÔNIO BANIDO" : kind === "yeti" ? "YETI ESMAGADO" : `${z.boss.name.toUpperCase()} DERROTADO`;
+            if (kind === "collapse") BossVoice.play(z, "death");
             b.classList.remove("show");
             mouse.down = false;
             mouse.aim = false;
@@ -15393,7 +16384,8 @@ body.netgame #revivetouch{display:flex}
             if (!a) return;
             a.time += dt;
             if (a.kind === "demon") this.demon(a, a.time, dt);
-            else this.yeti(a, a.time, dt);
+            else if (a.kind === "yeti") this.yeti(a, a.time, dt);
+            else this.collapse(a, a.time, dt);
             if (a.time >= a.duration) this.finish();
           },
           cam(a, local, look) {
@@ -15488,6 +16480,56 @@ body.netgame #revivetouch{display:flex}
             }
             const k = seg(t, 0, 5.2);
             this.cam(a, new V(Math.sin(0.55 - k * 0.8) * 7.8, 2.7 + k * 2.2, Math.cos(0.55 - k * 0.8) * 7.8), new V(0, 1.2 * S - Math.min(depth, 1.8), 0));
+          },
+          // Generic Boss I/II death: staggers under the last hits, drops to its knees, reaches out and
+          // slams face-down with a burst in the boss colour; the camera circles in slow motion.
+          collapse(a, t, dt) {
+            const z = a.z,
+              r = z.rig,
+              seg = this.seg,
+              color = z.boss.fx || 0xffffff;
+            const stagger = seg(t, 0, 1.1),
+              kneel = seg(t, 1.1, 1.9),
+              fall = seg(t, 2.3, 2.75);
+            r.upper.rotation.x = -0.35 * Math.sin(stagger * Math.PI) + 0.45 * kneel + 0.3 * fall;
+            r.upper.rotation.z = Math.sin(t * 7) * 0.15 * (1 - kneel);
+            r.neck.rotation.x = -0.6 * Math.sin(stagger * Math.PI) + 0.4 * kneel;
+            r.legs[0].rotation.x = -1.45 * kneel;
+            r.legs[1].rotation.x = -1.2 * kneel;
+            r.body.position.y = r.hipY * (1 - 0.5 * kneel);
+            r.arms[0].rotation.x = -0.5 - Math.sin(t * 9) * 0.5 * (1 - kneel) - 1.3 * seg(t, 1.8, 2.3);
+            r.arms[1].rotation.x = -0.3 - 0.4 * kneel;
+            r.arms[0].rotation.z = -0.2;
+            r.arms[1].rotation.z = 0.3;
+            r.root.rotation.x = 1.45 * fall * fall;
+            r.root.position.y = Math.sin(fall * Math.PI) * 0.2;
+            if (!a.flags.cry && t > 0.15) {
+              a.flags.cry = true;
+              shake = Math.max(shake, 0.5);
+            }
+            if (!a.flags.slam && fall >= 1) {
+              a.flags.slam = true;
+              const at = a.pos.clone();
+              shake = Math.max(shake, 1.1);
+              MonsterAudio.play("land", { volume: 1.7 });
+              MonsterFX.ring(at, 8, color, 1);
+              MonsterFX.ring(at, 4, 0xffffff, 0.6);
+              for (let i = 0; i < 60; i++) {
+                const ang = rand(0, Math.PI * 2);
+                ParticleSystem.emit(at.clone().add(new V(Math.cos(ang) * 1.5, rand(0.2, 1.5), Math.sin(ang) * 1.5)), i % 3 ? color : 0x6a5a4a, 4, 6);
+              }
+              PhysicsProps.impulse(at, 10, 12);
+              CombatFX.mark(at, 0x160f0a, 4.5);
+              $("killcambanner").classList.add("show");
+              const lines = $("speedlines");
+              lines.classList.remove("show");
+              void lines.offsetWidth;
+              lines.classList.add("show");
+            }
+            z.group.visible = t < 4.05;
+            const ang = 0.6 + t * 0.35,
+              rad = 6.5 - seg(t, 0, 3) * 1.5;
+            this.cam(a, new V(Math.sin(ang) * rad, 1.6 + seg(t, 0, 2) * 1.2, Math.cos(ang) * rad), new V(0, 1.5 - fall * 0.8, 0));
           },
           yeti(a, t, dt) {
             const z = a.z,
@@ -16324,7 +17366,8 @@ body.netgame #revivetouch{display:flex}
           onFx(m) {
             if (this.host) return;
             const z = m.id ? this.zmap.get(m.id) : null;
-            if (m.k === "puddle") MonsterFX.addPuddle(new V(m.x, 0, m.z), m.r);
+            if (m.k === "puddle") MonsterFX.addPuddle(new V(m.x, 0, m.z), m.r, m.t || "acid");
+            else if (m.k === "bk") BossKit.remote(m, z);
             else if (m.k === "frost") MonsterFX.frostPulse(new V(m.x, 0, m.z), m.r);
             else if (m.k === "throw" && z) MonsterFX.startThrow(z, 0, m.d.map(([x, zz]) => new V(x, 0, zz)), m.l);
             else if (m.k === "proj") {
@@ -17232,25 +18275,33 @@ body.netgame #revivetouch{display:flex}
         function loadoutSlotKey(kind) { return kind + "Slots"; }
         function loadoutOwnedKey(kind) { return kind === "class" ? "ownedClasses" : "ownedWeapons"; }
         const WEAPON_SLOT_MAX = 5;
+        const CLASS_SLOT_MAX = 3;
         function normalizeLoadoutState(data) {
           if (!data) return;
           data.pendingLoadout ||= {};
           data.weaponSlotsOwned = Number.isInteger(data.weaponSlotsOwned)
             ? clamp(data.weaponSlotsOwned, 1, WEAPON_SLOT_MAX)
             : 1;
+          if (!Number.isInteger(data.classSlotsOwned)) {
+            // Old saves had two free class slots: keep the second one if it was used.
+            const legacy = Array.isArray(data.classSlots) ? data.classSlots : data.ownedClasses;
+            data.classSlotsOwned = Array.isArray(legacy) && legacy[1] != null ? 2 : 1;
+          }
+          data.classSlotsOwned = clamp(data.classSlotsOwned, 1, CLASS_SLOT_MAX);
           for (const kind of ["class", "weapon"]) {
             const legacyPity = Number.isSafeInteger(data[kind + "Pity"]) && data[kind + "Pity"] >= 0
               ? Math.min(data[kind + "Pity"], 20)
               : 0;
-            for (const [suffix, cap] of [["MythicPity", 75], ["DivinePity", 150]]) {
+            for (const [suffix, cap] of [["DivinePity", 100], ["SecretPity", 300]]) {
               const key = kind + suffix;
               data[key] = Number.isSafeInteger(data[key]) && data[key] >= 0
                 ? Math.min(data[key], cap)
                 : Math.min(legacyPity, cap);
             }
+            delete data[kind + "MythicPity"];
             const catalog = Progression?.economy?.catalogs?.[kind] || (kind === "class" ? classes : WeaponSystem.weapons);
             const slotKey = loadoutSlotKey(kind), ownedKey = loadoutOwnedKey(kind);
-            const maxSlots = kind === "weapon" ? WEAPON_SLOT_MAX : 2;
+            const maxSlots = kind === "weapon" ? WEAPON_SLOT_MAX : CLASS_SLOT_MAX;
             let source = Array.isArray(data[slotKey]) ? data[slotKey] : Array.isArray(data[ownedKey]) ? data[ownedKey] : [];
             let slots = source.slice(0, maxSlots).map((id) => Number.isInteger(id) && catalog[id] ? id : null);
             while (slots.length < maxSlots) slots.push(null);
@@ -17272,6 +18323,7 @@ body.netgame #revivetouch{display:flex}
               data.weaponSlot = equippedSlot;
               current = slots[equippedSlot] ?? 0;
             } else {
+              for (let slot = data.classSlotsOwned; slot < maxSlots; slot++) slots[slot] = null; // locked
               if (!slots.some((id) => id !== null)) slots[0] = current !== null ? current : 0;
               if (!slots.includes(current)) current = slots.find((id) => id !== null);
             }
@@ -17288,22 +18340,43 @@ body.netgame #revivetouch{display:flex}
           const catalog = Progression.economy.catalogs[kind];
           const slots = Progression.data[loadoutSlotKey(kind)] || [];
           const current = Progression.data[kind + "Id"];
+          const pref = Armory.pref?.[kind];
           return rarityNames.map((name, tier) => ({ name, tier, rate: rates[tier] }))
             .filter((e) => e.rate > 0)
             .map((e) => {
               const items = catalog.map((item, id) => ({ item, id })).filter((entry) => entry.item.tier === e.tier);
               const expanded = activeTier === e.tier;
-              const chance = items.length ? +(e.rate / items.length).toFixed(3) : 0;
+              const boosted = items.some((x) => x.id === pref) && items.length > 1;
               const list = expanded ? `<div class="rarity-items" style="--rarity:${rarityColors[e.tier]}">${items.map(({ item, id }) => {
-                const equipped = current === id, stored = slots.includes(id);
-                const stateLabel = equipped ? "EQUIPADO" : stored ? "NO LOADOUT" : "DISPONÍVEL NO SPIN";
-                return `<button type="button" class="rarity-item ${equipped ? "equipped" : ""}" data-preview-id="${id}" style="--rarity:${rarityColors[e.tier]}"><span><strong>${item.name}</strong><small>${stateLabel}</small></span><b>${chance}%</b></button>`;
+                const equipped = current === id, stored = slots.includes(id), star = pref === id;
+                const chance = +(Armory.itemChance(kind, id, mode === "lucky")).toFixed(3);
+                const stateLabel = star ? "PREFERIDO · CHANCE x1.5" : equipped ? "EQUIPADO" : stored ? "NO LOADOUT" : "TOQUE PARA PREFERIR";
+                return `<button type="button" class="rarity-item ${equipped ? "equipped" : ""} ${star ? "preferred" : ""}" data-preview-id="${id}" style="--rarity:${rarityColors[e.tier]}"><span><strong>${star ? "✦ " : ""}${item.name}${star ? ' <em class="boost">x1.5</em>' : ""}</strong><small>${stateLabel}</small></span><b>${chance}%</b></button>`;
               }).join("")}</div>` : "";
-              return `<button type="button" class="rarity-line ${expanded ? "active" : ""}" data-rarity-tier="${e.tier}" aria-expanded="${expanded}" style="--rarity:${rarityColors[e.tier]}"><span>${e.name.toUpperCase()}</span><b>${e.rate}%</b><i>${expanded ? "−" : "+"}</i></button>${list}`;
+              return `<button type="button" class="rarity-line ${expanded ? "active" : ""} ${boosted ? "boosted" : ""}" data-rarity-tier="${e.tier}" aria-expanded="${expanded}" style="--rarity:${rarityColors[e.tier]}"><span>${e.name.toUpperCase()}${boosted ? " ✦" : ""}</span><b>${e.rate}%</b><i>${expanded ? "−" : "+"}</i></button>${list}`;
             }).join("");
         }
         const Armory = {
           tab: "weapon", mode: "armory", oddsMode: "normal", roll: null, selection: null, rarityFilter: null, previewSpin: null, awaitingConfirm: null, light: null,
+          // Preferred item per category (click a rarity, then an item): +50% weight inside its
+          // rarity on the next spins — a small boost, never a guarantee. Validated by the server.
+          pref: { weapon: null, class: null },
+          preference(kind) {
+            const id = this.pref[kind],
+              item = Progression.economy.catalogs[kind]?.[id];
+            return item ? id : null;
+          },
+          itemChance(kind, id, lucky) {
+            const list = Progression.economy.catalogs[kind],
+              tier = list[id].tier,
+              rate = Progression.economy.rates[lucky ? "lucky" : "normal"][tier] || 0,
+              n = list.filter((i) => i.tier === tier).length,
+              pref = this.pref[kind],
+              prefIn = pref != null && list[pref]?.tier === tier && n > 1;
+            if (!prefIn) return rate / n;
+            const pw = 1.5 / (n + 0.5);
+            return id === pref ? rate * pw : (rate * (1 - pw)) / (n - 1);
+          },
           open() { this.mode = "armory"; if (this.tab === "character") this.tab = "weapon"; state = GameState.CLASS_SELECT; AudioManager.init(); UIManager.screen("classscreen"); this.render(); },
           openCustomize() { this.mode = "customize"; this.tab = "character"; state = GameState.CLASS_SELECT; AudioManager.init(); UIManager.screen("classscreen"); this.render(); },
           render() {
@@ -17335,37 +18408,43 @@ body.netgame #revivetouch{display:flex}
             const identityState = spinPreview != null ? "NOVO SPIN" : displayId === currentId ? "EQUIPADO" : "PRÉVIA";
             $("armory-identity").innerHTML = `<span class="item-index">#${String(displayId + 1).padStart(3, "0")} · ${identityState}</span><h2>${displayItem.name}</h2><b>${rarityNames[displayItem.tier].toUpperCase()}</b><p>${kind === "class" ? displayItem.desc : (displayItem.kind === "melee" ? "Arma corpo a corpo. Ataques rápidos e silenciosos." : `${["Curto", "Médio", "Longo"][displayItem.cat] || "Médio"} alcance · ${Math.round(displayItem.damage * rarityMult[displayItem.tier])} de dano base.`)}</p>`;
             $("armory-info").innerHTML = kind === "class" ? `<h3>${displayItem.ability}</h3><p>${displayItem.active}</p><span class="armory-note">Q · recarga ${displayItem.cd}s</span>` : `<h3>${displayItem.kind === "melee" ? "CORPO A CORPO" : "ARMA PRINCIPAL"}</h3><dl class="weapon-stats"><div><dt>Dano</dt><dd>${Math.round(displayItem.damage * rarityMult[displayItem.tier])}</dd></div><div><dt>Cadência</dt><dd>${displayItem.kind === "melee" ? "—" : Math.round(60 / displayItem.rate) + "/min"}</dd></div><div><dt>Pente</dt><dd>${displayItem.mag === Infinity ? "—" : displayItem.mag}</dd></div><div><dt>Recarga</dt><dd>${displayItem.reload ? displayItem.reload + "s" : "—"}</dd></div></dl>`;
-            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${this.chance(kind, displayId, mode === "lucky")}%</b></div>${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity"><div class="pity-title">${kind === "weapon" ? "WEAPON" : "CLASS"} PITY <span>NORMAL +1 · LUCKY +2</span></div><div class="pity-row"><span>MÍTICO</span><i><em style="width:${Math.min(100, d[kind + "MythicPity"] / 75 * 100)}%;background:${rarityColors[5]}"></em></i><b>${d[kind + "MythicPity"]}/75</b></div><div class="pity-row"><span>DIVINO</span><i><em style="width:${Math.min(100, d[kind + "DivinePity"] / 150 * 100)}%;background:${rarityColors[6]}"></em></i><b>${d[kind + "DivinePity"]}/150</b></div>${d[kind + "DivinePity"] + (mode === "lucky" ? 2 : 1) >= 150 ? '<strong class="pity-guarantee">DIVINO GARANTIDO NESTE SPIN</strong>' : d[kind + "MythicPity"] + (mode === "lucky" ? 2 : 1) >= 75 ? '<strong class="pity-guarantee">MÍTICO+ GARANTIDO NESTE SPIN</strong>' : ''}</div>`;
+            const pts = mode === "lucky" ? 2 : 1, dvp = d[kind + "DivinePity"] || 0, scp = d[kind + "SecretPity"] || 0, prefId = this.preference(kind);
+            const prefChip = prefId != null ? `<button type="button" class="pref-chip" data-pref-clear="1" style="--rarity:${rarityColors[Progression.economy.catalogs[kind][prefId].tier]}">✦ ${Progression.economy.catalogs[kind][prefId].name} <em>x1.5</em><small>remover</small></button>` : `<div class="pref-hint">Abra uma raridade e toque num item para aumentar levemente a chance dele (x1.5).</div>`;
+            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${+this.itemChance(kind, displayId, mode === "lucky").toFixed(3)}%</b></div>${prefChip}${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity"><div class="pity-title">${kind === "weapon" ? "WEAPON" : "CLASS"} PITY <span>NORMAL +1 · LUCKY +2</span></div><div class="pity-row"><span>DIVINO</span><i><em style="width:${Math.min(100, dvp)}%;background:${rarityColors[6]}"></em></i><b>${dvp}/100</b></div><div class="pity-row"><span>SECRETO</span><i><em style="width:${Math.min(100, scp / 3)}%;background:${rarityColors[7]}"></em></i><b>${scp}/300</b></div>${scp + pts >= 300 ? '<strong class="pity-guarantee">SECRETO GARANTIDO NESTE SPIN</strong>' : dvp + pts >= 100 ? '<strong class="pity-guarantee">DIVINO GARANTIDO NESTE SPIN</strong>' : ""}</div>`;
             const costNormal = Progression.economy.cost(false), costLucky = Progression.economy.cost(true);
             const normalLabel = d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
             const luckyLabel = d.lucky > 0 ? `1 ticket · ${d.lucky} restante${d.lucky === 1 ? "" : "s"}` : `◈ ${costLucky}`;
             $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Resultado direto · aviso antes de girar novamente só com Mítico ou Divino equipado.</p>`;
             $("armory-list").innerHTML = this.slotCards(kind);
             $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => Progression.slotEquip(kind, +b.dataset.slotEquip));
-            $("armory-list").querySelectorAll("[data-buy-slot]").forEach((b) => b.onclick = () => Progression.buyWeaponSlot());
+            $("armory-list").querySelectorAll("[data-buy-slot]").forEach((b) => b.onclick = () => (kind === "weapon" ? Progression.buyWeaponSlot() : Progression.buyClassSlot()));
             $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => Progression.roll(kind, b.dataset.reroll === "true", b.dataset.pay));
             $("rarity-board").querySelectorAll("[data-odds-mode]").forEach((b) => b.onclick = () => { this.oddsMode = b.dataset.oddsMode; this.rarityFilter = null; this.selection = null; this.render(); });
             $("rarity-board").querySelectorAll("[data-rarity-tier]").forEach((b) => b.onclick = () => { const tier = +b.dataset.rarityTier; this.rarityFilter = this.rarityFilter === tier ? null : tier; if (this.rarityFilter != null) { const first = Progression.economy.catalogs[kind].findIndex((item) => item.tier === tier); if (first >= 0) this.selection = first; } this.render(); });
-            $("rarity-board").querySelectorAll("[data-preview-id]").forEach((b) => b.onclick = (event) => { event.stopPropagation(); this.selection = +b.dataset.previewId; const item = Progression.economy.catalogs[kind][this.selection]; this.rarityFilter = item.tier; this.render(); });
+            $("rarity-board").querySelectorAll("[data-preview-id]").forEach((b) => b.onclick = (event) => { event.stopPropagation(); const id = +b.dataset.previewId; this.selection = id; this.pref[kind] = this.pref[kind] === id ? null : id; const item = Progression.economy.catalogs[kind][id]; this.rarityFilter = item.tier; AudioManager.tone(this.pref[kind] === id ? 880 : 440, 0.08, "triangle", 0.08, 1200, "ui"); this.render(); });
+            $("rarity-board").querySelectorAll("[data-pref-clear]").forEach((b) => b.onclick = () => { this.pref[kind] = null; this.render(); });
             document.querySelectorAll("[data-armory-tab]").forEach((b) => { b.classList.toggle("selected", b.dataset.armoryTab === this.tab); b.setAttribute("aria-selected", b.dataset.armoryTab === this.tab); b.disabled = Progression.busy; });
             $("classcontinue").disabled = Progression.busy; $("armory-back").disabled = Progression.busy; updatePreview(); Account.badge();
           },
           slotCards(kind) {
             const d = Progression.data, current = d[kind + "Id"];
-            const owned = kind === "weapon" ? d.weaponSlotsOwned : 2;
+            const max = kind === "weapon" ? WEAPON_SLOT_MAX : CLASS_SLOT_MAX;
+            const owned = kind === "weapon" ? d.weaponSlotsOwned : d.classSlotsOwned;
+            const prices = kind === "weapon" ? Progression.economy.weaponSlotPrices : Progression.economy.classSlotPrices;
             const slots = d[loadoutSlotKey(kind)].slice(0, owned);
+            const short = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v));
             const cards = slots.map((id, slot) => {
               if (id === null) return `<article class="slot-card empty"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span>RESERVA</span></div><h3 class="slot-name">VAZIO</h3><div class="slot-meta">O próximo spin pode ocupar este espaço.</div></article>`;
               const item = Progression.economy.catalogs[kind][id],
                 selected = kind === "weapon" ? d.weaponSlot === slot : current === id;
               return `<article class="slot-card ${selected ? "selected" : ""}" style="--rarity:${rarityColors[item.tier]}"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span style="color:${rarityColors[item.tier]}">${rarityNames[item.tier].toUpperCase()}</span></div><h3 class="slot-name">${item.name}</h3><div class="slot-meta">${selected ? "EQUIPADO AGORA" : "RESERVA DO LOADOUT"}</div><div class="slot-actions"><button data-slot-equip="${slot}" ${selected ? "disabled" : ""}>${selected ? "EM USO" : "EQUIPAR"}</button></div></article>`;
             }).join("");
-            if (kind !== "weapon" || owned >= WEAPON_SLOT_MAX) return cards;
-            const price = Progression.economy.weaponSlotPrices[owned + 1];
-            const locked = Account.user
-              ? `<div class="slot-meta">Disponível apenas offline por enquanto.</div>`
-              : `<div class="slot-actions"><button data-buy-slot="1" ${Progression.busy || d.coins < price ? "disabled" : ""}>COMPRAR · ◈ ${price.toLocaleString("pt-BR")}</button></div>`;
-            return cards + `<article class="slot-card locked"><div class="slot-head"><span class="slot-badge">${owned + 1}</span><span>BLOQUEADO</span></div><h3 class="slot-name">NOVO SLOT DE ARMA</h3><div class="slot-meta">Leve mais uma arma pra partida e troque com as teclas 1-${WEAPON_SLOT_MAX} durante o jogo.</div>${locked}</article>`;
+            let locked = "";
+            for (let n = owned + 1; n <= max; n++) {
+              const price = prices[n], next = n === owned + 1;
+              locked += `<article class="slot-card locked ${next ? "next" : ""}"><div class="slot-head"><span class="slot-badge">${n}</span><span>🔒 BLOQUEADO</span></div><h3 class="slot-name slot-price">◈ ${short(price)}</h3><div class="slot-meta">${kind === "weapon" ? `Leve mais uma arma e troque com 1-${WEAPON_SLOT_MAX} na partida.` : "Guarde mais uma classe no loadout."}</div>${next ? `<div class="slot-actions"><button data-buy-slot="1" ${Progression.busy || d.coins < price ? "disabled" : ""}>COMPRAR · ◈ ${price.toLocaleString("pt-BR")}</button></div>` : ""}</article>`;
+            }
+            return cards + locked;
           },
           chance(kind, id, lucky) { const list = Progression.economy.catalogs[kind], tier = list[id].tier; return +(Progression.economy.rates[lucky ? "lucky" : "normal"][tier] / list.filter((i) => i.tier === tier).length).toFixed(3); },
           customization() {
@@ -17377,97 +18456,96 @@ body.netgame #revivetouch{display:flex}
             $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach((b) => b.onclick = () => Cosmetics.select(b.dataset.cosmeticItem));
             $("cosmetic-fields").querySelectorAll("[data-cosmetic-clear]").forEach((b) => b.onclick = () => Cosmetics.unequip(b.dataset.cosmeticClear));
           },
+          // Spin reveal (reference video): no reel overlay — the item title above the survivor
+          // flicks through candidates, slowing down, while the 3D preview swaps with it; then a
+          // rarity-coloured burst lands on the result. SKIP jumps straight to the reveal.
+          identity(kind, id, label) {
+            const item = Progression.economy.catalogs[kind][id];
+            const el = $("armory-identity");
+            el.style.setProperty("--rarity", rarityColors[item.tier]);
+            el.innerHTML = `<span class="item-index">#${String(id + 1).padStart(3, "0")} · ${label}</span><h2>${item.name}</h2><b>${rarityNames[item.tier].toUpperCase()}</b><p>${kind === "class" ? item.desc : item.ability || ""}</p>`;
+          },
           reveal(kind, result, lucky) {
             const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
             const catalog = Progression.economy.catalogs[kind];
             const rates = Progression.economy.rates[lucky ? "lucky" : "normal"];
-            const cardStep = 164;
-            const targetIndex = 38 + Math.floor(Math.random() * 11);
-            // O prêmio sempre termina perfeitamente centralizado na seta.
-            // A variação visual acontece na aproximação: ele pode quase parar no canto
-            // da carta e então "arredondar" suavemente para o meio no fim.
-            const targetOffset = targetIndex * cardStep;
-            const edgeDirection = Math.random() < 0.5 ? -1 : 1;
-            const edgeOffset = targetOffset + (reduced ? 0 : edgeDirection * (46 + Math.random() * 20));
-            // Faster overall spin: the suspense now comes from the near-miss snap, not
-            // from making the player wait out a long reel.
-            const duration = reduced ? 0.35 : 2.5 + Math.random() * 0.8;
-            const totalCards = targetIndex + 24 + Math.floor(Math.random() * 9);
-
-            const entries = catalog.map((item, id) => ({ item, id }));
-            const visualPool = entries.filter((entry) => (rates[entry.item.tier] || 0) > 0);
-            const pool = visualPool.length ? visualPool : entries;
-            const pickVisual = (avoidId = -1) => {
-              const availableRates = rates.reduce((sum, value) => sum + Math.max(0, value || 0), 0);
-              let tier = pool[Math.floor(Math.random() * pool.length)].item.tier;
-              if (availableRates > 0) {
-                let roll = Math.random() * availableRates;
-                for (let i = 0; i < rates.length; i++) {
-                  roll -= Math.max(0, rates[i] || 0);
-                  if (roll < 0) { tier = i; break; }
-                }
-              }
-              let tierPool = pool.filter((entry) => entry.item.tier === tier && entry.id !== avoidId);
-              if (!tierPool.length) tierPool = pool.filter((entry) => entry.id !== avoidId);
-              if (!tierPool.length) tierPool = pool;
-              return tierPool[Math.floor(Math.random() * tierPool.length)];
+            const pool = catalog.map((item, id) => ({ item, id })).filter((e) => (rates[e.item.tier] || 0) > 0);
+            const pickVisual = (avoid) => {
+              const total = pool.reduce((a, e) => a + Math.sqrt(rates[e.item.tier]), 0);
+              let r = Math.random() * total;
+              for (const e of pool) if ((r -= Math.sqrt(rates[e.item.tier])) < 0 && e.id !== avoid) return e;
+              return pool[Math.floor(Math.random() * pool.length)];
             };
-
-            const sequence = [];
-            for (let i = 0; i < totalCards; i++) {
-              const previous = sequence.length ? sequence[sequence.length - 1].id : -1;
-              sequence.push(pickVisual(previous));
-            }
-            sequence[targetIndex] = result;
-
-            const divinePool = entries.filter((entry) => entry.item.tier === 6);
-            const nearMiss = !reduced && result.item.tier !== 6 && divinePool.length > 0 && Math.random() < 0.29;
-            let nearSide = 0;
-            let nearIndex = -1;
-            let nearOffset = targetOffset;
-            if (nearMiss) {
-              nearSide = Math.random() < 0.5 ? -1 : 1;
-              nearIndex = targetIndex + nearSide;
-              sequence[nearIndex] = divinePool[Math.floor(Math.random() * divinePool.length)];
-              nearOffset = targetOffset + nearSide * cardStep * (0.60 + Math.random() * 0.08) + (Math.random() * 12 - 6);
-            }
-
-            const softOvershoot = !reduced && Math.random() < 0.58
-              ? (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 16)
-              : 0;
-
-            this.previewSpin = { kind, id: result.id };
+            this.previewSpin = { kind, id: pickVisual(-1).id };
             this.selection = null;
             this.rarityFilter = result.item.tier;
-            this.roll = {
-              kind, result, lucky, start: menuTime, startWall: performance.now(), duration, tick: -1,
-              cardStep, targetIndex, targetOffset, edgeOffset, nearMiss, nearSide, nearIndex, nearOffset,
-              softOvershoot, reduced, hold: result.item.tier === 6 ? 2.05 : 0.88
-            };
-
+            const duration = reduced ? 0.3 : lucky ? 2.3 : 1.8;
+            this.roll = { kind, result, lucky, startWall: performance.now(), duration, next: 0, swaps: 0, pickVisual, revealed: false, hold: result.item.tier >= 6 ? 1.9 : result.item.tier >= 4 ? 1.1 : 0.75 };
             const rollRef = this.roll;
             clearTimeout(this.rollFallback);
             this.rollFallback = setTimeout(() => {
               if (this.roll === rollRef) this.finishSpin(rollRef);
-            }, reduced ? 1400 : Math.ceil((duration + 3.2) * 1000));
-
-            const overlay = $("roll-overlay");
-            overlay.querySelector(".divine-celebration")?.remove();
-            overlay.classList.remove("hidden", "result-reveal", "divine-win", "near-miss");
-            overlay.style.removeProperty("--roll-rarity");
-            overlay.setAttribute("aria-busy", "true");
-
-            const strip = $("roll-strip");
-            strip.style.transform = "translate3d(calc(50% - 82px),0,0)";
-            strip.innerHTML = sequence.map((entry, index) => {
-              const nearClass = nearMiss && index === nearIndex ? " near-divine" : "";
-              return `<div class="reel-card${nearClass}" data-reel-index="${index}" style="--rarity:${rarityColors[entry.item.tier]}"><small>${rarityNames[entry.item.tier]}</small><b>${entry.item.name}</b><span>#${String(entry.id + 1).padStart(3, "0")}</span></div>`;
-            }).join("");
-
-            $("roll-status").textContent = lucky ? "LUCKY SPIN" : "NORMAL SPIN";
+            }, Math.ceil((duration + 3.5) * 1000));
+            $("classscreen").classList.add("spinning");
+            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky skip" data-skip="1"><span class="ico">»</span><span class="label">SKIP</span><span class="cost">${lucky ? "LUCKY SPIN" : "NORMAL SPIN"}</span></button><button class="spin-btn normal" disabled><span class="ico">↻</span><span class="label">GIRANDO…</span><span class="cost">aguarde</span></button></div>`;
+            $("roll-controls").querySelector("[data-skip]").onclick = () => { if (this.roll === rollRef && !rollRef.revealed) rollRef.startWall = performance.now() - duration * 1000; };
+            this.identity(kind, this.previewSpin.id, lucky ? "LUCKY SPIN" : "NORMAL SPIN");
             updatePreview();
           },
+          burst(color, big) {
+            const stage = document.querySelector(".survivor-stage");
+            stage.querySelector(".spin-burst")?.remove();
+            const fx = document.createElement("div");
+            fx.className = "spin-burst" + (big ? " big" : "");
+            fx.style.setProperty("--c", color);
+            fx.innerHTML = `<i class="flash"></i><i class="rays"></i>` + Array.from({ length: big ? 26 : 14 }, () => `<b style="--x:${Math.round(rand(-46, 46))}%;--y:${Math.round(rand(-40, 40))}%;--s:${rand(0.5, 1.4).toFixed(2)};--d:${Math.round(rand(0, 380))}ms"></b>`).join("");
+            stage.appendChild(fx);
+            setTimeout(() => fx.remove(), big ? 2600 : 1500);
+          },
+          update(dt) {
+            if (!this.roll) return;
+            const r = this.roll,
+              t = clamp((performance.now() - r.startWall) / (r.duration * 1000), 0, 1);
+            if (!r.revealed && t < 1 && performance.now() >= r.next) {
+              // Decelerating flicker through candidates.
+              r.next = performance.now() + (45 + 330 * Math.pow(t, 2.4)) ;
+              r.swaps++;
+              const e = r.pickVisual(this.previewSpin.id);
+              this.previewSpin = { kind: r.kind, id: e.id };
+              this.identity(r.kind, e.id, r.lucky ? "LUCKY SPIN" : "NORMAL SPIN");
+              updatePreview();
+              AudioManager.tone(260 + t * 420, 0.035, "triangle", 0.05, 120, "ui");
+            }
+            if (t >= 1 && !r.revealed) {
+              r.revealed = true;
+              r.revealAtWall = performance.now();
+              const tier = r.result.item.tier,
+                color = rarityColors[tier];
+              this.previewSpin = { kind: r.kind, id: r.result.id };
+              this.identity(r.kind, r.result.id, tier >= 7 ? "SECRETO!" : tier === 6 ? "DIVINO!" : "NOVO ITEM");
+              updatePreview();
+              this.burst(color, tier >= 4);
+              if (tier >= 6) {
+                AudioManager.tone(523, 0.75, "sine", 0.13, 80, "ui");
+                AudioManager.tone(659, 0.82, "triangle", 0.11, 70, "ui");
+                AudioManager.tone(784, 0.95, "sine", 0.1, 65, "ui");
+              } else AudioManager.tone(tier >= 4 ? 160 : 300, 0.48, "triangle", 0.18, 60, "ui");
+              $("reveal-message").textContent = `${r.result.item.name} · ${rarityNames[tier]} · equipado automaticamente`;
+              $("reveal-message").style.color = color;
+              $("classscreen").style.setProperty("--reveal", color);
+              $("classscreen").classList.remove("rarity-reveal");
+              void $("classscreen").offsetWidth;
+              $("classscreen").classList.add("rarity-reveal");
+              if (this.light) {
+                this.light.color.set(color);
+                this.light.intensity = tier >= 6 ? 7.2 : 2.6 + tier * 0.55;
+              }
+              return;
+            }
+            if (r.revealed && performance.now() - r.revealAtWall >= r.hold * 1000) this.finishSpin(r);
+          },
           async finishSpin(r) {
+            $("classscreen").classList.remove("spinning");
             clearTimeout(this.rollFallback);
             this.rollFallback = null;
             this.roll = null;
@@ -17498,117 +18576,6 @@ body.netgame #revivetouch{display:flex}
             requestAnimationFrame(() => $("spin-confirm-accept").focus());
             return true;
           },
-          update(dt) {
-            if (!this.roll) return;
-            const r = this.roll;
-            // Spin presentation uses wall-clock time so low FPS cannot make the
-            // fallback finish a roll before the visual result is revealed.
-            const t = clamp((performance.now() - r.startWall) / (r.duration * 1000), 0, 1);
-            const easeOut = (value, power = 5) => 1 - Math.pow(1 - clamp(value, 0, 1), power);
-            let offset;
-
-            if (r.reduced) {
-              offset = r.targetOffset;
-            } else if (r.nearMiss) {
-              // Suspense em três atos, mas mais curto e mais brusco: chega perto do
-              // Divino cedo, e o desvio para o prêmio real é um "puxão" rápido em vez
-              // de uma demora — dramático, só que sem enrolar.
-              const nearEnd = r.nearSide > 0 ? 0.56 : 0.52;
-              const edgeEnd = 0.86;
-              if (t < nearEnd) {
-                offset = r.nearOffset * easeOut(t / nearEnd, 5);
-              } else if (t < edgeEnd) {
-                const settleEdge = easeOut((t - nearEnd) / (edgeEnd - nearEnd), 4);
-                offset = r.nearOffset + (r.edgeOffset + r.softOvershoot - r.nearOffset) * settleEdge;
-              } else {
-                const center = easeOut((t - edgeEnd) / (1 - edgeEnd), 4);
-                offset = r.edgeOffset + r.softOvershoot + (r.targetOffset - r.edgeOffset - r.softOvershoot) * center;
-              }
-            } else {
-              // Todo giro pode parecer que parou no finalzinho da carta,
-              // mas os últimos instantes sempre arredondam para o centro exato.
-              const edgeEnd = 0.94;
-              const approach = r.edgeOffset + r.softOvershoot;
-              if (t < edgeEnd) {
-                offset = approach * easeOut(t / edgeEnd, 5);
-              } else {
-                const center = easeOut((t - edgeEnd) / (1 - edgeEnd), 3);
-                offset = approach + (r.targetOffset - approach) * center;
-              }
-            }
-
-            if (r.nearMiss && !r.nearCue && t >= (r.nearSide > 0 ? 0.56 : 0.52)) {
-              r.nearCue = true;
-              $("roll-overlay").classList.add("near-miss");
-            }
-
-            if (r.lastOffset == null || Math.abs(offset - r.lastOffset) >= 0.45 || t >= 1) {
-              $("roll-strip").style.transform = `translate3d(calc(50% - 82px - ${offset}px),0,0)`;
-              r.lastOffset = offset;
-            }
-
-            const tick = Math.floor(offset / r.cardStep);
-            if (tick !== r.tick) {
-              r.tick = tick;
-              const remaining = Math.max(0, Math.abs(r.targetOffset - offset));
-              const pitch = 205 + Math.min(330, Math.max(0, 260 - remaining * 0.12));
-              AudioManager.tone(pitch, .032, "triangle", .042, 95, "ui");
-            }
-
-            if (t >= 1 && !r.revealed) {
-              r.revealed = true;
-              r.revealAt = menuTime;
-              r.revealAtWall = performance.now();
-              const color = rarityColors[r.result.item.tier];
-              const overlay = $("roll-overlay");
-              overlay.classList.remove("near-miss");
-              overlay.style.setProperty("--roll-rarity", color);
-              overlay.classList.add("result-reveal");
-              $("roll-status").textContent = `${rarityNames[r.result.item.tier]} · ${r.result.item.name}`;
-
-              const cards = $("roll-strip").children;
-              if (cards[r.targetIndex]) cards[r.targetIndex].classList.add("winner");
-
-              if (r.result.item.tier === 6) {
-                overlay.classList.add("divine-win");
-                if (cards[r.targetIndex]) cards[r.targetIndex].classList.add("divine-winner");
-                $("roll-status").textContent = `DIVINO! · ${r.result.item.name}`;
-                const fx = document.createElement("div");
-                fx.className = "divine-celebration";
-                fx.setAttribute("aria-hidden", "true");
-                fx.innerHTML = Array.from({ length: 28 }, (_, i) => {
-                  const angle = Math.round((360 / 28) * i + Math.random() * 12 - 6);
-                  const distance = Math.round(120 + Math.random() * 250);
-                  const delay = Math.round(Math.random() * 210);
-                  const size = (4 + Math.random() * 7).toFixed(1);
-                  return `<i style="--a:${angle}deg;--d:${distance}px;--delay:${delay}ms;--s:${size}px"></i>`;
-                }).join("");
-                overlay.appendChild(fx);
-                AudioManager.tone(523, .75, "sine", .13, 80, "ui");
-                AudioManager.tone(659, .82, "triangle", .11, 70, "ui");
-                AudioManager.tone(784, .95, "sine", .10, 65, "ui");
-              } else {
-                AudioManager.tone(r.result.item.tier >= 4 ? 160 : 300, .48, "triangle", .18, 60, "ui");
-              }
-
-              $("reveal-message").textContent = r.result.item.tier === 6
-                ? `${r.result.item.name} · DIVINO obtido e equipado`
-                : `${r.result.item.name} · equipado automaticamente`;
-              $("reveal-message").style.color = color;
-              $("classscreen").style.setProperty("--reveal", color);
-              $("classscreen").classList.remove("rarity-reveal");
-              void $("classscreen").offsetWidth;
-              $("classscreen").classList.add("rarity-reveal");
-              if (this.light) {
-                this.light.color.set(color);
-                this.light.intensity = r.result.item.tier === 6 ? 7.2 : 2.6 + r.result.item.tier * .55;
-              }
-              updatePreview();
-              return;
-            }
-
-            if (r.revealed && performance.now() - r.revealAtWall >= r.hold * 1000) this.finishSpin(r);
-          },
         };
         // Slot-based Armory. A spin never silently overwrites a full slot.
         const economyLoad = LoadoutEconomy.prototype.load;
@@ -17630,6 +18597,7 @@ body.netgame #revivetouch{display:flex}
             id == null ? null : migrateClass(id),
           );
           this.data.classRosterVersion = 2;
+          this.data.classSlotsOwned = Number.isInteger(saved.classSlotsOwned) ? saved.classSlotsOwned : this.data.classSlots[1] != null ? 2 : 1;
           this.data.weaponSlots = Array.isArray(saved.weaponSlots) ? saved.weaponSlots : Array.isArray(saved.ownedWeapons) ? saved.ownedWeapons : [this.data.weaponId, null];
           this.data.weaponSlot = Number.isInteger(saved.weaponSlot) ? saved.weaponSlot : 0;
           // Grandfather in anyone who already had a second weapon slot filled under the old
@@ -17641,14 +18609,14 @@ body.netgame #revivetouch{display:flex}
           this.data.pendingLoadout = saved.pendingLoadout && typeof saved.pendingLoadout === "object" ? saved.pendingLoadout : {};
           normalizeLoadoutState(this.data); this.data.pendingLoadout = {}; this.save();
         };
-        LoadoutEconomy.prototype.roll = function (kind, lucky, payment) {
+        LoadoutEconomy.prototype.roll = function (kind, lucky, payment, pref = null) {
           if (!this.catalogs[kind] || !["ticket", "coins"].includes(payment)) return null;
           normalizeLoadoutState(this.data);
           const ticket = lucky ? "lucky" : "normal", cost = this.cost(lucky);
           if (payment === "ticket" ? this.data[ticket] < 1 : this.data.coins < cost) return null;
           const pity = this.pityState(kind, lucky), tier = this.drawTier(lucky, pity.minimumTier), eligible = this.catalogs[kind].map((item, id) => ({ item, id })).filter((e) => e.item.tier === tier);
           if (!eligible.length) return null;
-          const result = eligible[Math.min(eligible.length - 1, Math.floor(this.random() * eligible.length))];
+          const result = this.pick(eligible, pref);
           if (payment === "ticket") this.data[ticket]--; else this.data.coins -= cost;
           this.commitPity(pity, tier);
           delete this.data.pendingLoadout[kind];
@@ -17669,9 +18637,9 @@ body.netgame #revivetouch{display:flex}
           try {
             let result;
             if (Account.user) {
-              const r = await Account.queue("roll", { kind, lucky, payment: resolvedPayment });
+              const r = await Account.queue("roll", { kind, lucky, payment: resolvedPayment, pref: Armory.preference(kind) });
               Account.apply(r.profile); result = { id: r.id, item: this.economy.catalogs[kind][r.id] };
-            } else result = this.economy.roll(kind, lucky, resolvedPayment);
+            } else result = this.economy.roll(kind, lucky, resolvedPayment, Armory.preference(kind));
             if (!result) throw Error("Saldo insuficiente.");
             selectedClass = this.data.classId;
             Armory.reveal(kind, result, lucky);
@@ -17681,7 +18649,7 @@ body.netgame #revivetouch{display:flex}
           normalizeLoadoutState(this.data);
           // A spin can only land in an owned slot — never auto-fill a slot the player
           // hasn't bought yet.
-          const owned = kind === "weapon" ? this.data.weaponSlotsOwned : 2;
+          const owned = kind === "weapon" ? this.data.weaponSlotsOwned : this.data.classSlotsOwned;
           const slots = this.data[loadoutSlotKey(kind)].slice(0, owned);
           if (kind === "weapon") {
             return Number.isInteger(this.data.weaponSlot)
@@ -17699,7 +18667,7 @@ body.netgame #revivetouch{display:flex}
           normalizeLoadoutState(this.data);
           const item = this.economy.catalogs[kind][id];
           if (!item) throw Error("Item inválido.");
-          const owned = kind === "weapon" ? this.data.weaponSlotsOwned : 2;
+          const owned = kind === "weapon" ? this.data.weaponSlotsOwned : this.data.classSlotsOwned;
           const slots = this.data[loadoutSlotKey(kind)].slice(0, owned), existing = slots.indexOf(id);
           if (Account.user) {
             const pending = this.data.pendingLoadout?.[kind];
@@ -17759,6 +18727,26 @@ body.netgame #revivetouch{display:flex}
         // Extra weapon inventory slots let the player carry more than one weapon into a
         // run and switch between them with number keys. Offline only for now — logged-in
         // accounts sync their loadout from the server, which doesn't know this field yet.
+        Progression.buyClassSlot = function () {
+          if (state !== GameState.CLASS_SELECT || this.busy) return;
+          if (Account.user) {
+            this.busy = true;
+            Account.queue("classslot/buy").then((r) => { Account.apply(r.profile); AudioManager.coin(); UIManager.toast("Novo slot de classe liberado."); }).catch((e) => UIManager.toast(e.message)).finally(() => { this.busy = false; Armory.render(); });
+            return;
+          }
+          normalizeLoadoutState(this.data);
+          const owned = this.data.classSlotsOwned;
+          if (owned >= CLASS_SLOT_MAX) return;
+          const price = this.economy.classSlotPrices[owned + 1];
+          if (this.data.coins < price) { UIManager.toast("Moedas insuficientes."); return; }
+          this.data.coins -= price;
+          this.data.classSlotsOwned = owned + 1;
+          normalizeLoadoutState(this.data);
+          this.economy.save();
+          player.coins = this.data.coins;
+          AudioManager.coin();
+          Armory.render();
+        };
         Progression.buyWeaponSlot = function () {
           if (state !== GameState.CLASS_SELECT || this.busy) return;
           if (Account.user) {
@@ -18351,12 +19339,9 @@ body.netgame #revivetouch{display:flex}
           AudioManager.init();
           DR.LobbyUI.openPlay();
         };
+        DevMode.attachLogo();
         $("loadoutbtn").onclick = () => {
           Armory.tab = "weapon";
-          Armory.open();
-        };
-        $("classesbtn").onclick = () => {
-          Armory.tab = "class";
           Armory.open();
         };
         $("missionsbtn").onclick = () => DR.MissionUI.open();
@@ -18373,7 +19358,6 @@ body.netgame #revivetouch{display:flex}
               Armory.render();
             }),
         );
-        $("accountbtn").onclick = () => DR.ProfileUI.open();
         let fullscreenWasActive = false;
         function enterFullscreen() {
           if (window.DeadRecoilRuntime?.native) return Promise.resolve();
@@ -18547,6 +19531,7 @@ body.netgame #revivetouch{display:flex}
           keys.add(c);
           if (repeat) return true;
           if (c === "KeyR") PlayerController.reload();
+          if (c === "F8" && DevMode.allowed) DevMode.toggle();
           if (c === "KeyQ") PlayerController.ability();
           if (c === "KeyF") SecretWeaponSkills.use();
           if (c === "KeyG") PlayerController.grenade();

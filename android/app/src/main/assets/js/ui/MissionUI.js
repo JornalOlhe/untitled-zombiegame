@@ -53,7 +53,7 @@
       });
       $("missions-refresh").onclick = () => this.refresh();
       $("index-refresh").onclick = () => this.refreshIndex();
-      $("missions-index").onclick = () => this.openIndex(this.from);
+      if ($("missions-index")) $("missions-index").onclick = () => this.openIndex(this.from);
       $("mission-reward-ok").onclick = () => $("missionreward").classList.add("hidden");
       $("missiontracker").addEventListener("click", () => this.game.openGameMissions?.());
     },

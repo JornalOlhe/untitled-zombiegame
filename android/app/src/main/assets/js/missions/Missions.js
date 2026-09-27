@@ -20,7 +20,13 @@
     const m = Math.round(Number(sec || 0) / 60);
     return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}min` : ""}` : `${m} min`;
   };
-  const BOSS_NAMES = { yeti: "o Yeti", demon: "o Demônio", mutant: "o Mutante", quarterback: "o Quarterback" };
+  const BOSS_NAMES = {
+    quarterback: "o Quarterback", roadblock: "o Roadblock", juggernaut: "o Juggernaut", wrecker: "o Wrecker",
+    surgeon: "o Surgeon", patient_zero: "o Patient Zero", butcher: "o Butcher", plague_host: "o Plague Host",
+    forest_stalker: "o Stalker", gravekeeper: "o Gravekeeper", wendigo: "o Wendigo", demon: "o Demônio",
+    mutant: "o Mutante", prototype_x: "o Prototype X", abomination: "a Abomination", omega: "o Experiment Omega",
+    frost_brute: "o Frost Brute", cryo_hunter: "o Cryo Hunter", yeti: "o Yeti", avalanche_titan: "o Avalanche Titan",
+  };
 
   // type → { icon, title(m) }. New mission types only need an entry here and in the SQL generator.
   const MissionDefinitions = {
@@ -28,7 +34,7 @@
     WEAPON: { icon: "⌖", title: (m) => `Elimine ${n(m.target)} zumbis com ${FAMILIES[m.params?.family] || "a arma indicada"}` },
     HEADSHOT: { icon: "◎", title: (m) => `Acerte ${n(m.target)} headshots` },
     SURVIVAL: { icon: "⏳", title: (m) => `Sobreviva a ${n(m.target)} ondas` },
-    BOSS: { icon: "♛", title: (m) => (m.target === 1 ? "Derrote 1 chefe (Yeti ou Demônio)" : `Derrote ${n(m.target)} chefes`) },
+    BOSS: { icon: "♛", title: (m) => (m.target === 1 ? "Derrote 1 chefe (Boss I ou Boss II)" : `Derrote ${n(m.target)} chefes`) },
     MINIBOSS: { icon: "✚", title: (m) => (m.target === 1 ? "Derrote 1 mini-boss" : `Derrote ${n(m.target)} mini-bosses`) },
     DAMAGE: { icon: "✸", title: (m) => `Cause ${n(m.target)} de dano` },
     TEAM: { icon: "✚", title: (m) => (m.target === 1 ? "Reviva 1 aliado" : `Reviva ${n(m.target)} aliados`) },
@@ -169,10 +175,26 @@
     parasite_host: { name: "Hospedeiro", desc: "Ao morrer, libera parasitas." },
     tank: { name: "Tank", desc: "Uma parede de carne. Traga munição pesada." },
     parasite: { name: "Parasita", desc: "Pequeno, veloz e sempre em grupo." },
-    quarterback: { name: "Quarterback", desc: "Mini-boss. Investidas brutais em linha reta." },
-    mutant: { name: "Mutante", desc: "Mini-boss. O experimento que escapou do laboratório." },
-    yeti: { name: "Yeti", desc: "Chefe. O terror da nevasca." },
-    demon: { name: "Demônio", desc: "Chefe. O senhor do inferno." },
+    quarterback: { name: "Quarterback", desc: "Cidade · Mini-boss I. Investidas brutais em linha reta." },
+    roadblock: { name: "Roadblock", desc: "Cidade · Mini-boss II. Operário que avança e esmaga o chão." },
+    juggernaut: { name: "Juggernaut", desc: "Cidade · Boss I. Blindado, salta sobre você e esmaga." },
+    wrecker: { name: "The Wrecker", desc: "Cidade · Boss II. Arremessa destroços e chama a horda." },
+    surgeon: { name: "The Surgeon", desc: "Hospital · Mini-boss I. Investidas cirúrgicas e rastro de sangue." },
+    patient_zero: { name: "Patient Zero", desc: "Hospital · Mini-boss II. Infecta o chão e chama pacientes." },
+    butcher: { name: "The Butcher", desc: "Hospital · Boss I. Cutelo arremessado e golpes pesados." },
+    plague_host: { name: "Plague Host", desc: "Hospital · Boss II. Nuvens tóxicas e ácido por onde passa." },
+    forest_stalker: { name: "Stalker", desc: "Floresta · Mini-boss I. Salta das sombras sobre a presa." },
+    gravekeeper: { name: "Gravekeeper", desc: "Floresta · Mini-boss II. A lanterna prende e ergue os mortos." },
+    wendigo: { name: "Wendigo", desc: "Floresta · Boss I. Rápido, faminto e implacável." },
+    demon: { name: "Demônio", desc: "Floresta · Boss II. O senhor do inferno drena a sua vida." },
+    mutant: { name: "Mutante", desc: "Laboratório · Mini-boss I. O espécime que quebrou o tanque." },
+    prototype_x: { name: "Prototype X", desc: "Laboratório · Mini-boss II. Foguetes e investidas cibernéticas." },
+    abomination: { name: "Abomination", desc: "Laboratório · Boss I. Ácido, golpes e parasitas." },
+    omega: { name: "Experiment Omega", desc: "Laboratório · Boss II. O experimento final: foguetes e radiação." },
+    frost_brute: { name: "Frost Brute", desc: "Neve · Mini-boss I. Pancadas que congelam." },
+    cryo_hunter: { name: "Cryo Hunter", desc: "Neve · Mini-boss II. Lanças de gelo e saltos." },
+    yeti: { name: "Yeti", desc: "Neve · Boss I. O terror da nevasca." },
+    avalanche_titan: { name: "Avalanche Titan", desc: "Neve · Boss II. Uma avalanche que anda." },
   };
   const Bestiary = {
     list: [],

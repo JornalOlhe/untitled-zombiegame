@@ -134,10 +134,18 @@
   };
 
   const InventoryRepository = {
-    roll: (kind, lucky, payment, requestId = uuid()) => Backend.rpc("economy_roll", { p_kind: kind, p_lucky: !!lucky, p_payment: payment, p_request: requestId }),
+    roll: (kind, lucky, payment, requestId = uuid(), pref = null) =>
+      Backend.rpc("economy_roll", { p_kind: kind, p_lucky: !!lucky, p_payment: payment, p_request: requestId, p_pref: Number.isInteger(pref) ? pref : null }),
     equip: (kind, slot, action, requestId = uuid()) => Backend.rpc("economy_equip", { p_kind: kind, p_slot: slot ?? null, p_action: action, p_request: requestId }),
     buySlot: (requestId = uuid()) => Backend.rpc("economy_buy_slot", { p_request: requestId }),
+    buyClassSlot: (requestId = uuid()) => Backend.rpc("economy_buy_class_slot", { p_request: requestId }),
     buyCosmetic: (id, requestId = uuid()) => Backend.rpc("cosmetic_buy", { p_id: id, p_request: requestId }),
+  };
+
+  // Developer tools: every call is checked against the server-side whitelist (dev_whitelist).
+  const DevRepository = {
+    status: () => Backend.rpc("dev_status", {}, { timeout: 8000 }),
+    action: (action, args = {}, requestId = uuid()) => Backend.rpc("dev_action", { p_action: action, p_args: args, p_request: requestId }),
   };
 
   const RunRepository = {
@@ -215,6 +223,7 @@
   DR.Backend = Backend;
   DR.ProfileRepository = ProfileRepository;
   DR.InventoryRepository = InventoryRepository;
+  DR.DevRepository = DevRepository;
   DR.RunRepository = RunRepository;
   DR.MissionRepository = MissionRepository;
   DR.LobbyRepository = LobbyRepository;
