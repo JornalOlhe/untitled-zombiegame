@@ -43,6 +43,10 @@ set tier = excluded.tier,
     family = excluded.family,
     name = excluded.name;
 
+-- v28 weapon renames (Firestarter -> Hellfire, Hellfire Incarnate -> Fire Incarnation).
+update public.catalog_items set name = 'Hellfire' where kind = 'weapon' and item_id = 5;
+update public.catalog_items set name = 'Fire Incarnation' where kind = 'weapon' and item_id = 16;
+
 -- Secret is the same shared tier for class and weapon rolls.
 -- Prototype v25 rates: Normal 0.01%, Lucky 0.10%. Pity remains 75 Mythic+ / 150 Divine+.
 create or replace function public._draw_tier_min(p_lucky boolean, p_min int) returns int

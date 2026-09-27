@@ -252,7 +252,7 @@ begin
     lt := case when lvl > 0.8 then 1 else 0 end;
     insert into public.missions (user_id, category, period_key, slot, mission_type, template_key, params, target, rarity,
       reward_coins, reward_xp, reward_normal, reward_lucky)
-    values (p_uid, 'unique', p_month, i, t, 'm:' || p_month || ':' || i, params, greatest(1, target), rar, coins, xp, nt, lt)
+    values (p_uid, 'unique', p_month, i, t, 'm:' || p_month || ':' || i, coalesce(params, '{}'::jsonb), greatest(1, target), rar, coins, xp, nt, lt)
     on conflict do nothing;
   end loop;
 end $$;
