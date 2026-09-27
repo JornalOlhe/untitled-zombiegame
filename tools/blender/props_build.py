@@ -139,10 +139,10 @@ def broadleaf(name, seed, dark=False):
     base_g = (0.13, 0.21, 0.09) if dark else (0.2, 0.3, 0.12)
     for i, t in enumerate(tips + [top + Vector((0, 0, 0.6))]):
         r = random.uniform(1.1, 1.6)
-        blob(bm, t, r, (1, 1, 0.78), 2, seed * 10 + i)
+        blob(bm, t, r, (1, 1, 0.78), 1, seed * 10 + i, 0.22)
     for i in range(3):
         a = random.uniform(0, math.tau)
-        blob(bm, top + Vector((math.cos(a) * 0.9, math.sin(a) * 0.9, random.uniform(-0.6, 0.4))), random.uniform(1.0, 1.4), (1, 1, 0.8), 2, seed * 20 + i)
+        blob(bm, top + Vector((math.cos(a) * 0.9, math.sin(a) * 0.9, random.uniform(-0.6, 0.4))), random.uniform(1.0, 1.4), (1, 1, 0.8), 1, seed * 20 + i, 0.22)
 
     def leaf_col(co, n, c):
         shade = 0.75 + 0.35 * max(0, n.z) + 0.1 * noise.noise(c * 0.9)
