@@ -28,6 +28,7 @@ const server = http.createServer((req, res) => {
       const walletGuard = await page.evaluate(() => {
         const T = DeadRecoilTest;
         const original = { ...T.Progression.economy.data };
+        const account = { user: T.Account.user, userId: T.Account.userId, profile: T.Account.profile };
         try {
           T.Progression.economy.data.coins = 5000;
           T.Progression.economy.data.normal = 5;
@@ -60,6 +61,9 @@ const server = http.createServer((req, res) => {
           return { afterStale, afterReward };
         } finally {
           T.Progression.economy.data = original;
+          T.Account.user = account.user;
+          T.Account.userId = account.userId;
+          T.Account.profile = account.profile;
         }
       });
       assert.deepEqual(walletGuard.afterStale, { coins: 5000, normal: 5, lucky: 2 }, 'reward sync must never reduce wallet balances');
