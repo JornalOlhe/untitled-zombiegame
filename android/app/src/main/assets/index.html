@@ -5100,6 +5100,19 @@ body.netgame #revivetouch{display:flex}
             this.pending.get(name).push({ m, color: opts.color != null ? new THREE.Color(opts.color) : null });
             return true;
           },
+          // A plain (non-instanced) copy of a model, e.g. a class accessory attached to a rig.
+          group(name, scale = 1) {
+            const parts = this.ready && this.parts.get(name);
+            if (!parts) return null;
+            const g = new THREE.Group();
+            for (const part of parts) {
+              const m = new THREE.Mesh(part.geo, part.mat);
+              m.castShadow = !part.name.startsWith("glow");
+              g.add(m);
+            }
+            g.scale.setScalar(scale);
+            return g;
+          },
           flush(parent) {
             for (const [name, list] of this.pending) {
               for (const part of this.parts.get(name) || []) {
@@ -9801,6 +9814,109 @@ body.netgame #revivetouch{display:flex}
             NetGame.fx("proj", { p: [+pos.x.toFixed(2), +pos.y.toFixed(2), +pos.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)], dmg: damage, acid: extra.acid ? 1 : 0 });
           return p;
         }
+        // Cyborg rockets (Blender model "rocket"): telegraph → launch → smoke trail → explosion that
+        // leaves a short-lived fire zone. Host-authoritative in multiplayer (clients get the fx).
+        const CyborgRockets = {
+          pending: [],
+          zones: [],
+          telegraph(z) {
+            const line = new THREE.Line(
+              new THREE.BufferGeometry().setFromPoints([new V(), new V()]),
+              new THREE.LineBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.8, depthWrite: false }),
+            );
+            scene.add(line);
+            this.pending.push({ z, at: simulationTime + 0.7, line });
+            SpatialSound.emit?.(z.group.position, 880, 0.12, 0.2);
+          },
+          model() {
+            const parts = PropModels.parts.get("rocket");
+            const g = new THREE.Group();
+            if (parts) for (const part of parts) g.add(new THREE.Mesh(part.geo, part.mat));
+            else g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.9, 8).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x55604a })));
+            g.scale.setScalar(1.3);
+            return g;
+          },
+          launch(from, dir, damage = 22) {
+            const g = this.model();
+            g.position.copy(from);
+            scene.add(g);
+            const p = { kind: "rocket", mesh: g, pos: g.position, vel: dir.clone().normalize().multiplyScalar(15), life: 4, damage };
+            g.lookAt(from.clone().add(p.vel)); // the Blender model's nose points along +Z
+            projectiles.push(p);
+            AudioManager.on?.("effects", () => AudioManager.noise(0.35, 0.5));
+            return p;
+          },
+          update(dt) {
+            for (let i = this.pending.length - 1; i >= 0; i--) {
+              const t = this.pending[i], z = t.z;
+              const from = z.group.position.clone().add(new V(0.35 * z.size, 1.75 * z.size, 0)),
+                aim = player.pos.clone().add(new V(0, -0.4, 0));
+              t.line.geometry.setFromPoints([from, aim]);
+              t.line.material.opacity = 0.35 + 0.45 * Math.abs(Math.sin(simulationTime * 30));
+              if (z.dead || simulationTime >= t.at) {
+                scene.remove(t.line);
+                t.line.geometry.dispose();
+                t.line.material.dispose();
+                this.pending.splice(i, 1);
+                if (!z.dead) {
+                  const dir = aim.sub(from).normalize();
+                  this.launch(from, dir);
+                  if (NetGame.active && NetGame.host) NetGame.fx("rocket", { p: [+from.x.toFixed(2), +from.y.toFixed(2), +from.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)] });
+                }
+              }
+            }
+            for (let i = this.zones.length - 1; i >= 0; i--) {
+              const f = this.zones[i];
+              f.t += dt;
+              for (const sp of f.sprites) {
+                sp.material.opacity = Math.max(0, 0.85 * (1 - f.t / f.life)) * (0.7 + 0.3 * Math.sin(simulationTime * 18 + sp.userData.phase));
+                sp.scale.y = sp.userData.h * (0.8 + 0.3 * Math.sin(simulationTime * 11 + sp.userData.phase));
+              }
+              if (Math.random() < dt * 14) ParticleSystem.emit(f.pos.clone().add(new V(rand(-f.r, f.r) * 0.7, 0.2, rand(-f.r, f.r) * 0.7)), 0xff8a30, 2, 1.2);
+              if (player && Math.hypot(player.pos.x - f.pos.x, player.pos.z - f.pos.z) < f.r && (player.ground || 0) + player.jump < f.pos.y + 1.2 && simulationTime >= f.nextTick) {
+                f.nextTick = simulationTime + 0.4;
+                PlayerController.hurt(4 * diff[difficulty].damage);
+              }
+              if (f.t >= f.life) {
+                for (const sp of f.sprites) { scene.remove(sp); sp.material.dispose(); }
+                this.zones.splice(i, 1);
+              }
+            }
+          },
+          fireZone(pos, r = 2.4, life = 4.5) {
+            const sprites = [];
+            for (let k = 0; k < 7; k++) {
+              const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: k % 2 ? 0xff6a1a : 0xffb040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+              const a = (k / 7) * Math.PI * 2, d = k ? r * 0.55 : 0;
+              sp.position.set(pos.x + Math.cos(a) * d, pos.y + 0.5, pos.z + Math.sin(a) * d);
+              sp.userData.h = rand(1.1, 1.8);
+              sp.scale.set(rand(0.9, 1.4), sp.userData.h, 1);
+              sp.userData.phase = k * 1.7;
+              scene.add(sp);
+              sprites.push(sp);
+            }
+            this.zones.push({ pos: pos.clone(), r, life, t: 0, sprites, nextTick: 0 });
+            while (this.zones.length > 6) {
+              const old = this.zones.shift();
+              for (const sp of old.sprites) { scene.remove(sp); sp.material.dispose(); }
+            }
+          },
+          explode(pos, damage) {
+            const at = pos.clone();
+            at.y = Math.max(at.y, MapManager.groundAt(at.x, at.z, 0.2, at.y) + 0.05);
+            explosion(at, 3.2, damage, true, 0xff7a26);
+            ParticleSystem.emit(at.clone().add(new V(0, 0.8, 0)), 0x444444, 30, 1.6);
+            const flash = PhysicsProps.flashLight?.(0xff7a26, 12, at.clone().add(new V(0, 0.8, 0)));
+            if (flash) PhysicsProps.flashes.push({ light: flash, t: 0 });
+            this.fireZone(new V(at.x, MapManager.groundAt(at.x, at.z, 0.2, at.y), at.z));
+          },
+          clear() {
+            for (const t of this.pending) scene.remove(t.line);
+            for (const f of this.zones) for (const sp of f.sprites) scene.remove(sp);
+            this.pending.length = 0;
+            this.zones.length = 0;
+          },
+        };
         function removeProjectile(i) {
           const p = projectiles[i];
           scene.remove(p.mesh);
@@ -10461,17 +10577,10 @@ body.netgame #revivetouch{display:flex}
                     }
                   AudioManager.tone(350, 0.6, "sawtooth", 0.12, 70);
                 }
-                if (z.type === 8 && dist < 18) {
-                  const spit = spawnProjectile(
-                    "enemy",
-                    pos.clone().add(new V(0, 1.4, 0)),
-                    player.pos
-                      .clone()
-                      .sub(pos.clone().add(new V(0, 1.4, 0)))
-                      .normalize(),
-                    10,
-                    { acid: true },
-                  );
+                if (z.type === 8 && dist > 5 && dist < 28 && z.canSee !== false) {
+                  // Cyborg shoulder rocket: a short red-laser telegraph, then launch (see CyborgRockets).
+                  CyborgRockets.telegraph(z);
+                  z.special = simulationTime + 7.5;
                 }
                 if (z.boss) {
                   const kind = z.boss?.kind;
@@ -13280,6 +13389,7 @@ body.netgame #revivetouch{display:flex}
             selectedMap = Number(selectedMap);
             MapManager.build(selectedMap);
             ZombiePing.reset();
+            CyborgRockets.clear();
             RunStats.reset(); // per-match counters (bosses, weapon families, Index kills) must not leak into the next match
             elapsed = 0;
             simulationTime = 0;
@@ -13972,6 +14082,23 @@ body.netgame #revivetouch{display:flex}
           for (let i = projectiles.length - 1; i >= 0; i--) {
             const p = projectiles[i];
             p.life -= dt;
+            if (p.kind === "rocket") {
+              const previous = p.pos.clone(),
+                step = p.vel.clone().multiplyScalar(dt);
+              raycaster.set(previous, step.clone().normalize());
+              raycaster.far = step.length() + 0.2;
+              const wall = raycaster.intersectObjects(MapManager.walls)[0];
+              p.pos.add(step);
+              if (Math.random() < 0.8) ParticleSystem.emit(previous.clone().addScaledVector(p.vel, -0.03), 0x9a9a9a, 1, 0.4);
+              ParticleSystem.line(previous, p.pos, 0xffb060, 0.08);
+              const hitPlayer = player && player.pos.distanceTo(p.pos) < 1.0;
+              const ground = p.pos.y < MapManager.groundAt(p.pos.x, p.pos.z, 0.1, p.pos.y) + 0.05;
+              if (wall || hitPlayer || ground || p.life <= 0 || Math.abs(p.pos.x) > MapManager.half + 4 || Math.abs(p.pos.z) > MapManager.half + 4) {
+                CyborgRockets.explode(wall ? wall.point : p.pos, p.damage);
+                removeProjectile(i);
+              }
+              continue;
+            }
             if (p.kind === "arrow") {
               if (p.stuck) {
                 if (p.life <= 0 || ++stuckArrows > 24) removeProjectile(i);
@@ -16122,6 +16249,8 @@ body.netgame #revivetouch{display:flex}
             else if (m.k === "proj") {
               const p = spawnProjectile("enemy", new V(m.p[0], m.p[1], m.p[2]), new V(m.d[0], m.d[1], m.d[2]), m.dmg);
               if (m.acid) p.acid = true;
+            } else if (m.k === "rocket") {
+              CyborgRockets.launch(new V(m.p[0], m.p[1], m.p[2]), new V(m.d[0], m.d[1], m.d[2]));
             } else if (m.k === "intro" && z && VoxelMonsters.ready()) BossIntro.start(z);
           },
           onEvent(m) {
@@ -16690,6 +16819,20 @@ body.netgame #revivetouch{display:flex}
                 }
                 wings.push(wing);
               }
+              // Blender models (ARCHANGEL template) replace the placeholder halo and wings.
+              const haloModel = PropModels.group("acc_halo");
+              if (haloModel) {
+                halo.clear();
+                haloModel.position.set(0, 0.43, 0);
+                halo.add(haloModel);
+                wings.forEach((wing, i) => {
+                  const side = i ? 1 : -1, model = PropModels.group("acc_wing", 0.72);
+                  if (!model) return;
+                  wing.clear();
+                  model.scale.x *= side;
+                  wing.add(model);
+                });
+              }
               secretAccessories = { type:"angel", halo, left:wings[0], right:wings[1] };
             } else if (cls === 23) {
               const obsidian = 0x211a20, infernal = 0xe32121, horn = 0x5a3732;
@@ -16714,6 +16857,26 @@ body.netgame #revivetouch{display:flex}
                 const a=j*Math.PI*2/3;
                 A.link(rotor,[0,0,0],[Math.cos(a)*.28,Math.sin(a)*.28,0],.035,.012,obsidian,"steel");
                 A.ellipsoid(rotor,[Math.cos(a)*.3,Math.sin(a)*.3,0],[.08,.035,.04],infernal,"steel",infernal);
+              }
+              // Blender models (ARCHDEMON template): horns, segmented tail and the spinning rotor.
+              const tailModel = PropModels.group("acc_tail");
+              if (tailModel) {
+                horns.forEach((h, i) => {
+                  const side = i ? 1 : -1, model = PropModels.group("acc_horn", 1.1);
+                  if (!model) return;
+                  h.clear();
+                  model.scale.x *= side;
+                  h.add(model);
+                });
+                tail.clear();
+                tail.add(tailModel);
+                const rotorModel = PropModels.group("acc_rotor", 0.9);
+                if (rotorModel) {
+                  rotor.clear();
+                  rotor.position.set(Math.sin(7 * 0.55) * 0.08, -0.355, -1.14);
+                  rotor.add(rotorModel);
+                  tail.add(rotor);
+                }
               }
               secretAccessories = { type:"demon", horns, tail, rotor };
             }
@@ -18827,7 +18990,10 @@ body.netgame #revivetouch{display:flex}
               const cinematic = !!KillCam.active || !!BossDeath.active;
               if (!cinematic) PlayerController.update(sdt);
               if (state === GameState.PLAYING) ZombieManager.update(sdt);
-              if (state === GameState.PLAYING) updateProjectiles(sdt);
+              if (state === GameState.PLAYING) {
+                updateProjectiles(sdt);
+                CyborgRockets.update(sdt);
+              }
               if (state === GameState.PLAYING && !cinematic && (!NetGame.active || NetGame.host)) WaveManager.update(sdt);
               if (NetGame.active && NetGame.dead) NetGame.spectate();
               if (state === GameState.PLAYING) MonsterFX.update(sdt);
@@ -18981,6 +19147,12 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            Survivor,
+            SecretWeaponSkills,
+            CameraRig,
+            classBurst: () => classBurst(),
+            CyborgRockets,
+            PropModels,
             ZombiePing,
             MonsterPortraits,
             GrenadeThrow,

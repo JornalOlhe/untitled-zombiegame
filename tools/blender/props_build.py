@@ -412,7 +412,229 @@ def rock(name, seed, flat=False):
     export(name)
 
 
+# ------------------------------------------------------------------ secret class accessories
+# Following the ARCHANGEL (wings + halo) and ARCHDEMON (horns + tail) class accessory templates.
+# Axes (Blender): +X outward (right side), +Z up, +Y toward the back. The game mirrors the right
+# wing / horn for the left side and spins the tail rotor around the tail axis.
+def feather(bm, root, direction, length, width, bend=0.12, seg=5):
+    """A flat, tapered feather blade from `root` along `direction` (curving toward -Z)."""
+    d = Vector(direction).normalized()
+    side = d.cross(Vector((0, 1, 0)))
+    if side.length < 1e-3:
+        side = Vector((1, 0, 0))
+    side.normalize()
+    prev = None
+    for i in range(seg + 1):
+        t = i / seg
+        c = Vector(root) + d * length * t + Vector((0, 0, -bend * length * t * t))
+        w = width * (0.35 + 0.65 * math.sin(math.pi * min(1, t * 0.95 + 0.05))) * (1 - 0.8 * t ** 3)
+        th = 0.012 * (1 - t) + 0.003
+        ring = [bm.verts.new(c + side * w / 2), bm.verts.new(c + Vector((0, th, 0))), bm.verts.new(c - side * w / 2), bm.verts.new(c - Vector((0, th, 0)))]
+        if prev:
+            for k in range(4):
+                bm.faces.new((prev[k], prev[(k + 1) % 4], ring[(k + 1) % 4], ring[k]))
+        prev = ring
+
+
+def halo(name):
+    reset()
+    gold = mat("M_gold", 0.3, 0.8)
+    glowm = mat("M_glow", 0.2, 0.0, emit=(0.45, 0.85, 1.0))
+    bm = bmesh.new()
+    bmesh.ops.create_circle(bm, cap_ends=False, radius=0.235, segments=40)
+    geom = bmesh.ops.create_cone(bm, cap_ends=True, segments=40, radius1=0.235, radius2=0.235, depth=0.03)
+    bm.free()
+    bm = bmesh.new()
+    # Torus made by sweeping a small circle.
+    R, r, n, m = 0.235, 0.018, 48, 8
+    rings = []
+    for i in range(n):
+        a = i / n * math.tau
+        ca, sa = math.cos(a), math.sin(a)
+        rings.append([bm.verts.new(((R + r * math.cos(b)) * ca, (R + r * math.cos(b)) * sa, r * math.sin(b))) for b in (j / m * math.tau for j in range(m))])
+    for i in range(n):
+        for j in range(m):
+            a, b = rings[i][j], rings[i][(j + 1) % m]
+            c, d = rings[(i + 1) % n][(j + 1) % m], rings[(i + 1) % n][j]
+            bm.faces.new((a, b, c, d))
+    # Small spires at the four quarters (gold), pointing out.
+    for i in range(4):
+        a = i / 4 * math.tau
+        cyl(bm, (math.cos(a) * (R + 0.01), math.sin(a) * (R + 0.01), 0), (math.cos(a) * (R + 0.07), math.sin(a) * (R + 0.07), 0), 0.018, 0.0, 4)
+    paint(bm, lambda co, n, c: jitter((0.86, 0.68, 0.3), 0.04, int(c.x * 90 + c.y * 50)))
+    obj_from_bm("gold", bm, gold)
+    bm = bmesh.new()
+    for i in range(4):
+        a = i / 4 * math.tau + math.pi / 4
+        g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.028)
+        for v in g["verts"]:
+            v.co.z *= 1.7
+            v.co += Vector((math.cos(a) * R, math.sin(a) * R, 0))
+    g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.04)
+    for v in g["verts"]:
+        v.co.z = v.co.z * 2.2 + 0.07
+        v.co.y -= R
+    paint(bm, lambda co, n, c: (0.55, 0.9, 1.0))
+    obj_from_bm("glow", bm, glowm)
+    export(name)
+
+
+def wing(name):
+    reset()
+    random.seed(77)
+    gold = mat("M_gold", 0.3, 0.8)
+    featherm = mat("M_feather", 0.85)
+    glowm = mat("M_glow", 0.2, 0.0, emit=(0.45, 0.85, 1.0))
+    # Frame: shoulder -> wrist -> tip.
+    frame = [Vector((0, 0, 0)), Vector((0.22, 0.02, 0.2)), Vector((0.48, 0.05, 0.36)), Vector((0.72, 0.08, 0.34)), Vector((0.98, 0.1, 0.16))]
+    bm = bmesh.new()
+    for i in range(len(frame) - 1):
+        cyl(bm, frame[i], frame[i + 1], 0.045 - i * 0.008, 0.037 - i * 0.008, 7)
+    # Decorative gold plate at the wrist.
+    blob(bm, frame[2], 0.07, (1.4, 0.5, 1.0), 1, 3, 0.05)
+    paint(bm, lambda co, n, c: jitter((0.86, 0.68, 0.3), 0.05, int(c.x * 90 + c.z * 30)))
+    obj_from_bm("gold", bm, gold)
+
+    def along(t):
+        k = t * (len(frame) - 1)
+        i = min(int(k), len(frame) - 2)
+        return frame[i].lerp(frame[i + 1], k - i)
+
+    bm = bmesh.new()
+    # Primaries: long, from the outer frame, fanning down and out.
+    for i in range(13):
+        t = 0.5 + i * 0.038
+        ang = math.radians(-88 + i * 5.5)  # fan from straight down (inner) to outward (tip)
+        feather(bm, along(t) + Vector((0, 0.004 * i, 0)), (math.cos(ang), 0.02, math.sin(ang)), 0.5 + i * 0.03, 0.2, 0.08)
+    # Secondaries along the inner frame.
+    for i in range(12):
+        t = 0.06 + i * 0.04
+        feather(bm, along(t) + Vector((0, -0.01, 0)), (0.14, 0.02, -1), 0.4 + i * 0.015, 0.19, 0.08)
+    # Tertiaries / coverts: short layer over the frame.
+    for i in range(10):
+        t = 0.05 + i * 0.09
+        feather(bm, along(t) + Vector((0, -0.025, 0.02)), (0.25, 0.0, -1), 0.24, 0.15, 0.05, 4)
+
+    def col(co, n, c):
+        tip = max(0.0, min(1.0, (-c.z - 0.25) / 0.6))
+        base = (0.95, 0.97, 1.0)
+        blue = (0.62, 0.84, 1.0)
+        return jitter(tuple(base[k] * (1 - tip * 0.55) + blue[k] * tip * 0.55 for k in range(3)), 0.03, int(c.x * 71 + c.z * 37))
+
+    paint(bm, col)
+    obj_from_bm("leaves", bm, featherm)
+    bm = bmesh.new()
+    g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.045)
+    for v in g["verts"]:
+        v.co += frame[2] + Vector((0, -0.05, 0))
+    paint(bm, lambda co, n, c: (0.55, 0.9, 1.0))
+    obj_from_bm("glow", bm, glowm)
+    export(name)
+
+
+def horn(name):
+    reset()
+    obs = mat("M_obsidian", 0.35, 0.4)
+    glowm = mat("M_glow", 0.2, 0.0, emit=(1.0, 0.12, 0.08))
+    pts = []
+    for i in range(12):
+        t = i / 11
+        pts.append(Vector((0.02 + 0.2 * t - 0.05 * t ** 3, 0.02 + 0.06 * t - 0.18 * t ** 3, 0.03 + 0.24 * t - 0.02 * t * t)))
+    bm = bmesh.new()
+    for i in range(len(pts) - 1):
+        r0 = 0.055 * (1 - i / 11) ** 0.8 + 0.004
+        r1 = 0.055 * (1 - (i + 1) / 11) ** 0.8 + 0.003
+        cyl(bm, pts[i], pts[i + 1], r0, r1, 7)
+    for t in (0.35, 0.55, 0.75):
+        i = int(t * 11)
+        base = pts[i]
+        out = Vector((0.6, 0.3, 0.2)).normalized()
+        cyl(bm, base, base + out * 0.07, 0.022, 0.0, 4)
+    # Connector ring at the base.
+    for k in range(10):
+        a = k / 10 * math.tau
+        box(bm, (math.cos(a) * 0.06, math.sin(a) * 0.06, 0.0), (0.03, 0.03, 0.03), rot_z=a)
+    paint(bm, lambda co, n, c: jitter((0.12, 0.09, 0.1), 0.04, int(c.z * 90 + c.x * 30)))
+    obj_from_bm("body", bm, obs)
+    bm = bmesh.new()
+    for i in range(2, 9, 2):
+        a, b = pts[i], pts[i + 1]
+        mid = (a + b) / 2 + Vector((0.035, -0.02, 0))
+        cyl(bm, mid - (b - a) * 0.4, mid + (b - a) * 0.4, 0.008, 0.008, 4)
+    paint(bm, lambda co, n, c: (1.0, 0.15, 0.1))
+    obj_from_bm("glow", bm, glowm)
+    export(name)
+
+
+def tail(name):
+    reset()
+    obs = mat("M_obsidian", 0.35, 0.4)
+    bone = mat("M_bone", 0.7)
+    glowm = mat("M_glow", 0.2, 0.0, emit=(1.0, 0.12, 0.08))
+    pts = [Vector((math.sin(j * 0.55) * 0.08, 0.16 + j * 0.14, -0.04 - j * 0.045)) for j in range(8)]
+    pts.insert(0, Vector((0, 0, 0)))
+    bm = bmesh.new()
+    for j in range(len(pts) - 1):
+        r0 = 0.06 - j * 0.005
+        cyl(bm, pts[j], pts[j + 1], r0, r0 - 0.012, 8)
+        g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r0 * 1.15)
+        for v in g["verts"]:
+            v.co.y *= 0.7
+            v.co += pts[j + 1]
+    paint(bm, lambda co, n, c: jitter((0.12, 0.09, 0.1) if int(c.y * 7) % 2 else (0.3, 0.2, 0.17), 0.04, int(c.y * 90)))
+    obj_from_bm("body", bm, obs)
+    bm = bmesh.new()
+    for j in range(1, len(pts)):
+        p = pts[j]
+        cyl(bm, p + Vector((0, 0, 0.03)), p + Vector((0, 0.03, 0.11 - j * 0.008)), 0.025, 0.0, 4)
+    paint(bm, lambda co, n, c: jitter((0.75, 0.66, 0.55), 0.04, int(c.y * 70)))
+    obj_from_bm("spikes", bm, bone)
+    bm = bmesh.new()
+    for j in range(3, len(pts)):
+        g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.02)
+        for v in g["verts"]:
+            v.co += pts[j] + Vector((0, 0, -0.045))
+    paint(bm, lambda co, n, c: (1.0, 0.15, 0.1))
+    obj_from_bm("glow", bm, glowm)
+    export(name)
+
+
+def rotor(name):
+    """Three curved scythe blades in the X-Z plane around the origin (spins around Y)."""
+    reset()
+    obs = mat("M_obsidian", 0.35, 0.4)
+    glowm = mat("M_glow", 0.2, 0.0, emit=(1.0, 0.12, 0.08))
+    bm = bmesh.new()
+    for k in range(3):
+        a0 = k / 3 * math.tau
+        prev = None
+        for i in range(8):
+            t = i / 7
+            a = a0 + t * 1.1
+            r = 0.05 + 0.3 * t
+            w = 0.06 * math.sin(math.pi * min(1, t + 0.1)) + 0.005
+            c = Vector((math.cos(a) * r, 0, math.sin(a) * r))
+            nrm = Vector((-math.sin(a), 0, math.cos(a)))
+            ring = [bm.verts.new(c + nrm * w), bm.verts.new(c + Vector((0, 0.012, 0))), bm.verts.new(c - nrm * w * 0.3), bm.verts.new(c - Vector((0, 0.012, 0)))]
+            if prev:
+                for q in range(4):
+                    bm.faces.new((prev[q], prev[(q + 1) % 4], ring[(q + 1) % 4], ring[q]))
+            prev = ring
+    paint(bm, lambda co, n, c: jitter((0.14, 0.1, 0.11), 0.04, int(c.x * 50 + c.z * 30)))
+    obj_from_bm("body", bm, obs)
+    bm = bmesh.new()
+    g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.06)
+    paint(bm, lambda co, n, c: (1.0, 0.15, 0.1))
+    obj_from_bm("glow", bm, glowm)
+    export(name)
+
+
 if __name__ == "__main__":
+    halo("acc_halo")
+    wing("acc_wing")
+    horn("acc_horn")
+    tail("acc_tail")
+    rotor("acc_rotor")
     bush("bush", 3)
     rock("rock_a", 31)
     rock("rock_b", 47)
