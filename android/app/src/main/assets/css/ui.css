@@ -718,3 +718,12 @@ body.mouse-free #world { cursor: default; }
   .mission-tabs button { padding: 6px 12px; font-size: 18px; }
   #missionscreen .mission-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
 }
+
+/* Sniper scope (Titanbreaker / Thundergrave ADS) */
+#scope { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2; background: radial-gradient(circle at 50% 50%, transparent 0, transparent min(36vh, 36vw), rgba(4, 6, 6, .55) calc(min(36vh, 36vw) + 1px), #030404 calc(min(36vh, 36vw) + 6px)); }
+#scope.on { display: block; }
+#scope i { position: absolute; left: 50%; top: 50%; background: rgba(10, 12, 12, .9); }
+#scope .scope-h { width: min(72vh, 72vw); height: 1.5px; transform: translate(-50%, -50%); }
+#scope .scope-v { height: min(72vh, 72vw); width: 1.5px; transform: translate(-50%, -50%); }
+#scope b { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: #ff3a2a; transform: translate(-50%, -50%); box-shadow: 0 0 6px #ff3a2a; }
+body:has(#scope.on) .crosshair { opacity: 0; }

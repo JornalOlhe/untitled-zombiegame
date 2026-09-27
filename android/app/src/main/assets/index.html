@@ -2943,6 +2943,7 @@ body.netgame #revivetouch{display:flex}
       <div id="feed" class="feed"></div>
       <div id="bossbar" class="hidden"></div>
       <div class="crosshair"></div>
+      <div id="scope" aria-hidden="true"><i class="scope-h"></i><i class="scope-v"></i><b></b></div>
       <div id="hitmark">+</div>
       <div id="killmark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <div id="killpop" aria-hidden="true"><span>KILL</span><b></b></div>
@@ -8964,6 +8965,79 @@ body.netgame #revivetouch{display:flex}
           },
           // World position of the barrel end: the viewmodel is drawn by its own camera, so project
           // the flash point to the screen and back into the world camera at the same distance.
+          // ---- shot pipeline helpers (muzzle-coherent hit logic, spread states, camera recoil)
+          shotRay(w, eye, camDir) {
+            if (CameraRig.distance >= 0.6 || !this.model?.visible) return { from: eye, dir: camDir.clone() };
+            const target = aimTarget(w.range || 80),
+              muzzle = this.muzzleWorld(eye);
+            if (!isFinite(muzzle.x + muzzle.y + muzzle.z)) return { from: eye, dir: camDir.clone() };
+            const toMuzzle = muzzle.clone().sub(eye);
+            raycaster.set(eye, toMuzzle.clone().normalize());
+            raycaster.far = toMuzzle.length() + 0.05;
+            if (raycaster.intersectObjects(MapManager.walls).length) return { from: eye, dir: camDir.clone() };
+            const dir = target.sub(muzzle);
+            if (dir.lengthSq() < 0.25) return { from: eye, dir: camDir.clone() };
+            return { from: muzzle, dir: dir.normalize() };
+          },
+          // Spread cone (radians) for the current stance: standing, moving, sprinting, crouched,
+          // in the air, aiming. First shot from a still stance with a precise gun is near-perfect.
+          spreadFor(w) {
+            let s = w.spread || 0;
+            const m = PlayerController.motion,
+              speed = Math.hypot(m.vx || 0, m.vz || 0),
+              crouched = keys.has("ControlLeft") || keys.has("ControlRight");
+            if (player.jump > 0.05) s *= 2.2;
+            else if (speed > 6) s *= 2.2;
+            else if (speed > 1) s *= 1.45;
+            if (crouched) s *= 0.7;
+            if (mouse.aim) s *= w.kind === "shotgun" ? 0.7 : 0.35;
+            const precise = ["auto", "rail", "antimaterial"].includes(w.kind) && !w.pellets;
+            if (precise && speed < 0.5 && player.jump < 0.05 && (this.sinceLastShot ?? 9) > 0.4) s *= 0.15;
+            this.lastSpread = s;
+            return s;
+          },
+          coneDir(dir, angle) {
+            const out = dir.clone().normalize();
+            if (!(angle > 0)) return out;
+            const up = Math.abs(out.y) > 0.95 ? new V(1, 0, 0) : new V(0, 1, 0),
+              a = new V().crossVectors(out, up).normalize(),
+              b = new V().crossVectors(out, a).normalize(),
+              r = angle * Math.sqrt(Math.random()),
+              t = Math.random() * Math.PI * 2;
+            return out.addScaledVector(a, Math.cos(t) * Math.tan(r)).addScaledVector(b, Math.sin(t) * Math.tan(r)).normalize();
+          },
+          // Camera recoil (separate from the viewmodel kick): the view climbs per shot with a
+          // little sideways jitter, then recovers toward where the burst started once firing stops.
+          recoilAcc: 0,
+          burstPitch: 0,
+          kickFor(w) {
+            if (w.kick != null) return w.kick;
+            return { melee: 0, bow: 0, fire: 0.003, ice: 0.003, laser: 0.004, auto: w.name === "Crimson AK" ? 0.013 : w.name === "MP5" ? 0.0075 : 0.01, shotgun: 0.045, rail: 0.05, antimaterial: 0.075, missile: 0.03, quantum: 0.02, double: 0.03 }[w.kind] ?? 0.01;
+          },
+          applyRecoil(w) {
+            const k = this.kickFor(w) * (mouse.aim ? 0.8 : 1) * (keys.has("ControlLeft") ? 0.85 : 1);
+            if (!k) return;
+            if (this.recoilAcc <= 0.0001) this.burstPitch = pitch;
+            pitch = clamp(pitch + k, -1.45, 1.45);
+            yaw += (Math.random() - 0.5) * k * 0.7;
+            this.recoilAcc += k;
+          },
+          recoverRecoil(dt, w) {
+            if (this.recoilAcc <= 0 || !w) return;
+            if (simulationTime - lastShot < Math.max(0.12, (w.rate || 0.1) * 1.4)) return;
+            const r = Math.min(this.recoilAcc, dt * 1.6);
+            this.recoilAcc -= r;
+            if (pitch > this.burstPitch) pitch = Math.max(this.burstPitch, pitch - r);
+            else this.recoilAcc = 0; // the player already pulled down past the start
+          },
+          adsPose(w) {
+            if (w.kind === "antimaterial" || w.kind === "rail") return { pos: new V(0, -0.13, -0.33), fov: 0.3, scope: true };
+            if (w.kind === "missile") return { pos: new V(0.1, -0.21, -0.44), fov: 0.82 };
+            if (w.kind === "shotgun") return { pos: new V(0, -0.2, -0.4), fov: 0.82 };
+            if (w.kind === "bow") return { pos: new V(0.02, -0.15, -0.38), fov: 0.86 };
+            // Iron sights sit below the crosshair so the gun never covers the target.
+            return { pos: new V(0, -0.165, -0.39), fov: 0.78 };
+          },
           muzzleWorld(fallback = player?.pos) {
             const f = this.parts?.flash;
             if (!f || !this.model.parent || CameraRig.distance > 0.6) return fallback.clone();
@@ -9013,8 +9087,13 @@ body.netgame #revivetouch{display:flex}
               bob = moving
                 ? Math.sin(phase) * 0.008
                 : Math.sin(simulationTime * 1.6) * 0.002;
+            const ads = this.adsPose(w);
+            this.aimBlend = (this.aimBlend || 0) + ((aiming ? 1 : 0) - (this.aimBlend || 0)) * Math.min(1, dt * 12);
+            this.scoped = !!ads.scope && aiming && this.aimBlend > 0.82;
+            $("scope")?.classList.toggle("on", this.scoped);
+            this.recoverRecoil(dt, w);
             const target = aiming
-              ? new V(0, -0.105, -0.36)
+              ? ads.pos.clone()
               : new V(0.255, -0.24, -0.42);
             if (w.specter) {
               const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
@@ -9044,6 +9123,7 @@ body.netgame #revivetouch{display:flex}
             target.y -= GrenadeThrow.drop * 0.3;
             target.x += GrenadeThrow.drop * 0.08;
             this.model.position.lerp(target, 1 - Math.exp(-dt * 16));
+            if (this.scoped) this.model.position.y = -2; // looking through the scope
             this.model.rotation.set(
               this.kick * 0.075 + swayY * 0.3,
               swayX * 0.3,
@@ -9615,7 +9695,42 @@ body.netgame #revivetouch{display:flex}
             if (t >= this.END) this.cancel();
           },
         };
+        const ArrowArt = {
+          mesh() {
+            if (!this.parts) {
+              this.parts = {
+                shaft: new THREE.BoxGeometry(0.022, 0.022, 0.82),
+                head: new THREE.ConeGeometry(0.035, 0.12, 4).rotateX(-Math.PI / 2),
+                vane: new THREE.BoxGeometry(0.004, 0.06, 0.14),
+                wood: new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.8 }),
+                steel: new THREE.MeshStandardMaterial({ color: 0xb8c0c6, roughness: 0.35, metalness: 0.7 }),
+                feather: new THREE.MeshStandardMaterial({ color: 0xc23a30, roughness: 0.9 }),
+              };
+            }
+            const P = this.parts, g = new THREE.Group();
+            g.add(new THREE.Mesh(P.shaft, P.wood));
+            const head = new THREE.Mesh(P.head, P.steel);
+            head.position.z = -0.46;
+            g.add(head);
+            for (const a of [0, Math.PI / 2]) {
+              const v = new THREE.Mesh(P.vane, P.feather);
+              v.position.z = 0.34;
+              v.rotation.z = a;
+              g.add(v);
+            }
+            return g;
+          },
+        };
         function spawnProjectile(kind, pos, dir, damage, extra = {}) {
+          if (kind === "arrow") {
+            const g = ArrowArt.mesh();
+            g.position.copy(pos);
+            scene.add(g);
+            const p = { kind, mesh: g, pos: g.position, vel: dir.clone().multiplyScalar(extra.speed || 50), life: 5, damage, ...extra };
+            g.lookAt(pos.clone().add(p.vel));
+            projectiles.push(p);
+            return p;
+          }
           const mesh = sphere(
             scene,
             pos.x,
@@ -12387,11 +12502,10 @@ body.netgame #revivetouch{display:flex}
               scene.add(piece);
               this.debris.push({ mesh: piece, vel: new V(rand(-7, 7), rand(5, 10), rand(-7, 7)), spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin: rand(6, 14), life: 3.5, half: 0.05 });
             }
-            // Momentary light.
-            const flash = new THREE.PointLight(color, 9, radius * 3.2, 2);
-            flash.position.copy(at).add(new V(0, 0.6, 0));
-            scene.add(flash);
-            this.flashes.push({ light: flash, t: 0 });
+            // Momentary light from a fixed pool: adding a new PointLight to the scene changes the
+            // light count and recompiles every material (that was the freeze on barrel blasts).
+            const flash = this.flashLight(color, radius * 3.2, at.clone().add(new V(0, 0.6, 0)));
+            if (flash) this.flashes.push({ light: flash, t: 0 });
             // Sound: crack + low boom.
             AudioManager.noise(0.6, 1);
             AudioManager.tone(55, 0.7, "sawtooth", 0.6, 18);
@@ -12413,13 +12527,31 @@ body.netgame #revivetouch{display:flex}
             this.impulse(at, radius * 1.6, 15);
           },
           flashes: [],
+          flashPool: null,
+          flashLight(color, range, pos) {
+            if (!this.flashPool) {
+              this.flashPool = [0, 1].map(() => {
+                const l = new THREE.PointLight(0xff7a26, 0, 20, 2);
+                scene.add(l);
+                return l;
+              });
+            }
+            const l = this.flashPool.find((x) => !this.flashes.some((f) => f.light === x)) || this.flashes[0]?.light;
+            if (!l) return null;
+            this.flashes = this.flashes.filter((f) => f.light !== l);
+            if (l.parent !== scene) scene.add(l);
+            l.color.setHex(color);
+            l.distance = range;
+            l.position.copy(pos);
+            return l;
+          },
           updateFlashes(dt) {
             for (let i = this.flashes.length - 1; i >= 0; i--) {
               const f = this.flashes[i];
               f.t += dt;
               f.light.intensity = 9 * Math.max(0, 1 - f.t / 0.35);
               if (f.t > 0.35) {
-                scene.remove(f.light);
+                f.light.intensity = 0;
                 this.flashes.splice(i, 1);
               }
             }
@@ -12820,7 +12952,9 @@ body.netgame #revivetouch{display:flex}
             PhysicsProps.shove(propHit[0].object.userData.prop, shot, propHit[0].point, damage);
             end = propHit[0].point;
           }
-          const gunOrigin = WeaponSystem.muzzleWorld(origin);
+          const gunOrigin = origin.distanceTo(player.pos) > 0.05 ? origin : WeaponSystem.muzzleWorld(origin);
+          WeaponSystem.lastImpact = end.clone();
+          WeaponSystem.lastTracer = [gunOrigin.clone(), end.clone()];
           ParticleSystem.line(
             gunOrigin,
             end,
@@ -13437,7 +13571,10 @@ body.netgame #revivetouch{display:flex}
             muzzleLight.intensity = 1.5 + power * 2;
             recoil = Math.max(recoil, 0.3 + power * 0.5);
             WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 1.5 + power * 2;
-            fireHitscanShot(w, player.pos.clone(), CameraRig.aim(), damage);
+            // A real arrow: faster, flatter and more precise the longer the draw.
+            const { from, dir } = WeaponSystem.shotRay(w, player.pos.clone(), CameraRig.aim());
+            const shot = WeaponSystem.coneDir(dir, (1 - power) * 0.035);
+            spawnProjectile("arrow", from, shot, damage, { weapon: w, speed: 24 + 48 * power, power });
           },
           shoot() {
             if (NetGame.down || NetGame.dead) return;
@@ -13447,6 +13584,7 @@ body.netgame #revivetouch{display:flex}
               this.reload();
               return;
             }
+            WeaponSystem.sinceLastShot = simulationTime - lastShot;
             lastShot = simulationTime;
             player.shots++;
             if (w.kind === "melee") {
@@ -13529,20 +13667,20 @@ body.netgame #revivetouch{display:flex}
                 });
               return;
             }
-            const count = w.pellets || (w.kind === "laser" ? 3 : 1);
+            // One coherent shot: the camera ray finds what the crosshair is on (aim point), the
+            // bullet leaves the real muzzle toward that point, and the tracer and the hit test use
+            // that same ray. If a wall sits between the eye and the muzzle (gun poking through
+            // cover), the shot is taken from the eye so it cannot pass through the wall.
+            const { from, dir: baseDir } = WeaponSystem.shotRay(w, origin, dir);
+            const count = w.pellets || (w.kind === "laser" ? 3 : 1),
+              cone = WeaponSystem.spreadFor(w);
             for (let i = 0; i < count; i++) {
-              const shot = dir.clone(),
-                spread = (w.spread || 0) * (mouse.aim ? 0.35 : 1);
-              shot.x += rand(-spread, spread);
-              shot.y += rand(-spread, spread);
-              shot.z += rand(-spread, spread);
+              const shot = WeaponSystem.coneDir(baseDir, cone);
               if (w.kind === "laser")
                 shot.applyAxisAngle(new V(0, 1, 0), (i - 1) * 0.06);
-              shot.normalize();
-              fireHitscanShot(w, origin, shot, damage, i === 0);
+              fireHitscanShot(w, from, shot, damage, i === 0);
             }
-            if (w.kind === "antimaterial")
-              pitch = clamp(pitch + 0.045, -1.45, 1.45);
+            WeaponSystem.applyRecoil(w);
           },
           update(dt) {
             elapsed += dt;
@@ -13764,13 +13902,11 @@ body.netgame #revivetouch{display:flex}
               rand(-shake, shake) * 0.025,
               "YXZ",
             );
+            const drawPower = w?.kind === "bow" && this.chargeHeldSince != null ? clamp((simulationTime - this.chargeHeldSince) / (w.chargeTime || 0.9), 0, 1) : 0;
             const targetFov =
               SettingsManager.data.fov *
-              (mouse.aim && w?.kind !== "melee" && !GrenadeThrow.active
-                ? w?.cat === 2
-                  ? 0.48
-                  : 0.78
-                : 1);
+              (mouse.aim && w?.kind !== "melee" && !GrenadeThrow.active ? WeaponSystem.adsPose(w).fov : 1) *
+              (1 - drawPower * 0.28); // drawing a bow zooms in as the string comes back
             camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 12);
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
@@ -13832,9 +13968,46 @@ body.netgame #revivetouch{display:flex}
         };
 
         function updateProjectiles(dt) {
+          let stuckArrows = 0;
           for (let i = projectiles.length - 1; i >= 0; i--) {
             const p = projectiles[i];
             p.life -= dt;
+            if (p.kind === "arrow") {
+              if (p.stuck) {
+                if (p.life <= 0 || ++stuckArrows > 24) removeProjectile(i);
+                continue;
+              }
+              p.vel.y -= 9.8 * dt;
+              const previous = p.pos.clone(),
+                step = p.vel.clone().multiplyScalar(dt),
+                len = step.length(),
+                dirN = step.clone().normalize();
+              raycaster.set(previous, dirN);
+              raycaster.far = len + 0.45;
+              const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
+                wh = raycaster.intersectObjects(MapManager.walls)[0];
+              const floor = MapManager.groundAt(previous.x, previous.z, 0.05, previous.y);
+              if (zh && (!wh || zh.distance < wh.distance)) {
+                const z = zh.object.userData.zombie,
+                  head = !!zh.object.userData.head;
+                ZombieManager.hit(z, p.damage * (head ? p.weapon?.head || 2 : 1), head, zh.point, p.weapon);
+                ParticleSystem.emit(zh.point, 0x8a1010, 8, 2);
+                removeProjectile(i);
+                continue;
+              }
+              if (wh || previous.y + step.y < floor) {
+                // Stick into the wall / ground for a few seconds.
+                p.pos.copy(wh ? wh.point.clone().addScaledVector(dirN, 0.18) : previous.clone().add(step).setY(floor + 0.05));
+                p.stuck = true;
+                p.life = 4;
+                ParticleSystem.emit(p.pos, 0x9a8a70, 5, 1.2);
+                continue;
+              }
+              p.pos.add(step);
+              p.mesh.lookAt(p.pos.clone().add(p.vel));
+              if (p.life <= 0 || Math.abs(p.pos.x) > MapManager.half + 6 || Math.abs(p.pos.z) > MapManager.half + 6) removeProjectile(i);
+              continue;
+            }
             if (p.kind === "orbital") {
               p.ring.scale.setScalar(1 + (2 - p.life) * 4);
               if (p.life <= 0) {
@@ -18812,6 +18985,7 @@ body.netgame #revivetouch{display:flex}
             MonsterPortraits,
             GrenadeThrow,
             setPitch: (v) => (pitch = v),
+            getPitch: () => pitch,
             GameState,
             WeaponSystem,
             WeaponModels,
