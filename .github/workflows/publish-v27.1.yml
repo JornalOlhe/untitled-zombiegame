@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-v28.yml']
+    paths: ['.github/workflows/publish-v27.1.yml']
 
 
 concurrency:
