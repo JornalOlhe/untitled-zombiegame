@@ -1,15 +1,15 @@
-name: Publish Dead Recoil v27.1
-# v27.1 rerun after wallet regression isolation
+name: Publish Dead Recoil 0.27.1 (bridge tag v28)
+# v27.1 compatibility bridge: tag v28 so installed v27 updaters detect it
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-v27.1.yml']
+    paths: ['.github/workflows/publish-v28.yml']
 
 
 concurrency:
-  group: publish-v27.1
+  group: publish-v28
   cancel-in-progress: true
 
 permissions:
@@ -158,7 +158,7 @@ jobs:
               packaged = apk.read("assets/index.html")
           if source != packaged:
               raise SystemExit("Packaged game assets do not match current main.")
-          print("Android v27.1 verified.")
+          print("Android v28 verified.")
           PY
 
       - uses: actions/upload-artifact@v4
@@ -233,7 +233,7 @@ jobs:
           name: DeadRecoil-v27.1-Windows
           path: dist
 
-      - name: Publish GitHub release v27.1
+      - name: Publish GitHub release v28
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -241,11 +241,11 @@ jobs:
           set -euo pipefail
           test -f dist/DeadRecoil-v27.1.apk
           test -f dist/DeadRecoil-Setup-0.27.1.exe
-          if gh release view v27.1 >/dev/null 2>&1; then
-            gh release upload v27.1 dist/DeadRecoil-v27.1.apk dist/DeadRecoil-Setup-0.27.1.exe --clobber
-            gh release edit v27.1 --title "Dead Recoil 0.27.1" --notes-file release/v27.1-notes.md --latest
+          if gh release view v28 >/dev/null 2>&1; then
+            gh release upload v28 dist/DeadRecoil-v27.1.apk dist/DeadRecoil-Setup-0.27.1.exe --clobber
+            gh release edit v28 --title "Dead Recoil 0.27.1" --notes-file release/v27.1-notes.md --latest
           else
-            gh release create v27.1 dist/DeadRecoil-v27.1.apk dist/DeadRecoil-Setup-0.27.1.exe \
+            gh release create v28 dist/DeadRecoil-v27.1.apk dist/DeadRecoil-Setup-0.27.1.exe \
               --target "$GITHUB_SHA" --title "Dead Recoil 0.27.1" --notes-file release/v27.1-notes.md --latest
           fi
 
@@ -253,4 +253,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: gh release view v27.1 --json tagName,name,isDraft,isPrerelease,assets
+        run: gh release view v28 --json tagName,name,isDraft,isPrerelease,assets
