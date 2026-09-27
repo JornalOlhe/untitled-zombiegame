@@ -7739,7 +7739,7 @@ body.netgame #revivetouch{display:flex}
           // obstacle list changes length, so the big maps stay cheap for every zombie every frame.
           BUCKET: 4,
           near(x, z, r) {
-            if (this.indexed !== this.obstacles || this.indexedCount !== this.obstacles.length) this.reindex();
+            if (this.indexed !== this.obstacles || this.indexedCount !== this.obstacles.length || this.indexedTail !== this.obstacles[this.obstacles.length - 1]) this.reindex();
             if (r > 2.5) return this.obstacles;
             const B = this.BUCKET,
               key = ((Math.floor(x / B) + 512) << 10) | (Math.floor(z / B) + 512);
@@ -7765,6 +7765,7 @@ body.netgame #revivetouch{display:flex}
             }
             this.indexed = this.obstacles;
             this.indexedCount = this.obstacles.length;
+            this.indexedTail = this.obstacles[this.obstacles.length - 1];
           },
           move(pos, dx, dz, r = 0.4, feet = 0) {
             if (!this.collides(pos.x + dx, pos.z, r, feet)) pos.x += dx;
@@ -7804,8 +7805,7 @@ body.netgame #revivetouch{display:flex}
             for (let z = 0; z < n; z++)
               for (let x = 0; x < n; x++) {
                 const id = z * n + x,
-                  wx = (x - this.gridOffset) * 2,
-                  wz = (z - this.gridOffset) * 2;
+                  [wx, wz] = this.cellToWorld(x, z);
                 this.blocked[id] = this.collides(wx, wz, 0.55) ? 1 : 0;
                 if (!this.blocked[id]) {
                   let crowd = 0;
@@ -7819,12 +7819,28 @@ body.netgame #revivetouch{display:flex}
               }
             this.flow = new Int32Array(n * n);
           },
-          cellAt(x, z) {
-            const o = this.gridOffset ?? 17;
+          // Grid <-> world conversions. The grid covers [-half, half] on both axes with
+          // `cell`-metre cells centred on the origin; every navigation lookup goes through these.
+          worldToCell(x, z) {
             return [
-              clamp(Math.round(x / 2) + o, 0, this.gridSize - 1),
-              clamp(Math.round(z / 2) + o, 0, this.gridSize - 1),
+              clamp(Math.round(x / this.cell) + this.gridOffset, 0, this.gridSize - 1),
+              clamp(Math.round(z / this.cell) + this.gridOffset, 0, this.gridSize - 1),
             ];
+          },
+          cellToWorld(cx, cz) {
+            return [(cx - this.gridOffset) * this.cell, (cz - this.gridOffset) * this.cell];
+          },
+          cellAt(x, z) {
+            return this.worldToCell(x, z);
+          },
+          // Unit vector from a ladder towards its wall (the side with the building behind it).
+          ladderInward(l) {
+            if (l.inward) return l.inward;
+            const a = [Math.sin(l.ry), Math.cos(l.ry)];
+            const blockedA = this.collides(l.x + a[0] * 0.9, l.z + a[1] * 0.9, 0.2, 0),
+              blockedB = this.collides(l.x - a[0] * 0.9, l.z - a[1] * 0.9, 0.2, 0);
+            l.inward = blockedA && !blockedB ? a : blockedB && !blockedA ? [-a[0], -a[1]] : [-a[0], -a[1]];
+            return l.inward;
           },
           updateFlow() {
             const n = this.gridSize,
@@ -7882,8 +7898,7 @@ body.netgame #revivetouch{display:flex}
               const score = this.flow[ni] + (this.openPenalty?.[ni] || 0) + (dx && dz ? 0.2 : 0);
               if (score < bestScore) {
                 bestScore = score;
-                tx = (nx - 17) * 2;
-                tz = (nz - 17) * 2;
+                [tx, tz] = this.cellToWorld(nx, nz);
                 found = true;
               }
             }
@@ -7894,7 +7909,7 @@ body.netgame #revivetouch{display:flex}
                 const ni=nz*n+nx;
                 if(this.blocked[ni]) continue;
                 const score=this.flow[ni]+(this.openPenalty?.[ni]||0);
-                if(score<bestScore){bestScore=score;tx=(nx-17)*2;tz=(nz-17)*2;found=true;}
+                if(score<bestScore){bestScore=score;[tx,tz]=this.cellToWorld(nx,nz);found=true;}
               }
             }
             const out = new V(tx - pos.x, 0, tz - pos.z);
@@ -9536,7 +9551,7 @@ body.netgame #revivetouch{display:flex}
                 for (const detail of z.rig.detail) detail.visible = showDetail;
               }
               if (walking) {
-                let dir = z.canSee ? to.clone().normalize() : MapManager.direction(pos);
+                let dir = z.detourUntil > simulationTime ? z.detourDir.clone() : z.canSee ? to.clone().normalize() : MapManager.direction(pos);
                 if (z.boss?.kind === "necro" && dist < 11)
                   dir.multiplyScalar(-0.5);
                 for (const other of HordeAI.neighbors(pos)) {
@@ -9567,6 +9582,19 @@ body.netgame #revivetouch{display:flex}
                     if (before.distanceToSquared(pos) > 0.000001) z.stuckAt = 0;
                   }
                 } else z.stuckAt = 0;
+                // No-progress detection: a zombie that is moving but not closing in (sliding along a
+                // wall, looping around a prop) takes a short detour to the side and re-plans.
+                z.progressClock = (z.progressClock || 0) + dt;
+                if (z.progressClock > 1.6) {
+                  if (z.progressDist !== undefined && dist > 2.8 && dist > z.progressDist - 0.5) {
+                    z.detourSide = -(z.detourSide || 1);
+                    const side = new V(-to.z, 0, to.x).normalize().multiplyScalar(z.detourSide).add(to.clone().normalize().multiplyScalar(0.25));
+                    z.detourDir = MapManager.escapeDirection(pos, side.normalize());
+                    z.detourUntil = simulationTime + 0.9;
+                  }
+                  z.progressDist = dist;
+                  z.progressClock = 0;
+                }
                 if (z.boss?.kind !== "necro") pos.y += (MapManager.groundAt(pos.x, pos.z, 0.2, 0) - pos.y) * Math.min(1, dt * 12);
               }
               if (
@@ -12919,10 +12947,13 @@ body.netgame #revivetouch{display:flex}
             if (player.slowUntil > simulationTime) speed *= 1 - (player.slowFactor || 0);
             const crouched =
               keys.has("ControlLeft") || keys.has("ControlRight");
+            // Input as a world-space vector (for ladder intent).
+            const moveWX = x * Math.cos(yaw) + z * Math.sin(yaw),
+              moveWZ = -x * Math.sin(yaw) + z * Math.cos(yaw);
             const traveled = this.motion.step(
               player.pos,
-              x,
-              z,
+              player.climb ? 0 : x,
+              player.climb ? 0 : z,
               yaw,
               speed,
               dt,
@@ -12938,15 +12969,70 @@ body.netgame #revivetouch{display:flex}
               player.stepOffset = (player.stepOffset || 0) + (ground - feet);
               feet = ground;
             }
-            // Ladders: standing at one and pushing forward climbs; at the top the roof is walkable.
-            const ladder = MapManager.ladders?.find((l) => Math.hypot(player.pos.x - l.x, player.pos.z - l.z) < 0.95 && feet < l.top + 0.3);
-            const pushing = Math.hypot(x, z) > 0.1 || keys.has("Space");
-            if (ladder && pushing) {
-              player.vy = Math.max(player.vy, 3.4);
-              player.onLadder = true;
-            } else player.onLadder = false;
+            // Ladders: a small state machine. Walking into a ladder (or jumping at it) grabs it;
+            // while climbing gravity is off, forward/back move along the ladder only, and at the
+            // top the player is carried over the edge onto the roof instead of being launched.
             const flying = !!classBurst().flight;
-            if (flying) {
+            let climbing = false;
+            if (!player.climb && !flying) {
+              const l = MapManager.ladders?.find((l) => Math.hypot(player.pos.x - l.x, player.pos.z - l.z) < 0.9 && feet < l.top - 0.25);
+              if (l) {
+                const inward = MapManager.ladderInward(l),
+                  into = moveWX * inward[0] + moveWZ * inward[1];
+                if (into > 0.35 || (keys.has("Space") && player.jump === 0)) {
+                  player.climb = { l, inward, phase: "climb", t: 0 };
+                  player.vy = 0;
+                }
+              }
+              // From the roof: walking back over the ladder top grabs it to climb down.
+              const top = !player.climb && MapManager.ladders?.find((l) => Math.abs(feet - l.top) < 0.35 && Math.hypot(player.pos.x - l.x, player.pos.z - l.z) < 1.3);
+              if (top) {
+                const inward = MapManager.ladderInward(top),
+                  into = moveWX * inward[0] + moveWZ * inward[1];
+                if (into < -0.35) {
+                  player.climb = { l: top, inward, phase: "climb", t: 0 };
+                  feet = top.top - 0.05;
+                  player.vy = 0;
+                }
+              }
+            }
+            if (player.climb) {
+              const c = player.climb,
+                l = c.l,
+                [ix, iz] = c.inward;
+              climbing = true;
+              player.vy = 0;
+              if (c.phase === "climb") {
+                const into = moveWX * ix + moveWZ * iz;
+                const up = Math.abs(into) > 0.2 ? Math.sign(into) : keys.has("Space") ? 1 : 0;
+                feet += up * 3.1 * dt;
+                // Stay centred on the ladder, just off the wall.
+                const hx = l.x - ix * 0.1, hz = l.z - iz * 0.1;
+                player.pos.x += (hx - player.pos.x) * Math.min(1, dt * 10);
+                player.pos.z += (hz - player.pos.z) * Math.min(1, dt * 10);
+                if (feet >= l.top) {
+                  feet = l.top + 0.02;
+                  c.phase = "exit";
+                  c.t = 0;
+                } else if (up < 0 && feet <= (c.foot = MapManager.groundAt(player.pos.x - ix * 0.45, player.pos.z - iz * 0.45, 0.1, feet)) + 0.02) {
+                  feet = c.foot;
+                  player.climb = null;
+                } else if (keys.has("KeyS") && keys.has("Space")) {
+                  // Let go: small push away from the wall.
+                  player.climb = null;
+                  MapManager.move(player.pos, -ix * 0.5, -iz * 0.5, 0.4, feet);
+                }
+              } else {
+                c.t += dt;
+                feet = Math.max(feet, l.top + 0.02);
+                MapManager.move(player.pos, ix * 2.6 * dt, iz * 2.6 * dt, 0.4, l.top);
+                if (c.t > 0.4) player.climb = null;
+              }
+            }
+            player.onLadder = climbing;
+            if (climbing) {
+              // Feet are driven by the ladder; the roof becomes the ground once over it.
+            } else if (flying) {
               const up =
                 (keys.has("Space") ? 1 : 0) -
                 (keys.has("ControlLeft") || keys.has("ControlRight") ? 1 : 0);
@@ -12960,8 +13046,11 @@ body.netgame #revivetouch{display:flex}
               feet += player.vy * dt;
               if (feet < ground) feet = ground;
             }
-            player.ground = ground;
-            player.jump = Math.max(0, feet - ground);
+            const groundNow = !climbing ? ground
+              : player.climb?.phase === "climb" ? Math.min(feet, MapManager.groundAt(player.pos.x - player.climb.inward[0] * 0.45, player.pos.z - player.climb.inward[1] * 0.45, 0.1, feet))
+              : MapManager.groundAt(player.pos.x, player.pos.z, 0.28, feet);
+            player.ground = groundNow;
+            player.jump = Math.max(0, feet - groundNow);
             if (player.jump === 0) {
               player.vy = 0;
               if (wasAirborne)
@@ -18086,6 +18175,22 @@ body.netgame #revivetouch{display:flex}
             pause,
             spawnProjectile,
             updateProjectiles,
+            // Deterministic AI stepping for tests (the frame loop is paused while this runs).
+            stepPlayer(dt = 1 / 30, steps = 30) {
+              for (let i = 0; i < steps; i++) {
+                simulationTime += dt;
+                PlayerController.update(dt);
+              }
+            },
+            setYaw(v) { yaw = v; },
+            get keys() { return keys; },
+            get mouse() { return mouse; },
+            stepZombies(dt = 1 / 30, steps = 30) {
+              for (let i = 0; i < steps; i++) {
+                simulationTime += dt;
+                ZombieManager.update(dt);
+              }
+            },
           };
       })();
     </script>
