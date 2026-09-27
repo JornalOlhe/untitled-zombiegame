@@ -41,6 +41,12 @@ const server = http.createServer((req, res) => {
           return null;
         };
         const H = M.half, out = [];
+        // Connectivity: every spawn must reach the player start on the flow field.
+        const ps = M.playerStart || [0, 10];
+        T.player.pos.set(ps[0], 1.7, ps[1]);
+        M.updateFlow();
+        const unreachable = M.spawns.filter(([x, z]) => { const [cx, cz] = M.worldToCell(x, z); return M.flow[cz * M.gridSize + cx] >= 99999; });
+        out.push({ label: 'spawns', unreachable: unreachable.length, total: M.spawns.length, closed: !!M.closed, designed: true });
         const cases = [[5, 'near'], [30, 'mid'], [60, 'far'], [H * 1.7, 'edge-to-edge']];
         for (const [d, label] of cases) {
           const p = free(-Math.min(d, H * 1.7) / 2, -Math.min(d, H * 1.7) / 3), zp = free(p[0] + d * 0.8, p[1] + d * 0.6);
@@ -50,8 +56,8 @@ const server = http.createServer((req, res) => {
           const z = T.ZombieManager.spawn(0, null, new THREE.Vector3(zp[0], 0, zp[1]));
           const dist = () => Math.hypot(z.group.position.x - T.player.pos.x, z.group.position.z - T.player.pos.z);
           const d0 = dist(), samples = [d0];
-          // Up to ~40 simulated seconds, sampled every 4 s.
-          for (let i = 0; i < 10 && dist() > 2.2; i++) { T.stepZombies(1 / 30, 120); samples.push(dist()); }
+          // Up to ~72 simulated seconds, sampled every 4 s.
+          for (let i = 0; i < 18 && dist() > 2.2; i++) { T.stepZombies(1 / 30, 120); samples.push(dist()); }
           const d1 = dist();
           const nan = !isFinite(z.group.position.x) || !isFinite(z.group.position.z);
           z.dead = true; T.ZombieManager.list.splice(T.ZombieManager.list.indexOf(z), 1); T.scene.remove(z.group);
@@ -62,8 +68,9 @@ const server = http.createServer((req, res) => {
       console.log(JSON.stringify(res));
       for (const c of res.out) {
         if (c.skip) continue;
+        if (c.label === 'spawns') { if (c.unreachable) { failed = true; console.error(`FAIL map ${map}: ${c.unreachable}/${c.total} spawns unreachable`); } continue; }
         assert.ok(!c.nan, `map ${map} ${c.label}: NaN position`);
-        const ok = c.d1 < 2.6 || c.d1 < c.d0 * 0.5;
+        const ok = c.d1 < 3;
         if (!ok) { failed = true; console.error(`FAIL map ${map} ${c.label}: ${c.d0} -> ${c.d1}`); }
       }
     }

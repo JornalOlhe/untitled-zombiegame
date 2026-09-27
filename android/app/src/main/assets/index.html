@@ -3037,6 +3037,7 @@ body.netgame #revivetouch{display:flex}
     <script src="js/data/MapTextures.js"></script>
     <script src="vendor/GLTFLoader.js"></script>
     <script src="js/data/WeaponModels.js"></script>
+    <script src="js/data/PropModels.js"></script>
     <script src="js/missions/Missions.js"></script>
     <script src="js/network/Transport.js"></script>
     <script src="js/network/LobbyManager.js"></script>
@@ -3248,7 +3249,7 @@ body.netgame #revivetouch{display:flex}
             lore: "As portas da emergência continuam abertas.",
             color: "#688778",
             fog: 0x101a17,
-            density: 0.06,
+            density: 0.035,
             ground: 0x405048,
             rating: "●●●",
           },
@@ -3257,7 +3258,7 @@ body.netgame #revivetouch{display:flex}
             lore: "Algo se move além do alcance da lua.",
             color: "#415956",
             fog: 0x091310,
-            density: 0.08,
+            density: 0.052,
             ground: 0x27372c,
             rating: "●●●",
           },
@@ -4965,6 +4966,75 @@ body.netgame #revivetouch{display:flex}
           },
         };
         WeaponModels.load();
+        // Environment props built in Blender (tools/blender/props_build.py). Placed as
+        // InstancedMeshes: one draw per model part for every tree / car on the map.
+        const PropModels = {
+          parts: new Map(),
+          pending: new Map(),
+          ready: false,
+          load() {
+            const src = window.DR_PROP_GLB;
+            if (!src || !THREE.GLTFLoader) return;
+            const loader = new THREE.GLTFLoader(),
+              names = Object.keys(src);
+            let left = names.length;
+            for (const name of names) {
+              const bin = atob(src[name]),
+                buf = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+              loader.parse(buf.buffer, "", (gltf) => {
+                gltf.scene.updateMatrixWorld(true);
+                const parts = [];
+                gltf.scene.traverse((o) => {
+                  if (!o.isMesh) return;
+                  const geo = o.geometry.clone();
+                  geo.applyMatrix4(o.matrixWorld);
+                  const m = o.material;
+                  m.vertexColors = !!geo.attributes.color;
+                  if (o.name.startsWith("leaves")) PropKit.wind(m, name.includes("pine") ? 0.35 : 0.7);
+                  if (o.name.startsWith("glass")) { m.transparent = true; m.opacity = 0.5; m.depthWrite = false; }
+                  if (o.name.startsWith("glow")) { m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.8; m.toneMapped = false; }
+                  parts.push({ name: o.name, geo, mat: m });
+                });
+                this.parts.set(name, parts);
+                if (--left === 0) this.ready = true;
+              }, () => { if (--left === 0) this.ready = true; });
+            }
+          },
+          has(name) {
+            return this.ready && this.parts.has(name);
+          },
+          // Queue one instance; returns false when the model is not available (caller falls back).
+          place(name, x, y, z, ry = 0, s = 1, opts = {}) {
+            if (!this.has(name)) return false;
+            if (!this.pending.has(name)) this.pending.set(name, []);
+            const m = new THREE.Matrix4().compose(
+              new V(x, y, z),
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(opts.tilt || 0, ry, opts.roll || 0, "YXZ")),
+              opts.scale ? new V(...opts.scale) : new V(s, s, s),
+            );
+            this.pending.get(name).push({ m, color: opts.color != null ? new THREE.Color(opts.color) : null });
+            return true;
+          },
+          flush(parent) {
+            for (const [name, list] of this.pending) {
+              for (const part of this.parts.get(name) || []) {
+                const inst = new THREE.InstancedMesh(part.geo, part.mat, list.length);
+                list.forEach((it, i) => {
+                  inst.setMatrixAt(i, it.m);
+                  if (part.name.startsWith("paint")) inst.setColorAt(i, it.color || new THREE.Color(0xcccccc));
+                });
+                inst.instanceMatrix.needsUpdate = true;
+                inst.castShadow = !part.name.startsWith("glass") && !part.name.startsWith("glow");
+                inst.receiveShadow = true;
+                inst.userData.propModel = name;
+                parent.add(inst);
+              }
+            }
+            this.pending.clear();
+          },
+        };
+        PropModels.load();
         const ArsenalArt = {
           build(w, g) {
             const A = VisualArt,
@@ -5827,12 +5897,13 @@ body.netgame #revivetouch{display:flex}
                 const flame = new THREE.Sprite(
                   new THREE.SpriteMaterial({ map: A.texture("glow"), color: 0xff8c35, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
                 );
-                flame.position.set(x, y0 + (big ? 1.4 : 1.2), z);
-                flame.scale.set(big ? 2.4 : 0.8, big ? 3.2 : 1.8, 1);
+                const camp = big === "camp";
+                flame.position.set(x, y0 + (camp ? 0.6 : big ? 1.4 : 1.2), z);
+                flame.scale.set(camp ? 1.2 : big ? 2.4 : 0.8, camp ? 1.6 : big ? 3.2 : 1.8, 1);
                 flame.userData.disposableMaterial = true;
                 g.add(flame);
-                const light = new THREE.PointLight(0xff8a38, big ? 2.4 : 1.4, big ? 18 : 13, 2);
-                light.position.set(x, y0 + 1.3, z);
+                const light = new THREE.PointLight(0xff8a38, camp ? 1.8 : big ? 2.4 : 1.4, big ? 18 : 13, 2);
+                light.position.set(x, y0 + (camp ? 0.9 : 1.3), z);
                 g.add(light);
                 this.decor.push({ type: "fire", light, flame });
               }
@@ -5847,7 +5918,7 @@ body.netgame #revivetouch{display:flex}
               }
               for (const [x, z, color, intensity, range, flicker] of MapManager.lights || []) {
                 const l = new THREE.PointLight(color, intensity, range, 2);
-                l.position.set(x, MapManager.closed ? 9.5 : 4.5, z);
+                l.position.set(x, MapManager.lightY ?? (MapManager.closed ? 9.5 : 4.5), z);
                 l.userData.base = intensity;
                 if (flicker) this.decor.push({ type: flicker, light: l, next: 0, on: true });
                 g.add(l);
@@ -6709,6 +6780,12 @@ body.netgame #revivetouch{display:flex}
             M.ladders.push({ x, z, top, ry });
           },
           car(x, z, ry, style = "carRed", opts = {}) {
+            const model = style === "carBurnt" ? "car_burnt" : style === "policeBW" ? "car_police" : "car_sedan";
+            const paint = { carRed: 0x9b2b25, carBlue: 0x2d4f86, carGray: 0x7c8186, carWhite: 0xd9dcdc, carGreen: 0x3d5f3b }[style];
+            if (PropModels.place(model, x, 0, z, ry, 1, { tilt: opts.tilt || 0, color: paint })) {
+              this.rotCol(x, z, ry, 1.9, 4.3, 1.45);
+              return;
+            }
             const burnt = style === "carBurnt",
               police = style === "policeBW",
               at = (ox, oz) => this.at(x, z, ry, ox, oz),
@@ -6834,25 +6911,48 @@ body.netgame #revivetouch{display:flex}
             this.soft("tape", [(x0 + x1) / 2, 0.95, (z0 + z1) / 2], [0.03, 0.12, len], [0, ry, 0]);
             this.soft("tape", [(x0 + x1) / 2, 0.55, (z0 + z1) / 2], [0.03, 0.12, len], [0, ry, 0]);
           },
+          // Tree clusters with a minimum trunk spacing (never more than ~2 trees within 5 m):
+          // `groups` = [[x, z, count, radius]], counts of 2–6; also avoids `keep` circles [[x, z, r]].
+          forest(M, groups, style, opts = {}) {
+            const placed = M.trees || (M.trees = []),
+              min = opts.min ?? 3.4,
+              keep = opts.keep || [],
+              H = M.half;
+            for (const [gx, gz, n, r] of groups)
+              for (let i = 0, tries = 0; i < n && tries < n * 12; tries++) {
+                const a = this.r(0, Math.PI * 2),
+                  d = r * Math.sqrt(this.rnd()),
+                  x = gx + Math.cos(a) * d,
+                  z = gz + Math.sin(a) * d;
+                if (Math.abs(x) > H - 3 || Math.abs(z) > H - 3) continue;
+                if (placed.some((t) => (t[0] - x) ** 2 + (t[1] - z) ** 2 < min * min)) continue;
+                if (keep.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr)) continue;
+                if (M.collides(x, z, 0.9)) continue;
+                placed.push([x, z]);
+                WorldProps.tree(x, z, this.r(0.85, 1.25), typeof style === "function" ? style(this) : style);
+                i++;
+              }
+          },
           warnSign(x, z, ry) {
             this.hard("metal", [x, 0.8, z], [0.08, 1.6, 0.08]);
             this.soft("hazard", [x, 1.45, z], [1.2, 0.7, 0.05], [0, ry, 0], 0);
             this.soft("signRed", [x, 1.45, z + 0.03], [1.0, 0.4, 0.04], [0, ry, 0], 0);
           },
         };
-        // MAP 1 — CITY (140 m). A 3×3 street grid (avenues at x/z = 0, ±40) with sidewalks,
-        // crossings and traffic lights; 16 blocks of shops, apartments and offices split by alleys;
-        // a jammed avenue, a police checkpoint, a crashed bus, a collapsed block and four low
-        // buildings whose roofs are reached by ladders.
+        // MAP 1 — CITY (100 m). A 3×3 street grid (avenues at x/z = 0, ±25) with sidewalks,
+        // crossings and traffic lights; 16 blocks of shops, apartments and offices; a few story
+        // spots (abandoned cars, a two-car crash, a police checkpoint, a crashed bus, a collapsed
+        // block) instead of streets full of wrecks, and low buildings whose roofs are reached by ladders.
         MapDesigns[0] = (M, H) => {
           const K = MapKit;
           K.seed = 7011;
-          M.playerStart = [0, 16];
-          M.spawns = [[0, -64], [64, 0], [0, 64], [-64, 0], [-40, -64], [40, 64], [64, -40], [-64, 40], [40, -64], [-40, 64], [64, 40], [-64, -40]];
-          M.keepOut = [[0, 0, 8], [0, 16, 4]];
-          const streets = [-40, 0, 40],
-            roadHalf = 6,
-            walk = 3;
+          const S = 25;
+          M.playerStart = [0, 12];
+          M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-S, -46], [S, 46], [46, -S], [-46, S], [S, -46], [-S, 46], [46, S], [-46, -S]];
+          M.keepOut = [[0, 0, 7], [0, 12, 4]];
+          const streets = [-S, 0, S],
+            roadHalf = 5,
+            walk = 2.5;
           // Road surface, lane markings and crossings.
           for (const s of streets) {
             for (let t = -H + 4; t < H - 4; t += 6) {
@@ -6861,15 +6961,15 @@ body.netgame #revivetouch{display:flex}
               K.soft("stripeYellow", [t, 0.02, s], [3, 0.02, 0.18], null);
             }
             for (const c of streets)
-              for (let i = -4; i <= 4; i++) {
-                K.soft("stripeWhite", [s + i * 1.2, 0.02, c - roadHalf - 1.6], [0.6, 0.02, 2.4]);
-                K.soft("stripeWhite", [s + i * 1.2, 0.02, c + roadHalf + 1.6], [0.6, 0.02, 2.4]);
-                K.soft("stripeWhite", [c - roadHalf - 1.6, 0.02, s + i * 1.2], [2.4, 0.02, 0.6]);
-                K.soft("stripeWhite", [c + roadHalf + 1.6, 0.02, s + i * 1.2], [2.4, 0.02, 0.6]);
+              for (let i = -3; i <= 3; i++) {
+                K.soft("stripeWhite", [s + i * 1.2, 0.02, c - roadHalf - 1.4], [0.6, 0.02, 2.2]);
+                K.soft("stripeWhite", [s + i * 1.2, 0.02, c + roadHalf + 1.4], [0.6, 0.02, 2.2]);
+                K.soft("stripeWhite", [c - roadHalf - 1.4, 0.02, s + i * 1.2], [2.2, 0.02, 0.6]);
+                K.soft("stripeWhite", [c + roadHalf + 1.4, 0.02, s + i * 1.2], [2.2, 0.02, 0.6]);
               }
           }
           // Blocks: raised sidewalk slab + curb, then lots.
-          const spans = [[-H + 2, -40 - roadHalf], [-40 + roadHalf, -roadHalf], [roadHalf, 40 - roadHalf], [40 + roadHalf, H - 2]];
+          const spans = [[-H + 2, -S - roadHalf], [-S + roadHalf, -roadHalf], [roadHalf, S - roadHalf], [S + roadHalf, H - 2]];
           const lowRoofs = [];
           let blockIndex = 0;
           for (const [x0, x1] of spans)
@@ -6884,115 +6984,108 @@ body.netgame #revivetouch{display:flex}
               for (const [ex, ez, ew, ed] of [[cx, z0, bw, 0.3], [cx, z1, bw, 0.3], [x0, cz, 0.3, bd], [x1, cz, 0.3, bd]])
                 K.soft("curb", [ex, 0.1, ez], [ew, 0.2, ed]);
               // Street furniture along the curb.
-              for (let t = x0 + 4; t < x1 - 3; t += 11) {
+              for (let t = x0 + 3.5; t < x1 - 3; t += 10) {
                 if (z0 > -H + 3) K.lampPost(t, z0 + 0.8, 0);
                 if (z1 < H - 3) K.lampPost(t + 5, z1 - 0.8, Math.PI);
               }
-              if (K.rnd() < 0.5) K.hydrant(x0 + 1.2, cz + K.r(-3, 3));
+              if (K.rnd() < 0.4) K.hydrant(x0 + 1.2, cz + K.r(-3, 3));
               const inner = { x0: x0 + walk, x1: x1 - walk, z0: z0 + walk, z1: z1 - walk };
               const iw = inner.x1 - inner.x0,
                 id = inner.z1 - inner.z0;
               // Special blocks.
               if (blockIndex === 6) {
-                // Collapsed block: rubble, broken shells, a fire and scattered wrecks.
-                K.building(M, inner.x0 + 4, inner.z0 + 4, 7, 7, 5.5, "concrete_wall_008", 0x6e716f, 4);
-                K.windows(inner.x0 + 4, inner.z0 + 4, 7, 7, 5.5, { broken: 0.8, lit: 0 });
-                for (const [rx, rz, sz] of [[cx, cz, 3.2], [cx + 5, cz - 4, 2.4], [cx - 4, cz + 5, 2.8], [cx + 3, cz + 6, 2]]) K.rubble(rx, rz, sz);
-                K.hard("concrete", [cx - 6, 2.5, cz + 1], [0.5, 5, 6], [0, 0, 0.08]);
-                M.obstacles.push({ x: cx - 6, z: cz + 1, w: 0.35, d: 3, h: 5, top: 5 });
-                K.car(cx + 7, cz + 7, 0.6, "carBurnt", { tilt: 0.1 });
-                M.fires.push([cx + 1, cz - 1]);
+                // Collapsed block: rubble, one broken shell, a burning wreck.
+                K.building(M, inner.x0 + 3, inner.z0 + 3, 5.5, 5.5, 5, "concrete_wall_008", 0x6e716f, 4);
+                K.windows(inner.x0 + 3, inner.z0 + 3, 5.5, 5.5, 5, { broken: 0.8, lit: 0 });
+                for (const [rx, rz, sz] of [[cx + 1, cz + 1, 2.4], [cx + 3.5, cz - 2.5, 1.6], [cx - 2, cz + 3.5, 1.9]]) K.rubble(rx, rz, sz);
+                K.hard("concrete", [cx - 4, 2.2, cz + 1], [0.5, 4.4, 4.5], [0, 0, 0.08]);
+                M.obstacles.push({ x: cx - 4, z: cz + 1, w: 0.35, d: 2.25, h: 4.4, top: 4.4 });
+                K.car(cx + 4, cz + 4.5, 0.6, "carBurnt", { tilt: 0.1 });
+                M.fires.push([cx + 4, cz + 4.5, true]);
                 continue;
               }
               if (blockIndex === 11) {
-                // Parking lot with abandoned cars and a low office with a roof ladder.
-                K.soft("stripeWhite", [cx, 0.17, cz], [0.15, 0.01, id - 2]);
-                for (let i = 0; i < 4; i++) {
-                  K.car(cx - 4, inner.z0 + 3 + i * 4, Math.PI / 2 + K.r(-0.1, 0.1), K.pick(["carRed", "carBlue", "carGray", "carWhite", "carGreen"]), { doorOpen: i === 1 });
-                }
-                K.building(M, cx + 5, cz, 8, 12, 4.8, "concrete_wall_008", 0x8a8f8c, 4);
-                K.windows(cx + 5, cz, 8, 12, 4.8, { start: 2.2, lit: 0.1 });
-                lowRoofs.push([cx + 5, cz, 8, 12, 4.8, -Math.PI / 2]);
+                // Small parking lot: two abandoned cars, a low office with a roof ladder.
+                K.soft("stripeWhite", [cx - 2, 0.17, cz], [0.15, 0.01, id - 2]);
+                K.car(cx - 3.8, inner.z0 + 3, Math.PI / 2 + 0.08, "carBlue", { doorOpen: true });
+                K.car(cx - 3.6, inner.z1 - 3.5, Math.PI / 2 - 0.1, "carWhite");
+                K.building(M, cx + 3.2, cz, 6, 10, 4.8, "concrete_wall_008", 0x8a8f8c, 4);
+                K.windows(cx + 3.2, cz, 6, 10, 4.8, { start: 2.2, lit: 0.1 });
+                lowRoofs.push([cx + 3.2, cz, 6, 10, 4.8, -Math.PI / 2]);
                 continue;
               }
-              // Regular block: 2×2 lots split by alleys (one lot per block may be a low roof).
-              const alley = 3;
-              const lotW = (iw - alley) / 2,
-                lotD = (id - alley) / 2;
-              for (const lx of [0, 1])
-                for (const lz of [0, 1]) {
+              // Regular block: 1–2 lots per side depending on the block size, split by alleys.
+              const alley = 2.5;
+              const nx = iw >= 12 ? 2 : 1,
+                nz = id >= 12 ? 2 : 1;
+              const lotW = (iw - alley * (nx - 1)) / nx,
+                lotD = (id - alley * (nz - 1)) / nz;
+              const outer = Math.abs(cx) > S + 3 || Math.abs(cz) > S + 3;
+              for (let lx = 0; lx < nx; lx++)
+                for (let lz = 0; lz < nz; lz++) {
                   const x = inner.x0 + lotW / 2 + lx * (lotW + alley),
                     z = inner.z0 + lotD / 2 + lz * (lotD + alley);
-                  const edgeX = lx ? inner.x1 : inner.x0,
-                    edgeZ = lz ? inner.z1 : inner.z0;
-                  const outer = Math.abs(cx) > 45 || Math.abs(cz) > 45,
-                    low = !outer && lx === 0 && lz === 1 && blockIndex % 3 === 1;
+                  const low = !outer && lx === 0 && lz === nz - 1 && blockIndex % 3 === 1;
                   const kind = low ? "low" : K.pick(outer ? ["apartment", "office", "apartment"] : ["shop", "apartment", "shop", "office"]);
-                  const h = low ? 4.8 : kind === "shop" ? K.r(5, 7.5) : kind === "apartment" ? K.r(9, 16) : K.r(14, 26);
+                  const h = low ? 4.8 : kind === "shop" ? K.r(5, 7.5) : kind === "apartment" ? K.r(9, 15) : K.r(13, 22);
                   const surface = kind === "office" ? "concrete_wall_008" : K.pick(["red_brick_03", "red_brick_03", "concrete_wall_008"]);
                   const tint = surface === "red_brick_03" ? K.pick([0x8a7f7c, 0x9a8a80, 0x7a6e6a]) : K.pick([0x8e958f, 0x7b8487, 0x9a9790]);
                   K.building(M, x, z, lotW, lotD, h, surface, tint, surface === "red_brick_03" ? 3.2 : 4);
-                  // Faces toward the street get shops (for shop lots) and ground-floor detail.
                   const streetFaces = [];
                   if (lz === 0) streetFaces.push(["n", x, z - lotD / 2 - 0.06, lotW, 0]);
-                  if (lz === 1) streetFaces.push(["s", x, z + lotD / 2 + 0.06, lotW, Math.PI]);
+                  if (lz === nz - 1) streetFaces.push(["s", x, z + lotD / 2 + 0.06, lotW, Math.PI]);
                   if (lx === 0) streetFaces.push(["w", x - lotW / 2 - 0.06, z, lotD, -Math.PI / 2]);
-                  if (lx === 1) streetFaces.push(["e", x + lotW / 2 + 0.06, z, lotD, Math.PI / 2]);
+                  if (lx === nx - 1) streetFaces.push(["e", x + lotW / 2 + 0.06, z, lotD, Math.PI / 2]);
                   K.windows(x, z, lotW, lotD, h, { start: kind === "shop" ? 5.2 : low ? 2.2 : 3.4, lit: 0.1, broken: 0.14 });
                   if (kind === "shop")
-                    for (const [, fx, fz, len, ry] of streetFaces) K.shopFront(fx, fz, len, ry);
-                  // Roof: parapet, AC units, water tank on tall ones.
+                    for (const [, fx, fz, len, ry] of streetFaces.slice(0, 2)) K.shopFront(fx, fz, len, ry);
+                  // Roof: parapet, HVAC unit, water tank on tall ones.
                   K.soft("roof", [x, h + 0.02, z], [lotW - 0.2, 0.05, lotD - 0.2]);
                   for (const [px, pz, pw, pd] of [[x, z - lotD / 2 + 0.1, lotW, 0.2], [x, z + lotD / 2 - 0.1, lotW, 0.2], [x - lotW / 2 + 0.1, z, 0.2, lotD], [x + lotW / 2 - 0.1, z, 0.2, lotD]])
                     K.soft("concrete", [px, h + 0.35, pz], [pw, 0.7, pd]);
                   K.hard("metal", [x + K.r(-1, 1), h + 0.6, z + K.r(-1, 1)], [1.6, 1.2, 1.2]);
-                  if (h > 14) K.hard("metal", [x - lotW / 4, h + 1.6, z + lotD / 4], [1.8, 3.2, 1.8]);
-                  if (low) lowRoofs.push([x, z, lotW, lotD, h, lx ? Math.PI / 2 : -Math.PI / 2]);
+                  if (h > 13) K.hard("metal", [x - lotW / 4, h + 1.6, z + lotD / 4], [1.6, 3.0, 1.6]);
+                  if (low) lowRoofs.push([x, z, lotW, lotD, h, -Math.PI / 2]);
                 }
-              // Alley life: dumpsters, trash, a barrel.
-              K.dumpster(cx + K.r(-2, 2), cz, K.pick([0, Math.PI / 2]));
-              M.designProps.push(["trash", cx + 1.2, cz + 3], ["barrel", cx - 1, cz - 3]);
+              // Alley life: a dumpster and trash; barrels only in a few service alleys.
+              if (nx > 1 || nz > 1) K.dumpster(cx + K.r(-1.5, 1.5), cz, K.pick([0, Math.PI / 2]));
+              M.designProps.push(["trash", cx + 1.2, cz + 2.4]);
+              if (blockIndex === 3 || blockIndex === 9 || blockIndex === 14) M.designProps.push(["barrel", cx - 1, cz - 2.4]);
             }
-          // Low buildings: roof access by ladder, roof cover (AC units) for shooting from above.
+          // Low buildings: roof access by ladder, roof HVAC boxes as cover for shooting from above.
           for (const [x, z, w, d, h, side] of lowRoofs) {
-            const lx = x + Math.sin(side) * (w / 2 + 0.25),
-              lz = z + Math.cos(side) * (d / 2 + 0.25) * 0;
-            K.ladder(M, lx, lz, side, h);
+            const lx = x + Math.sin(side) * (w / 2 + 0.25);
+            K.ladder(M, lx, z, side, h);
             for (const [ox, oz] of [[-w / 4, -d / 4], [w / 4, d / 4]]) {
-              K.hard("metal", [x + ox, h + 0.55, z + oz], [1.4, 1.1, 1.0]);
-              WorldProps.collider(x + ox, z + oz, 1.4, 1.0, h + 1.1);
+              K.hard("metal", [x + ox, h + 0.55, z + oz], [1.3, 1.1, 1.0]);
+              WorldProps.collider(x + ox, z + oz, 1.3, 1.0, h + 1.1);
             }
           }
-          // Story set pieces on the streets.
-          // Jammed northbound avenue: cars nose to tail, doors open, two crashed.
-          for (let i = 0; i < 7; i++) {
-            const z = -18 - i * 5.2;
-            if (Math.abs(z + 40) < 9) continue;
-            K.car(3 + K.r(-0.4, 0.4), z, Math.PI + K.r(-0.12, 0.12), K.pick(["carRed", "carBlue", "carGray", "carWhite", "carGreen"]), { doorOpen: K.rnd() < 0.4 });
-          }
-          K.car(-2.6, -25, 2.5, "carGray", { tilt: 0.05 });
-          K.car(-3.5, -29, 2.0, "carBurnt");
+          // Story set pieces (few, readable).
+          // Abandoned cars on the north avenue, one with the door open; a two-car crash, one burning.
+          K.car(3, -9, Math.PI + 0.08, "carRed", { doorOpen: true });
+          K.car(-2.8, -13.5, 2.5, "carGray", { tilt: 0.05 });
+          K.car(-1.2, -16.8, 2.0, "carBurnt");
+          M.fires.push([-1.2, -16.8, true]);
           // Police checkpoint at the north crossing.
-          K.car(-4, -34, 0.8, "policeBW", { doorOpen: true });
-          K.car(4.5, -46, -0.7, "policeBW");
-          for (let i = -2; i <= 2; i++) K.jersey(i * 2.5, -40 - 7.2, 0);
-          K.sandbags(-8, -37.5, 4, 0);
-          K.sandbags(8, -37.5, 4, 0);
-          M.beacons.push([-4, -34], [4.5, -46]);
-          for (const [x, z] of [[-1.5, -38], [1, -38.6], [3, -37.8], [-3.2, -38.8]]) M.designProps.push(["cone", x, z]);
+          K.car(-3.6, -19.5, 0.8, "policeBW", { doorOpen: true });
+          K.car(3.8, -31, -0.7, "policeBW");
+          for (let i = -1; i <= 1; i++) K.jersey(i * 2.6, -S - 6.2, 0);
+          K.sandbags(-6.5, -21.5, 3.2, 0);
+          M.beacons.push([-3.6, -19.5], [3.8, -31]);
+          for (const [x, z] of [[-1.5, -22.5], [1, -23], [2.6, -22.2]]) M.designProps.push(["cone", x, z]);
           // Crashed bus across the east avenue and a car in a shop window.
-          K.bus(40, 18, 0.35);
-          K.car(29.5, -12, Math.PI / 2 + 0.3, "carBlue", { tilt: 0.06 });
-          K.rubble(26.5, -12, 1.4);
-          // West avenue: burnt wrecks and a fire barrel group.
-          for (const [x, z] of [[0, -40], [0, 40], [-40, 0], [40, 0], [0, 16], [-40, -40], [40, 40]]) M.lights.push([x + 7, z + 7, 0xffa052, 1.1, 16]);
-          K.car(-41, 22, 0.2, "carBurnt");
-          K.car(-38, 30, -0.4, "carBurnt", { tilt: 0.12 });
-          M.fires.push([-43, 26]);
+          K.bus(S, 11, 0.35);
+          K.car(S - 7, -8, Math.PI / 2 + 0.3, "carGreen", { tilt: 0.06 });
+          K.rubble(S - 9.3, -8, 1.1);
+          // West avenue: one more burning wreck by the curb.
+          K.car(-S - 1, 14, 0.2, "carBurnt");
+          M.fires.push([-S - 1, 14, true]);
+          for (const [x, z] of [[0, -S], [0, S], [-S, 0], [S, 0], [0, 12], [-S, -S], [S, S]]) M.lights.push([x + 5, z + 5, 0xffa052, 1.1, 14]);
           // South crossing: military barricade with containers.
-          K.container(-8, 44, 0);
-          K.container(9, 45, 0);
-          K.sandbags(0, 47, 6, 0);
+          K.container(-8, S + 9, 0);
+          K.container(8.5, S + 9.5, 0);
+          K.sandbags(0, S + 7, 5, 0);
           // Traffic lights and signs at crossings.
           for (const sx of streets)
             for (const sz of streets) {
@@ -7001,21 +7094,33 @@ body.netgame #revivetouch{display:flex}
               K.streetSign(sx + roadHalf + 1, sz - roadHalf - 1, 0);
             }
           // Bus stop on the main avenue.
-          K.hard("metal", [8.5, 1.3, 20], [0.1, 2.6, 0.1]);
-          K.hard("metal", [8.5, 1.3, 24], [0.1, 2.6, 0.1]);
-          K.soft("shopGlass", [9.2, 1.3, 22], [0.05, 2.2, 4], null, 0);
-          K.hard("roof", [8.8, 2.65, 22], [1.6, 0.1, 4.4]);
-          // Street ends at the map edge: barricades that explain the boundary.
+          K.hard("metal", [7.2, 1.3, 14], [0.1, 2.6, 0.1]);
+          K.hard("metal", [7.2, 1.3, 18], [0.1, 2.6, 0.1]);
+          K.soft("shopGlass", [7.9, 1.3, 16], [0.05, 2.2, 4], null, 0);
+          K.hard("roof", [7.5, 2.65, 16], [1.6, 0.1, 4.4]);
+          // Street ends at the playable edge: blocked by barricades; the city keeps going beyond.
           for (const s of streets) {
             for (const [x, z, ry] of [[s, -H + 3, 0], [s, H - 3, 0], [-H + 3, s, Math.PI / 2], [H - 3, s, Math.PI / 2]]) {
               K.container(x + (ry ? 0 : -3.2), z + (ry ? -3.2 : 0), ry);
               K.container(x + (ry ? 0 : 3.2), z + (ry ? 3.2 : 0), ry, 2);
-              K.hard("fence", [x, 2, z], ry ? [0.1, 4, 12] : [12, 4, 0.1], null, 0.5);
+              K.hard("fence", [x, 2, z], ry ? [0.1, 4, 10] : [10, 4, 0.1], null, 0.5);
             }
           }
-          // Tall perimeter facades so the city never visibly ends.
+          // Distant skyline behind the edge (no collision, fog hides the far end).
+          for (let i = 0; i < 28; i++) {
+            const side = i % 4,
+              t = -H - 10 + (i >> 2) * ((2 * H + 20) / 7) + K.r(-2, 2),
+              dist = H + K.r(9, 26),
+              w = K.r(8, 16),
+              h = K.r(14, 42);
+            const [x, z] = side === 0 ? [t, -dist] : side === 1 ? [t, dist] : side === 2 ? [-dist, t] : [dist, t];
+            const m = box(M.group, x, h / 2, z, w, h, w, 0x2c3336);
+            m.material = VisualArt.surface("concrete_wall_008", K.pick([0x4a5256, 0x3e4549, 0x55504c]), "concrete");
+            VisualArt.tileUV(m, 5);
+          }
+          // Perimeter facades so the playable area has a believable edge.
           for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
-            const m = M.solid(x, 9, z, w, 18, d, 0x3a4246);
+            const m = M.solid(x, 7, z, w, 14, d, 0x3a4246);
             m.material = VisualArt.surface("red_brick_03", 0x5c5654, "concrete");
             VisualArt.tileUV(m, 3.2);
           }
@@ -7025,7 +7130,435 @@ body.netgame #revivetouch{display:flex}
             VisualArt.tileUV(floor, 7);
           }
         };
-        // MAP 4 — UNDERGROUND LAB (112 m, closed). One big research hall under a 12 m ceiling.
+        // MAP 2 — ABANDONED HOSPITAL (100 m, closed, one floor under a 4.2 m ceiling).
+        // Two main corridors cross at the lobby (reception + nurse station); ring corridors at ±24
+        // make loops. Sixteen departments sit between the corridors, each with 2 doors on different
+        // corridors: emergency, wards, patient rooms, exam/surgery, pharmacy storage, a technical
+        // room, a waiting room. Some areas are intact, some trashed, one corridor is barricaded.
+        MapDesigns[1] = (M, H) => {
+          const K = MapKit;
+          K.seed = 1221;
+          const CEIL = 4.2,
+            MAIN = 3, // main corridor half-width
+            RING = 24,
+            RW = 2; // ring corridor half-width
+          M.closed = true;
+          M.playerStart = [0, 6];
+          M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-RING, -46], [RING, 46], [46, -RING], [-46, RING], [RING, -46], [-RING, 46], [46, RING], [-46, -RING]];
+          M.keepOut = [[0, 0, 7], [0, 6, 4]];
+          const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
+          if (floor) {
+            floor.material = VisualArt.surface("floor_tiles_06", 0xa3aca3, "concrete", { roughness: 0.6 });
+            VisualArt.tileUV(floor, 2.6);
+          }
+          // Ceiling and outer walls.
+          K.soft("plaster", [0, CEIL + 0.15, 0], [H * 2, 0.3, H * 2], null, 0.3);
+          for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
+            const m = M.solid(x, CEIL / 2, z, w, CEIL, d, 0x8a958e);
+            m.material = VisualArt.surface("concrete_wall_008", 0x9aa59c, "concrete");
+            VisualArt.tileUV(m, 4);
+          }
+          // Wall segment helpers: a wall along x (at z) or along z (at x) with door gaps (centres).
+          const T = 0.3;
+          const wall = (ax, az, bx, bz, doors = [], door = 3) => {
+            const alongX = az === bz,
+              a = alongX ? ax : az,
+              b = alongX ? bx : bz;
+            const cuts = doors.map((c) => [c - door / 2, c + door / 2]).sort((p, q) => p[0] - q[0]);
+            let t = Math.min(a, b);
+            const end = Math.max(a, b);
+            for (const [c0, c1] of [...cuts, [end, end]]) {
+              const s0 = t,
+                s1 = Math.min(c0, end);
+              if (s1 - s0 > 0.05) {
+                const mid = (s0 + s1) / 2,
+                  len = s1 - s0;
+                const [x, z, w, d] = alongX ? [mid, az, len, T] : [ax, mid, T, len];
+                K.hard("wardWall", [x, CEIL / 2, z], [w, CEIL, d], null, 1);
+                // Painted wainscot band on both faces, with a dark skirting.
+                K.soft("wainscot", [x, 0.6, z], [alongX ? len : T + 0.03, 1.2, alongX ? T + 0.03 : len], null, 0);
+                K.soft("metal", [x, 0.06, z], [alongX ? len : T + 0.05, 0.12, alongX ? T + 0.05 : len], null, 1);
+                K.col(x, z, w, d, CEIL);
+              }
+              if (c1 > t) t = Math.max(t, c1);
+              if (c0 < end && c1 > s0) {
+                // Door frame header.
+                const mid = (c0 + c1) / 2;
+                const [x, z, w, d] = alongX ? [mid, az, c1 - c0, T] : [ax, mid, T, c1 - c0];
+                K.soft("wardWall", [x, CEIL - 0.5, z], [w, 1, d], null, 1);
+              }
+            }
+          };
+          // Department blocks between the corridors.
+          const bands = [[-H + 1, -RING - RW], [-RING + RW, -MAIN], [MAIN, RING - RW], [RING + RW, H - 1]];
+          const depts = [];
+          for (let ix = 0; ix < 4; ix++)
+            for (let iz = 0; iz < 4; iz++) {
+              const [x0, x1] = bands[ix],
+                [z0, z1] = bands[iz];
+              depts.push({ ix, iz, x0, x1, z0, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 });
+            }
+          // Room type per block (ix, iz): 0 = west edge ... 3 = east edge; iz 0 = north.
+          const plan = {
+            "0,0": "tech", "1,0": "wards", "2,0": "rooms", "3,0": "emergency",
+            "0,1": "rooms", "1,1": "waiting", "2,1": "exam", "3,1": "emergency2",
+            "0,2": "storage", "1,2": "surgery", "2,2": "wards", "3,2": "rooms",
+            "0,3": "rooms", "1,3": "pharmacy", "2,3": "trashed", "3,3": "wards",
+          };
+          for (const b of depts) {
+            // Doors: toward the nearer corridor on each axis (and the ring on outer blocks).
+            const nDoor = [], sDoor = [], wDoor = [], eDoor = [];
+            const even = (v) => Math.round(v / 2) * 2;
+            if (b.iz === 1 || b.iz === 3) nDoor.push(even(b.cx + (b.ix % 2 ? 3 : -3)));
+            if (b.iz === 0 || b.iz === 2) sDoor.push(even(b.cx + (b.ix % 2 ? -3 : 3)));
+            if (b.ix === 1 || b.ix === 3) wDoor.push(even(b.cz + (b.iz % 2 ? -3 : 3)));
+            if (b.ix === 0 || b.ix === 2) eDoor.push(even(b.cz + (b.iz % 2 ? 3 : -3)));
+            if (b.z0 > -H + 2) wall(b.x0, b.z0, b.x1, b.z0, nDoor);
+            if (b.z1 < H - 2) wall(b.x0, b.z1, b.x1, b.z1, sDoor);
+            if (b.x0 > -H + 2) wall(b.x0, b.z0, b.x0, b.z1, wDoor);
+            if (b.x1 < H - 2) wall(b.x1, b.z0, b.x1, b.z1, eDoor);
+            b.type = plan[`${b.ix},${b.iz}`];
+          }
+          const bed = (x, z, ry, messy = false) => {
+            K.hard("white", [x, 0.55, z], [0.95, 0.12, 2.0], [0, ry, 0]);
+            K.hard("metal", [x, 0.28, z], [0.85, 0.5, 1.8], [0, ry, 0], 2);
+            K.soft("mattress", [x, 0.66, z], [0.9, 0.1, 1.9], [messy ? 0.08 : 0, ry + (messy ? 0.12 : 0), 0]);
+            const [hx, hz] = K.at(x, z, ry, 0, -0.95);
+            K.hard("metal", [hx, 0.9, hz], [0.95, 0.7, 0.06], [0, ry, 0]);
+            if (messy) K.soft("blood", [x + K.r(-0.2, 0.2), 0.72, z], [0.5, 0.01, 0.4], [0, K.r(0, 3), 0], 0);
+            K.rotCol(x, z, ry, 1, 2.05, 0.9);
+          };
+          const ivStand = (x, z) => {
+            K.hard("metal", [x, 0.95, z], [0.05, 1.9, 0.05]);
+            K.hard("metal", [x, 0.03, z], [0.45, 0.05, 0.45]);
+            K.soft("lightBlue", [x + 0.12, 1.7, z], [0.16, 0.26, 0.06], null, 0);
+          };
+          const monitor = (x, z, ry) => {
+            K.hard("metal", [x, 0.7, z], [0.5, 1.4, 0.4], [0, ry, 0]);
+            const [sx, sz] = K.at(x, z, ry, 0, 0.21);
+            K.soft(K.rnd() < 0.3 ? "windowBroken" : "screen", [sx, 1.2, sz], [0.4, 0.3, 0.02], [0, ry, 0], 0);
+            K.rotCol(x, z, ry, 0.5, 0.4, 1.4);
+          };
+          const cabinet = (x, z, ry, w = 1.2) => {
+            K.hard("metal", [x, 1.0, z], [w, 2.0, 0.5], [0, ry, 0]);
+            K.soft("white", [x, 1.0, z], [w - 0.05, 0.02, 0.52], [0, ry, 0]);
+            K.rotCol(x, z, ry, w, 0.5, 2);
+          };
+          const shelf = (x, z, ry, w = 2.4) => {
+            K.hard("metal", [x, 1.1, z], [w, 2.2, 0.5], [0, ry, 0]);
+            for (const y of [0.4, 0.95, 1.5, 2.0])
+              for (let i = 0; i < 6; i++) {
+                if (K.rnd() < 0.35) continue;
+                const [px, pz] = K.at(x, z, ry, -w / 2 + 0.25 + i * (w - 0.4) / 5, 0);
+                K.soft(K.pick(["white", "medkit", "lightBlue", "white"]), [px, y + 0.12, pz], [0.16, 0.22, 0.2], [0, ry, 0], 0);
+              }
+            K.rotCol(x, z, ry, w, 0.5, 2.2);
+          };
+          const chair = (x, z, ry) => {
+            K.hard("metal", [x, 0.45, z], [0.45, 0.06, 0.45], [0, ry, 0]);
+            const [bx, bz] = K.at(x, z, ry, 0, -0.2);
+            K.hard("metal", [bx, 0.75, bz], [0.45, 0.55, 0.05], [0, ry, 0]);
+          };
+          const wheelchair = (x, z, ry) => {
+            chair(x, z, ry);
+            for (const s of [-0.28, 0.28]) {
+              const [wx, wz] = K.at(x, z, ry, s, 0);
+              K.hard("tire", [wx, 0.32, wz], [0.05, 0.6, 0.6], [0, ry, 0]);
+            }
+          };
+          const stretcher = (x, z, ry, tipped = false) => {
+            K.hard("white", [x, tipped ? 0.35 : 0.8, z], [0.65, 0.08, 1.9], [tipped ? 1.2 : 0, ry, 0]);
+            if (!tipped) K.hard("metal", [x, 0.4, z], [0.08, 0.8, 1.6], [0, ry, 0]);
+            K.rotCol(x, z, ry, 0.7, 1.9, tipped ? 0.7 : 0.9);
+          };
+          const desk = (x, z, ry, pc = true) => {
+            K.hard("planks", [x, 0.75, z], [1.6, 0.08, 0.8], [0, ry, 0]);
+            K.hard("metal", [x, 0.37, z], [1.5, 0.74, 0.7], [0, ry, 0]);
+            if (pc) {
+              K.soft("screen", [x, 1.05, z], [0.5, 0.35, 0.04], [0, ry, 0], 0);
+              K.soft("white", [x + 0.4, 0.8, z + 0.1], [0.3, 0.01, 0.4], [0, ry + 0.3, 0]);
+            }
+            K.rotCol(x, z, ry, 1.6, 0.8, 0.8);
+          };
+          // Fill each department.
+          for (const b of depts) {
+            const { cx, cz, w, d, x0, x1, z0, z1 } = b;
+            const along = w > d ? 0 : Math.PI / 2;
+            if (b.type === "wards" || b.type === "rooms") {
+              const rooms = b.type === "rooms";
+              if (rooms) {
+                // Split into two patient rooms with a doorway between them.
+                if (w >= d) wall(cx, z0, cx, z1, [Math.round(cz / 2) * 2], 2.4);
+                else wall(x0, cz, x1, cz, [Math.round(cx / 2) * 2], 2.4);
+              }
+              const beds = rooms ? 4 : 6;
+              for (let i = 0; i < beds; i++) {
+                const t = (i + 0.5) / beds;
+                const x = w >= d ? x0 + 1.8 + t * (w - 3.6) : x0 + 1.6,
+                  z = w >= d ? z0 + 1.6 : z0 + 1.8 + t * (d - 3.6);
+                if (Math.abs(x - cx) < 1.2 && rooms && w >= d) continue;
+                bed(x, z, w >= d ? 0 : Math.PI / 2, K.rnd() < 0.3);
+                if (K.rnd() < 0.5) ivStand(x + 0.8, z + 0.6);
+                else if (K.rnd() < 0.5) monitor(x - 0.9, z + 0.5, 0);
+              }
+              if (K.rnd() < 0.6) wheelchair(cx + K.r(-2, 2), cz + K.r(-2, 2), K.r(0, 6));
+              cabinet(w >= d ? x1 - 1 : x1 - 0.4, w >= d ? z1 - 0.4 : z1 - 1, w >= d ? Math.PI : -Math.PI / 2);
+              M.designProps.push(["trash", cx + K.r(-3, 3), cz + K.r(-2, 2)]);
+            } else if (b.type === "emergency" || b.type === "emergency2") {
+              // Triage bays: curtains (thin soft panels), stretchers, monitors; one tipped over.
+              for (let i = 0; i < 4; i++) {
+                const x = x0 + 2.5 + i * ((w - 5) / 3),
+                  z = z0 + 2;
+                stretcher(x, z, 0, i === 2 && b.type === "emergency2");
+                monitor(x + 0.9, z - 0.6, 0);
+                K.soft("labFloor", [x + 1.4, 1.6, z + 0.4], [0.03, 2.4, 2.4], null, 0.8);
+              }
+              if (b.type === "emergency") {
+                M.lights.push([cx, cz, 0xff3a2a, 1.6, 16, "alarm"]);
+                K.soft("signRed", [cx, CEIL - 0.7, z1 - 0.2], [3, 0.6, 0.06], null, 0);
+              }
+              stretcher(cx + 2, cz + 2, 0.4);
+              for (const [x, z] of [[cx - 3, cz + 3], [cx + 1, cz + 4]]) K.soft("blood", [x, 0.012, z], [1.2, 0.01, 0.8], [0, K.r(0, 3), 0], 0);
+            } else if (b.type === "exam" || b.type === "surgery") {
+              const surgery = b.type === "surgery";
+              K.hard("white", [cx, 0.85, cz], [1.0, 0.12, 2.2]);
+              K.hard("metal", [cx, 0.42, cz], [0.35, 0.84, 0.35]);
+              K.soft("mattress", [cx, 0.95, cz], [0.9, 0.06, 2]);
+              K.col(cx, cz, 1.0, 2.2, 1);
+              K.soft("lightWhite", [cx, CEIL - 0.4, cz], [1.4, 0.2, 1.4]);
+              if (surgery) M.lights.push([cx, cz, 0xe8f4ff, 1.6, 12]);
+              monitor(cx + 1.4, cz - 0.8, -Math.PI / 2);
+              ivStand(cx - 1.1, cz + 0.6);
+              K.hard("metal", [cx + 1.3, 0.85, cz + 0.9], [0.6, 0.06, 0.4]); // instrument tray
+              cabinet(x0 + 0.4, cz, Math.PI / 2, 1.6);
+              cabinet(x1 - 0.4, cz + 2, -Math.PI / 2, 1.6);
+              desk(cx + 3, z0 + 1.2, 0);
+              if (surgery) K.soft("blood", [cx + 0.3, 0.012, cz + 1.3], [1.4, 0.01, 1], [0, 0.4, 0], 0);
+            } else if (b.type === "waiting") {
+              for (let r = 0; r < 3; r++)
+                for (let i = 0; i < 5; i++) if (K.rnd() < 0.85) chair(x0 + 3 + i * 1.1, z0 + 3 + r * 2.4, 0);
+              K.col(x0 + 5.2, z0 + 5.4, 6, 5.6, 0.9);
+              K.soft("screen", [x1 - 0.2, 2.4, cz], [0.04, 1.2, 2], null, 0);
+              wheelchair(x1 - 3, z1 - 3, 2.3);
+            } else if (b.type === "storage" || b.type === "pharmacy") {
+              for (let i = 0; i < 3; i++) shelf(cx - 4 + i * 4, cz - 2, 0);
+              for (let i = 0; i < 2; i++) shelf(cx - 2 + i * 4, cz + 2.5, Math.PI);
+              if (b.type === "pharmacy") {
+                desk(cx, z1 - 1.5, Math.PI);
+                K.soft("signGreen", [cx, CEIL - 0.7, z0 + 0.2], [2.4, 0.5, 0.06], null, 0);
+              }
+              M.designProps.push(["box", cx + 5, cz + 4], ["box", cx + 5.6, cz + 4.4]);
+            } else if (b.type === "tech") {
+              // Technical room: generators, a boiler, pipes, one working and one dead light.
+              for (const [x, z] of [[cx - 3, cz - 2], [cx + 3, cz - 2]]) {
+                K.hard("metal", [x, 1.1, z], [3, 2.2, 2]);
+                K.hard("hazard", [x, 2.25, z], [3.05, 0.1, 2.05]);
+                K.col(x, z, 3, 2, 2.2);
+              }
+              K.hard("white", [cx, 1.6, cz + 4], [1.8, 3.2, 1.8]);
+              K.col(cx, cz + 4, 1.8, 1.8, 3.2);
+              for (const y of [3.4, 3.8]) K.hard("metal", [cx, y, cz], [w - 1, 0.25, 0.25]);
+              M.designProps.push(["barrel", cx - 5, cz + 4], ["toxic", cx + 5, cz + 4.4]);
+
+            } else if (b.type === "trashed") {
+              // Partly destroyed ward: collapsed ceiling, overturned beds, debris.
+              K.rubble(cx - 1, cz, 2.2);
+              stretcher(cx + 3, cz - 2, 1.2, true);
+              bed(x0 + 2, z0 + 2, 0.5, true);
+              K.hard("plaster", [cx + 2, 1.5, cz + 2], [3, 0.12, 2.2], [0.9, 0.3, 0.2]);
+              K.col(cx + 2, cz + 2, 2.4, 2, 1.8);
+              for (const [x, z] of [[cx - 3, cz - 3], [cx + 1, cz + 3.5]]) K.soft("blood", [x, 0.012, z], [1.4, 0.01, 1], [0, K.r(0, 3), 0], 0);
+            }
+          }
+          // Lobby: reception desk + nurse station at the main crossing, benches, signs.
+          const rcx = -7, rcz = -6;
+          K.hard("planks", [rcx, 0.55, rcz], [4.2, 1.1, 0.8]);
+          K.hard("white", [rcx, 1.12, rcz], [4.4, 0.06, 1.0]);
+          K.col(rcx, rcz, 4.2, 0.8, 1.1);
+          for (const dx of [-1.2, 0.6]) K.soft("screen", [rcx + dx, 1.4, rcz - 0.1], [0.5, 0.35, 0.04], null, 0);
+          K.hard("planks", [7, 0.55, 6], [0.8, 1.1, 3.6]);
+          K.col(7, 6, 0.8, 3.6, 1.1);
+          K.soft("screen", [7, 1.4, 5.4], [0.04, 0.35, 0.5], null, 0);
+          K.soft("signCyan", [0, CEIL - 0.6, -MAIN + 0.2], [3.2, 0.5, 0.06], null, 0);
+          K.soft("signGreen", [MAIN - 0.2, CEIL - 0.6, 0], [0.06, 0.5, 3.2], null, 0);
+          // Barricaded ring corridor segment (north-east): beds and a cabinet across it, with a gap.
+          // (pushed to the sides so one lane stays open through the middle)
+          for (const [x, ry] of [[30, 0.05], [33, -0.04]]) bed(x, -RING + 1.15, Math.PI / 2 + ry, true);
+          cabinet(36.5, -RING - 1.35, 0);
+          K.soft("tape", [32, 1.1, -RING], [8, 0.1, 0.03]);
+          // Corridor furniture: benches, a gurney, trash, blood trails.
+          for (const [x, z, ry] of [[-15, 0.4 - MAIN + 0.6, 0], [15, MAIN - 0.8, Math.PI], [-RING + 1.2, 14, Math.PI / 2], [RING - 1.2, -14, -Math.PI / 2]]) {
+            K.hard("metal", [x, 0.45, z], [2.2, 0.08, 0.5], [0, ry, 0]);
+            K.rotCol(x, z, ry, 2.2, 0.5, 0.5);
+          }
+          stretcher(-34, 1.2, Math.PI / 2 + 0.3);
+          wheelchair(12, -RING + 0.8, 1);
+          for (const [x, z] of [[-4, 12], [20, -1], [-28, RING], [4, -30], [38, 2]]) K.soft("blood", [x, 0.012, z], [K.r(0.8, 1.6), 0.01, K.r(0.5, 1)], [0, K.r(0, 3), 0], 0);
+          M.designProps.push(["trash", -20, 1.5], ["trash", 18, -RING + 1], ["cone", 26, -RING + 1.2]);
+          // Ceiling lights: cold panels on the corridors; some dead, some flickering, red emergency.
+          for (let t = -H + 5; t < H - 3; t += 8) {
+            for (const [x, z] of [[t, 0], [0, t], [t, -RING], [t, RING], [-RING, t], [RING, t]]) {
+              const k = K.rnd();
+              K.soft(k < 0.15 ? "window" : "lightWhite", [x, CEIL - 0.05, z], [x === 0 || Math.abs(x) === RING ? 0.6 : 2.4, 0.08, x === 0 || Math.abs(x) === RING ? 2.4 : 0.6]);
+            }
+          }
+          M.lightY = CEIL - 0.6;
+          M.lights.push([0, 0, 0xdfefff, 2.2, 24], [-RING, -RING, 0xdfefff, 1.8, 26, "stutter"], [RING, RING, 0xdfefff, 1.8, 26], [-RING, RING, 0xdfefff, 1.6, 26, "stutter"]);
+        };
+        // MAP 3 — DARK FOREST (100 m, open sky). A night forest with uneven ground, tree groups and
+        // clearings; the survivors' camp (cabins around a campfire) at the start, a dirt road with
+        // their crashed, burning car, and a taped "DO NOT CROSS" edge with hills and forest beyond.
+        MapDesigns[2] = (M, H) => {
+          const K = MapKit;
+          K.seed = 2317;
+          M.playerStart = [2, 10];
+          M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-34, -44], [36, 42], [44, -30], [-44, 32], [22, -46], [-26, 46], [46, 24], [-46, -18]];
+          M.keepOut = [[0, 4, 9], [2, 10, 4]];
+          const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
+          if (floor) {
+            floor.material = VisualArt.surface("forest_ground_04", 0x6f7a5c, "concrete", { roughness: 0.95 });
+            VisualArt.tileUV(floor, 4.5);
+          }
+          // Dirt road (east-west, gently curving) with ruts and puddles.
+          const road = (x) => 26 + Math.sin(x * 0.06) * 5;
+          for (let x = -H + 1; x < H - 1; x += 2.4) {
+            const z = road(x),
+              ry = Math.atan(Math.cos(x * 0.06) * 0.3);
+            K.soft("dirt", [x, 0.015, z], [2.6, 0.02, 5.2], [0, ry, 0], 0.6);
+            for (const s of [-1.1, 1.1]) K.soft("mud", [x, 0.022, z + s], [2.5, 0.01, 0.35], [0, ry, 0], 0.6);
+          }
+          // Terrain: low mounds (terraced, walkable) and small hollows (dark mud patches), leaf litter.
+          const mound = (x, z, r, h) => {
+            if (PropModels.place("mound", x, -0.05, z, K.r(0, 6), 1, { color: 0x5f6e4c, scale: [r * 1.1, h / 0.3, r * 0.9] })) {
+              K.col(x, z, r * 1.2, r, Math.min(h, 0.45));
+              return;
+            }
+            const layers = Math.max(1, Math.round(h / 0.3));
+            for (let l = 0; l < layers; l++) {
+              const f = 1 - l / (layers + 0.6);
+              K.hard("mossy", [x, 0.15 + l * 0.3, z], [r * 2 * f, 0.3, r * 1.6 * f], [0, K.r(0, 3), 0], 0.4);
+            }
+            K.col(x, z, r * 1.2, r, Math.min(h, 0.45));
+          };
+          for (const [x, z, r, h] of [[-30, -12, 4, 0.9], [18, -30, 5, 1.2], [36, 8, 3.5, 0.6], [-14, 34, 4, 0.9], [-40, 16, 3, 0.6], [30, -8, 3, 0.9]]) mound(x, z, r, h);
+          for (let i = 0; i < 22; i++) K.soft(K.pick(["mud", "mossy", "mud"]), [K.r(-H + 4, H - 4), 0.012, K.r(-H + 4, H - 4)], [K.r(1.2, 3), 0.01, K.r(1, 2.4)], [0, K.r(0, 3), 0], 0.8);
+          // Survivors' camp: three cabins around a campfire, logs to sit on, a tent, crates.
+          const cabin = (x, z, ry, w = 6, d = 4.6, door = true) => {
+            const h = 2.8;
+            const walls = [[0, -d / 2, w, 0.25], [-w / 2, 0, 0.25, d], [w / 2, 0, 0.25, d]];
+            for (const [ox, oz, ww, dd] of walls) {
+              const [px, pz] = K.at(x, z, ry, ox, oz);
+              K.hard("planks", [px, h / 2, pz], [ww, h, dd], [0, ry, 0], 1.2);
+              K.rotCol(px, pz, ry, ww, dd, h);
+            }
+            // Front wall with a doorway.
+            for (const s of [-1, 1]) {
+              const seg = (w - 1.4) / 2,
+                [px, pz] = K.at(x, z, ry, s * (0.7 + seg / 2), d / 2);
+              K.hard("planks", [px, h / 2, pz], [seg, h, 0.25], [0, ry, 0], 1.2);
+              K.rotCol(px, pz, ry, seg, 0.25, h);
+            }
+            const [hx, hz] = K.at(x, z, ry, 0, d / 2);
+            K.hard("planks", [hx, h - 0.3, hz], [1.4, 0.6, 0.25], [0, ry, 0], 1.2);
+            // Gable roof.
+            for (const s of [-1, 1]) {
+              const [rx, rz] = K.at(x, z, ry, 0, s * d / 4);
+              K.hard("cabinRoof", [rx, h + 0.55, rz], [w + 0.6, 0.14, d / 2 + 0.6], [-s * 0.42, ry, 0], 1);
+            }
+            for (const s of [-1, 1]) {
+              const [gx, gz] = K.at(x, z, ry, s * w / 2, 0);
+              K.soft("planks", [gx, h + 0.45, gz], [0.2, 0.9, d * 0.7], [0, ry, 0], 1.2);
+            }
+            // Inside: a cot and a table; a lit window.
+            const [bx, bz] = K.at(x, z, ry, -w / 2 + 1, -0.6);
+            K.hard("planks", [bx, 0.35, bz], [0.9, 0.12, 2], [0, ry, 0]);
+            K.soft("mattress", [bx, 0.46, bz], [0.8, 0.1, 1.8], [0, ry, 0]);
+            const [tx, tz] = K.at(x, z, ry, w / 2 - 1.2, -0.8);
+            K.hard("planks", [tx, 0.75, tz], [1.2, 0.08, 0.8], [0, ry, 0]);
+            const [wx, wz] = K.at(x, z, ry, -w / 2 - 0.02, 0.5);
+            K.soft("windowLit", [wx, 1.6, wz], [0.05, 0.7, 0.9], [0, ry, 0], 0);
+          };
+          cabin(-8, 2, Math.PI / 2 + 0.2);
+          cabin(9, -1, -Math.PI / 2 - 0.15);
+          cabin(0, -9, 0.05);
+          // Campfire: stone ring + fire (WorldArt adds the flames, embers, smoke and light).
+          for (let i = 0; i < 9; i++) {
+            const a = (i / 9) * Math.PI * 2;
+            K.hard("stone", [1 + Math.cos(a) * 0.75, 0.12, 3 + Math.sin(a) * 0.75], [0.35, 0.24, 0.3], [0, a, 0]);
+          }
+          K.col(1, 3, 1.6, 1.6, 0.3);
+          M.fires.push([1, 3, "camp"]);
+          for (const [x, z, ry] of [[-1.6, 3.2, 1.4], [3.7, 3.4, 1.7], [1.2, 5.8, 0.1]]) {
+            K.hard("bark", [x, 0.22, z], [1.8, 0.44, 0.44], [0, ry, 0]);
+            K.rotCol(x, z, ry, 1.8, 0.44, 0.44);
+          }
+          // Tent and supply crates.
+          K.hard("sandbag", [-4, 1.0, -5], [2.4, 0.1, 2.4], [0, 0.4, Math.PI / 4]);
+          K.hard("sandbag", [-4, 1.0, -5], [2.4, 0.1, 2.4], [0, 0.4, -Math.PI / 4]);
+          K.col(-4, -5, 2.4, 2.4, 1.7);
+          M.designProps.push(["box", 5, 6.5], ["box", 5.6, 6.8], ["barrel", -5.5, 7]);
+          M.lights.push([1, 3, 0xff9a45, 1.9, 16]);
+          // Crashed survivors' car against a tree by the road, burning.
+          const cx = 20, cz = road(20) - 2.4;
+          K.car(cx, cz, 1.25, "carBurnt", { tilt: 0.12 });
+          WorldProps.tree(cx + 3, cz - 0.6, 1.1, "leafDark");
+          M.fires.push([cx, cz, true]);
+          K.rubble(cx - 2.6, cz + 0.8, 0.8);
+          for (let i = 0; i < 4; i++) K.soft("blood", [cx - 3 - i * 1.6, 0.013, cz + 1 + i * 0.4], [0.4, 0.01, 0.3], [0, K.r(0, 3), 0], 0);
+          M.lights.push([cx, cz, 0xff7a30, 1.6, 14]);
+          // Fallen logs, rocks and bushes.
+          for (const [x, z, len, ry] of [[-22, -26, 4, 0.4], [26, 36, 3.5, 1.9], [-36, 4, 3, 1.2], [8, -38, 4, 2.8], [40, -20, 3, 0.2]]) {
+            K.hard("bark", [x, 0.28, z], [len, 0.56, 0.56], [0, ry, 0]);
+            K.rotCol(x, z, ry, len, 0.6, 0.56);
+          }
+          for (let i = 0; i < 12; i++) {
+            const x = K.r(-H + 5, H - 5),
+              z = K.r(-H + 5, H - 5);
+            if (Math.hypot(x, z - 2) < 12 || Math.abs(z - road(x)) < 4) continue;
+            WorldProps.rock(x, z, K.r(0.8, 1.6), K.r(0.35, 0.9), "mossy");
+          }
+          for (let i = 0; i < 40; i++) {
+            const x = K.r(-H + 3, H - 3),
+              z = K.r(-H + 3, H - 3);
+            if (Math.hypot(x, z - 2) < 10 || Math.abs(z - road(x)) < 3.5) continue;
+            if (!PropModels.place("bush", x, 0, z, K.r(0, 6), K.r(0.8, 1.4)))
+              K.soft(K.pick(["leafDark", "leaf", "leafDark"]), [x, 0.35, z], [K.r(0.8, 1.6), K.r(0.5, 0.8), K.r(0.8, 1.4)], [0, K.r(0, 3), 0], 1);
+          }
+          // Trees in groups of 2–6 with clearings; broadleaf and pine mixed.
+          const keep = [[0, 2, 13], [cx, cz, 5], [0, 26, 0]];
+          const groups = [];
+          for (const [x, z, n] of [[-24, -36, 5], [-40, -30, 4], [-14, -20, 3], [24, -18, 4], [40, -40, 5], [4, -36, 3], [-38, -4, 4], [-26, 12, 3], [38, 0, 5], [22, 12, 2], [-30, 40, 5], [-8, 42, 4], [14, 42, 3], [40, 40, 5], [-44, 26, 3], [30, -30, 2], [-10, -44, 3], [44, 16, 3], [-20, 26, 2], [10, 16, 2]])
+            groups.push([x, z, n, 3 + n * 0.9]);
+          K.forest(M, groups, (k) => (k.rnd() < 0.55 ? "leafDark" : "pine"), { keep: [...keep, ...Array.from({ length: 50 }, (_, i) => [-H + i * 2, road(-H + i * 2), 4.5])] });
+          // Background forest beyond the edge (visual only) and hills.
+          for (let i = 0; i < 70; i++) {
+            const a = K.r(0, Math.PI * 2),
+              dd = H + K.r(3, 22),
+              x = Math.cos(a) * dd * (Math.abs(Math.cos(a)) > 0.7 ? 1 : 1.2),
+              z = Math.sin(a) * dd;
+            if (Math.abs(x) < H + 1 && Math.abs(z) < H + 1) continue;
+            WorldProps.tree(x, z, K.r(1, 1.5), K.rnd() < 0.5 ? "pine" : "leafDark");
+          }
+          // DO NOT CROSS tape at the edge, and road barricades where the road leaves the area.
+          const e = H - 3;
+          for (const [x0, z0, x1, z1] of [[-e, -e, e, -e], [e, -e, e, e], [e, e, -e, e], [-e, e, -e, -e]]) {
+            const segs = 7;
+            for (let i = 0; i < segs; i++) {
+              const ax = x0 + ((x1 - x0) * i) / segs,
+                az = z0 + ((z1 - z0) * i) / segs,
+                bx = x0 + ((x1 - x0) * (i + 1)) / segs,
+                bz = z0 + ((z1 - z0) * (i + 1)) / segs;
+              K.tapeLine(ax, az, bx, bz);
+              if (i % 2 === 1) K.warnSign((ax + bx) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
+            }
+          }
+          for (const x of [-H + 5, H - 5]) {
+            K.jersey(x, road(x) - 1.3, Math.PI / 2);
+            K.jersey(x, road(x) + 1.3, Math.PI / 2);
+          }
+          M.landscape = { inner: H - 1, peak: 34, snow: 0 };
+        };
+        // MAP 4 — UNDERGROUND LAB (100 m, closed). One big research hall under a 12 m ceiling.
         // Centre: a floor-to-ceiling containment capsule (glass, green liquid, the mutant specimen
         // as decoration) inside a two-level ring — the ground ring with its control consoles and a
         // wider balcony ring at 4.5 m reached by two curved staircases. Around it: chemical storage,
@@ -7039,7 +7572,7 @@ body.netgame #revivetouch{display:flex}
             R_OUT = 19,
             CAPSULE_R = 3.4;
           M.playerStart = [0, 32];
-          M.spawns = [[0, -51], [51, 0], [0, 51], [-51, 0], [-51, -30], [51, 30], [30, -51], [-30, 51], [51, -30], [-51, 30]];
+          M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-46, -30], [46, 30], [30, -46], [-30, 46], [46, -30], [-46, 30]];
           M.keepOut = [[0, 0, R_OUT + 3], [0, 32, 4]];
           M.closed = true;
           // Floor, ceiling, perimeter.
@@ -7205,7 +7738,7 @@ body.netgame #revivetouch{display:flex}
           for (let row = 0; row < 3; row++)
             for (let i = 0; i < 5; i++) {
               const x = -24 + i * 12,
-                z = -36 - row * 5;
+                z = -33 - row * 4.6;
               K.hard("metal", [x, 1.6, z], [4.5, 3.2, 1.1]);
               for (const y of [0.5, 1.3, 2.1, 2.9]) {
                 K.soft("labFloor", [x, y, z], [4.6, 0.06, 1.15]);
@@ -7213,10 +7746,10 @@ body.netgame #revivetouch{display:flex}
               }
               K.col(x, z, 4.6, 1.2, 3.2);
             }
-          for (const [x, z] of [[-30, -30], [-27, -31], [26, -30], [30, -31.5], [-6, -30], [8, -30.5]]) M.designProps.push([K.rnd() < 0.5 ? "barrel" : "toxic", x, z]);
+          for (const [x, z, k] of [[-28, -28, "barrel"], [-25.5, -29, "toxic"], [26, -28, "barrel"], [6, -28.5, "toxic"]]) M.designProps.push([k, x, z]);
           // East: server rows with blinking status lights.
           for (let row = 0; row < 4; row++) {
-            const x = 30 + row * 5;
+            const x = 29 + row * 4.6;
             for (let z = -16; z <= 16; z += 8) {
               K.hard("labWall", [x, 1.25, z], [1.2, 2.5, 6.8], null, 0.5);
               for (let k = 0; k < 6; k++) K.soft(K.rnd() < 0.2 ? "lightRed" : "lightGreen", [x - 0.62, 0.5 + k * 0.33, z + K.r(-3, 3)], [0.03, 0.06, 0.12], null, 0);
@@ -7226,7 +7759,7 @@ body.netgame #revivetouch{display:flex}
           // South: cryo pods and a surgery bay.
           for (let i = 0; i < 7; i++) {
             const x = -24 + i * 8,
-              z = 44;
+              z = 42;
             K.hard("metal", [x, 0.3, z], [2.2, 0.6, 2.2]);
             K.hard("metal", [x, 3.4, z], [2.2, 0.5, 2.2]);
             K.soft(i === 2 || i === 5 ? "windowBroken" : "signCyan", [x, 1.9, z - 0.9], [1.6, 2.6, 0.08], null, 0);
@@ -7258,8 +7791,8 @@ body.netgame #revivetouch{display:flex}
             K.hard("metal", [x, 0.45, z], [2.8, 0.9, 1.0], [0, ry, 0]);
             K.rotCol(x, z, ry, 3, 1.2, 1);
           }
-          for (const [x, z] of [[-14, 30], [18, 30], [34, -40], [-38, -40], [40, 40], [-44, 40]]) M.designProps.push(["toxic", x, z], ["box", x + 1.2, z + 0.4]);
-          for (const [x, z] of [[20, -36], [-36, 20], [36, -20]]) M.designProps.push(["barrel", x, z]);
+          for (const [x, z] of [[-14, 30], [34, -40], [-40, 36]]) M.designProps.push(["toxic", x, z], ["box", x + 1.2, z + 0.4]);
+          for (const [x, z] of [[-36, 20]]) M.designProps.push(["barrel", x, z]);
         };
         // MAP 5 — ARCTIC BASE (120 m, open sky). A research outpost in a snowfield: prefab huts,
         // fuel tanks, a radio mast and fences around a frozen lake; wind-sculpted drifts, snow-capped
@@ -7268,22 +7801,26 @@ body.netgame #revivetouch{display:flex}
         MapDesigns[4] = (M, H) => {
           const K = MapKit;
           K.seed = 5507;
-          M.playerStart = [0, 18];
-          M.spawns = [[0, -54], [54, 0], [0, 54], [-54, 0], [-40, -50], [44, 48], [52, -38], [-52, 36], [30, -54], [-34, 54]];
-          M.keepOut = [[0, 0, 8], [0, 18, 4]];
+          M.playerStart = [0, 16];
+          M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-36, -44], [38, 42], [44, -32], [-44, 30], [26, -46], [-28, 46]];
+          M.keepOut = [[0, 0, 7], [0, 16, 4]];
           const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
           if (floor) {
             floor.material = VisualArt.surface("snow_02", 0xe4eef3, "concrete", { roughness: 0.95, normal: 1.2 });
             VisualArt.tileUV(floor, 5);
           }
           // Frozen lake (north-west): clear ice with a darker rim of packed snow.
-          K.soft("ice", [-26, 0.015, -24], [22, 0.02, 16], null, 0.4);
-          for (let i = 0; i < 24; i++) {
-            const a = (i / 24) * Math.PI * 2;
-            K.soft("snow", [-26 + Math.cos(a) * 11.4, 0.1, -24 + Math.sin(a) * 8.4], [2.6, 0.2, 1.2], [0, -a + Math.PI / 2, 0]);
+          K.soft("ice", [-22, 0.015, -20], [18, 0.02, 13], null, 0.4);
+          for (let i = 0; i < 22; i++) {
+            const a = (i / 22) * Math.PI * 2;
+            K.soft("snow", [-22 + Math.cos(a) * 9.4, 0.1, -20 + Math.sin(a) * 6.9], [2.4, 0.2, 1.1], [0, -a + Math.PI / 2, 0]);
           }
           // Wind-sculpted drifts: terraced so the player can walk over them.
           const drift = (x, z, len, ry, h = 0.9) => {
+            if (PropModels.place("mound", x, -0.05, z, ry, 1, { color: 0xeef4f8, scale: [len * 0.5, h / 0.3, 1.3] })) {
+              K.rotCol(x, z, ry, len * 0.6, 1.2, Math.min(h, 0.45));
+              return;
+            }
             const layers = Math.max(1, Math.round(h / 0.3));
             for (let l = 0; l < layers; l++) {
               const f = 1 - l / (layers + 0.5);
@@ -7291,11 +7828,11 @@ body.netgame #revivetouch{display:flex}
             }
             K.rotCol(x, z, ry, len * 0.6, 1.2, Math.min(h, 0.45));
           };
-          for (let i = 0; i < 16; i++) {
-            const x = K.r(-H + 8, H - 8),
-              z = K.r(-H + 8, H - 8);
-            if (Math.hypot(x, z) < 12 || Math.hypot(x + 26, z + 24) < 14 || Math.hypot(x, z - 18) < 6) continue;
-            drift(x, z, K.r(5, 10), K.r(0, 3), K.r(0.6, 1.2));
+          for (let i = 0; i < 12; i++) {
+            const x = K.r(-H + 7, H - 7),
+              z = K.r(-H + 7, H - 7);
+            if (Math.hypot(x, z) < 10 || Math.hypot(x + 22, z + 20) < 12 || Math.hypot(x, z - 16) < 6) continue;
+            drift(x, z, K.r(4, 8), K.r(0, 3), K.r(0.6, 1.2));
           }
           // Outpost: three prefab huts, fuel tanks, radio mast, fences.
           const hut = (x, z, ry, w = 8, d = 5) => {
@@ -7307,97 +7844,93 @@ body.netgame #revivetouch{display:flex}
             const [dx, dz] = K.at(x, z, ry, 0, d / 2 + 0.06);
             K.soft("labFloor", [dx, 1.1, dz], [1.2, 2.2, 0.1], [0, ry, 0], 0);
             K.soft("lightAmber", [dx, 2.5, dz], [0.4, 0.15, 0.2], [0, ry, 0], 0);
-            for (const s of [-2.6, 2.6]) {
-              const [wx, wz] = K.at(x, z, ry, s, d / 2 + 0.06);
+            for (const sd of [-2.6, 2.6]) {
+              const [wx, wz] = K.at(x, z, ry, sd, d / 2 + 0.06);
               K.soft(K.rnd() < 0.4 ? "windowLit" : "window", [wx, 1.8, wz], [1.2, 0.9, 0.08], [0, ry, 0], 0);
             }
           };
-          hut(22, -22, 0);
-          hut(34, -12, Math.PI / 2);
-          hut(18, -36, Math.PI);
-          for (const [x, z] of [[38, -30], [42, -26]]) {
+          hut(20, -18, 0);
+          hut(31, -9, Math.PI / 2);
+          hut(16, -31, Math.PI);
+          for (const [x, z] of [[34, -26], [38, -22]]) {
             K.hard("white", [x, 2, z], [3.2, 4, 3.2]);
             K.soft("snow", [x, 4.15, z], [3.3, 0.3, 3.3]);
             K.soft("hazard", [x, 1.2, z + 1.62], [2, 0.3, 0.04]);
             K.col(x, z, 3.2, 3.2, 4);
           }
           for (let y = 0; y < 18; y += 3) {
-            K.hard("metal", [30, y + 1.5, -44], [0.2, 3, 0.2], [0, 0, 0.04]);
-            K.soft("metal", [30, y + 1.5, -44], [1.4 - y * 0.05, 0.06, 0.06], [0.7, 0, 0]);
+            K.hard("metal", [27, y + 1.5, -38], [0.2, 3, 0.2], [0, 0, 0.04]);
+            K.soft("metal", [27, y + 1.5, -38], [1.4 - y * 0.05, 0.06, 0.06], [0.7, 0, 0]);
           }
-          K.soft("lightRed", [30, 18.2, -44], [0.3, 0.3, 0.3], null, 0);
-          K.col(30, -44, 1, 1, 18);
-          for (let x = 12; x < 48; x += 3) {
-            K.hard("metal", [x, 0.9, -48], [0.1, 1.8, 0.1]);
-            K.soft("fence", [x + 1.5, 0.9, -48], [3, 1.6, 0.05], null, 0.8);
+          K.soft("lightRed", [27, 18.2, -38], [0.3, 0.3, 0.3], null, 0);
+          K.col(27, -38, 1, 1, 18);
+          for (let x = 11; x < 42; x += 3) {
+            K.hard("metal", [x, 0.9, -42], [0.1, 1.8, 0.1]);
+            K.soft("fence", [x + 1.5, 0.9, -42], [3, 1.6, 0.05], null, 0.8);
           }
-          M.lights.push([26, -26, 0xffc27a, 1.4, 22], [0, 0, 0xcfe4ff, 0.8, 40]);
-          M.fires.push([16, -18]);
-          M.designProps.push(["barrel", 36, -18], ["barrel", 37, -19.2], ["toxic", 20, -30], ["box", 24, -18], ["box", 25, -18.5], ["barrel", -20, 36], ["box", -30, 14]);
-          // Pine groves (trees get snow caps and wind from their material) and snow-capped rocks.
-          for (const [gx, gz, n, r] of [[40, 30, 14, 12], [-40, 30, 16, 13], [-44, -8, 10, 9], [8, 44, 10, 10], [46, 6, 8, 8], [-10, -46, 10, 10]]) {
-            for (let i = 0; i < n; i++) {
-              const a = K.r(0, Math.PI * 2),
-                d = Math.sqrt(K.rnd()) * r,
-                x = gx + Math.cos(a) * d,
-                z = gz + Math.sin(a) * d;
-              if (Math.abs(x) > H - 4 || Math.abs(z) > H - 4) continue;
-              WorldProps.tree(x, z, K.r(0.85, 1.3), "snowPine");
-            }
-          }
-          for (let i = 0; i < 18; i++) {
-            const x = K.r(-H + 6, H - 6),
-              z = K.r(-H + 6, H - 6);
-            if (Math.hypot(x, z) < 10 || Math.hypot(x, z - 18) < 5) continue;
-            const s = K.r(1.1, 2.4),
-              h = K.r(0.5, 1.4);
-            K.hard("stone", [x, h / 2, z], [s, h, s * K.r(0.7, 1.2)], [0, K.r(0, 3), 0]);
-            K.soft("snow", [x, h + 0.08, z], [s * 0.9, 0.16, s * 0.8], [0, K.r(0, 3), 0]);
-            K.col(x, z, s, s, h);
-          }
-          // Five igloos: ring courses of snow blocks that step inward to a dome, a tunnel entrance,
-          // collision per block (the doorway stays open) and a warm lamp inside.
+          M.lights.push([23, -22, 0xffc27a, 1.4, 20], [0, 0, 0xcfe4ff, 0.8, 34]);
+          M.fires.push([14, -15]);
+          M.designProps.push(["barrel", 32, -15], ["toxic", 18, -26], ["box", 21, -15], ["box", 22, -15.5], ["box", -26, 12]);
+          // Five walk-in igloos: ring courses of snow blocks stepping inward to a dome, a tunnel
+          // entrance tall enough to walk through, one collider per wall block and a lamp inside.
+          const igloos = [[-12, 24, Math.PI / 2], [-32, -36, 0.4], [12, 28, Math.PI * 0.6], [-32, 6, 0], [36, 20, Math.PI]];
           const igloo = (x, z, facing) => {
-            const R = 2.7,
-              courses = 6;
+            const R = 3.9,
+              courses = 8,
+              top = 3.7;
+            const tr0 = -facing + Math.PI / 2,
+              model = PropModels.place("igloo", x, 0, z, tr0);
             for (let c = 0; c < courses; c++) {
               const t = c / courses,
-                r = R * Math.cos(t * Math.PI * 0.46),
-                y = 0.25 + Math.sin(t * Math.PI * 0.5) * 2.3,
-                n = Math.max(6, Math.round((2 * Math.PI * r) / 0.9));
+                r = R * Math.cos(t * Math.PI * 0.47),
+                y = 0.25 + Math.sin(t * Math.PI * 0.5) * (top - 0.3),
+                n = Math.max(7, Math.round((2 * Math.PI * r) / 0.95));
               for (let i = 0; i < n; i++) {
                 const a = (i / n) * Math.PI * 2 + (c % 2) * (Math.PI / n);
                 const off = Math.atan2(Math.sin(a - facing), Math.cos(a - facing));
-                if (c < 3 && Math.abs(off) < 0.42) continue; // doorway
+                if (c < 4 && Math.abs(off) < 0.33) continue; // doorway
                 const bx = x + Math.cos(a) * r,
                   bz = z + Math.sin(a) * r;
-                K.hard("snow", [bx, y, bz], [0.5, 0.5, (2 * Math.PI * r) / n + 0.06], [0.35 * t, -a, 0], 1.4);
-                if (c < 4) M.obstacles.push({ x: bx, z: bz, w: 0.32, d: 0.32, h: y + 0.25, top: 2.6 });
+                if (!model) K.hard("snow", [bx, y, bz], [0.55, 0.55, (2 * Math.PI * r) / n + 0.06], [0.4 * t, -a, 0], 1.4);
+                if (c < 5) M.obstacles.push({ x: bx, z: bz, w: 0.33, d: 0.33, h: y + 0.28, top: top });
               }
             }
-            K.hard("snow", [x, 2.62, z], [1.1, 0.35, 1.1], null, 1.4);
-            // Entrance tunnel.
-            for (const s of [-1, 1]) {
-              const [tx, tz] = K.at(x, z, -facing + Math.PI / 2, s * 1.0, R + 0.9);
-              K.hard("snow", [tx, 0.75, tz], [0.4, 1.5, 1.8], [0, -facing + Math.PI / 2, 0], 1.4);
-              M.obstacles.push({ x: tx, z: tz, w: 0.35, d: 0.35, h: 1.5, top: 2 });
+            if (!model) K.hard("snow", [x, top + 0.05, z], [1.2, 0.35, 1.2], null, 1.4);
+            // Entrance tunnel (2.1 m tall inside).
+            const tr = tr0;
+            for (const sd of [-1, 1]) {
+              const [tx, tz] = K.at(x, z, tr, sd * 1.15, R + 1.1);
+              if (!model) K.hard("snow", [tx, 1.05, tz], [0.45, 2.1, 2.2], [0, tr, 0], 1.4);
+              M.obstacles.push({ x: tx, z: tz, w: 0.4, d: 0.4, h: 2.1, top: 2.4 });
+              const [ux, uz] = K.at(x, z, tr, sd * 1.15, R + 0.2);
+              M.obstacles.push({ x: ux, z: uz, w: 0.4, d: 0.4, h: 2.1, top: 2.4 });
             }
-            const [rx, rz] = K.at(x, z, -facing + Math.PI / 2, 0, R + 0.9);
-            K.hard("snow", [rx, 1.62, rz], [2.5, 0.3, 1.9], [0, -facing + Math.PI / 2, 0], 1.4);
-            // Floor furs and a lamp inside.
-            K.soft("sandbag", [x, 0.03, z], [2.2, 0.04, 1.6], [0, K.r(0, 3), 0]);
-            K.soft("lightAmber", [x + 0.6, 0.35, z - 0.4], [0.2, 0.3, 0.2], null, 0);
-            M.lights.push([x + 0.6, z - 0.4, 0xffb060, 0.9, 5.5]);
+            const [rx, rz] = K.at(x, z, tr, 0, R + 1.1);
+            if (!model) K.hard("snow", [rx, 2.25, rz], [2.9, 0.35, 2.3], [0, tr, 0], 1.4);
+            // Floor furs, a crate and a lamp inside.
+            K.soft("sandbag", [x, 0.03, z], [2.6, 0.04, 2], [0, K.r(0, 3), 0]);
+            const [lx, lz] = K.at(x, z, tr, 1.4, -1.4);
+            K.soft("lightAmber", [lx, 0.4, lz], [0.22, 0.34, 0.22], null, 0);
+            M.lights.push([lx, lz, 0xffb060, 1.1, 7]);
+            M.igloos = M.igloos || [];
+            M.igloos.push({ x, z, facing, R, top });
           };
-          igloo(-14, 26, Math.PI / 2);
-          igloo(-36, -40, 0.4);
-          igloo(12, 30, Math.PI * 0.6);
-          igloo(-34, 8, 0);
-          igloo(44, 20, Math.PI);
+          for (const [x, z, f] of igloos) igloo(x, z, f);
+          // Pines in small groups (2–6) with open snowfields between them; snow-capped rocks.
+          const keep = [[0, 0, 9], [0, 16, 5], [-22, -20, 11], ...igloos.map(([x, z]) => [x, z, 7]), [26, -24, 16]];
+          K.forest(M, [[36, 34, 5, 6], [-38, 34, 4, 5], [-40, -8, 3, 4], [6, 42, 4, 5], [42, 4, 3, 4], [-8, -42, 5, 6], [20, 40, 2, 3], [-18, 40, 3, 4], [42, -40, 3, 4], [-44, -24, 2, 3], [-8, 34, 2, 3], [44, 26, 2, 3]], "snowPine", { keep });
+          for (let i = 0; i < 14; i++) {
+            const x = K.r(-H + 6, H - 6),
+              z = K.r(-H + 6, H - 6);
+            if (keep.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr) || M.collides(x, z, 1.4)) continue;
+            const sz = K.r(1.1, 2.3),
+              h = K.r(0.5, 1.3);
+            WorldProps.rock(x, z, sz, h, "snow");
+          }
           // Taped barriers at the invisible edge, and snowy mountains beyond it.
           const e = H - 3;
           for (const [x0, z0, x1, z1] of [[-e, -e, e, -e], [e, -e, e, e], [e, e, -e, e], [-e, e, -e, -e]]) {
-            const segs = 8;
+            const segs = 7;
             for (let i = 0; i < segs; i++) {
               const ax = x0 + ((x1 - x0) * i) / segs,
                 az = z0 + ((z1 - z0) * i) / segs,
@@ -7407,7 +7940,7 @@ body.netgame #revivetouch{display:flex}
               if (i % 2 === 0) K.warnSign((ax + bx) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
             }
           }
-          M.landscape = { inner: H - 1, peak: 58, snow: 1 };
+          M.landscape = { inner: H - 1, peak: 50, snow: 1 };
         };
         const MapManager = {
           group: new THREE.Group(),
@@ -7426,7 +7959,8 @@ body.netgame #revivetouch{display:flex}
           cell: 2,
           // Half the side of the playable square, per map (the maps got much bigger in v24).
           half: 36,
-          halves: [70, 36, 36, 56, 60],
+          // Every map is a 100 m square (v27).
+          halves: [50, 50, 50, 50, 50],
           index: null,
           flow: null,
           blocked: null,
@@ -7452,6 +7986,9 @@ body.netgame #revivetouch{display:flex}
             this.closed = false;
             this.keepOut = null;
             this.playerStart = null;
+            this.trees = [];
+            this.igloos = [];
+            this.lightY = null;
             WorldProps.begin();
             this.spawns = this.spawnSets[index].map((p) => p.slice());
             this.spawnCursor = 0;
@@ -7817,7 +8354,34 @@ body.netgame #revivetouch{display:flex}
                   this.openPenalty[id] = crowd * 0.42;
                 }
               }
+            // Edge passability: thin walls can sit between two open cell centres, so each step
+            // between neighbouring cells is sampled along the way (x+1 edges and z+1 edges).
+            this.passX = new Uint8Array(n * n);
+            this.passZ = new Uint8Array(n * n);
+            const edgeClear = (ax, az, bx, bz) => {
+              for (const t of [0.2, 0.5, 0.8]) if (this.collides(ax + (bx - ax) * t, az + (bz - az) * t, 0.3)) return 0;
+              return 1;
+            };
+            for (let z = 0; z < n; z++)
+              for (let x = 0; x < n; x++) {
+                const id = z * n + x;
+                if (this.blocked[id]) continue;
+                const [ax, az] = this.cellToWorld(x, z);
+                if (x + 1 < n && !this.blocked[id + 1]) this.passX[id] = edgeClear(ax, az, ax + this.cell, az);
+                if (z + 1 < n && !this.blocked[id + n]) this.passZ[id] = edgeClear(ax, az, ax, az + this.cell);
+              }
             this.flow = new Int32Array(n * n);
+          },
+          // Can a zombie step from cell (x, z) to its neighbour (x+dx, z+dz)? Diagonals need an
+          // open orthogonal corner on at least one side.
+          canStep(x, z, dx, dz) {
+            const n = this.gridSize,
+              ok = (cx, cz, sx, sz) => {
+                if (sx) return sx > 0 ? this.passX[cz * n + cx] : this.passX[cz * n + cx - 1];
+                return sz > 0 ? this.passZ[cz * n + cx] : this.passZ[(cz - 1) * n + cx];
+              };
+            if (!dx || !dz) return !!ok(x, z, dx, dz);
+            return (!!ok(x, z, dx, 0) && !!ok(x + dx, z, 0, dz)) || (!!ok(x, z, 0, dz) && !!ok(x, z + dz, dx, 0));
           },
           // Grid <-> world conversions. The grid covers [-half, half] on both axes with
           // `cell`-metre cells centred on the origin; every navigation lookup goes through these.
@@ -7870,7 +8434,8 @@ body.netgame #revivetouch{display:flex}
                   nx >= n ||
                   nz >= n ||
                   this.blocked[ni] ||
-                  this.flow[ni] !== 99999
+                  this.flow[ni] !== 99999 ||
+                  (!this.blocked[id] && !this.canStep(cx, cz, dx, dz))
                 )
                   continue;
                 this.flow[ni] = this.flow[id] + 1;
@@ -7895,6 +8460,7 @@ body.netgame #revivetouch{display:flex}
               if (nx < 0 || nz < 0 || nx >= n || nz >= n) continue;
               const ni = nz * n + nx;
               if (this.blocked[ni] || this.flow[ni] >= currentFlow) continue;
+              if (!this.blocked[z * n + x] && !this.canStep(x, z, dx, dz)) continue;
               const score = this.flow[ni] + (this.openPenalty?.[ni] || 0) + (dx && dz ? 0.2 : 0);
               if (score < bestScore) {
                 bestScore = score;
@@ -11166,6 +11732,14 @@ body.netgame #revivetouch{display:flex}
               case "tile":
                 for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, x % 8 === 0 || y % 8 === 0 ? [150, 156, 150] : jitter([206, 212, 204], 10));
                 break;
+              case "wardWall":
+                fill([204, 208, 200], 7);
+                dots([176, 180, 170], 8, 10);
+                break;
+              case "wainscot":
+                fill([112, 150, 140], 8);
+                for (let x = 0; x < N; x++) { px(x, 0, [214, 218, 210]); px(x, 1, [84, 120, 112]); }
+                break;
               case "hospitalWall":
                 fill([196, 206, 200], 10);
                 for (let y = 10; y < N; y++) for (let x = 0; x < N; x++) px(x, y, jitter([96, 140, 132], 10));
@@ -11275,7 +11849,11 @@ body.netgame #revivetouch{display:flex}
                 .replace(
                   "#include <begin_vertex>",
                   `#include <begin_vertex>
+                  #ifdef USE_INSTANCING
+                  vec4 wpW = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+                  #else
                   vec4 wpW = modelMatrix * vec4(transformed, 1.0);
+                  #endif
                   float hW = clamp((wpW.y - 2.2) / 4.0, 0.0, 1.4) * ${amount.toFixed(2)};
                   float phW = wpW.x * 0.21 + wpW.z * 0.17;
                   float gust = 0.55 + 0.45 * sin(windTime * 0.37 + wpW.x * 0.03);
@@ -11318,7 +11896,9 @@ body.netgame #revivetouch{display:flex}
                   const f = Math.floor(i / 4);
                   if (b.density) uvA.setXY(i, uvA.getX(i) * faceDims[f][0] * b.density, uvA.getY(i) * faceDims[f][1] * b.density);
                 }
-                e.set(...(b.rot || [0, 0, 0]));
+                // Yaw first, then pitch/roll in the object's own frame (tilted roofs, wrecks, panels).
+                const [rx, ry, rz] = b.rot || [0, 0, 0];
+                e.set(rx, ry, rz, "YXZ");
                 m4.compose(new V(...b.pos), q.setFromEuler(e), one);
                 g.applyMatrix4(m4);
                 pos.push(...g.attributes.position.array);
@@ -11376,6 +11956,11 @@ body.netgame #revivetouch{display:flex}
             return null;
           },
           tree(x, z, s = 1, style = "leaf") {
+            const model = { leaf: "tree_broadleaf_a", leafDark: "tree_broadleaf_b", pine: Math.random() < 0.5 ? "tree_pine_a" : "tree_pine_b", snowPine: "tree_snowpine" }[style];
+            if (model && PropModels.place(model, x, -0.05, z, rand(0, Math.PI * 2), s * rand(0.9, 1.1), { tilt: rand(-0.04, 0.04) })) {
+              this.collider(x, z, 0.55 * s, 0.55 * s, 7 * s);
+              return;
+            }
             const H = (3.2 + rand(0, 1.4)) * s,
               T = 0.8 * s;
             PropKit.add(this.hard, "bark", [x, H / 2, z], [T, H, T]);
@@ -11412,6 +11997,11 @@ body.netgame #revivetouch{display:flex}
           },
           // Rock clusters: low ones can simply be walked onto, taller ones need a jump.
           rock(x, z, size = 1, top = 0.45, kind = "stone") {
+            const tint = { stone: 0x8e8f8a, mossy: 0x6d7b58, snow: 0xe6eef2, ice: 0xb8d3e3, concrete: 0x8c8b86 }[kind] ?? 0x8e8f8a;
+            if (PropModels.place(Math.random() < 0.5 ? "rock_a" : "rock_b", x, -0.05, z, rand(0, 6.28), 1, { color: tint, scale: [size * 0.62, top / 0.8, size * 0.62] })) {
+              this.collider(x, z, size * 0.95, size * 0.95, top);
+              return;
+            }
             const n = 2 + ((Math.random() * 3) | 0);
             PropKit.add(this.hard, kind, [x, top / 2, z], [size, top, size * rand(0.8, 1.2)], [0, rand(0, 1.5), 0]);
             for (let i = 0; i < n; i++) {
@@ -11483,6 +12073,7 @@ body.netgame #revivetouch{display:flex}
               this.scatter(12, (x, z) => this.rock(x, z, rand(0.7, 1.2), rand(0.3, 0.45), "snow"), 1);
               this.scatter(5, (x, z) => this.rock(x, z, rand(1.2, 1.8), rand(0.8, 1.2), "ice"), 1.5);
             }
+            PropModels.flush(MapManager.group);
             const hard = PropKit.build(this.hard, MapManager.group);
             MapManager.walls.push(...hard);
             PropKit.build(this.soft, MapManager.group);
