@@ -5127,6 +5127,21 @@ body.netgame #revivetouch{display:flex}
               r.body.rotation.z = s * 0.08 * mb;
               r.neck.rotation.x = -C + 0.12 + Math.sin(t * 0.5) * 0.06;
               r.neck.rotation.z = Math.sin(t * 0.5) * 0.12;
+              // Keep the head out of the ground: pitch the whole crawler to the terrain under its
+              // head and hips (curbs, stairs, rubble) and never let the head sink below it.
+              if (z.group && MapManager.groundAt) {
+                const g = z.group.position,
+                  yawNow = z.group.rotation.y,
+                  fx = Math.sin(yawNow), fz = Math.cos(yawNow),
+                  S = z.size || 1,
+                  ahead = MapManager.groundAt(g.x + fx * 0.6 * S, g.z + fz * 0.6 * S, 0.15, g.y + 0.6),
+                  behind = MapManager.groundAt(g.x - fx * 0.45 * S, g.z - fz * 0.45 * S, 0.15, g.y + 0.6);
+                const slope = clamp(Math.atan2(ahead - behind, 1.05 * S), -0.55, 0.55);
+                z.crawlPitch = (z.crawlPitch || 0) + (slope - (z.crawlPitch || 0)) * Math.min(1, dt * 10);
+                r.root.rotation.x = -z.crawlPitch;
+                const lift = Math.max(0, ahead - g.y - 0.05);
+                r.root.position.y = Math.min(0.6, lift * 0.6);
+              }
             } else {
               r.legs[0].rotation.x = s * stride;
               r.legs[1].rotation.x = -s * stride;
@@ -5249,7 +5264,8 @@ body.netgame #revivetouch{display:flex}
               }
             }
             if (z.stagger > 0) {
-              r.upper.rotation.x -= z.stagger * 0.6;
+              if (st === "crawler") r.body.rotation.z += z.stagger * 0.3;
+              else r.upper.rotation.x -= z.stagger * 0.6;
               if (z.hitZone === "head") r.neck.rotation.x -= z.stagger * 1.1;
               z.stagger = Math.max(0, z.stagger - dt * 1.7);
             }
@@ -5310,7 +5326,7 @@ body.netgame #revivetouch{display:flex}
           apply(w, gun, parts) {
             const scene = this.scenes.get(w.name);
             if (!scene) return false;
-            const keep = new Set([parts.flash, parts.arrow, parts.magazine, parts.pump].filter(Boolean));
+            const keep = new Set([parts.flash, parts.arrow, parts.string, parts.magazine, parts.pump].filter(Boolean));
             for (const child of gun.children) if (!keep.has(child)) child.visible = false;
             for (const pivot of [parts.magazine, parts.pump]) if (pivot) for (const c of pivot.children) c.visible = false;
             const model = scene.clone(true);
@@ -5823,46 +5839,30 @@ body.netgame #revivetouch{display:flex}
                   muzzle = -0.86;
                 }
                 if (w.kind === "bow") {
-                  const wood2 = 0x7a5a3a;
+                  // v28: vertical bow (riser in the left hand, limbs up/down), a live string that
+                  // bends to the nock point and a nocked arrow — matches the Blender models.
+                  const wood2 = 0x7a5a3a,
+                    tipY = { Bow: 0.42, Stormpiercer: 0.44, Wraithpiercer: 0.5 }[w.name] || 0.42,
+                    tipZ = -0.44;
                   for (const side of [-1, 1]) {
-                    const limb = A.link(
-                      gun,
-                      [0, 0.02, -0.2],
-                      [side * 0.34, 0.02, -0.52],
-                      0.025,
-                      0.012,
-                      wood2,
-                      "polymer",
-                    );
-                    limb.rotation.y = side * 0.5;
+                    A.link(gun, [0, side * 0.07, -0.5], [0, side * (tipY * 0.6), -0.51], 0.024, 0.026, wood2, "polymer");
+                    A.link(gun, [0, side * (tipY * 0.6), -0.51], [0, side * tipY, tipZ], 0.022, 0.024, wood2, "polymer");
                   }
-                  A.link(
-                    gun,
-                    [-0.34, 0.02, -0.52],
-                    [0.34, 0.02, -0.52],
-                    0.006,
-                    0.006,
-                    0xd8d2c2,
-                    "steel",
-                  );
-                  b([0, 0.02, -0.2], [0.04, 0.18, 0.2], wood2, "polymer");
-                  // Nocked arrow, animated by WeaponSystem.update(): rests at the string
-                  // and slides back toward the grip while the shot is charging.
-                  parts.arrow = A.pivot(gun, 0, 0.03, -0.52);
+                  b([0, 0, -0.5], [0.04, 0.2, 0.05], wood2, "polymer");
+                  const stringGeo = new THREE.BufferGeometry().setFromPoints([new V(0, tipY, tipZ), new V(0, 0.035, tipZ), new V(0, -tipY, tipZ)]);
+                  parts.string = new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color: 0xe8e2d0 }));
+                  parts.string.userData.tip = [tipY, tipZ];
+                  gun.add(parts.string);
+                  // Nocked arrow: the pivot sits at the nock on the string.
+                  parts.arrow = A.pivot(gun, 0.022, 0.035, tipZ);
                   const shaft = 0xc7b28a;
-                  A.tube(parts.arrow, [0, 0, -0.16], 0.007, 0.42, shaft, "polymer", "z");
-                  A.block(parts.arrow, [0, 0, 0.04], [0.02, 0.02, 0.05], 0x8f97a1, "steel");
+                  A.tube(parts.arrow, [0, 0, -0.3], 0.007, 0.6, shaft, "polymer", "z");
+                  A.block(parts.arrow, [0, 0, -0.62], [0.02, 0.02, 0.05], 0x8f97a1, "steel");
                   for (const side of [-1, 1]) {
-                    const fletch = A.block(
-                      parts.arrow,
-                      [side * 0.012, 0, 0.17],
-                      [0.002, 0.032, 0.05],
-                      0xb23c3c,
-                      "cloth",
-                    );
+                    const fletch = A.block(parts.arrow, [side * 0.012, 0, -0.04], [0.002, 0.032, 0.06], 0xb23c3c, "cloth");
                     fletch.rotation.z = side * 0.5;
                   }
-                  muzzle = -0.55;
+                  muzzle = -1.05;
                 }
               }
               if (w.tier > 0)
@@ -6002,29 +6002,35 @@ body.netgame #revivetouch{display:flex}
               spin: new V(rand(-9, 9), rand(-9, 9), rand(-9, 9)),
             });
           },
+          // Blood / scorch decals: pooled meshes, blood fades out after ~5 s (scorches a bit later).
+          pool: [],
           mark(pos, color = 0x522726, size = 0.45) {
             if (SettingsManager.data.vfx === "off") return;
-            while (this.marks.length > 32) {
-              scene.remove(this.marks[0].mesh);
-              this.marks[0].mesh.material.dispose();
-              this.marks.shift();
+            while (this.marks.length > 40) this.recycle(this.marks.shift());
+            const tex = color === 0x57692f ? "stain" : "blood";
+            let mesh = this.pool.pop();
+            if (!mesh) {
+              mesh = new THREE.Mesh(
+                VisualArt.geometries.plane,
+                new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.7, depthWrite: false }),
+              );
+              mesh.rotation.x = -Math.PI / 2;
             }
-            const mesh = new THREE.Mesh(
-              VisualArt.geometries.plane,
-              new THREE.MeshBasicMaterial({
-                map: VisualArt.texture(color === 0x57692f ? "stain" : "blood"),
-                color,
-                transparent: true,
-                opacity: 0.7,
-                depthWrite: false,
-              }),
-            );
-            mesh.rotation.x = -Math.PI / 2;
+            mesh.material.map = VisualArt.texture(tex);
+            mesh.material.color.set(color);
+            mesh.material.opacity = 0.7;
+            mesh.material.needsUpdate = true;
             mesh.rotation.z = rand(0, 6);
-            mesh.position.set(pos.x, 0.045, pos.z);
+            mesh.position.set(pos.x, (pos.y > 0.2 ? pos.y : 0) + 0.045, pos.z);
             mesh.scale.setScalar(size);
             scene.add(mesh);
-            this.marks.push({ mesh, life: 35 });
+            const life = size > 2 ? 9 : 5;
+            this.marks.push({ mesh, life, max: life });
+          },
+          recycle(m) {
+            scene.remove(m.mesh);
+            if (this.pool.length < 48) this.pool.push(m.mesh);
+            else m.mesh.material.dispose();
           },
           remove(i) {
             scene.remove(this.items[i].mesh);
@@ -6032,10 +6038,7 @@ body.netgame #revivetouch{display:flex}
           },
           clear() {
             while (this.items.length) this.remove(0);
-            for (const m of this.marks) {
-              scene.remove(m.mesh);
-              m.mesh.material.dispose();
-            }
+            for (const m of this.marks) this.recycle(m);
             this.marks = [];
           },
           update(dt) {
@@ -6058,11 +6061,9 @@ body.netgame #revivetouch{display:flex}
             for (let i = this.marks.length - 1; i >= 0; i--) {
               const m = this.marks[i];
               m.life -= dt;
-              if (m.life < 5)
-                m.mesh.material.opacity = Math.max(0, (m.life / 5) * 0.7);
+              if (m.life < 2) m.mesh.material.opacity = Math.max(0, (m.life / 2) * 0.7);
               if (m.life <= 0) {
-                scene.remove(m.mesh);
-                m.mesh.material.dispose();
+                this.recycle(m);
                 this.marks.splice(i, 1);
               }
             }
@@ -6505,10 +6506,19 @@ body.netgame #revivetouch{display:flex}
           update(dt) {
             for (const o of this.decor) {
               if (o.type === "stutter") {
+                // Mostly steady light; every 8-22 s a short burst of 2-4 flickers.
                 o.next -= dt;
                 if (o.next <= 0) {
-                  o.on = !o.on || Math.random() < 0.3;
-                  o.next = o.on ? rand(0.4, 3.5) : rand(0.04, 0.22);
+                  if (o.burst > 0) {
+                    o.on = !o.on;
+                    if (o.on) o.burst--;
+                    o.next = o.on ? rand(0.05, 0.16) : rand(0.04, 0.12);
+                    if (o.burst <= 0 && o.on) o.next = rand(8, 22);
+                  } else {
+                    o.burst = 2 + Math.floor(Math.random() * 3);
+                    o.on = false;
+                    o.next = rand(0.04, 0.12);
+                  }
                 }
                 o.light.intensity = o.on ? o.light.userData.base : o.light.userData.base * 0.05;
                 continue;
@@ -8109,40 +8119,88 @@ body.netgame #revivetouch{display:flex}
           for (const [x, z, r, h] of [[-30, -12, 4, 0.9], [18, -30, 5, 1.2], [36, 8, 3.5, 0.6], [-14, 34, 4, 0.9], [-40, 16, 3, 0.6], [30, -8, 3, 0.9]]) mound(x, z, r, h);
           for (let i = 0; i < 22; i++) K.soft(K.pick(["mud", "mossy", "mud"]), [K.r(-H + 4, H - 4), 0.012, K.r(-H + 4, H - 4)], [K.r(1.2, 3), 0.01, K.r(1, 2.4)], [0, K.r(0, 3), 0], 0.8);
           // Survivors' camp: three cabins around a campfire, logs to sit on, a tent, crates.
-          const cabin = (x, z, ry, w = 6, d = 4.6, door = true) => {
-            const h = 2.8;
-            const walls = [[0, -d / 2, w, 0.25], [-w / 2, 0, 0.25, d], [w / 2, 0, 0.25, d]];
+          // Small abandoned log cabins: plank walls on a stone footing, a proper A-frame roof with
+          // overhang and filled gables, a stone chimney, a porch with posts, a boarded window and a
+          // door hanging open. Walls collide; the doorway is walkable.
+          const cabin = (x, z, ry, w = 5.6, d = 4.4, door = true) => {
+            const h = 2.5,
+              pitch = 0.5,
+              rise = (d / 2 + 0.4) * Math.tan(pitch);
+            K.hard("stone", [x, 0.12, z], [w + 0.3, 0.24, d + 0.3], [0, ry, 0], 1);
+            const walls = [[0, -d / 2, w, 0.28], [-w / 2, 0, 0.28, d], [w / 2, 0, 0.28, d]];
             for (const [ox, oz, ww, dd] of walls) {
               const [px, pz] = K.at(x, z, ry, ox, oz);
-              K.hard("planks", [px, h / 2, pz], [ww, h, dd], [0, ry, 0], 1.2);
-              K.rotCol(px, pz, ry, ww, dd, h);
+              K.hard("planks", [px, h / 2 + 0.12, pz], [ww, h, dd], [0, ry, 0], 1.2);
+              K.rotCol(px, pz, ry, ww, dd, h + 0.12);
             }
-            // Front wall with a doorway.
-            for (const s of [-1, 1]) {
-              const seg = (w - 1.4) / 2,
-                [px, pz] = K.at(x, z, ry, s * (0.7 + seg / 2), d / 2);
-              K.hard("planks", [px, h / 2, pz], [seg, h, 0.25], [0, ry, 0], 1.2);
-              K.rotCol(px, pz, ry, seg, 0.25, h);
+            // Log bands across the walls (darker horizontal strips read as stacked logs).
+            for (let k = 0; k < 5; k++) {
+              const y = 0.4 + k * 0.5;
+              const [bx0, bz0] = K.at(x, z, ry, 0, -d / 2 - 0.15);
+              K.soft("bark", [bx0, y, bz0], [w + 0.2, 0.12, 0.06], [0, ry, 0], 1);
+              for (const sd of [-1, 1]) {
+                const [sx, sz] = K.at(x, z, ry, sd * (w / 2 + 0.15), 0);
+                K.soft("bark", [sx, y, sz], [0.06, 0.12, d + 0.2], [0, ry, 0], 1);
+              }
+            }
+            // Corner posts.
+            for (const cxs of [-1, 1]) for (const czs of [-1, 1]) {
+              const [px, pz] = K.at(x, z, ry, cxs * (w / 2 + 0.05), czs * (d / 2 + 0.05));
+              K.hard("bark", [px, h / 2 + 0.12, pz], [0.34, h + 0.1, 0.34], [0, ry, 0], 1);
+            }
+            // Front wall with a doorway and the door hanging open.
+            for (const sd of [-1, 1]) {
+              const seg = (w - 1.2) / 2,
+                [px, pz] = K.at(x, z, ry, sd * (0.6 + seg / 2), d / 2);
+              K.hard("planks", [px, h / 2 + 0.12, pz], [seg, h, 0.28], [0, ry, 0], 1.2);
+              K.rotCol(px, pz, ry, seg, 0.28, h + 0.12);
             }
             const [hx, hz] = K.at(x, z, ry, 0, d / 2);
-            K.hard("planks", [hx, h - 0.3, hz], [1.4, 0.6, 0.25], [0, ry, 0], 1.2);
-            // Gable roof.
-            for (const s of [-1, 1]) {
-              const [rx, rz] = K.at(x, z, ry, 0, s * d / 4);
-              K.hard("cabinRoof", [rx, h + 0.55, rz], [w + 0.6, 0.14, d / 2 + 0.6], [-s * 0.42, ry, 0], 1);
+            K.hard("planks", [hx, h - 0.15, hz], [1.2, 0.55, 0.28], [0, ry, 0], 1.2);
+            if (door) {
+              const [dx, dz] = K.at(x, z, ry, 0.95, d / 2 + 0.45);
+              K.soft("planks", [dx, 1.05, dz], [0.08, 1.9, 0.95], [0, ry + 0.25, 0], 1.4);
             }
-            for (const s of [-1, 1]) {
-              const [gx, gz] = K.at(x, z, ry, s * w / 2, 0);
-              K.soft("planks", [gx, h + 0.45, gz], [0.2, 0.9, d * 0.7], [0, ry, 0], 1.2);
+            // A-frame roof: two panels meeting at the ridge (outer edges lower), with overhang.
+            const panel = Math.hypot(d / 2 + 0.45, rise);
+            for (const sd of [-1, 1]) {
+              const [rx, rz] = K.at(x, z, ry, 0, sd * (d / 4 + 0.22));
+              K.hard("cabinRoof", [rx, h + 0.12 + rise / 2 + 0.08, rz], [w + 0.8, 0.14, panel + 0.08], [sd * pitch, ry, 0], 1);
             }
-            // Inside: a cot and a table; a lit window.
+            const [rgx, rgz] = K.at(x, z, ry, 0, 0);
+            K.hard("bark", [rgx, h + 0.12 + rise + 0.1, rgz], [w + 0.9, 0.2, 0.22], [0, ry, 0], 1);
+            // Gable triangles (stacked, shrinking planks) at both ends.
+            for (const sd of [-1, 1]) {
+              const [gx, gz] = K.at(x, z, ry, sd * (w / 2), 0);
+              for (let k = 0; k < 5; k++) {
+                const f = 1 - (k + 0.5) / 5;
+                K.hard("planks", [gx, h + 0.12 + (k + 0.5) * (rise / 5), gz], [0.24, rise / 5 + 0.01, (d + 0.2) * f], [0, ry, 0], 1.2);
+              }
+            }
+            // Stone chimney on the back-left corner.
+            const [chx, chz] = K.at(x, z, ry, -w / 2 + 0.9, -d / 2 + 0.2);
+            K.hard("stone", [chx, (h + rise + 1) / 2, chz], [0.8, h + rise + 1, 0.8], [0, ry, 0], 1);
+            K.col(chx, chz, 0.9, 0.9, h + rise + 1);
+            // Porch: deck, two posts and a little roof over the door.
+            const [px0, pz0] = K.at(x, z, ry, 0, d / 2 + 0.9);
+            K.hard("planks", [px0, 0.14, pz0], [2.6, 0.14, 1.5], [0, ry, 0], 1.2);
+            for (const sd of [-1, 1]) {
+              const [ppx, ppz] = K.at(x, z, ry, sd * 1.15, d / 2 + 1.5);
+              K.hard("bark", [ppx, 1.2, ppz], [0.16, 2.2, 0.16], [0, ry, 0], 1);
+            }
+            const [prx, prz] = K.at(x, z, ry, 0, d / 2 + 0.95);
+            K.hard("cabinRoof", [prx, 2.35, prz], [2.8, 0.1, 1.7], [0.28, ry, 0], 1);
+            // Inside: a cot, a table, a lantern glow; one window lit, one boarded up.
             const [bx, bz] = K.at(x, z, ry, -w / 2 + 1, -0.6);
-            K.hard("planks", [bx, 0.35, bz], [0.9, 0.12, 2], [0, ry, 0]);
-            K.soft("mattress", [bx, 0.46, bz], [0.8, 0.1, 1.8], [0, ry, 0]);
+            K.hard("planks", [bx, 0.45, bz], [0.9, 0.12, 2], [0, ry, 0]);
+            K.soft("mattress", [bx, 0.56, bz], [0.8, 0.1, 1.8], [0, ry, 0]);
             const [tx, tz] = K.at(x, z, ry, w / 2 - 1.2, -0.8);
-            K.hard("planks", [tx, 0.75, tz], [1.2, 0.08, 0.8], [0, ry, 0]);
-            const [wx, wz] = K.at(x, z, ry, -w / 2 - 0.02, 0.5);
+            K.hard("planks", [tx, 0.85, tz], [1.2, 0.08, 0.8], [0, ry, 0]);
+            const [wx, wz] = K.at(x, z, ry, -w / 2 - 0.16, 0.5);
             K.soft("windowLit", [wx, 1.6, wz], [0.05, 0.7, 0.9], [0, ry, 0], 0);
+            const [bwx, bwz] = K.at(x, z, ry, w / 2 + 0.16, 0.3);
+            K.soft("window", [bwx, 1.6, bwz], [0.05, 0.7, 0.9], [0, ry, 0], 0);
+            for (const k of [-0.2, 0.15]) K.soft("planks", [bwx, 1.6 + k, bwz], [0.07, 0.14, 1.1], [0.35 * Math.sign(k), ry, 0], 1.2);
           };
           cabin(-8, 2, Math.PI / 2 + 0.2);
           cabin(9, -1, -Math.PI / 2 - 0.15);
@@ -8159,8 +8217,12 @@ body.netgame #revivetouch{display:flex}
             K.rotCol(x, z, ry, 1.8, 0.44, 0.44);
           }
           // Tent and supply crates.
-          K.hard("sandbag", [-4, 1.0, -5], [2.4, 0.1, 2.4], [0, 0.4, Math.PI / 4]);
-          K.hard("sandbag", [-4, 1.0, -5], [2.4, 0.1, 2.4], [0, 0.4, -Math.PI / 4]);
+          // A-frame canvas tent: two panels leaning together, ridge pole, stakes.
+          for (const sd of [-1, 1]) {
+            const [tx, tz] = K.at(-4, -5, 0.4, sd * 0.55, 0);
+            K.hard("sandbag", [tx, 0.78, tz], [1.7, 0.08, 2.6], [0, 0.4, -sd * 0.95]);
+          }
+          K.hard("bark", [-4, 1.5, -5], [0.08, 0.08, 2.8], [0, 0.4, 0]);
           K.col(-4, -5, 2.4, 2.4, 1.7);
           M.designProps.push(["box", 5, 6.5], ["box", 5.6, 6.8], ["barrel", -5.5, 7]);
           M.lights.push([1, 3, 0xff9a45, 1.9, 16]);
@@ -8206,16 +8268,17 @@ body.netgame #revivetouch{display:flex}
             WorldProps.tree(x, z, K.r(1, 1.5), K.rnd() < 0.5 ? "pine" : "leafDark");
           }
           // DO NOT CROSS tape at the edge, and road barricades where the road leaves the area.
-          const e = H - 3;
+          // The yellow tape + signs sit exactly on the real limit (MapManager.collides edge), corner to corner.
+          const e = H - 1.55;
           for (const [x0, z0, x1, z1] of [[-e, -e, e, -e], [e, -e, e, e], [e, e, -e, e], [-e, e, -e, -e]]) {
-            const segs = 7;
+            const segs = 10;
             for (let i = 0; i < segs; i++) {
               const ax = x0 + ((x1 - x0) * i) / segs,
                 az = z0 + ((z1 - z0) * i) / segs,
                 bx = x0 + ((x1 - x0) * (i + 1)) / segs,
                 bz = z0 + ((z1 - z0) * (i + 1)) / segs;
               K.tapeLine(ax, az, bx, bz);
-              if (i % 2 === 1) K.warnSign((ax + bx) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
+              K.warnSign((ax + bx) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az) + Math.PI / 2);
             }
           }
           for (const x of [-H + 5, H - 5]) {
@@ -8505,7 +8568,9 @@ body.netgame #revivetouch{display:flex}
                 const bx = x + Math.cos(a) * r,
                   bz = z + Math.sin(a) * r;
                 if (!model) K.hard("snow", [bx, y, bz], [0.55, 0.55, (2 * Math.PI * r) / n + 0.06], [0.4 * t, -a, 0], 1.4);
-                if (c < 5) M.obstacles.push({ x: bx, z: bz, w: 0.33, d: 0.33, h: y + 0.28, top: top });
+                // Only blocks at body height collide (base = underside of the block): the dome
+                // courses overhead no longer act as invisible walls inside.
+                if (c < 5) M.obstacles.push({ x: bx, z: bz, w: 0.3, d: 0.3, h: y + 0.28, top: y + 0.28, base: c === 0 ? undefined : y - 0.28 });
               }
             }
             if (!model) K.hard("snow", [x, top + 0.05, z], [1.2, 0.35, 1.2], null, 1.4);
@@ -8514,9 +8579,11 @@ body.netgame #revivetouch{display:flex}
             for (const sd of [-1, 1]) {
               const [tx, tz] = K.at(x, z, tr, sd * 1.15, R + 1.1);
               if (!model) K.hard("snow", [tx, 1.05, tz], [0.45, 2.1, 2.2], [0, tr, 0], 1.4);
-              M.obstacles.push({ x: tx, z: tz, w: 0.4, d: 0.4, h: 2.1, top: 2.4 });
-              const [ux, uz] = K.at(x, z, tr, sd * 1.15, R + 0.2);
-              M.obstacles.push({ x: ux, z: uz, w: 0.4, d: 0.4, h: 2.1, top: 2.4 });
+              // Tunnel walls: thin colliders matching the model (0.45 m thick), a 1.85 m wide passage.
+              for (const along of [R + 0.1, R + 0.9, R + 1.7]) {
+                const [ux, uz] = K.at(x, z, tr, sd * 1.15, along);
+                M.obstacles.push({ x: ux, z: uz, w: 0.22, d: 0.22, h: 2.1, top: 2.4 });
+              }
             }
             const [rx, rz] = K.at(x, z, tr, 0, R + 1.1);
             if (!model) K.hard("snow", [rx, 2.25, rz], [2.9, 0.35, 2.3], [0, tr, 0], 1.4);
@@ -9194,18 +9261,19 @@ body.netgame #revivetouch{display:flex}
             },
             {
               modelId: 17,
-              name: "Firestarter",
+              name: "Hellfire",
               cat: 1,
               tier: 1,
               kind: "fire",
-              damage: 6,
-              rate: 0.045,
-              mag: 70,
-              reload: 2,
-              range: 13,
-              spread: 0.05,
-              burn: { dps: 14, duration: 2.5 },
-              ability: "Queima o alvo: dano contínuo por 2.5s.",
+              stream: true,
+              cone: 0.2,
+              damage: 5,
+              rate: 0.06,
+              mag: 90,
+              reload: 2.2,
+              range: 11,
+              burn: { dps: 12, duration: 2.5 },
+              ability: "Lança-chamas: jato contínuo em cone que incendeia os alvos.",
             },
             // Raro (×1.9)
             {
@@ -9269,17 +9337,20 @@ body.netgame #revivetouch{display:flex}
             {
               modelId: 19,
               name: "Frostbite",
-              cat: 1,
+              cat: 0,
               tier: 3,
-              kind: "ice",
-              damage: 19,
-              rate: 0.22,
-              mag: 24,
-              reload: 1.8,
-              range: 60,
-              spread: 0.015,
-              freeze: { slow: 0.45, duration: 1.6 },
-              ability: "Congela: reduz a velocidade do alvo.",
+              kind: "melee",
+              iceStaff: true,
+              oneHand: true,
+              damage: 30,
+              rate: 0.45,
+              mag: Infinity,
+              reload: 0,
+              range: 3.1,
+              multiHit: 2,
+              freeze: { slow: 0.5, duration: 1.8 },
+              chill: 0.34,
+              ability: "Cajado de gelo (mão direita): golpes que congelam e deixam os alvos lentos.",
             },
             {
               modelId: 20,
@@ -9360,18 +9431,19 @@ body.netgame #revivetouch{display:flex}
             },
             {
               modelId: 22,
-              name: "Hellfire Incarnate",
+              name: "Fire Incarnation",
               cat: 1,
               tier: 5,
               kind: "fire",
-              damage: 8,
-              rate: 0.038,
-              mag: 90,
-              reload: 2.2,
-              range: 16,
-              spread: 0.045,
-              burn: { dps: 26, duration: 3 },
-              ability: "Queima forte e mais duradoura; jato mais largo.",
+              stream: true,
+              cone: 0.3,
+              damage: 7,
+              rate: 0.05,
+              mag: 120,
+              reload: 2.4,
+              range: 14,
+              burn: { dps: 22, duration: 3 },
+              ability: "Lança-chamas infernal: jato largo e contínuo, fogo forte e duradouro.",
             },
             {
               modelId: 23,
@@ -9401,6 +9473,7 @@ body.netgame #revivetouch{display:flex}
               tier: 6,
               kind: "melee",
               spear: true,
+              oneHand: true,
               damage: 78,
               rate: 0.5,
               mag: Infinity,
@@ -9408,7 +9481,7 @@ body.netgame #revivetouch{display:flex}
               range: 4.4,
               chargeTime: 0.32,
               ability:
-                "Clique: golpe de alcance maior. Segurar: carrega e arremessa a lança.",
+                "Clique: golpe de alcance maior. Segurar: arremessa a lança, que volta para a sua mão (dano na ida e na volta).",
             },
             {
               modelId: 24,
@@ -9429,15 +9502,17 @@ body.netgame #revivetouch{display:flex}
               name: "Absolute Zero",
               cat: 1,
               tier: 6,
-              kind: "ice",
-              damage: 30,
-              rate: 0.18,
-              mag: 20,
-              reload: 1.6,
-              range: 65,
-              spread: 0.01,
-              freeze: { slow: 0.85, duration: 2 },
-              ability: "Congela quase por completo: o alvo mal se move.",
+              kind: "cryo",
+              stream: true,
+              cone: 0.24,
+              damage: 6,
+              rate: 0.06,
+              mag: 110,
+              reload: 2.2,
+              range: 13,
+              chill: 0.09,
+              freeze: { slow: 0.3, duration: 1.2 },
+              ability: "Lança-gelo: desacelera cada vez mais até congelar. Zumbi comum congelado quebra com qualquer golpe.",
             },
             // Secret — prototype geometry is generated in ArsenalArt until final Blender GLBs land.
             {
@@ -9446,15 +9521,15 @@ body.netgame #revivetouch{display:flex}
               cat: 0,
               tier: 7,
               kind: "melee",
-              spear: true,
-              trident: true,
-              damage: 70,
-              rate: 0.48,
+              scythe: true,
+              oneHand: true,
+              multiHit: 4,
+              damage: 64,
+              rate: 0.55,
               mag: Infinity,
               reload: 0,
-              range: 4.8,
-              chargeTime: 0.28,
-              ability: "Tridente de duas mãos: estocada e arremesso. O modelo final terá retorno animado e a interação secreta do Archdemon em voo.",
+              range: 4.2,
+              ability: "Foice demoníaca (mão direita): cortes largos que atingem vários zumbis no arco.",
             },
             {
               modelId: 27,
@@ -9541,7 +9616,7 @@ body.netgame #revivetouch{display:flex}
           burstPitch: 0,
           kickFor(w) {
             if (w.kick != null) return w.kick;
-            return { melee: 0, bow: 0, fire: 0.003, ice: 0.003, laser: 0.004, auto: w.name === "Crimson AK" ? 0.013 : w.name === "MP5" ? 0.0075 : 0.01, shotgun: 0.045, rail: 0.05, antimaterial: 0.075, missile: 0.03, quantum: 0.02, double: 0.03 }[w.kind] ?? 0.01;
+            return { melee: 0, bow: 0, fire: 0.003, cryo: 0.003, ice: 0.003, laser: 0.004, auto: w.name === "Crimson AK" ? 0.013 : w.name === "MP5" ? 0.0075 : 0.01, shotgun: 0.045, rail: 0.05, antimaterial: 0.075, missile: 0.03, quantum: 0.02, double: 0.03 }[w.kind] ?? 0.01;
           },
           applyRecoil(w) {
             const k = this.kickFor(w) * (mouse.aim ? 0.8 : 1) * (keys.has("ControlLeft") ? 0.85 : 1);
@@ -9679,21 +9754,35 @@ body.netgame #revivetouch{display:flex}
                 .set(0.1, 0.1, 0.14)
                 .multiplyScalar(1 + Math.sin(simulationTime * 7) * 0.02);
             if (this.parts.arrow) {
-              // Draw animation: the nocked arrow and the off-hand slide back together
-              // toward the grip while charging, then snap forward the instant it looses.
+              // Bow cycle: after a shot the right hand reaches back to the quiver, brings an
+              // arrow, nocks it on the string, then draws it back while charging.
               const drawing = w.kind === "bow" && PlayerController.chargeHeldSince != null,
-                progress = drawing
-                  ? clamp(
-                      (simulationTime - PlayerController.chargeHeldSince) /
-                        (w.chargeTime || 0.9),
-                      0,
-                      1,
-                    )
-                  : 0,
-                pull = 0.24 * progress;
-              this.parts.arrow.position.z = -0.52 + pull;
-              this.parts.leftHand.position.set(-0.02, 0.0, -0.52 + pull);
-              this.parts.leftHand.rotation.x = -0.25;
+                progress = drawing ? clamp((simulationTime - PlayerController.chargeHeldSince) / (w.chargeTime || 0.9), 0, 1) : 0,
+                pull = 0.3 * progress,
+                reach = !drawing && since < 0.45 ? since / 0.45 : 1,
+                [tipY, tipZ] = this.parts.string?.userData.tip || [0.42, -0.44];
+              const nockZ = tipZ + pull;
+              this.parts.arrow.visible = reach > 0.55;
+              this.parts.arrow.position.z = nockZ;
+              if (reach < 1) {
+                // 0-0.5: hand goes up and back over the shoulder; 0.5-1: comes back with the arrow.
+                const k = reach < 0.5 ? reach / 0.5 : 1 - (reach - 0.5) / 0.5;
+                this.parts.rightHand.position.set(0.03 + 0.12 * k, 0.035 + 0.32 * k, nockZ + 0.45 * k);
+                this.parts.rightHand.rotation.x = -0.9 * k;
+              } else {
+                this.parts.rightHand.position.set(0.03, 0.035, nockZ + 0.03);
+                this.parts.rightHand.rotation.x = 0;
+              }
+              this.parts.leftHand.position.set(-0.01, -0.02, -0.5);
+              this.parts.leftHand.rotation.x = 0;
+              if (this.parts.string) {
+                const pos = this.parts.string.geometry.attributes.position,
+                  nz = reach > 0.55 ? nockZ : tipZ;
+                pos.setXYZ(0, 0, tipY, tipZ + pull * 0.12);
+                pos.setXYZ(1, 0, 0.035, nz);
+                pos.setXYZ(2, 0, -tipY, tipZ + pull * 0.12);
+                pos.needsUpdate = true;
+              }
             }
             if (this.magazine) {
               this.magazine.visible = w.kind !== "shotgun";
@@ -9759,14 +9848,21 @@ body.netgame #revivetouch{display:flex}
               this.model.position.x -= swing * 0.18;
               this.model.position.z -= swing * 0.14;
             }
-            this.flash.visible = w.kind !== "melee" && since < 0.045;
+            // The Dawn Spear leaves the hand while it is thrown and comes back when caught.
+            const spearOut = !!(w.spear && SpearThrow.active);
+            if (spearOut !== !!this.spearHidden) {
+              this.spearHidden = spearOut;
+              this.model.visible = !spearOut;
+            }
+            // Small, quick muzzle flash; streams, bows and melee have none.
+            this.flash.visible = w.kind !== "melee" && w.kind !== "bow" && !w.stream && since < 0.035;
             this.flash.material.color.set(
               w.tier >= 3 ? rarityColors[w.tier] : 0xffc581,
             );
             this.flash.material.rotation = rand(0, 6.28);
             const flashScale =
-              w.modelId === 8 ? 0.13 : w.cat === 0 ? 0.45 : 0.29;
-            this.flash.scale.setScalar(flashScale * (1 + Math.random() * 0.5));
+              w.modelId === 8 ? 0.09 : w.kind === "shotgun" ? 0.24 : w.kind === "missile" ? 0.26 : 0.16;
+            this.flash.scale.setScalar(flashScale * (1 + Math.random() * 0.3));
             recoil = Math.max(0, recoil - dt * 6);
           },
         };
@@ -10263,12 +10359,96 @@ body.netgame #revivetouch{display:flex}
             return g;
           },
         };
+        // Dawn Spear throw: the spear itself flies point-first, pierces what it passes, and at
+        // the end of its range (or on a wall) turns around and flies back into your hand, hitting
+        // again on the way back. You never teleport; you can't throw again until it returns.
+        const SpearThrow = {
+          active: null,
+          spawn(pos, dir, damage, extra) {
+            const model = WeaponModels.scenes.get(extra.weapon?.name || "Dawn Spear");
+            const mesh = new THREE.Group();
+            if (model) {
+              const m = model.clone(true);
+              m.rotation.x = -Math.PI / 2; // model shaft is +y: point it along +z (lookAt forward)
+              m.position.z = -0.4;
+              m.scale.setScalar(1.25);
+              mesh.add(m);
+            } else mesh.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6).rotateX(Math.PI / 2), VoxelMonsters.flat(0xf2e6c0, 0x6a5010)));
+            mesh.position.copy(pos);
+            scene.add(mesh);
+            const p = { kind: "spear", mesh, pos: mesh.position, vel: dir.clone().normalize().multiplyScalar(34), life: 7, damage, phase: "out", travelled: 0, range: 24, hitOut: new Set(), hitBack: new Set(), ...extra };
+            mesh.lookAt(pos.clone().add(p.vel));
+            projectiles.push(p);
+            this.active = p;
+            return p;
+          },
+          sweep(p, from, to, seen) {
+            const seg = new THREE.Line3(from, to), closest = new V();
+            for (const z of [...ZombieManager.list]) {
+              if (z.dead || seen.has(z)) continue;
+              const c = z.group.position.clone().add(new V(0, z.size, 0));
+              seg.closestPointToPoint(c, true, closest);
+              if (c.distanceTo(closest) < z.size * 0.7) {
+                seen.add(z);
+                const head = closest.y > z.group.position.y + z.size * 1.25;
+                ZombieManager.hit(z, p.damage * (p.phase === "back" ? 0.8 : 1), head, closest.clone(), p.weapon, true);
+                ParticleSystem.emit(closest, 0xffe7a8, 10, 2);
+              }
+            }
+          },
+          step(p, dt) {
+            const prev = p.pos.clone();
+            if (p.phase === "out") {
+              const move = p.vel.clone().multiplyScalar(dt);
+              raycaster.set(prev, move.clone().normalize());
+              raycaster.far = move.length() + 0.2;
+              const wall = raycaster.intersectObjects(MapManager.walls).length > 0;
+              if (!wall) p.pos.add(move);
+              p.travelled += move.length();
+              this.sweep(p, prev, p.pos, p.hitOut);
+              if (wall || p.travelled >= p.range || p.life < 3.5) {
+                p.phase = "back";
+                ParticleSystem.emit(p.pos, 0xffe7a8, 14, 3);
+                AudioManager.tone(880, 0.12, "triangle", 0.06, 1400, "weapons");
+              }
+            } else {
+              const hand = player.pos.clone().add(new V(0, -0.25, 0)),
+                to = hand.clone().sub(p.pos),
+                d = to.length();
+              p.vel.lerp(to.normalize().multiplyScalar(36), Math.min(1, dt * 9));
+              p.pos.addScaledVector(p.vel, dt);
+              this.sweep(p, prev, p.pos, p.hitBack);
+              if (d < 1.1 || p.life <= 0) {
+                this.active = null;
+                AudioManager.meleeSwing?.();
+                return true;
+              }
+            }
+            p.mesh.lookAt(p.pos.clone().add(p.vel));
+            ParticleSystem.line(prev, p.pos, 0xffe7a8, 0.08);
+            return false;
+          },
+          clear() {
+            this.active = null;
+          },
+        };
         function spawnProjectile(kind, pos, dir, damage, extra = {}) {
           if (kind === "arrow") {
             const g = ArrowArt.mesh();
             g.position.copy(pos);
             scene.add(g);
             const p = { kind, mesh: g, pos: g.position, vel: dir.clone().multiplyScalar(extra.speed || 50), life: 5, damage, ...extra };
+            g.lookAt(pos.clone().add(p.vel));
+            projectiles.push(p);
+            return p;
+          }
+          if (kind === "spear") return SpearThrow.spawn(pos, dir, damage, extra);
+          if (kind === "missile") {
+            // Real missile: the rocket model flying nose-first, smoke trail + rear flame.
+            const g = CyborgRockets.model();
+            g.position.copy(pos);
+            scene.add(g);
+            const p = { kind, mesh: g, pos: g.position, vel: dir.clone().multiplyScalar(19), life: 6, damage, missile: true, ...extra };
             g.lookAt(pos.clone().add(p.vel));
             projectiles.push(p);
             return p;
@@ -10692,6 +10872,15 @@ body.netgame #revivetouch{display:flex}
           },
           hit(z, damage, head, point, w, ignoreArmor = false) {
             if (z.dead) return;
+            // Frozen solid: a normal zombie shatters on any hit (the ice stream itself only keeps
+            // it frozen); minibosses / bosses take the bounded bonus from BossArmor instead.
+            const frozen = z.frozenUntil > simulationTime;
+            if (frozen && !z.boss && damage > 0 && w?.kind !== "cryo" && !z.remote) {
+              damage = Math.max(damage, z.hp + 1);
+              ParticleSystem.emit(z.group.position.clone().add(new V(0, 0.9 * z.size, 0)), 0xcff4ff, 34, 4);
+              ParticleSystem.emit(z.group.position.clone().add(new V(0, 0.5 * z.size, 0)), 0x7fc8ff, 18, 3);
+              AudioManager.tone(2400, 0.18, "triangle", 0.08, 700, "effects");
+            }
             if (point) {
               z.lastHitPoint = point.clone();
               z.lastHitAt = simulationTime;
@@ -10761,6 +10950,7 @@ body.netgame #revivetouch{display:flex}
             if (w?.burn && !z.remote)
               this.applyBurn(z, w.burn.dps * rarityMult[w.tier], w.burn.duration, w);
             if (w?.freeze && !z.remote) this.applySlow(z, w.freeze.slow, w.freeze.duration);
+            if (w?.chill && !z.remote) this.applyChill(z, w.chill);
             if (w?.lifesteal && !NetGame.attacker)
               player.hp = Math.min(
                 player.maxhp + player.bonus,
@@ -10772,6 +10962,38 @@ body.netgame #revivetouch{display:flex}
             z.burnDps = dps;
             z.burnWeapon = w;
             z.burnUntil = simulationTime + duration;
+          },
+          // Progressive chill (ice staff / ice thrower): slows more and more, then freezes solid.
+          // Bosses chill slower and stay frozen only briefly; nothing is ever a hitkill on them.
+          applyChill(z, amount) {
+            const t = simulationTime,
+              rank = BossArmor.rank(z);
+            if (z.frozenUntil > t) return;
+            z.chill = Math.min(1, (z.chill || 0) + amount * (rank >= 3 ? 0.3 : rank ? 0.5 : 1));
+            z.chillAt = t;
+            z.slowFactor = Math.max(z.slowUntil > t ? z.slowFactor || 0 : 0, Math.min(0.85, z.chill * 0.9));
+            z.slowUntil = Math.max(z.slowUntil || 0, t + 1.2);
+            if (z.chill >= 1) {
+              z.chill = 0;
+              z.frozenUntil = t + (rank >= 3 ? 0.8 : rank ? 1.5 : 2.6);
+              this.iceShell(z, true);
+              ParticleSystem.emit(z.group.position.clone().add(new V(0, 1, 0)), 0xcff4ff, 20, 2);
+            }
+          },
+          iceShell(z, on) {
+            if (on && !z.iceMesh) {
+              const m = new THREE.Mesh(unitBox, VoxelMonsters.iceMat ||= new THREE.MeshStandardMaterial({ color: 0xbfe8ff, emissive: 0x2a6a9a, emissiveIntensity: 0.4, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.55, depthWrite: false }));
+              const S = z.size || 1;
+              m.scale.set(0.95 / S * S, 1.95, 0.8);
+              m.position.set(0, 0.97, 0);
+              m.renderOrder = 4;
+              z.group.add(m);
+              z.iceMesh = m;
+            } else if (!on && z.iceMesh) {
+              z.group.remove(z.iceMesh);
+              z.iceMesh = null;
+              ParticleSystem.emit(z.group.position.clone().add(new V(0, 1, 0)), 0xcff4ff, 12, 2);
+            }
           },
           applySlow(z, factor, duration) {
             z.slowFactor = factor;
@@ -10915,6 +11137,14 @@ body.netgame #revivetouch{display:flex}
                 // status from inside hit() and keep it alive forever.
                 this.hit(z, z.burnDps * 0.4, false, null, null, true);
                 if (z.dead) continue;
+              }
+              if (z.iceMesh && !(z.frozenUntil > simulationTime)) this.iceShell(z, false);
+              if (z.chill > 0 && simulationTime - (z.chillAt || 0) > 1) z.chill = Math.max(0, z.chill - dt * 0.35);
+              if (z.frozenUntil > simulationTime) {
+                // Frozen solid: no movement, no animation, no attacks.
+                z.walkingNow = false;
+                z.strikeAt = 0;
+                continue;
               }
               const pos = z.group.position,
                 to = player.pos.clone().sub(pos);
@@ -11390,6 +11620,7 @@ body.netgame #revivetouch{display:flex}
           clear() {
             BossKit.clear();
             MutantBreakout.reset();
+            FlameStream.clear();
             for (const it of this.items) {
               it.onClear?.();
               this.dispose(it.mesh);
@@ -14050,6 +14281,95 @@ body.netgame #revivetouch{display:flex}
             }
           },
         };
+        // Flamethrower / ice-thrower stream: a continuous cone of pooled additive sprites (no
+        // projectiles, no tracers). Damage is a cone test from the eye along the crosshair with a
+        // wall line-of-sight check; burn / chill are applied by ZombieManager.hit via the weapon.
+        const FlameStream = {
+          live: [],
+          pool: [],
+          lastSound: 0,
+          PAL: {
+            fire: [[1, 0.97, 0.8], [1, 0.72, 0.2], [1, 0.34, 0.06], [0.22, 0.18, 0.16]],
+            cryo: [[0.95, 1, 1], [0.66, 0.9, 1], [0.35, 0.7, 1], [0.8, 0.9, 0.95]],
+          },
+          sprite() {
+            const s = this.pool.pop() || new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+            s.userData.ownMaterial = true;
+            scene.add(s);
+            return s;
+          },
+          emit(from, dir, kind = "fire", count = 5, range = 12) {
+            if (SettingsManager.data.vfx === "off") count = Math.min(count, 2);
+            const speed = range / 0.42;
+            for (let i = 0; i < count; i++) {
+              const d = dir.clone().add(new V(rand(-0.09, 0.09), rand(-0.07, 0.09), rand(-0.09, 0.09))).normalize();
+              const s = this.sprite();
+              s.position.copy(from).addScaledVector(d, rand(0, 0.25));
+              this.live.push({ s, vel: d.multiplyScalar(speed * rand(0.8, 1.1)), life: 0, max: rand(0.34, 0.5), kind, spin: rand(-3, 3) });
+            }
+            while (this.live.length > 260) this.recycle(this.live.shift());
+          },
+          recycle(p) {
+            scene.remove(p.s);
+            this.pool.push(p.s);
+          },
+          update(dt) {
+            for (let i = this.live.length - 1; i >= 0; i--) {
+              const p = this.live[i];
+              p.life += dt;
+              const k = p.life / p.max;
+              if (k >= 1) {
+                this.recycle(p);
+                this.live.splice(i, 1);
+                continue;
+              }
+              p.vel.multiplyScalar(Math.exp(-dt * 2.2));
+              p.vel.y += (p.kind === "fire" ? 2.6 : -1.2) * dt;
+              p.s.position.addScaledVector(p.vel, dt);
+              if (MapManager.collides(p.s.position.x, p.s.position.z, 0.05, p.s.position.y - 0.5)) p.vel.multiplyScalar(0.25);
+              const pal = this.PAL[p.kind] || this.PAL.fire,
+                seg = Math.min(2, Math.floor(k * 3)),
+                f = k * 3 - seg,
+                a = pal[seg], b = pal[seg + 1];
+              p.s.material.color.setRGB(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f);
+              p.s.material.opacity = (p.kind === "fire" ? 0.85 : 0.6) * (1 - k * k);
+              p.s.material.rotation += p.spin * dt;
+              p.s.scale.setScalar(0.18 + k * (p.kind === "fire" ? 1.3 : 1.1));
+            }
+          },
+          clear() {
+            for (const p of this.live) this.recycle(p);
+            this.live = [];
+          },
+          fire(w, damage) {
+            const origin = player.pos.clone(),
+              aim = CameraRig.aim(),
+              muzzle = WeaponSystem.muzzleWorld(origin),
+              kind = w.kind === "cryo" ? "cryo" : "fire",
+              cosCone = Math.cos(w.cone || 0.22);
+            this.emit(muzzle, aim, kind, kind === "fire" ? 6 : 5, w.range);
+            muzzleLight.color.set(kind === "fire" ? 0xff7a2a : 0x8fdcff);
+            muzzleLight.intensity = 1.6 + Math.random() * 0.8;
+            if (simulationTime - this.lastSound > 0.16) {
+              this.lastSound = simulationTime;
+              AudioManager.noise?.(0.14, kind === "fire" ? 0.18 : 0.12);
+            }
+            scene.updateMatrixWorld(true);
+            for (const z of [...ZombieManager.list]) {
+              if (z.dead) continue;
+              const c = z.group.position.clone().add(new V(0, 0.9 * (z.size || 1), 0)),
+                to = c.clone().sub(origin),
+                d = to.length();
+              if (d > w.range + (z.size || 1) * 0.5 || d < 0.01) continue;
+              if (to.dot(aim) / d < cosCone - (z.size || 1) * 0.12 / Math.max(1, d)) continue;
+              raycaster.set(origin, to.clone().normalize());
+              raycaster.far = d;
+              if (raycaster.intersectObjects(MapManager.walls).some((h) => h.distance < d - 0.5)) continue;
+              ZombieManager.hit(z, damage * (1 - 0.35 * (d / w.range)), false, c, w);
+            }
+            WeaponSystem.lastImpact = origin.clone().addScaledVector(aim, w.range * 0.7);
+          },
+        };
         // A single ray of a hitscan weapon: raycast, apply damage/pierce, draw the tracer.
         // Factored out of PlayerController.shoot() so a charged bow shot (fired from
         // updateChargeShot on release, not from the regular per-frame shoot() loop) can
@@ -14195,7 +14515,7 @@ body.netgame #revivetouch{display:flex}
             this.throws.length = this.fires.length = 0;
           },
           readyText(w = WeaponSystem.current()) {
-            if (!w?.specter && !w?.trident) return "";
+            if (!w?.specter && !w?.trident && !w?.scythe) return "";
             if (w.specter && classBurst().flight === "angel") return "F · LANÇAR · SEM CD NO VOO";
             const left = Math.max(0, this.cooldown - simulationTime);
             return left > 0 ? `F · ARMA ${left.toFixed(1)}s` : "F · HABILIDADE DA ARMA";
@@ -14203,11 +14523,36 @@ body.netgame #revivetouch{display:flex}
           use() {
             if (state !== GameState.PLAYING || NetGame.down || NetGame.dead) return;
             const w = WeaponSystem.current();
-            if (!w?.specter && !w?.trident) {
+            if (!w?.specter && !w?.trident && !w?.scythe) {
               UIManager.toast("Esta arma não possui habilidade própria.");
               return;
             }
             const flight = classBurst().flight;
+            if (w.scythe) {
+              // Reaping Arc: a full 360° sweep around you (Archdemon in flight: no cooldown).
+              if (flight !== "demon" && simulationTime < this.cooldown) {
+                UIManager.toast(`Ceifa: ${Math.ceil(this.cooldown - simulationTime)}s de recarga.`);
+                return;
+              }
+              this.cooldown = simulationTime + 8;
+              const origin = player.pos.clone();
+              const targets = ZombieManager.list
+                .filter((z) => !z.dead && Math.hypot(z.group.position.x - origin.x, z.group.position.z - origin.z) < 4.8 + (z.size || 1) * 0.4)
+                .slice(0, 8);
+              for (const z of targets) ZombieManager.hit(z, weaponDamage(w) * 1.6, false, z.group.position.clone().add(new V(0, z.size, 0)), w);
+              const ground = origin.clone();
+              ground.y = (player.ground || 0) + 0.05;
+              MonsterFX.ring(ground, 5, 0xff2a14, 0.5);
+              MonsterFX.ring(ground, 3, 0x5a0a08, 0.4);
+              for (let i = 0; i < 28; i++) {
+                const a = (i / 28) * Math.PI * 2;
+                ParticleSystem.emit(ground.clone().add(new V(Math.cos(a) * 3.5, 0.9, Math.sin(a) * 3.5)), i % 2 ? 0xff2a14 : 0x2a0a0a, 2, 3);
+              }
+              AudioManager.meleeSwing();
+              AudioManager.tone(160, 0.35, "sawtooth", 0.15, 60, "weapons");
+              shake = Math.max(shake, 0.25);
+              return;
+            }
             if (w.specter) {
               if (flight === "angel") {
                 this.throwSpecter(w);
@@ -14662,6 +15007,7 @@ body.netgame #revivetouch{display:flex}
             this.spearHeldSince = null;
             lastShot = simulationTime;
             player.shots++;
+            if (SpearThrow.active) return; // the spear is still flying back
             if (held >= (w.chargeTime || 0.32)) {
               this.throwSpear(w);
             } else {
@@ -14676,6 +15022,7 @@ body.netgame #revivetouch{display:flex}
             }
           },
           throwSpear(w) {
+            if (SpearThrow.active) return;
             AudioManager.meleeSwing();
             spawnProjectile(
               "spear",
@@ -14740,6 +15087,12 @@ body.netgame #revivetouch{display:flex}
             }
             if (!classBurst().infiniteAmmo && !DevMode.on("infiniteAmmo") && w.ammo !== Infinity)
               w.ammo--;
+            if (w.stream) {
+              // Flamethrower / ice thrower: continuous cone, no bullets or tracers.
+              FlameStream.fire(w, weaponDamage(w));
+              NetGame.shot(player.pos.clone(), CameraRig.aim(), w.kind === "cryo" ? 2 : 1);
+              return;
+            }
             AudioManager.shot(w);
             recoil = w.kind === "antimaterial" ? 2 : 1;
             WeaponSystem.kickVelocity =
@@ -14758,8 +15111,8 @@ body.netgame #revivetouch{display:flex}
             const damage = weaponDamage(w),
               dir = CameraRig.aim(),
               origin = player.pos.clone();
-            NetGame.shot(origin, dir);
             if (["grenade", "missile", "orbital", "quantum"].includes(w.kind)) {
+              NetGame.shot(origin, dir);
               // Projectiles leave from the real barrel end and fly toward the crosshair point.
               const muzzle = WeaponSystem.muzzleWorld(origin);
               if (CameraRig.distance < 0.6) {
@@ -14821,6 +15174,7 @@ body.netgame #revivetouch{display:flex}
                 shot.applyAxisAngle(new V(0, 1, 0), (i - 1) * 0.06);
               fireHitscanShot(w, from, shot, damage, i === 0);
             }
+            NetGame.shot(origin, dir);
             WeaponSystem.applyRecoil(w);
           },
           update(dt) {
@@ -15113,6 +15467,16 @@ body.netgame #revivetouch{display:flex}
           for (let i = projectiles.length - 1; i >= 0; i--) {
             const p = projectiles[i];
             p.life -= dt;
+            if (p.kind === "spear") {
+              if (SpearThrow.step(p, dt)) removeProjectile(i);
+              continue;
+            }
+            if (p.missile) {
+              p.mesh.lookAt(p.pos.clone().add(p.vel));
+              const back = p.pos.clone().addScaledVector(p.vel.clone().normalize(), -0.55);
+              ParticleSystem.emit(back, Math.random() < 0.5 ? 0xffb040 : 0xff5a1e, 2, 0.6);
+              if (Math.random() < 0.8) ParticleSystem.emit(back.clone().addScaledVector(p.vel.clone().normalize(), -0.3), 0x8a8a8a, 1, 0.3);
+            }
             if (p.kind === "rocket") {
               const previous = p.pos.clone(),
                 step = p.vel.clone().multiplyScalar(dt);
@@ -15232,12 +15596,14 @@ body.netgame #revivetouch{display:flex}
               p.mesh.rotation.y += p.spin.y * dt;
               p.mesh.rotation.z += p.spin.z * dt;
             }
-            ParticleSystem.line(
-              previous,
-              p.pos,
-              p.kind === "enemy" ? 0xb076ff : p.kind === "spear" ? 0xffe7a8 : 0xffbe67,
-              0.12,
-            );
+            if (!p.missile)
+              ParticleSystem.line(
+                previous,
+                p.pos,
+                p.kind === "enemy" ? 0xb076ff : p.kind === "spear" ? 0xffe7a8 : 0xffbe67,
+                0.12,
+              );
+            else ParticleSystem.line(previous, p.pos, 0x9a9a9a, 0.2);
             let hit = null;
             if (p.kind === "enemy") {
               if (player.pos.distanceTo(p.pos) < 0.8) {
@@ -17104,16 +17470,31 @@ body.netgame #revivetouch{display:flex}
             this.remotes.delete(id);
           },
           // Local fire → remote tracer + sound (bundled, max one per packet).
-          shot(origin, dir) {
+          shot(origin, dir, stream = 0) {
             if (!this.active) return;
             if (this.outbox.some(([t]) => t === "sh")) return;
-            this.queue("sh", { o: [+origin.x.toFixed(2), +origin.y.toFixed(2), +origin.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)], w: WeaponSystem.current()?.id ?? 0 });
+            const end = WeaponSystem.lastImpact;
+            this.queue("sh", { o: [+origin.x.toFixed(2), +origin.y.toFixed(2), +origin.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)], w: WeaponSystem.current()?.id ?? 0, s: stream || 0, e: !stream && end ? [+end.x.toFixed(2), +end.y.toFixed(2), +end.z.toFixed(2)] : null });
+          },
+          // Remote shots start at the remote avatar's weapon muzzle (not its chest/eye) and end
+          // where the shooter's own shot landed.
+          remoteMuzzle(r, o, d) {
+            const rig = r?.avatar?.userData?.rig;
+            if (rig?.gun && rig.parts?.muzzle != null) {
+              r.avatar.updateMatrixWorld(true);
+              return rig.gun.localToWorld(new V(0, 0.03, rig.parts.muzzle));
+            }
+            return o.clone().addScaledVector(d, 0.6).add(new V(0, -0.35, 0));
           },
           onShot(m) {
             const o = new V(...m.o),
-              d = new V(...m.d);
-            ParticleSystem.line(o.clone().addScaledVector(d, 0.6), o.clone().addScaledVector(d, 22), 0xffd386);
-            SpatialSound.emit?.(o, 520, 0.08, 0.12);
+              d = new V(...m.d),
+              from = this.remoteMuzzle(this.remotes.get(m.from), o, d);
+            if (m.s) FlameStream.emit(from, d, m.s === 2 ? "cryo" : "fire", 4, WeaponSystem.weapons[m.w]?.range || 12);
+            else {
+              ParticleSystem.line(from, m.e ? new V(...m.e) : o.clone().addScaledVector(d, 22), 0xffd386);
+              SpatialSound.emit?.(o, 520, 0.08, 0.12);
+            }
           },
 
           // ── Targets for host AI ──
@@ -17927,9 +18308,9 @@ body.netgame #revivetouch{display:flex}
             if (cls === 22) {
               const gold = 0xd6ad55, holy = 0x74dcff, feather = 0xf3fbff;
               const halo = A.pivot(head, 0, 0, 0);
-              const haloRing = A.ring(halo, [0, 0.43, 0], 0.235, gold);
+              const haloRing = A.ring(halo, [0, 0.36, -0.01], 0.15, gold);
               haloRing.rotation.x = Math.PI / 2;
-              A.ellipsoid(halo, [0, 0.43, 0], [0.045, 0.045, 0.045], holy, "steel", holy);
+              A.ellipsoid(halo, [0, 0.36, -0.01], [0.03, 0.03, 0.03], holy, "steel", holy);
               const wings = [];
               for (const side of [-1, 1]) {
                 const wing = A.pivot(chest, side * 0.19, 0.39, -0.13);
@@ -17944,10 +18325,11 @@ body.netgame #revivetouch{display:flex}
                 wings.push(wing);
               }
               // Blender models (ARCHANGEL template) replace the placeholder halo and wings.
-              const haloModel = PropModels.group("acc_halo");
+              // v28: smaller halo sitting just above the head.
+              const haloModel = PropModels.group("acc_halo", 0.62);
               if (haloModel) {
                 halo.clear();
-                haloModel.position.set(0, 0.43, 0);
+                haloModel.position.set(0, 0.35, -0.01);
                 halo.add(haloModel);
                 wings.forEach((wing, i) => {
                   const side = i ? 1 : -1, model = PropModels.group("acc_wing", 0.72);
@@ -17986,7 +18368,7 @@ body.netgame #revivetouch{display:flex}
               const tailModel = PropModels.group("acc_tail");
               if (tailModel) {
                 horns.forEach((h, i) => {
-                  const side = i ? 1 : -1, model = PropModels.group("acc_horn", 1.1);
+                  const side = i ? 1 : -1, model = PropModels.group("acc_horn", 1.25);
                   if (!model) return;
                   h.clear();
                   model.scale.x *= side;
@@ -18003,6 +18385,21 @@ body.netgame #revivetouch{display:flex}
                 }
               }
               secretAccessories = { type:"demon", horns, tail, rotor };
+            }
+            if (weapon?.kind === "bow") {
+              // Quiver on the back with visible arrows (fletching up, over the right shoulder).
+              const quiver = A.pivot(chest, 0.1, 0.24, -0.2);
+              quiver.rotation.z = -0.35;
+              quiver.rotation.x = 0.12;
+              A.tube(quiver, [0, 0, 0], 0.075, 0.5, 0x5a3a22, "cloth", "y");
+              A.tube(quiver, [0, -0.25, 0], 0.08, 0.04, 0x2f2218, "cloth", "y");
+              A.tube(quiver, [0, 0.22, 0], 0.082, 0.05, 0x8a6a3a, "steel", "y");
+              for (let i = 0; i < 6; i++) {
+                const ax = Math.cos(i * 1.1) * 0.035, az = Math.sin(i * 1.1) * 0.035;
+                A.tube(quiver, [ax, 0.33, az], 0.006, 0.22, 0xc7b28a, "polymer", "y");
+                A.block(quiver, [ax, 0.44, az], [0.004, 0.06, 0.03], i % 2 ? 0xb23c3c : 0xe8e2d0, "cloth");
+              }
+              A.link(chest, [0.2, 0.46, 0.14], [-0.18, 0.05, 0.14], 0.03, 0.012, 0x3a2a1c, "cloth"); // strap
             }
             const gun = new THREE.Group(),
               parts = ArsenalArt.build(weapon, gun);
@@ -20144,6 +20541,7 @@ body.netgame #revivetouch{display:flex}
           }
           if (state === GameState.PLAYING || !inWorld) {
             ParticleSystem.update(dt);
+            FlameStream.update(dt);
             CombatFX.update(dt);
             BloodFX.update(dt);
             WorldArt.update(dt);

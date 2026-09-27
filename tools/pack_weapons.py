@@ -3,11 +3,12 @@ import base64, json, os, sys
 SRC = sys.argv[1]
 OUT = "android/app/src/main/assets/js/data/WeaponModels.js"
 NAMES = {"machete": "Machete", "mp5": "MP5", "bow": "Bow", "riot_breaker": "Riot Breaker", "crimson_ak": "Crimson AK",
-         "firestarter": "Firestarter", "wraith_m4a1": "Wraith M4A1", "bloodfang": "Bloodfang", "titanbreaker": "Titanbreaker",
+         "firestarter": "Hellfire", "wraith_m4a1": "Wraith M4A1", "bloodfang": "Bloodfang", "titanbreaker": "Titanbreaker",
          "cerberus_laser": "Cerberus Laser", "frostbite": "Frostbite", "stormpiercer": "Stormpiercer", "thundergrave": "Thundergrave",
          "doomsday_launcher": "Doomsday Launcher", "widowmaker": "Widowmaker", "quantum_annihilator": "Quantum Annihilator",
-         "hellfire_incarnate": "Hellfire Incarnate", "wraithpiercer": "Wraithpiercer", "dawn_spear": "Dawn Spear",
-         "heavenfall_bazooka": "Heavenfall Bazooka", "absolute_zero": "Absolute Zero", "grenade": "Grenade"}
+         "hellfire_incarnate": "Fire Incarnation", "wraithpiercer": "Wraithpiercer", "dawn_spear": "Dawn Spear",
+         "heavenfall_bazooka": "Heavenfall Bazooka", "absolute_zero": "Absolute Zero", "grenade": "Grenade",
+         "demonic_fury": "Demonic Fury"}
 data = {}
 for slug, name in NAMES.items():
     p = os.path.join(SRC, slug + ".glb")

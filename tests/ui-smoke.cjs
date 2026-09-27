@@ -94,37 +94,38 @@ const server = http.createServer((req, res) => {
         const result = {};
         try {
           e.data.coins = 100000;
-          e.data.classMythicPity = 33;
+          // v28 pity: Mythic pity removed; Divine at 100, Secret at 300 (Normal +1, Lucky +2).
           e.data.classDivinePity = 44;
-          e.data.weaponMythicPity = 74;
-          e.data.weaponDivinePity = 20;
+          e.data.classSecretPity = 33;
+          e.data.weaponDivinePity = 99;
+          e.data.weaponSecretPity = 20;
           e.random = () => 0;
           let roll = e.roll("weapon", false, "coins");
-          result.normalMythic = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity,classMythic:e.data.classMythicPity,classDivine:e.data.classDivinePity};
+          result.normalDivine = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity,classDivine:e.data.classDivinePity,classSecret:e.data.classSecretPity};
 
-          e.data.weaponMythicPity = 10;
-          e.data.weaponDivinePity = 149;
+          e.data.weaponDivinePity = 10;
+          e.data.weaponSecretPity = 299;
           e.random = () => 0;
           roll = e.roll("weapon", false, "coins");
-          result.normalDivine = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+          result.normalSecret = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
 
-          e.data.weaponMythicPity = 73;
-          e.data.weaponDivinePity = 40;
+          e.data.weaponDivinePity = 98;
+          e.data.weaponSecretPity = 40;
           e.random = () => 0;
           roll = e.roll("weapon", true, "coins");
-          result.luckyMythic = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+          result.luckyDivine = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
 
-          e.data.weaponMythicPity = 12;
-          e.data.weaponDivinePity = 52;
+          e.data.weaponDivinePity = 12;
+          e.data.weaponSecretPity = 52;
           e.random = () => 0.975;
           roll = e.roll("weapon", true, "coins");
-          result.naturalMythic = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+          result.naturalMythic = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
 
-          e.data.weaponMythicPity = 25;
-          e.data.weaponDivinePity = 70;
+          e.data.weaponDivinePity = 25;
+          e.data.weaponSecretPity = 70;
           e.random = () => 0.99975;
           roll = e.roll("weapon", false, "coins");
-          result.naturalDivine = {tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity};
+          result.naturalDivine = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
         } finally {
           e.data = original;
           e.random = originalRandom;
@@ -132,11 +133,11 @@ const server = http.createServer((req, res) => {
         }
         return result;
       });
-      assert.deepEqual(pityMechanics.normalMythic, {tier:5,mythic:0,divine:21,classMythic:33,classDivine:44}, '74/75 + Normal must guarantee Mythic+ and leave Class pity untouched');
-      assert.deepEqual(pityMechanics.normalDivine, {tier:6,mythic:0,divine:0}, '149/150 + Normal must guarantee Divine and reset both weapon pities');
-      assert.deepEqual(pityMechanics.luckyMythic, {tier:5,mythic:0,divine:42}, '73/75 + Lucky must add 2 pity and guarantee Mythic+');
-      assert.deepEqual(pityMechanics.naturalMythic, {tier:5,mythic:0,divine:54}, 'Natural Mythic must reset only Mythic pity while Divine keeps +2');
-      assert.deepEqual(pityMechanics.naturalDivine, {tier:6,mythic:0,divine:0}, 'Natural Divine must reset Mythic and Divine pity');
+      assert.deepEqual(pityMechanics.normalDivine, {tier:6,divine:0,secret:21,classDivine:44,classSecret:33}, '99/100 + Normal must guarantee Divine, keep Secret counting and leave Class pity untouched');
+      assert.deepEqual(pityMechanics.normalSecret, {tier:7,divine:0,secret:0}, '299/300 + Normal must guarantee Secret and reset both weapon pities');
+      assert.deepEqual(pityMechanics.luckyDivine, {tier:6,divine:0,secret:42}, '98/100 + Lucky must add 2 pity and guarantee Divine');
+      assert.deepEqual(pityMechanics.naturalMythic, {tier:5,divine:14,secret:54}, 'Mythic no longer resets anything');
+      assert.deepEqual(pityMechanics.naturalDivine, {tier:6,divine:0,secret:71}, 'Natural Divine resets only Divine pity');
       await page.locator('#loadoutbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
       const armoryLayout = await page.evaluate(() => {
@@ -223,17 +224,15 @@ const server = http.createServer((req, res) => {
         });
         await page.locator('.spin-btn.lucky').click();
         await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 4, {timeout:3000});
-        const reelMeta = await page.evaluate(() => ({
-          targetIndex: DeadRecoilTest.Armory.roll.targetIndex,
-          targetOffset: DeadRecoilTest.Armory.roll.targetOffset,
-          edgeOffset: DeadRecoilTest.Armory.roll.edgeOffset,
-          cardStep: DeadRecoilTest.Armory.roll.cardStep,
-          cards: document.querySelectorAll('#roll-strip .reel-card').length
+        // v28 spin (reference video): no reel overlay — title flicker, SKIP button, rarity burst.
+        const spinMeta = await page.evaluate(() => ({
+          duration: DeadRecoilTest.Armory.roll.duration,
+          skip: !!document.querySelector('#roll-controls [data-skip]'),
+          overlayHidden: document.querySelector('#roll-overlay').classList.contains('hidden'),
         }));
-        assert.ok(reelMeta.targetIndex >= 38 && reelMeta.targetIndex <= 48, 'Spin target index must vary inside the long reel');
-        assert.ok(reelMeta.cards >= reelMeta.targetIndex + 24, 'Spin reel must keep a long visual buffer after the winner');
-        assert.equal(reelMeta.targetOffset, reelMeta.targetIndex * reelMeta.cardStep, 'Every result must finish exactly centered under the marker');
-        assert.ok(Math.abs(reelMeta.edgeOffset - reelMeta.targetOffset) >= 45, 'Spin must be able to brake near a card edge before centering');
+        assert.ok(spinMeta.duration >= 1 && spinMeta.duration <= 3, 'Spin reveal must be short and snappy');
+        assert.ok(spinMeta.skip, 'A SKIP button must replace the spin button while spinning');
+        assert.ok(spinMeta.overlayHidden, 'The old reel overlay must stay hidden');
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Legendary result must equip directly with no confirmation');
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), previousWeapon, 'Legendary result must replace/equip automatically');
@@ -247,8 +246,7 @@ const server = http.createServer((req, res) => {
         });
         await page.locator('.spin-btn.lucky').click();
         await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, null, {timeout:3000});
-        await page.waitForFunction(() => document.querySelector('#roll-overlay')?.classList.contains('divine-win'), null, {timeout:8000});
-        assert.ok(await page.locator('#roll-overlay').evaluate(el => el.classList.contains('divine-win')), 'Divine result must trigger the dedicated celebration');
+        await page.waitForFunction(() => !!document.querySelector('.survivor-stage .spin-burst.big'), null, {timeout:8000});
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Winning Divine must not show a confirmation');
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine result must replace/equip automatically');

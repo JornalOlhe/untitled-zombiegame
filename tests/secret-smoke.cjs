@@ -52,16 +52,15 @@ const server = http.createServer((req, res) => {
     out.weapons = await page.evaluate(() => {
       const T = DeadRecoilTest, W = T.WeaponSystem, S = T.SecretWeaponSkills;
       T.setMap(4); T.PlayerController.start(); T.setClass(23); T.setPlaying();
-      const w = { ...W.weapons.find((x) => x.trident) };
+      // v28: Demonic Fury is a one-handed scythe; F = Reaping Arc around the player.
+      const w = { ...W.weapons.find((x) => x.scythe) };
       W.equip(w);
       T.player.pos.set(0, 1.7, 16); T.setYaw(0); T.setPitch(-0.3);
-      const before = S.throws.length;
-      S.use();
-      const thrown = S.throws.length > before;
-      // In demon flight a ground hit leaves hellfire.
-      T.player.classCharge = 100; T.player.cooldown = 0; T.PlayerController.ability();
-      S.tridentReady = 0; S.use();
-      const hellfire = S.fires.length > 0;
+      const z = T.ZombieManager.spawn(0, null, new THREE.Vector3(2, 0, 16));
+      const hp0 = z.hp;
+      S.cooldown = 0; S.use();
+      const thrown = z.dead || z.hp < hp0;
+      const hellfire = S.cooldown > T.time && !!w.oneHand;
       const sw = { ...W.weapons.find((x) => x.specter) };
       W.equip(sw); T.setClass(0); S.cooldown = 0; S.use();
       const spinning = S.spinUntil > T.time;

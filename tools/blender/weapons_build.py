@@ -64,6 +64,15 @@ class W:
         c = (p0 + p1) / 2
         return self.box(tuple(c), (t, h, d.length), st, rot=(0, ang, 0), node=node)
 
+    def vlink_yz(self, p0, p1, h, t, st, node="body"):
+        """Box from p0 to p1 in the vertical yz plane (rotation about x): length along the segment,
+        h = extent across it (in yz), t = thickness along x."""
+        p0, p1 = Vector(p0), Vector(p1)
+        d = p1 - p0
+        ang = math.degrees(math.atan2(-d.z, d.y))
+        c = (p0 + p1) / 2
+        return self.box(tuple(c), (t, d.length, h), st, rot=(-ang, 0, 0), node=node)
+
     def vlink(self, p0, p1, t, d_, st, node="body"):
         """Box from p0 to p1 in the vertical xy plane (rotation about z), thickness t, depth d_."""
         p0, p1 = Vector(p0), Vector(p1)
@@ -127,21 +136,27 @@ w.box((0.04, -0.012, -0.08), (0.008, 0.02, 0.03), S("cell", RED, g=G_RED))
 WEAPONS.append(w)
 
 # 03 Bow ---------------------------------------------------------------------
-def bow_limbs(w, st, tip_st, string_st, kinks=((0.16, -0.26), (0.28, -0.4), (0.34, -0.52)), h=0.03):
+# v28: real vertical bows. The riser sits in the left hand, the limbs run up and down (y) and
+# curve back toward the archer at the tips; the string and the nocked arrow are animated by the
+# game (procedural line + arrow), so they are not baked into the model.
+RISER_Z = -0.5
+
+
+def bow_limbs(w, st, tip_st, string_st=None, kinks=((0.14, -0.035), (0.26, -0.01), (0.36, 0.035), (0.42, 0.06)), h=0.03):
     for side in (-1, 1):
-        prev = (side * 0.02, 0.02, -0.2)
-        for kx, kz in kinks:
-            nxt = (side * kx, 0.02, kz)
-            w.link(prev, nxt, 0.026, h, st)
+        prev = (0.0, side * 0.07, RISER_Z)
+        for ky, kz in kinks:
+            nxt = (0.0, side * ky, RISER_Z + kz)
+            w.vlink_yz(prev, nxt, h, 0.026, st)
             prev = nxt
-        w.box((side * kinks[-1][0], 0.02, kinks[-1][1]), (0.034, h + 0.016, 0.034), tip_st)
-    w.link((-kinks[-1][0], 0.02, kinks[-1][1]), (kinks[-1][0], 0.02, kinks[-1][1]), 0.006, 0.006, string_st)
+        w.box((0.0, side * kinks[-1][0], RISER_Z + kinks[-1][1]), (0.03, 0.036, 0.03), tip_st)
 
 
 w = W("bow", "Bow")
-bow_limbs(w, S(["wood", "bands"], WOOD, BLK, step=14, bw=2), S("metal", BLK), S("metal", STRING))
-w.box((0, 0.02, -0.2), (0.046, 0.16, 0.16), S(["grip"], BLK))
-w.box((0, 0.02, -0.2), (0.05, 0.06, 0.1), S("wood", DWOOD))
+bow_limbs(w, S(["wood", "bands"], WOOD, BLK, step=14, bw=2), S("metal", BLK))
+w.box((0, 0.0, RISER_Z), (0.04, 0.2, 0.05), S(["grip"], BLK))
+w.box((0, 0.0, RISER_Z - 0.01), (0.046, 0.09, 0.055), S("wood", DWOOD))
+w.box((0.028, 0.035, RISER_Z), (0.012, 0.025, 0.035), S("metal", GRY))  # arrow rest
 WEAPONS.append(w)
 
 # 04 Riot Breaker -------------------------------------------------------------
@@ -256,23 +271,30 @@ w.box((0, -0.075, -0.26), (0.07, 0.07, 0.16), S("cell", DGR, g=G_BLUE), node="ma
 w.box((0, 0.02, 0.17), (0.08, 0.12, 0.26), S(["panel", "glowline"], BLK, g=G_RED))
 WEAPONS.append(w)
 
-# 11 Frostbite ---------------------------------------------------------------------
+# 11 Frostbite — v28: one-handed ice staff (melee), held like the machete (shaft along +y).
 w = W("frostbite", "Frostbite")
-w.box((0, 0.03, -0.35), (0.13, 0.14, 0.55), S(["panel", "glowline"], WHITE, g=G_ICE))
-w.box((0, 0.125, -0.35), (0.07, 0.055, 0.3), S("cell", DGR, g=G_BLUE))
-w.box((0, 0.03, -0.75), (0.06, 0.06, 0.25), S("panel", GRY))
-w.box((0, 0.03, -0.9), (0.085, 0.085, 0.05), S("cell", DGR, g=G_ICE))
-pistol_grip(w, S("grip", BLK), z=0.0)
-w.box((0, -0.095, -0.24), (0.05, 0.12, 0.08), S("cell", DGR, g=G_BLUE), node="mag")
-w.box((0, 0.02, 0.16), (0.08, 0.12, 0.24), S("panel", WHITE))
+shaft = S(["panel", "bands"], (0.3, 0.38, 0.46), WHITE, step=12, bw=2, axis="v")
+w.box((0, 0.22, -0.23), (0.035, 1.05, 0.035), shaft)
+w.box((0, -0.34, -0.23), (0.05, 0.06, 0.05), S("metal", GRY))
+w.box((0, -0.05, -0.23), (0.046, 0.2, 0.046), S("grip", BLK))
+w.box((0, 0.76, -0.23), (0.07, 0.05, 0.07), S("metal", STL))
+for sd in (-1, 1):
+    w.box((sd * 0.05, 0.84, -0.23), (0.02, 0.14, 0.03), S("metal", STL), rot=(0, 0, sd * 22))
+w.box((0, 0.93, -0.23), (0.07, 0.2, 0.07), S("cell", G_ICE, g=G_ICE), rot=(0, 45, 0))
+w.box((0, 1.06, -0.23), (0.04, 0.09, 0.04), S("cell", WHITE, g=G_ICE), rot=(0, 45, 0))
+for sd in (-1, 1):
+    w.box((sd * 0.065, 0.92, -0.23), (0.03, 0.12, 0.03), S("cell", G_ICE, g=G_BLUE), rot=(0, 0, sd * 28))
+    w.box((0, 0.9, -0.23 + sd * 0.06), (0.03, 0.1, 0.03), S("cell", G_ICE, g=G_BLUE), rot=(sd * 28, 0, 0))
 WEAPONS.append(w)
 
 # 12 Stormpiercer ---------------------------------------------------------------------
 w = W("stormpiercer", "Stormpiercer")
-bow_limbs(w, S(["panel", "glowline"], BLK, g=G_PURPLE), S("cell", BLK, g=G_PURPLE), S("cell", G_PURPLE, g=G_PURPLE),
-          kinks=((0.12, -0.22), (0.24, -0.34), (0.3, -0.46), (0.35, -0.54)), h=0.034)
-w.box((0, 0.02, -0.2), (0.05, 0.17, 0.16), S(["grip"], BLK))
-w.box((0, 0.02, -0.28), (0.03, 0.04, 0.03), S("cell", BLK, g=G_PURPLE))
+bow_limbs(w, S(["panel", "glowline"], BLK, g=G_PURPLE), S("cell", BLK, g=G_PURPLE),
+          kinks=((0.12, -0.04), (0.22, -0.02), (0.31, 0.01), (0.38, 0.045), (0.44, 0.07)), h=0.034)
+w.box((0, 0.0, RISER_Z), (0.042, 0.22, 0.055), S(["grip"], BLK))
+w.box((0, 0.0, RISER_Z - 0.035), (0.03, 0.14, 0.02), S("cell", BLK, g=G_PURPLE))
+for sd in (-1, 1):
+    w.box((0, sd * 0.14, RISER_Z - 0.03), (0.02, 0.05, 0.03), S("cell", DGR, g=G_PURPLE))
 WEAPONS.append(w)
 
 # 13 Thundergrave -------------------------------------------------------------------------
@@ -335,14 +357,13 @@ WEAPONS.append(w)
 
 # 18 Wraithpiercer ------------------------------------------------------------------------------
 w = W("wraithpiercer", "Wraithpiercer")
-bow_limbs(w, S(["panel", "glowline"], BLK, g=G_PURPLE), S("cell", DGR, g=G_PURPLE), S("cell", G_PURPLE, g=G_PURPLE),
-          kinks=((0.1, -0.2), (0.2, -0.3), (0.26, -0.44), (0.36, -0.5), (0.38, -0.58)), h=0.04)
-w.box((0, 0.02, -0.2), (0.055, 0.18, 0.17), S(["grip"], BLK))
+bow_limbs(w, S(["panel", "glowline"], BLK, g=G_PURPLE), S("cell", DGR, g=G_PURPLE),
+          kinks=((0.12, -0.05), (0.22, -0.03), (0.3, -0.06), (0.38, 0.0), (0.45, 0.04), (0.5, 0.075)), h=0.04)
+w.box((0, 0.0, RISER_Z), (0.046, 0.24, 0.06), S(["grip"], BLK))
 for side in (-1, 1):
-    w.box((side * 0.2, 0.02, -0.3), (0.03, 0.05, 0.03), S("cell", BLK, g=G_PURPLE))
-w.box((0.1, -0.05, -0.04), (0.06, 0.06, 0.22), S(["panel", "glowline"], BLK, g=G_PURPLE))
-for x in (0.085, 0.115):
-    w.box((x, -0.05, -0.17), (0.012, 0.012, 0.04), S("cell", BLK, g=G_PURPLE))
+    w.box((0, side * 0.2, RISER_Z - 0.05), (0.03, 0.05, 0.03), S("cell", BLK, g=G_PURPLE))
+    w.box((0, side * 0.3, RISER_Z - 0.075), (0.022, 0.06, 0.022), S("cell", DGR, g=G_PURPLE))
+w.box((0, 0.0, RISER_Z - 0.04), (0.034, 0.12, 0.02), S(["panel", "glowline"], BLK, g=G_PURPLE))
 WEAPONS.append(w)
 
 # 19 Dawn Spear ------------------------------------------------------------------------------------
@@ -381,6 +402,30 @@ w.box((0, -0.1, -0.26), (0.06, 0.1, 0.12), S("cell", DGR, g=G_BLUE), node="mag")
 w.box((0, 0.02, 0.16), (0.08, 0.12, 0.26), S(["panel", "glowline"], BLK, g=G_BLUE))
 WEAPONS.append(w)
 
+
+# 22 Demonic Fury — v28: demonic scythe, one-handed (shaft along +y, blade sweeping forward).
+w = W("demonic_fury", "Demonic Fury")
+OBS = (0.13, 0.1, 0.12)
+BONE = (0.56, 0.42, 0.36)
+G_INF = (1.0, 0.12, 0.08)
+w.box((0, 0.3, -0.23), (0.038, 1.25, 0.038), S(["panel", "bands"], OBS, BONE, step=18, bw=2, axis="v", g=G_INF))
+w.box((0, -0.05, -0.23), (0.048, 0.22, 0.048), S("grip", BLK))
+w.box((0, -0.36, -0.23), (0.06, 0.07, 0.06), S(["panel", "gem"], OBS, g=G_INF))
+w.box((0, 0.93, -0.23), (0.07, 0.08, 0.07), S(["panel", "gem"], BONE, g=G_INF))
+# Curved blade: segments arcing forward (-z) and down from the top of the shaft.
+import math as _m
+prev = (0.0, 0.94, -0.26)
+for i in range(7):
+    t = (i + 1) / 7
+    ang = t * 1.35
+    nxt = (0.0, 0.94 + _m.sin(ang) * 0.1 - t * t * 0.28, -0.26 - _m.sin(ang * 1.1) * 0.62)
+    wdt = 0.12 * (1 - t * 0.75) + 0.02
+    w.vlink_yz(prev, nxt, wdt, 0.016, S(["metal", "glowline"], (0.22, 0.2, 0.22), g=G_INF))
+    prev = nxt
+w.box((0, prev[1] - 0.02, prev[2] - 0.02), (0.014, 0.05, 0.05), S("metal", STL))
+for sd in (-1, 1):
+    w.box((sd * 0.04, 0.99, -0.2), (0.02, 0.12, 0.02), S("metal", BONE), rot=(0, 0, sd * 30))
+WEAPONS.append(w)
 
 # Hand grenade (thrown item, not in the arsenal): segmented olive body, fuze, spoon and pin ring.
 w = W("grenade", "Grenade")

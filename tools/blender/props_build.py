@@ -533,34 +533,54 @@ def wing(name):
 
 
 def horn(name):
+    """ARCHDEMON horn: thick plated base that sweeps out sideways and curls up and back in a
+    C-shape, spikes along the outer edge, crimson glow veins and a spiked connector band."""
     reset()
     obs = mat("M_obsidian", 0.35, 0.4)
+    bone = mat("M_bone", 0.7)
     glowm = mat("M_glow", 0.2, 0.0, emit=(1.0, 0.12, 0.08))
-    pts = []
-    for i in range(12):
-        t = i / 11
-        pts.append(Vector((0.02 + 0.2 * t - 0.05 * t ** 3, 0.02 + 0.06 * t - 0.18 * t ** 3, 0.03 + 0.24 * t - 0.02 * t * t)))
+    N = 16
+    C = Vector((0.1, 0.0, 0.13))
+    pts, outs = [], []
+    for i in range(N + 1):
+        t = i / N
+        a = math.radians(-105 + t * 215)
+        R = 0.14 - 0.05 * t
+        p = C + Vector((math.cos(a) * R, -0.1 * t * t, math.sin(a) * R))
+        pts.append(p)
+        outs.append(Vector((math.cos(a), 0, math.sin(a))))
+    shift = Vector((0.02, 0.0, 0.0)) - pts[0]
+    pts = [q + shift for q in pts]
     bm = bmesh.new()
-    for i in range(len(pts) - 1):
-        r0 = 0.055 * (1 - i / 11) ** 0.8 + 0.004
-        r1 = 0.055 * (1 - (i + 1) / 11) ** 0.8 + 0.003
-        cyl(bm, pts[i], pts[i + 1], r0, r1, 7)
-    for t in (0.35, 0.55, 0.75):
-        i = int(t * 11)
-        base = pts[i]
-        out = Vector((0.6, 0.3, 0.2)).normalized()
-        cyl(bm, base, base + out * 0.07, 0.022, 0.0, 4)
-    # Connector ring at the base.
-    for k in range(10):
-        a = k / 10 * math.tau
-        box(bm, (math.cos(a) * 0.06, math.sin(a) * 0.06, 0.0), (0.03, 0.03, 0.03), rot_z=a)
-    paint(bm, lambda co, n, c: jitter((0.12, 0.09, 0.1), 0.04, int(c.z * 90 + c.x * 30)))
+    for i in range(N):
+        r0 = 0.078 * (1 - i / N) ** 0.9 + 0.005
+        r1 = 0.078 * (1 - (i + 1) / N) ** 0.9 + 0.004
+        cyl(bm, pts[i], pts[i + 1], r0, r1, 8)
+    paint(bm, lambda co, n, c: jitter((0.11, 0.08, 0.09) if int(c.z * 40 + c.x * 25) % 3 else (0.24, 0.16, 0.14), 0.04, int(c.z * 90 + c.x * 30)))
     obj_from_bm("body", bm, obs)
     bm = bmesh.new()
-    for i in range(2, 9, 2):
-        a, b = pts[i], pts[i + 1]
-        mid = (a + b) / 2 + Vector((0.035, -0.02, 0))
-        cyl(bm, mid - (b - a) * 0.4, mid + (b - a) * 0.4, 0.008, 0.008, 4)
+    for i in range(2, N - 1, 2):
+        base, out = pts[i], outs[i]
+        r = 0.078 * (1 - i / N) ** 0.9
+        tipdir = (out + Vector((0, -0.25, 0.15))).normalized()
+        cyl(bm, base + out * r * 0.8, base + out * r * 0.8 + tipdir * (0.05 + 0.03 * (1 - i / N)), 0.022 * (1 - i / N) + 0.008, 0.0, 4)
+    for k in range(12):
+        a = k / 12 * math.tau
+        box(bm, (math.cos(a) * 0.075 + 0.02, math.sin(a) * 0.075, 0.005), (0.035, 0.03, 0.03), rot_z=a)
+        if k % 2 == 0:
+            cyl(bm, Vector((math.cos(a) * 0.09 + 0.02, math.sin(a) * 0.09, 0.0)), Vector((math.cos(a) * 0.13 + 0.02, math.sin(a) * 0.13, 0.03)), 0.012, 0.0, 4)
+    paint(bm, lambda co, n, c: jitter((0.72, 0.6, 0.5), 0.05, int(c.x * 70 + c.z * 40)))
+    obj_from_bm("spikes", bm, bone)
+    bm = bmesh.new()
+    for i in range(1, N - 3, 3):
+        a2, b2 = pts[i], pts[i + 1]
+        inn = -outs[i]
+        r = 0.078 * (1 - i / N) ** 0.9
+        mid = (a2 + b2) / 2 + inn * r * 0.85
+        cyl(bm, mid - (b2 - a2) * 0.45, mid + (b2 - a2) * 0.45, 0.008, 0.006, 4)
+    g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.022)
+    for v in g["verts"]:
+        v.co += Vector((0.02, 0.085, 0.01))
     paint(bm, lambda co, n, c: (1.0, 0.15, 0.1))
     obj_from_bm("glow", bm, glowm)
     export(name)
@@ -586,7 +606,9 @@ def tail(name):
     bm = bmesh.new()
     for j in range(1, len(pts)):
         p = pts[j]
-        cyl(bm, p + Vector((0, 0, 0.03)), p + Vector((0, 0.03, 0.11 - j * 0.008)), 0.025, 0.0, 4)
+        cyl(bm, p + Vector((0, 0, 0.04)), p + Vector((0, 0.04, 0.15 - j * 0.012)), 0.032 - j * 0.002, 0.0, 4)
+        for sd in (-1, 1):
+            cyl(bm, p + Vector((sd * 0.045, 0, 0.01)), p + Vector((sd * (0.11 - j * 0.008), 0.03, 0.03)), 0.022 - j * 0.0015, 0.0, 4)
     paint(bm, lambda co, n, c: jitter((0.75, 0.66, 0.55), 0.04, int(c.y * 70)))
     obj_from_bm("spikes", bm, bone)
     bm = bmesh.new()
@@ -600,34 +622,47 @@ def tail(name):
 
 
 def rotor(name):
-    """Three curved scythe blades in the X-Z plane around the origin (spins around Y)."""
+    """ARCHDEMON tail tip: two big crescent blades (a double axe) with glowing edges around a rune
+    gem, in the X-Z plane (spins around Y)."""
     reset()
     obs = mat("M_obsidian", 0.35, 0.4)
     glowm = mat("M_glow", 0.2, 0.0, emit=(1.0, 0.12, 0.08))
     bm = bmesh.new()
-    for k in range(3):
-        a0 = k / 3 * math.tau
-        prev = None
-        for i in range(8):
-            t = i / 7
-            a = a0 + t * 1.1
-            r = 0.05 + 0.3 * t
-            w = 0.06 * math.sin(math.pi * min(1, t + 0.1)) + 0.005
+    edge = bmesh.new()
+    for k in range(2):
+        a0 = k * math.pi - 0.75
+        prev = prev_e = None
+        for i in range(11):
+            t = i / 10
+            a = a0 + t * 1.5
+            r = 0.12 + 0.26 * math.sin(math.pi * t) ** 0.6
+            w = 0.11 * math.sin(math.pi * t) + 0.008
             c = Vector((math.cos(a) * r, 0, math.sin(a) * r))
-            nrm = Vector((-math.sin(a), 0, math.cos(a)))
-            ring = [bm.verts.new(c + nrm * w), bm.verts.new(c + Vector((0, 0.012, 0))), bm.verts.new(c - nrm * w * 0.3), bm.verts.new(c - Vector((0, 0.012, 0)))]
+            rad = Vector((math.cos(a), 0, math.sin(a)))
+            ring = [bm.verts.new(c + rad * w), bm.verts.new(c + Vector((0, 0.016, 0))), bm.verts.new(c - rad * w * 0.4), bm.verts.new(c - Vector((0, 0.016, 0)))]
             if prev:
                 for q in range(4):
                     bm.faces.new((prev[q], prev[(q + 1) % 4], ring[(q + 1) % 4], ring[q]))
             prev = ring
+            e = [edge.verts.new(c + rad * (w + 0.012) + Vector((0, 0.006, 0))), edge.verts.new(c + rad * (w + 0.012) - Vector((0, 0.006, 0))),
+                 edge.verts.new(c + rad * (w - 0.01) - Vector((0, 0.006, 0))), edge.verts.new(c + rad * (w - 0.01) + Vector((0, 0.006, 0)))]
+            if prev_e:
+                for q in range(4):
+                    edge.faces.new((prev_e[q], prev_e[(q + 1) % 4], e[(q + 1) % 4], e[q]))
+            prev_e = e
+        for t in (0.3, 0.7):
+            a = a0 + t * 1.5
+            base = Vector((math.cos(a) * 0.1, 0, math.sin(a) * 0.1))
+            cyl(bm, base, base * 1.9 + Vector((0, 0, 0.02)), 0.018, 0.0, 4)
+    box(bm, (0, 0, 0), (0.09, 0.05, 0.09))
     paint(bm, lambda co, n, c: jitter((0.14, 0.1, 0.11), 0.04, int(c.x * 50 + c.z * 30)))
     obj_from_bm("body", bm, obs)
-    bm = bmesh.new()
-    g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.06)
-    paint(bm, lambda co, n, c: (1.0, 0.15, 0.1))
-    obj_from_bm("glow", bm, glowm)
+    g = bmesh.ops.create_icosphere(edge, subdivisions=1, radius=0.045)
+    for v in g["verts"]:
+        v.co.y *= 1.6
+    paint(edge, lambda co, n, c: (1.0, 0.15, 0.1))
+    obj_from_bm("glow", edge, glowm)
     export(name)
-
 
 if __name__ == "__main__":
     halo("acc_halo")
