@@ -403,28 +403,109 @@ w.box((0, 0.02, 0.16), (0.08, 0.12, 0.26), S(["panel", "glowline"], BLK, g=G_BLU
 WEAPONS.append(w)
 
 
-# 22 Demonic Fury — v28: demonic scythe, one-handed (shaft along +y, blade sweeping forward).
+# 22 Demonic Fury — v29: rebuilt from the "DEMONIC FURY" UV template. Scythe held one-handed:
+# vertebrae shaft with red wraps and back spikes, horned skull core with glowing eyes, a large
+# crescent blade (bone spine, black body with runes, glowing inner edge), hanging chain with a red
+# crystal and torn cloth ribbons. Shaft along +y, blade sweeping forward (-z).
 w = W("demonic_fury", "Demonic Fury")
-OBS = (0.13, 0.1, 0.12)
-BONE = (0.56, 0.42, 0.36)
+OBS = (0.13, 0.1, 0.11)
+BONE = (0.62, 0.47, 0.38)
+CLOTH = (0.45, 0.05, 0.06)
 G_INF = (1.0, 0.12, 0.08)
-w.box((0, 0.3, -0.23), (0.038, 1.25, 0.038), S(["panel", "bands"], OBS, BONE, step=18, bw=2, axis="v", g=G_INF))
-w.box((0, -0.05, -0.23), (0.048, 0.22, 0.048), S("grip", BLK))
-w.box((0, -0.36, -0.23), (0.06, 0.07, 0.06), S(["panel", "gem"], OBS, g=G_INF))
-w.box((0, 0.93, -0.23), (0.07, 0.08, 0.07), S(["panel", "gem"], BONE, g=G_INF))
-# Curved blade: segments arcing forward (-z) and down from the top of the shaft.
 import math as _m
-prev = (0.0, 0.94, -0.26)
-for i in range(7):
-    t = (i + 1) / 7
-    ang = t * 1.35
-    nxt = (0.0, 0.94 + _m.sin(ang) * 0.1 - t * t * 0.28, -0.26 - _m.sin(ang * 1.1) * 0.62)
-    wdt = 0.12 * (1 - t * 0.75) + 0.02
-    w.vlink_yz(prev, nxt, wdt, 0.016, S(["metal", "glowline"], (0.22, 0.2, 0.22), g=G_INF))
-    prev = nxt
-w.box((0, prev[1] - 0.02, prev[2] - 0.02), (0.014, 0.05, 0.05), S("metal", STL))
+SX = -0.23  # shaft z
+w.box((0, 0.3, SX), (0.04, 1.25, 0.04), S(["panel", "bands"], OBS, (0.5, 0.06, 0.07), step=14, bw=3, axis="v"))
+w.box((0, -0.06, SX), (0.05, 0.24, 0.05), S(["grip", "bands"], (0.18, 0.05, 0.06), BONE, step=9, bw=1, axis="v"))
+for i in range(9):  # vertebrae + back spikes
+    y = 0.14 + i * 0.085
+    w.box((0, y, SX), (0.058, 0.026, 0.058), S("panel", BONE))
+    w.box((0, y + 0.012, SX + 0.045), (0.014, 0.022, 0.04), S("metal", BONE), rot=(-35, 0, 0))
+w.box((0, -0.35, SX), (0.064, 0.06, 0.064), S(["panel", "gem"], OBS, g=G_INF))  # pommel
+w.vlink_yz((0, -0.38, SX), (0, -0.5, SX + 0.02), 0.03, 0.03, S("metal", BONE))
+# Skull core at the head.
+HY, HZ = 0.95, -0.24
+w.box((0, HY, HZ), (0.15, 0.16, 0.14), S(["panel", "scratch"], BONE))
+w.box((0, HY + 0.02, HZ - 0.075), (0.11, 0.1, 0.02), S(["panel", "scratch"], (0.55, 0.4, 0.32)))  # brow plate
+w.box((0, HY - 0.095, HZ - 0.02), (0.1, 0.04, 0.09), S("panel", (0.5, 0.37, 0.3)))  # jaw
 for sd in (-1, 1):
-    w.box((sd * 0.04, 0.99, -0.2), (0.02, 0.12, 0.02), S("metal", BONE), rot=(0, 0, sd * 30))
+    w.box((sd * 0.032, HY + 0.01, HZ - 0.087), (0.03, 0.022, 0.012), S("cell", OBS, g=G_INF))  # eyes
+    w.vlink_yz((sd * 0.04, HY + 0.05, HZ + 0.02), (sd * 0.05, HY + 0.17, HZ + 0.1), 0.028, 0.022, S("metal", BONE))  # horns
+    w.vlink_yz((sd * 0.05, HY + 0.17, HZ + 0.1), (sd * 0.05, HY + 0.2, HZ + 0.18), 0.016, 0.016, S("metal", (0.3, 0.22, 0.2)))
+w.box((0, HY + 0.02, HZ + 0.075), (0.03, 0.05, 0.05), S(["panel", "gem"], OBS, g=G_INF))  # rear core
+# Crescent blade.
+prev = (0.0, HY + 0.03, HZ - 0.05)
+N = 10
+for i in range(N):
+    t = (i + 1) / N
+    nxt = (0.0, HY + 0.03 + _m.sin(t * 2.2) * 0.13 - t * t * 0.5, HZ - 0.05 - _m.sin(t * 1.45) * 0.8)
+    wdt = 0.23 * (1 - t * 0.85) + 0.02
+    dy, dz = nxt[1] - prev[1], nxt[2] - prev[2]
+    ln = _m.hypot(dy, dz) or 1
+    ny, nz = dz / ln, -dy / ln  # inner side (below the curve)
+    if ny > 0: ny, nz = -ny, -nz
+    mid = lambda a, b, k: ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + ny * k, (a[2] + b[2]) / 2 + nz * k)
+    w.vlink_yz(prev, nxt, wdt, 0.018, S(["panel", "runes"], OBS, g=G_INF, rune=0.5))
+    e0 = (prev[0], prev[1] + ny * wdt * 0.5, prev[2] + nz * wdt * 0.5)
+    e1 = (nxt[0], nxt[1] + ny * (wdt * 0.5), nxt[2] + nz * (wdt * 0.5))
+    w.vlink_yz(e0, e1, 0.022, 0.01, S("cell", (0.5, 0.05, 0.05), g=G_INF))  # glowing inner edge
+    s0 = (prev[0], prev[1] - ny * wdt * 0.5, prev[2] - nz * wdt * 0.5)
+    s1 = (nxt[0], nxt[1] - ny * wdt * 0.5, nxt[2] - nz * wdt * 0.5)
+    w.vlink_yz(s0, s1, 0.026, 0.026, S(["panel", "scratch"], BONE))  # bone spine
+    if i % 2 == 0 and i < N - 2:
+        sp = (s1[0], s1[1] - ny * 0.06, s1[2] - nz * 0.06 + 0.03)
+        w.vlink_yz(s1, sp, 0.018, 0.014, S("metal", BONE))
+    prev = nxt
+w.vlink_yz(prev, (0, prev[1] - 0.05, prev[2] - 0.05), 0.012, 0.012, S("metal", STL))  # tip
+# Hanging chain with the red crystal.
+cy = HY - 0.09
+for i in range(6):
+    w.box((0.0, cy - i * 0.045, HZ - 0.06), (0.012 if i % 2 else 0.03, 0.04, 0.03 if i % 2 else 0.012), S("metal", (0.28, 0.24, 0.22)))
+w.box((0, cy - 6 * 0.045 - 0.02, HZ - 0.06), (0.04, 0.04, 0.04), S("cell", DRED, g=G_INF), rot=(0, 45, 45))
+# Torn cloth ribbons behind the head.
+for sd, ln, lean in ((-1, 0.34, 6), (1, 0.26, -8), (0, 0.42, 3)):
+    w.box((sd * 0.045, HY - 0.1 - ln / 2, HZ + 0.03), (0.008, ln, 0.05), S(["panel", "blood"], CLOTH, blood=0.4), rot=(lean, 0, sd * 4))
+WEAPONS.append(w)
+
+# 23 Angelic Specter — v29: from the "ANGELIC SPECTER" UV template. A floating holy double spear:
+# white shaft with gold collars, a winged head with a glowing core at each end. Long axis -z.
+w = W("angelic_specter", "Angelic Specter")
+IVORY = (0.9, 0.93, 0.97)
+PALE = (0.66, 0.84, 0.98)
+AGOLD = (0.88, 0.68, 0.26)
+G_HOLY = (0.38, 0.85, 1.0)
+w.box((0, 0, -0.56), (0.034, 0.034, 0.66), S(["white", "glowline"], IVORY, g=G_HOLY))
+for z in (-0.22, -0.9, -0.4, -0.72):
+    w.box((0, 0, z), (0.044, 0.044, 0.035 if z in (-0.22, -0.9) else 0.02), S(["panel", "bands"], AGOLD, (0.6, 0.42, 0.12), step=4, bw=1, axis="u"))
+w.box((0, 0, -0.56), (0.05, 0.05, 0.05), S("cell", AGOLD, g=G_HOLY), rot=(0, 0, 45))
+
+
+def winged_head(zc, dirz, sc):
+    """Head centred at z=zc; the point goes toward dirz (-1 forward, +1 back)."""
+    w.box((0, 0, zc), (0.085 * sc, 0.085 * sc, 0.085 * sc), S("cell", AGOLD, g=G_HOLY), rot=(0, 0, 45))
+    for x, y in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        w.box((x * 0.068 * sc, y * 0.068 * sc, zc), (0.03 * sc, 0.03 * sc, 0.05 * sc), S(["panel", "gem"], AGOLD, g=G_HOLY), rot=(0, 0, 45))
+    w.box((0, 0, zc - dirz * 0.02), (0.18 * sc, 0.022, 0.024), S("panel", AGOLD))  # crossbar
+    # Point: gold / crystal / gold taper.
+    for k, (L, wd, st) in enumerate(((0.08, 0.055, S("panel", AGOLD)), (0.09, 0.04, S("cell", PALE, g=G_HOLY)),
+                                     (0.08, 0.026, S("panel", AGOLD)), (0.05, 0.012, S("metal", (1.0, 0.86, 0.5))))):
+        off = 0.07 + sum(l for l, _, _ in ((0.08, 0, 0), (0.09, 0, 0), (0.08, 0, 0), (0.05, 0, 0))[:k]) + L / 2
+        w.box((0, 0, zc + dirz * off * sc), (wd * sc, wd * 0.6 * sc, L * sc), st)
+    for sd in (-1, 1):  # crossguard spikes sweeping toward the point
+        a = (sd * 0.07 * sc, 0, zc + dirz * 0.01)
+        b = (sd * 0.15 * sc, 0.01, zc + dirz * 0.1 * sc)
+        c = (sd * 0.17 * sc, 0.015, zc + dirz * 0.18 * sc)
+        w.link(a, b, 0.022, 0.018, S("panel", AGOLD))
+        w.link(b, c, 0.012, 0.012, S("cell", PALE, g=G_HOLY))
+        # Feather fan sweeping away from the point (toward the shaft).
+        for j, (ang, L) in enumerate(((35, 0.2), (55, 0.27), (75, 0.3), (95, 0.24), (115, 0.16))):
+            r = _m.radians(ang)
+            p0 = (sd * 0.05 * sc, 0.012 + j * 0.004, zc - dirz * 0.02)
+            p1 = (p0[0] + sd * _m.sin(r) * L * sc, p0[1] + 0.035 + j * 0.012, p0[2] - dirz * _m.cos(r) * L * sc)
+            w.link(p0, p1, (0.078 - j * 0.006) * sc, 0.014, S(["feather"], IVORY if j % 2 else PALE, PALE if j % 2 else IVORY, g=G_HOLY))
+
+
+winged_head(-1.0, -1, 1.0)
+winged_head(-0.1, 1, 0.72)
 WEAPONS.append(w)
 
 # Hand grenade (thrown item, not in the arsenal): segmented olive body, fuze, spoon and pin ring.
@@ -517,6 +598,32 @@ def paint(W_, H_, st, face, rng):
         elif p == "scratch":
             m = rng.random((H_, W_)) < 0.05
             img[m] = np.minimum(img[m] * 1.5 + 0.1, 1)
+        elif p == "runes" and g is not None:
+            if face == "side" and W_ >= 8 and H_ >= 5:
+                y0 = H_ // 2 - 1
+                for x0 in range(2, W_ - 4, 5):
+                    if rng.random() > st.get("rune", 0.6):
+                        continue
+                    glyph = rng.random((3, 3)) < 0.55
+                    glyph[1, 1] = True
+                    for gy in range(3):
+                        for gx in range(3):
+                            if glyph[gy, gx] and 0 <= y0 + gy < H_:
+                                img[y0 + gy, x0 + gx] = g
+                                emit[y0 + gy, x0 + gx] = g * 0.9
+        elif p == "feather":
+            t = (ii / max(W_ - 1, 1))[..., None]
+            img[:] = (base * (1 - t) + c2 * t) * (1 + rng.uniform(-0.04, 0.04, (H_, W_, 1)))
+            mid = H_ // 2
+            if H_ >= 3:
+                img[mid, :] = np.array(GOLD) * 0.95  # rachis
+                for x in range(1, W_, 2):  # barbs
+                    for y in range(H_):
+                        if abs(y - mid) and (x + abs(y - mid)) % 3 == 0:
+                            img[y, x] *= 0.86
+            if g is not None and W_ >= 6:
+                img[:, -2:] = np.minimum(g * 0.6 + 0.35, 1)
+                emit[:, -2:] = g * 0.5
         elif p == "white":
             if W_ >= 6:
                 for x in range(6, W_ - 1, 9):

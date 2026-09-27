@@ -9701,6 +9701,7 @@ body.netgame #revivetouch{display:flex}
             const target = aiming
               ? ads.pos.clone()
               : new V(0.255, -0.24, -0.42);
+            if (w.scythe && !aiming) target.x += 0.14; // keep the blade clear of the crosshair
             if (w.specter) {
               const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
                 orbit = simulationTime * (spinning ? 8.5 : 0.7),
@@ -9735,6 +9736,13 @@ body.netgame #revivetouch{display:flex}
               swayX * 0.3,
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
+            if (w.scythe && !aiming) {
+              // Scythe carried on the shoulder: head leans away and the blade turns its flat
+              // side toward the camera instead of cutting the view edge-on.
+              this.model.rotation.x -= 0.42;
+              this.model.rotation.y += 0.75;
+              this.model.rotation.z -= 0.18;
+            }
             if (w.specter) {
               this.model.rotation.y += Math.sin(simulationTime * 0.8) * 0.003;
               this.model.rotation.z += Math.sin(simulationTime * 1.15) * 0.006;
@@ -14604,6 +14612,11 @@ body.netgame #revivetouch{display:flex}
               VisualArt.link(g,[-.16,0,-.4],[.16,0,-.4],.025,.018,metal,"steel");
               for(const x of[-.16,0,.16])
                 VisualArt.link(g,[x,0,-.4],[x,0,-.72],.025,.008,c,"steel",c);
+            } else if (WeaponModels.scenes.get("Angelic Specter")) {
+              // The thrown form is the Blender model itself (centred on its shaft).
+              const m = WeaponModels.scenes.get("Angelic Specter").clone(true);
+              m.position.z = 0.55;
+              g.add(m);
             } else {
               VisualArt.ellipsoid(g,[0,0,0],[.11,.045,.18],c,"steel",c);
               VisualArt.ring(g,[0,0,0],.18,metal).rotation.x=Math.PI/2;
