@@ -127,8 +127,28 @@
         body.innerHTML = `<div class="empty-state"><h3>Missões exigem uma conta</h3><p>Entre para receber missões diárias, semanais e conquistas únicas, ganhar moedas e XP e manter o progresso no PC e no Android.</p><button class="primary" data-go-login type="button">ENTRAR / CRIAR CONTA</button></div>`;
         body.querySelector("[data-go-login]").onclick = () => this.game.openLogin();
       } else {
-        const items = MM.of(this.tab);
-        if (!items.length) {
+        let items = MM.of(this.tab);
+        // Unique missions: 100 new every month that never expire — filter by month and status.
+        let filterBar = "";
+        if (this.tab === "unique") {
+          const months = [...new Set(items.map((m) => m.month).filter(Boolean))].sort().reverse();
+          const monthName = (k) => {
+            const [y, mo] = k.split("-").map(Number);
+            return new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+          };
+          if (!this.uMonth || (this.uMonth !== "all" && this.uMonth !== "perm" && !months.includes(this.uMonth))) this.uMonth = months[0] || "perm";
+          this.uStatus ||= "open";
+          const monthOpts = [["all", "Todos os períodos"], ...months.map((k) => [k, monthName(k)]), ["perm", "Conquistas permanentes"]];
+          filterBar = `<div class="mission-filters"><label>Período<select data-u-month>${monthOpts.map(([v, l]) => `<option value="${v}" ${v === this.uMonth ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label><label>Status<select data-u-status>${[["open", "Não concluídas"], ["done", "Concluídas"], ["all", "Todas"]].map(([v, l]) => `<option value="${v}" ${v === this.uStatus ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`;
+          items = items
+            .filter((m) => (this.uMonth === "all" ? true : this.uMonth === "perm" ? !m.month : m.month === this.uMonth))
+            .filter((m) => (this.uStatus === "all" ? true : this.uStatus === "done" ? m.completed : !m.completed));
+        }
+        if (!items.length && filterBar) {
+          summary.innerHTML = "";
+          body.innerHTML = filterBar + `<div class="empty-state"><h3>Nada por aqui</h3><p>Nenhuma missão com esses filtros.</p></div>`;
+          this.bindFilters(body);
+        } else if (!items.length) {
           summary.innerHTML = "";
           body.innerHTML = `<div class="empty-state"><h3>${MM.loading ? "Carregando missões…" : online ? "Nenhuma missão carregada" : "OFFLINE"}</h3><p>${online ? "" : "Conecte-se para sincronizar suas missões."}</p></div>`;
         } else {
@@ -141,9 +161,10 @@
             <div class="ms-stat"><span>CONCLUÍDAS</span><b>${done} / ${main.length}</b></div>
             <div class="ms-stat"><span>RESGATADAS</span><b>${claimed} / ${items.length}</b></div>
             <div class="ms-track"><i style="width:${(100 * done) / Math.max(1, main.length)}%"></i></div>
-            <p class="ms-note">${periodic ? `Complete as ${main.length} missões para liberar a recompensa final.` : "Conquistas de longo prazo. Cada uma é resgatada uma única vez e fica salva na conta."}</p>`;
+            <p class="ms-note">${periodic ? `Complete as ${main.length} missões para liberar a recompensa final.` : "100 missões novas todo mês. As que você não terminar continuam aqui e acumulam com as do mês seguinte."}</p>`;
           const sorted = periodic ? main : [...main].sort((a, b) => Number(a.claimed) - Number(b.claimed) || Number(b.completed) - Number(a.completed) || b.progress / b.target - a.progress / a.target);
-          body.innerHTML = sorted.map((m) => this.card(m)).join("") + (final ? this.card(final) : "");
+          body.innerHTML = filterBar + sorted.map((m) => this.card(m)).join("") + (final ? this.card(final) : "");
+          this.bindFilters(body);
         }
       }
       $("missions-offline").classList.toggle("hidden", !signed || online);
@@ -154,6 +175,12 @@
       $("indexbadge").textContent = !signed ? "Requer conta" : idx ? `${idx} recompensa${idx > 1 ? "s" : ""} disponíve${idx > 1 ? "is" : "l"}` : "Bestiário e marcos de abate";
       $("indexbtn").classList.toggle("has-reward", idx > 0);
       this.renderTracker();
+    },
+    bindFilters(body) {
+      const m = body.querySelector("[data-u-month]"),
+        s = body.querySelector("[data-u-status]");
+      if (m) m.onchange = () => { this.uMonth = m.value; this.render(); };
+      if (s) s.onchange = () => { this.uStatus = s.value; this.render(); };
     },
     renderTimers() {
       document.querySelectorAll("[data-countdown]").forEach((el) => {

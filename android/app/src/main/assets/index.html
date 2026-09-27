@@ -3071,6 +3071,7 @@ body.netgame #revivetouch{display:flex}
     <script src="js/ui/LoginUI.js"></script>
     <script src="js/ui/ProfileUI.js"></script>
     <script src="js/ui/MissionUI.js"></script>
+    <script src="js/ui/BadgeUI.js"></script>
     <script src="js/ui/LobbyUI.js"></script>
     <script src="monsters/voxel-atlas.js"></script>
     <script src="monsters/monster-sfx.js"></script>
@@ -16063,6 +16064,7 @@ body.netgame #revivetouch{display:flex}
             CharacterStyle.data = { ...CharacterStyle.defaults, ...(profile.cosmetics || {}) };
             CharacterStyle.owned = ["standard", ...new Set(Array.isArray(profile.ownedCosmetics) ? profile.ownedCosmetics : [])];
             normalizeLoadoutState(Progression.economy.data);
+            DR.BadgeUI?.announce(profile);
             if (this.userId !== DevMode.checkedFor) {
               DevMode.checkedFor = this.userId;
               DevMode.refresh();
@@ -20362,6 +20364,7 @@ body.netgame #revivetouch{display:flex}
         DR.LoginUI.init(App);
         DR.ProfileUI.init(App);
         DR.MissionUI.init(App);
+        DR.BadgeUI.init(App);
         DR.LobbyUI.init(App);
         DR.GoogleAuth.setHandler(async (url) => {
           const result = await DR.AuthService.handleCallback(url);

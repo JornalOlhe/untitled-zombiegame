@@ -32,6 +32,7 @@
       this.game.screen("profilescreen");
       this.render();
       // Progress panels use the missions and Index data; fetch them if this session has none yet.
+      DR.BadgeUI?.refresh();
       if (this.game.signedIn() && DR.Backend.isOnline()) {
         if (!DR.MissionManager.list.length) DR.MissionManager.refresh().then(() => this.render(), () => {});
         if (!DR.Bestiary.list.length) DR.Bestiary.refresh().then(() => this.render(), () => {});

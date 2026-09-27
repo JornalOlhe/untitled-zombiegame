@@ -501,6 +501,9 @@ body.bossdeath #announcement, body.bossdeath #hud, body.bossdeath #touch { opaci
 .mission-tabs button.active { color: var(--bone); background: linear-gradient(180deg, rgba(179,20,27,.55), rgba(58,3,6,.7)); border-color: var(--blood-2); }
 .mission-tabs button i { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 10px; background: var(--toxic); color: #081000; font: 700 12px/1 var(--head); font-style: normal; }
 .mission-tabs button i:empty { display: none; }
+.mission-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; }
+.mission-filters label { display: flex; align-items: center; gap: 6px; font: 600 12px/1 var(--head); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.mission-filters select { padding: 6px 8px; background: rgba(19,15,13,.85); color: var(--bone); border: 1px solid var(--edge); border-radius: 4px; font: 600 13px/1 var(--head); }
 .mission-summary { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)) 1fr; gap: 8px 22px; align-items: end; padding: 12px 16px; background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut-s); }
 .mission-summary:empty { display: none; }
 .ms-stat { display: grid; gap: 2px; }
