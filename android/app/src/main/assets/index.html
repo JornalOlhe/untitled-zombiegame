@@ -14795,7 +14795,12 @@ body.netgame #revivetouch{display:flex}
           },
           async flushOffline() {
             if (!this.userId) return;
-            const r = await DR.OfflineQueue.flush(this.userId).catch(() => null);
+            // Every operation that can return a profile snapshot must run in the same
+            // serial queue. Otherwise an older run/offline response can arrive after a
+            // newer one and visually roll the wallet back to a stale coin balance.
+            const op = this.pending.catch(() => {}).then(() => DR.OfflineQueue.flush(this.userId));
+            this.pending = op.catch(() => {});
+            const r = await op.catch(() => null);
             if (r?.synced) {
               if (r.last?.profile) this.apply(r.last.profile);
               if (r.last?.missions) DR.MissionManager.set(r.last.missions);
@@ -14881,7 +14886,11 @@ body.netgame #revivetouch{display:flex}
             }
             if (DR.Backend.isOnline()) {
               try {
-                const r = await DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId);
+                const op = this.pending
+                  .catch(() => {})
+                  .then(() => DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId));
+                this.pending = op.catch(() => {});
+                const r = await op;
                 this.run = { id: r.run, offline: false };
                 if (r.profile) this.apply(r.profile);
                 return;
@@ -14907,7 +14916,12 @@ body.netgame #revivetouch{display:flex}
               }
               return Promise.resolve();
             }
-            return DR.RunRepository.report(run.id, this.report(result), ended, ended ? result : null)
+            const snapshot = this.report(result);
+            const op = this.pending
+              .catch(() => {})
+              .then(() => DR.RunRepository.report(run.id, snapshot, ended, ended ? result : null));
+            this.pending = op.catch(() => {});
+            return op
               .then((r) => {
                 this.apply(r.profile);
                 DR.MissionManager.set(r.missions);
@@ -14915,16 +14929,19 @@ body.netgame #revivetouch{display:flex}
               .catch((e) => {
                 if (ended && (e.code === "network" || e.code === "timeout")) {
                   // Keep the final report for later: the server clamps it to the real run time.
-                  DR.OfflineQueue.push(this.userId, this.report(result));
+                  DR.OfflineQueue.push(this.userId, snapshot);
                   UIManager.toast("Sem conexão: resultado será sincronizado depois.");
                 } else if (ended) this.run = null;
               });
           },
           claimMutation(wave, event) {
             if (!this.signedIn() || !this.run || this.run.offline || !event) return Promise.resolve();
-            return DR.RunRepository.mutation(this.run.id, wave, event.id)
-              .then((r) => this.apply(r.profile))
-              .catch(() => {});
+            const runId = this.run.id;
+            const op = this.pending
+              .catch(() => {})
+              .then(() => DR.RunRepository.mutation(runId, wave, event.id));
+            this.pending = op.catch(() => {});
+            return op.then((r) => this.apply(r.profile)).catch(() => {});
           },
           update() {
             if (this.signedIn() && this.run && !this.run.offline && elapsed - this.lastCheckpoint >= 8) {
