@@ -4447,8 +4447,93 @@ body.netgame #revivetouch{display:flex}
               );
             return this.dressMats.get(id);
           },
+          // Map skin variants painted onto a copy of the monster's atlas (from the LAB / SNOW
+          // VARIANT skin templates): chemical contamination in purple / yellow / green with drips,
+          // or snow caps on every top face, snowy shoulders and icicle drips with frost flecks.
+          variantMaterial(key, variant) {
+            const id = key + "@" + variant;
+            if (this.matCache.has(id)) return this.matCache.get(id);
+            const A = window.DR_VOXEL_ATLAS,
+              canvas = document.createElement("canvas");
+            canvas.width = canvas.height = 1024;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.encoding = THREE.sRGBEncoding;
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            const m = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.92, metalness: 0 });
+            this.matCache.set(id, m);
+            const img = new Image();
+            img.onload = () => {
+              const c = canvas.getContext("2d"),
+                S = canvas.width;
+              c.drawImage(img, 0, 0, S, S);
+              let seed = [...id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 2147483647, 7) || 1;
+              const R = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+              const px = (x, y, w, h, col, a = 1) => {
+                c.globalAlpha = a;
+                c.fillStyle = col;
+                c.fillRect(Math.round(x), Math.round(y), Math.ceil(w), Math.ceil(h));
+                c.globalAlpha = 1;
+              };
+              const shade = (hex, k) => {
+                const n = parseInt(hex.slice(1), 16),
+                  f = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
+                return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+              };
+              for (const [part, faces] of Object.entries(A.uv[key] || {}))
+                for (const [face, [u0, v0, u1, v1]] of Object.entries(faces)) {
+                  const x0 = u0 * S, x1 = u1 * S, y0 = (1 - v1) * S, y1 = (1 - v0) * S,
+                    w = x1 - x0, h = y1 - y0, B = w / 16, cols = Math.round(w / B), rows = Math.round(h / B);
+                  if (face === "ny") continue;
+                  if (variant === "lab") {
+                    // Splotches: short random walks of pixel blocks; drips run down the sides.
+                    const blots = face === "py" ? 3 : 2 + Math.floor(R() * 3);
+                    for (let b = 0; b < blots; b++) {
+                      const col = ["#8e3cc8", "#e0cf2a", "#7fe02a", "#b457e6", "#c9e23a"][Math.floor(R() * 5)];
+                      let cx = Math.floor(R() * cols), cy = Math.floor(R() * rows);
+                      for (let k = 0, n = 6 + Math.floor(R() * 14); k < n; k++) {
+                        px(x0 + cx * B, y0 + cy * B, B, B, shade(col, 0.8 + R() * 0.4), 0.9);
+                        cx = Math.max(0, Math.min(cols - 1, cx + Math.floor(R() * 3) - 1));
+                        cy = Math.max(0, Math.min(rows - 1, cy + Math.floor(R() * 3) - 1));
+                      }
+                    }
+                    if (face !== "py")
+                      for (let d = 0, n = Math.floor(R() * 3); d < n; d++) {
+                        const col = R() < 0.5 ? "#e0cf2a" : "#7fe02a", cx = Math.floor(R() * cols), len = 3 + Math.floor(R() * rows * 0.6);
+                        for (let k = 0; k < len; k++) px(x0 + cx * B, y0 + k * B, B, B, shade(col, 0.85 + R() * 0.3), 0.85);
+                      }
+                  } else if (variant === "snow") {
+                    if (face === "py") {
+                      for (let yy = 0; yy < rows; yy++)
+                        for (let xx = 0; xx < cols; xx++) if (R() < 0.9) px(x0 + xx * B, y0 + yy * B, B, B, shade("#eef4fa", 0.9 + R() * 0.12));
+                    } else {
+                      // Snow band along the top edge with uneven icicles, frost flecks below.
+                      const band = part === "head" || part === "torso" || part.startsWith("arm") ? 2 + Math.floor(R() * 2) : 1;
+                      for (let xx = 0; xx < cols; xx++) {
+                        const len = band + (R() < 0.35 ? 1 + Math.floor(R() * 3) : 0);
+                        for (let k = 0; k < len; k++) px(x0 + xx * B, y0 + k * B, B, B, shade("#e8f1f8", 0.88 + R() * 0.14));
+                      }
+                      for (let f = 0, n = 3 + Math.floor(R() * 5); f < n; f++)
+                        px(x0 + Math.floor(R() * cols) * B, y0 + Math.floor(R() * rows) * B, B, B, R() < 0.5 ? "#f4f8fc" : "#cfe4f4", 0.85);
+                    }
+                  }
+                }
+              texture.needsUpdate = true;
+            };
+            img.src = A.atlases[key];
+            return m;
+          },
           dress(rig, map) {
-            if (!rig?.voxel || rig.style === "crawler") return;
+            if (!rig?.voxel) return;
+            const variant = map === 3 ? "lab" : map === 4 ? "snow" : null;
+            if (variant) {
+              const skin = this.material(rig.key),
+                alt = this.variantMaterial(rig.key, variant);
+              rig.root?.traverse?.((o) => { if (o.isMesh && o.material === skin) o.material = alt; });
+              if (!rig.root) for (const part of [rig.upper, rig.head, rig.neck, ...(rig.arms || []), ...(rig.legs || [])]) part?.traverse((o) => { if (o.isMesh && o.material === skin) o.material = alt; });
+            }
+            if (rig.style === "crawler") return;
             const s = rig.shape,
               P = this.P,
               tw = s.tw * P,
@@ -4510,21 +4595,19 @@ body.netgame #revivetouch{display:flex}
               }
             } else if (map === 3) {
               const chem = [0x39ff5a, 0xb050ff, 0xffd23a][Math.floor(Math.random() * 3)];
-              if (r < 0.45) {
+              if (r < 0.25) {
                 torso(0xdfe4e6, "white", 0.05, lh * 0.35);
                 sleeves(0xdfe4e6, "white", 0.75);
-              } else if (r < 0.7) {
+              } else if (r < 0.4) {
                 // Hazmat suit with a visor.
                 torso(0xc9b23a, "plaster", 0.05);
                 sleeves(0xc9b23a, "plaster", 0.9);
                 pants(0xc9b23a, "plaster");
                 add(rig.head, [hs * 0.8, hs * 0.35, 0.03], [0, hs * 0.05, hs / 2 + 0.02], 0x1c2a30, 0x103038);
               }
-              // Chemical splashes and drips (glowing a little).
-              splash(rig.upper, tw, th, td + 0.06, th / 2, chem);
-              if (Math.random() < 0.7) add(rig.head, [hs * 0.5, 0.06, hs * 0.4], [rand(-0.05, 0.05), hs / 2 + 0.02, 0], chem, chem);
-              rig.arms.forEach((a) => Math.random() < 0.5 && add(a, [aw + 0.04, 0.08, aw + 0.04], [0, -ah * rand(0.3, 0.8), 0], chem, chem));
-            } else if (map === 4) {
+              // A few glowing drops on top of the painted contamination.
+              if (Math.random() < 0.4) splash(rig.upper, tw, th, td + 0.06, th / 2, chem);
+            } else if (map === 4 && false) {
               // Snow settled on the head and shoulders, a few frost flecks.
               add(rig.neck, [hs * 0.9, 0.05, hs * 0.85], [0, hs + 0.025, (s.drop * P) * 0.35], 0xf2f7fa, 0, "snow");
               rig.arms.forEach((a) => add(a, [aw + 0.02, 0.04, aw + 0.02], [0, aw / 2 + 0.02, 0], 0xf2f7fa, 0, "snow"));
