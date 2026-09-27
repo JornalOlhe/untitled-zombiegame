@@ -43,7 +43,7 @@ final class UpdateManager {
     private volatile boolean cancelled;
     private volatile boolean promptVisible;
     private long lastCheck;
-    private int promptedVersion = -1;
+    private String promptedVersion = "";
     private String releaseNotes = "";
     private String releaseName = "";
     private String releasePage = "";
@@ -59,7 +59,6 @@ final class UpdateManager {
 
         new Thread(() -> {
             try {
-                final int installed = installedVersion();
                 final String installedName = installedVersionName();
 
                 HttpURLConnection connection = open(RELEASES);
@@ -67,11 +66,13 @@ final class UpdateManager {
                     if (connection.getResponseCode() != 200) return;
                     byte[] body = readLimited(connection.getInputStream(), 2 * 1024 * 1024);
                     JSONArray releases = new JSONArray(new String(body, "UTF-8"));
-                    JSONObject newest = newestRelease(releases, installed);
+                    JSONObject newest = newestRelease(releases, installedName);
                     if (newest == null) return;
 
-                    final int version = releaseVersion(newest);
-                    if (version <= installed || version == promptedVersion) return;
+                    final String version = releaseVersionName(newest);
+                    if (version.isEmpty()
+                            || compareVersions(version, installedName) <= 0
+                            || version.equals(promptedVersion)) return;
 
                     final boolean prerelease = newest.optBoolean("prerelease");
                     final String name = newest.optString("name", newest.optString("tag_name", "Nova versão"));
@@ -101,7 +102,7 @@ final class UpdateManager {
 
     private void showUpdatePrompt(
             String installedName,
-            int version,
+            String version,
             boolean prerelease,
             JSONObject exactAsset,
             JSONObject anyApk) {
@@ -130,7 +131,7 @@ final class UpdateManager {
                 .setPositiveButton("Baixar mais recente", (d, w) -> {
                     promptVisible = false;
                     if (anyApk != null) {
-                        startVerifiedDownload(version, anyApk);
+                        startVerifiedDownload(anyApk);
                     } else {
                         openExternal(releasePage);
                     }
@@ -142,7 +143,7 @@ final class UpdateManager {
         dialog.show();
     }
 
-    private void startVerifiedDownload(int version, JSONObject asset) {
+    private void startVerifiedDownload(JSONObject asset) {
         String url = asset.optString("browser_download_url", "");
         if (!url.startsWith(ASSET_PREFIX) || !url.toLowerCase().endsWith(".apk")) {
             openExternal(releasePage);
@@ -152,10 +153,10 @@ final class UpdateManager {
         String digest = asset.optString("digest", "");
         File cached = new File(activity.getCacheDir(), "verified-update.apk");
         try {
-            verifyPackage(cached, version);
+            verifyPackage(cached);
             ready();
         } catch (Exception missing) {
-            download(version, url, digest);
+            download(url, digest);
         }
     }
 
@@ -169,7 +170,7 @@ final class UpdateManager {
                 .show();
     }
 
-    private void download(int version, String url, String digest) {
+    private void download(String url, String digest) {
         if (activity.isFinishing() || activity.isDestroyed()) return;
 
         busy = true;
@@ -236,7 +237,7 @@ final class UpdateManager {
                         throw new Exception("Arquivo não passou na verificação");
                     }
 
-                    verifyPackage(temp, version);
+                    verifyPackage(temp);
 
                     File verified = new File(activity.getCacheDir(), "verified-update.apk");
                     if (verified.exists() && !verified.delete()) {
@@ -278,16 +279,16 @@ final class UpdateManager {
         }, "DeadRecoil-update-download").start();
     }
 
-    private JSONObject newestRelease(JSONArray releases, int installed) {
+    private JSONObject newestRelease(JSONArray releases, String installedVersion) {
         JSONObject newest = null;
-        int newestVersion = installed;
+        String newestVersion = installedVersion;
 
         for (int i = 0; i < releases.length(); i++) {
             JSONObject release = releases.optJSONObject(i);
             if (release == null || release.optBoolean("draft")) continue;
 
-            int version = releaseVersion(release);
-            if (version > newestVersion) {
+            String version = releaseVersionName(release);
+            if (!version.isEmpty() && compareVersions(version, newestVersion) > 0) {
                 newestVersion = version;
                 newest = release;
             }
@@ -296,14 +297,53 @@ final class UpdateManager {
         return newest;
     }
 
-    private static int releaseVersion(JSONObject release) {
-        String tag = release.optString("tag_name", "");
-        if (!tag.matches("v[0-9]+")) return -1;
+    private static String releaseVersionName(JSONObject release) {
+        String name = release.optString("name", "");
+        String parsed = extractSemanticVersion(name);
+        if (!parsed.isEmpty()) return parsed;
 
+        String tag = release.optString("tag_name", "");
+        parsed = extractSemanticVersion(tag);
+        if (!parsed.isEmpty()) return parsed;
+
+        if (tag.matches("v[0-9]+")) {
+            try {
+                return "0." + Integer.parseInt(tag.substring(1)) + ".0";
+            } catch (NumberFormatException ignored) {
+                return "";
+            }
+        }
+        return "";
+    }
+
+    private static String extractSemanticVersion(String value) {
+        if (value == null) return "";
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:^|[^0-9])(\\d+)\\.(\\d+)(?:\\.(\\d+))?(?:[^0-9]|$)")
+                .matcher(value);
+        if (!matcher.find()) return "";
+        String patch = matcher.group(3) == null ? "0" : matcher.group(3);
+        return Integer.parseInt(matcher.group(1)) + "."
+                + Integer.parseInt(matcher.group(2)) + "."
+                + Integer.parseInt(patch);
+    }
+
+    private static int compareVersions(String left, String right) {
+        String[] a = left.split("\\.");
+        String[] b = right.split("\\.");
+        for (int i = 0; i < 3; i++) {
+            int av = i < a.length ? safePart(a[i]) : 0;
+            int bv = i < b.length ? safePart(b[i]) : 0;
+            if (av != bv) return Integer.compare(av, bv);
+        }
+        return 0;
+    }
+
+    private static int safePart(String value) {
         try {
-            return Integer.parseInt(tag.substring(1));
-        } catch (NumberFormatException ignored) {
-            return -1;
+            return Integer.parseInt(value.replaceAll("[^0-9].*$", ""));
+        } catch (Exception ignored) {
+            return 0;
         }
     }
 
@@ -344,7 +384,7 @@ final class UpdateManager {
         }
     }
 
-    private void verifyPackage(File file, int expectedVersion) throws Exception {
+    private void verifyPackage(File file) throws Exception {
         if (!file.exists() || file.length() == 0) throw new Exception("Atualização ainda não foi baixada");
 
         PackageManager manager = activity.getPackageManager();
@@ -355,7 +395,6 @@ final class UpdateManager {
 
         if (archive == null
                 || !activity.getPackageName().equals(archive.packageName)
-                || archive.versionCode != expectedVersion
                 || archive.versionCode <= installed.versionCode
                 || archive.signatures == null
                 || installed.signatures == null
