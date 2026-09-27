@@ -25,6 +25,45 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(`http://127.0.0.1:${server.address().port}/?native=1&platform=android&test=1`);
       await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
+      const walletGuard = await page.evaluate(() => {
+        const T = DeadRecoilTest;
+        const original = { ...T.Progression.economy.data };
+        try {
+          T.Progression.economy.data.coins = 5000;
+          T.Progression.economy.data.normal = 5;
+          T.Progression.economy.data.lucky = 2;
+          T.Account.applyNonSpending({
+            ...T.Progression.economy.data,
+            userId: 'wallet-test',
+            username: 'wallet_test',
+            displayName: 'Wallet Test',
+            coins: 144,
+            normal: 0,
+            lucky: 0,
+          });
+          const afterStale = {
+            coins: T.Progression.economy.data.coins,
+            normal: T.Progression.economy.data.normal,
+            lucky: T.Progression.economy.data.lucky,
+          };
+          T.Account.applyNonSpending({
+            ...T.Progression.economy.data,
+            coins: 5250,
+            normal: 7,
+            lucky: 3,
+          });
+          const afterReward = {
+            coins: T.Progression.economy.data.coins,
+            normal: T.Progression.economy.data.normal,
+            lucky: T.Progression.economy.data.lucky,
+          };
+          return { afterStale, afterReward };
+        } finally {
+          T.Progression.economy.data = original;
+        }
+      });
+      assert.deepEqual(walletGuard.afterStale, { coins: 5000, normal: 5, lucky: 2 }, 'reward sync must never reduce wallet balances');
+      assert.deepEqual(walletGuard.afterReward, { coins: 5250, normal: 7, lucky: 3 }, 'reward sync must still accept higher balances');
       assert.deepEqual(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky), [0,0,0,58.9,37,3,1,0.1]);
       assert.equal(await page.evaluate(() => DeadRecoilTest.Progression.economy.rates.lucky.reduce((a,b)=>a+b,0)),100);
       assert.ok(await page.evaluate(() => DeadRecoilTest.Progression.economy.catalogs.weapon.some(item => item.tier === 6)), 'Divine weapon must exist');
