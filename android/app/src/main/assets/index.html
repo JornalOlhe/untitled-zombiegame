@@ -14721,6 +14721,20 @@ body.netgame #revivetouch{display:flex}
             } catch {}
             this.badge();
           },
+          // Run start/checkpoints/mutations/offline sync are reward-only operations.
+          // They must never reduce wallet balances, even if an older server snapshot
+          // arrives after a newer profile response.
+          applyNonSpending(profile) {
+            if (!profile) return;
+            const current = Progression.data || {};
+            const safe = {
+              ...profile,
+              coins: Math.max(Number(current.coins || 0), Number(profile.coins || 0)),
+              normal: Math.max(Number(current.normal || 0), Number(profile.normal || 0)),
+              lucky: Math.max(Number(current.lucky || 0), Number(profile.lucky || 0)),
+            };
+            this.apply(safe);
+          },
           badge() {
             const online = DR.Backend.isOnline();
             const status = $("account-status");
@@ -14802,7 +14816,7 @@ body.netgame #revivetouch{display:flex}
             this.pending = op.catch(() => {});
             const r = await op.catch(() => null);
             if (r?.synced) {
-              if (r.last?.profile) this.apply(r.last.profile);
+              if (r.last?.profile) this.applyNonSpending(r.last.profile);
               if (r.last?.missions) DR.MissionManager.set(r.last.missions);
               UIManager.toast(`${r.synced} partida(s) offline sincronizada(s).`);
             }
@@ -14892,7 +14906,7 @@ body.netgame #revivetouch{display:flex}
                 this.pending = op.catch(() => {});
                 const r = await op;
                 this.run = { id: r.run, offline: false };
-                if (r.profile) this.apply(r.profile);
+                if (r.profile) this.applyNonSpending(r.profile);
                 return;
               } catch (e) {
                 if (lobbyId) throw e;
@@ -14923,7 +14937,7 @@ body.netgame #revivetouch{display:flex}
             this.pending = op.catch(() => {});
             return op
               .then((r) => {
-                this.apply(r.profile);
+                this.applyNonSpending(r.profile);
                 DR.MissionManager.set(r.missions);
               })
               .catch((e) => {
@@ -14941,7 +14955,7 @@ body.netgame #revivetouch{display:flex}
               .catch(() => {})
               .then(() => DR.RunRepository.mutation(runId, wave, event.id));
             this.pending = op.catch(() => {});
-            return op.then((r) => this.apply(r.profile)).catch(() => {});
+            return op.then((r) => this.applyNonSpending(r.profile)).catch(() => {});
           },
           update() {
             if (this.signedIn() && this.run && !this.run.offline && elapsed - this.lastCheckpoint >= 8) {
@@ -19215,6 +19229,7 @@ body.netgame #revivetouch{display:flex}
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
             Survivor,
+            Account,
             SecretWeaponSkills,
             CameraRig,
             classBurst: () => classBurst(),
