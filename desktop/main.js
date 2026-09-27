@@ -116,19 +116,35 @@ function finishSmoke(code) {
   app.exit(code);
 }
 
-function releaseCodeFromTag(tag) {
-  const match = /^v(\d+)$/.exec(String(tag || ""));
-  return match ? Number(match[1]) : -1;
+function parseVersion(value) {
+  const match = String(value || "").match(/(?:^|[^0-9])(\d+)\.(\d+)(?:\.(\d+))?(?:[^0-9]|$)/);
+  if (!match) return null;
+  return [Number(match[1]) || 0, Number(match[2]) || 0, Number(match[3]) || 0];
 }
 
-function installedReleaseCode() {
-  const parts = String(app.getVersion() || "0.0.0")
-    .split(".")
-    .map((value) => Number(value) || 0);
+function compareVersions(a, b) {
+  for (let i = 0; i < 3; i++) {
+    const av = a?.[i] || 0;
+    const bv = b?.[i] || 0;
+    if (av > bv) return 1;
+    if (av < bv) return -1;
+  }
+  return 0;
+}
 
-  // Dead Recoil uses 0.N.0 package versions with GitHub tags vN.
-  if ((parts[0] || 0) === 0) return parts[1] || 0;
-  return parts[0] || 0;
+function releaseVersion(release) {
+  // The human release name is authoritative. This lets bridge tags such as v28
+  // still carry the real product version 0.27.1 without causing an update loop.
+  const fromName = parseVersion(release?.name);
+  if (fromName) return fromName;
+
+  // Normal semantic tags such as v27.2 or v27.2.1.
+  const fromTag = parseVersion(release?.tag_name);
+  if (fromTag) return fromTag;
+
+  // Legacy tags v27, v28... map to the historical 0.N.0 scheme.
+  const legacy = /^v(\d+)$/.exec(String(release?.tag_name || ""));
+  return legacy ? [0, Number(legacy[1]) || 0, 0] : null;
 }
 
 // Installed builds (NSIS) update themselves in place: the new installer is downloaded to one
@@ -215,20 +231,20 @@ async function checkForUpdates() {
     if (!response.ok) return;
 
     const releases = await response.json();
-    const installedCode = installedReleaseCode();
+    const currentVersion = app.getVersion();
+    const installedVersion = parseVersion(currentVersion) || [0, 0, 0];
 
     const newest = releases
       .filter((release) => release && !release.draft)
-      .map((release) => ({ release, code: releaseCodeFromTag(release.tag_name) }))
-      .filter(({ code }) => code > installedCode)
-      .sort((a, b) => b.code - a.code)[0];
+      .map((release) => ({ release, version: releaseVersion(release) }))
+      .filter(({ version }) => version && compareVersions(version, installedVersion) > 0)
+      .sort((a, b) => compareVersions(b.version, a.version))[0];
 
     if (!newest || !mainWindow || mainWindow.isDestroyed()) return;
 
-    const { release, code } = newest;
+    const { release } = newest;
     const asset = findWindowsAsset(release);
-    const currentVersion = app.getVersion();
-    const releaseName = release.name || release.tag_name || `v${code}`;
+    const releaseName = release.name || release.tag_name || "Nova versão";
     const installed = isInstalledBuild();
 
     const result = await dialog.showMessageBox(mainWindow, {
