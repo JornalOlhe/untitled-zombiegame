@@ -16735,7 +16735,7 @@ body.netgame #revivetouch{display:flex}
               this.lastSound = simulationTime;
               AudioManager.noise?.(0.14, kind === "fire" ? 0.18 : 0.12);
             }
-            scene.updateMatrixWorld(true);
+            syncHitMatrices();
             for (const z of [...ZombieManager.list]) {
               if (z.dead) continue;
               const c = z.group.position.clone().add(new V(0, 0.9 * (z.size || 1), 0)),
@@ -16755,10 +16755,18 @@ body.netgame #revivetouch{display:flex}
         // Factored out of PlayerController.shoot() so a charged bow shot (fired from
         // updateChargeShot on release, not from the regular per-frame shoot() loop) can
         // reuse the exact same hit logic.
+        // Raycasts against zombies need their current matrices. Updating only the zombie groups,
+        // once per simulation step, replaces a whole-scene matrix update per bullet / pellet.
+        let hitSyncAt = -1;
+        function syncHitMatrices() {
+          if (hitSyncAt === simulationTime) return;
+          hitSyncAt = simulationTime;
+          for (const z of ZombieManager.list) z.group.updateMatrixWorld(true);
+        }
         function fireHitscanShot(w, origin, shot, damage, first = true) {
           raycaster.set(origin, shot);
           raycaster.far = w.range;
-          scene.updateMatrixWorld(true);
+          syncHitMatrices();
           let wallDistance = w.range;
           if (!w.walls) {
             const wall = raycaster.intersectObjects(MapManager.walls);
@@ -16964,7 +16972,7 @@ body.netgame #revivetouch{display:flex}
               dir = CameraRig.aim().normalize();
             raycaster.set(origin, dir);
             raycaster.far = maxDistance;
-            scene.updateMatrixWorld(true);
+            syncHitMatrices();
             const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
               wh = raycaster.intersectObjects(MapManager.walls)[0];
             if (zh && (!wh || zh.distance < wh.distance)) {
@@ -17408,7 +17416,7 @@ body.netgame #revivetouch{display:flex}
             });
           },
           strike(w, damage, reach = Math.min(w.range, 2.6)) {
-            scene.updateMatrixWorld(true);
+            syncHitMatrices();
             const hits = meleeTargets(
               player.pos,
               forward(),
@@ -21160,7 +21168,7 @@ body.netgame #revivetouch{display:flex}
             let distance = offset.length();
             const back = distance > 0.001 ? offset.normalize() : new V(0, 0, 1);
             if (distance > 0.02) {
-              scene.updateMatrixWorld(true);
+              // walls are static: their matrices are already current (no scene-wide update per frame)
               for (const margin of [
                 new V(),
                 new V(0.17, 0, 0),
