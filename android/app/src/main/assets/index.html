@@ -5344,6 +5344,34 @@ body.netgame #revivetouch{display:flex}
                 pivot.add(node);
               }
             }
+            if (w.kind === "bow" && parts.string) {
+              // Hook the live string to the real limb tips of the model (the extreme top/bottom
+              // vertices), so the string, the nock and the arrow sit on this bow's geometry.
+              let top = null;
+              gun.updateMatrixWorld(true);
+              const inv = new THREE.Matrix4().copy(gun.matrixWorld).invert(),
+                v = new V();
+              model.traverse((o) => {
+                if (!o.isMesh) return;
+                const p = o.geometry.attributes.position,
+                  mw = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+                for (let i = 0; i < p.count; i++) {
+                  v.fromBufferAttribute(p, i).applyMatrix4(mw);
+                  if (!top || v.y > top.y + 1e-4 || (Math.abs(v.y - top.y) < 0.01 && v.z > top.z)) top = v.clone();
+                }
+              });
+              if (top) {
+                const tipY = top.y - 0.01,
+                  tipZ = top.z;
+                const pos = parts.string.geometry.attributes.position;
+                pos.setXYZ(0, 0, tipY, tipZ);
+                pos.setXYZ(1, 0, 0.035, tipZ);
+                pos.setXYZ(2, 0, -tipY, tipZ);
+                pos.needsUpdate = true;
+                parts.string.userData.tip = [tipY, tipZ];
+                if (parts.arrow) parts.arrow.position.z = tipZ;
+              }
+            }
             if (w.kind !== "melee" && w.kind !== "bow" && isFinite(minZ)) {
               // Muzzle flash at the real end of the barrel.
               parts.flash.position.z = minZ - 0.02;
@@ -10147,9 +10175,9 @@ body.netgame #revivetouch{display:flex}
             if (w.kind === "bow" && !aiming) {
               // A bow is held upright in front of the body, left of centre, with its belly turned
               // a little toward the camera so the curved limbs and the string read clearly.
-              target.x -= 0.2;
-              target.y += 0.02;
-              target.z -= 0.06;
+              target.x -= 0.24;
+              target.y += 0.1;
+              target.z -= 0.3;
             }
             if (w.specter) {
               const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
@@ -10186,8 +10214,8 @@ body.netgame #revivetouch{display:flex}
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
             if (w.kind === "bow") {
-              this.model.rotation.y += aiming ? 0.18 : 0.55;
-              this.model.rotation.z += aiming ? 0.12 : 0.22;
+              this.model.rotation.y += aiming ? 0.18 : 0.95;
+              this.model.rotation.z += aiming ? 0.12 : 0.16;
             }
             if (w.scythe && !aiming) {
               // Scythe carried on the shoulder: head leans away and the blade turns its flat
