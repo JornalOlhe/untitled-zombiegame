@@ -68,6 +68,64 @@ const server = http.createServer((req, res) => {
       T.keys.add('KeyW'); for (let i = 0; i < 60; i++) T.stepPlayer(1 / 30, 1); T.keys.delete('KeyW');
       out.tall = { blocked: p.pos.x < tall.x - tall.w, feet: +feet().toFixed(2) };
       M.obstacles.splice(M.obstacles.indexOf(tall), 1);
+      // ── Locomotion feel: sprint build-up, deceleration, jump, bunny hop, air control ──────
+      const G = T.GroundMotion, PC = T.PlayerController, mo = PC.motion;
+      const home = () => { p.pos.set(sx, 1.7, sz); };
+      const keepHome = () => { if (Math.hypot(p.pos.x - sx, p.pos.z - sz) > 3) { p.pos.x = sx; p.pos.z = sz; } };
+      const reset = () => { home(); p.ground = 0; p.jump = 0; p.vy = 0; p.climb = null; mo.reset(); T.keys.clear(); T.mouse.aim = false; faceDir(1, 0); };
+      const run = (sec, fps, each) => { const n = Math.round(sec * fps); for (let i = 0; i < n; i++) { T.stepPlayer(1 / fps, 1); keepHome(); each && each(i, n); } };
+      const sp = () => Math.hypot(mo.vx, mo.vz);
+      reset(); T.keys.add('KeyW'); run(1.5, 60); const walk = sp();
+      const sprintCurve = (fps) => {
+        reset(); T.keys.add('KeyW'); run(1.0, fps); T.keys.add('ShiftLeft');
+        const s = {}; let t = 0;
+        for (const mark of [0.25, 0.5, 1.0, 1.5, 2.0, 2.6]) { run(mark - t, fps); t = mark; s[mark] = +sp().toFixed(3); }
+        return s;
+      };
+      const c60 = sprintCurve(60), c30 = sprintCurve(30), c144 = sprintCurve(144);
+      const sprintMax = walk * G.SPRINT_MULT;
+      // Release: smooth deceleration back to walking speed.
+      T.keys.delete('ShiftLeft'); run(0.1, 60); const after01 = sp(); run(0.6, 60); const after07 = sp();
+      out.sprint = { walk: +walk.toFixed(3), sprintMax: +sprintMax.toFixed(3), c60, c30, c144, after01: +after01.toFixed(3), after07: +after07.toFixed(3) };
+      // Jump height from rest.
+      reset(); T.queueJump(); let top = 0; run(1.2, 60, () => { top = Math.max(top, p.jump); });
+      out.jump = { top: +top.toFixed(3), landed: p.jump === 0 };
+      // Bunny hop: at full sprint, hop on every landing while strafing with the mouse turn.
+      // Air-strafe like a player would: in the air hold only the strafe key and turn the view
+      // so the strafe direction stays ~86° from the velocity; hop on every landing.
+      const hopRun = (fps, late, aim) => {
+        reset(); T.keys.add('KeyW'); T.keys.add('ShiftLeft'); run(2.6, fps);
+        if (aim) T.mouse.aim = true;
+        let maxS = 0, hops = 0, air = false, landedAt = -1, frame = 0, side = 1;
+        const n = Math.round(6 * fps);
+        for (let i = 0; i < n; i++) {
+          frame++;
+          if (p.jump === 0) {
+            if (air) { air = false; landedAt = frame; T.keys.add('KeyW'); T.keys.delete('KeyA'); T.keys.delete('KeyD'); }
+            if (landedAt < 0 || (late && frame - landedAt >= Math.round(0.4 * fps))) T.queueJump();
+          } else {
+            // Timed player: presses jump just before touching down (the 0.12 s buffer).
+            if (!late && p.vy < 0 && p.jump < 0.35) T.queueJump();
+            if (!air) { air = true; hops++; side = -side; T.keys.delete('KeyW'); T.keys.add(side > 0 ? 'KeyD' : 'KeyA'); }
+            // Velocity heading → yaw such that the strafe key points 80° away from it.
+            const vAng = Math.atan2(mo.vx, mo.vz);
+            const want = vAng + side * (86 * Math.PI / 180);
+            // strafe D (x=+1) points at (cos yaw, -sin yaw) → atan2 = PI/2 - yaw; A is the opposite.
+            T.setYaw(side > 0 ? Math.PI / 2 - want : -Math.PI / 2 - want);
+          }
+          T.stepPlayer(1 / fps, 1); keepHome();
+          maxS = Math.max(maxS, sp());
+          if (!isFinite(sp())) return { nan: true };
+        }
+        const end = sp();
+        T.keys.clear(); T.mouse.aim = false;
+        return { max: +maxS.toFixed(3), end: +end.toFixed(3), hops, cap: +PC.speedCap.toFixed(3) };
+      };
+      out.bhop = { timed60: hopRun(60), timed30: hopRun(30), timed144: hopRun(144), late: hopRun(60, true), aim: hopRun(60, false, true) };
+      // Air control from a standing jump: strafing in the air only adds a little speed.
+      reset(); T.queueJump(); T.stepPlayer(1 / 60, 2); T.keys.add('KeyD'); let airMax = 0; run(0.5, 60, () => { if (p.jump > 0) airMax = Math.max(airMax, sp()); }); T.keys.clear();
+      out.air = { airMax: +airMax.toFixed(3), wish: G.AIR_WISH };
+      reset();
       out.nan = !isFinite(p.pos.x + p.pos.y + p.pos.z);
       return out;
     });
@@ -77,6 +135,27 @@ const server = http.createServer((req, res) => {
     assert.ok(r.ladderDown.grabbedDown && r.ladderDown.maxDescentSpeed < 4, 'ladder: climb down, not fall');
     assert.ok(r.lowStep.crossed && r.lowStep.maxFeet >= 0.3, 'low obstacle is stepped over');
     assert.ok(r.tall.blocked && r.tall.feet < 0.1, 'tall obstacle blocks');
+    const S = r.sprint;
+    for (const c of [S.c60, S.c30, S.c144]) {
+      assert.ok(c[0.25] > S.walk && c[0.25] < S.sprintMax * 0.93, 'sprint starts accelerating, not instant: ' + JSON.stringify(c));
+      assert.ok(c[0.25] < c[0.5] && c[0.5] < c[1] && c[1] < c[1.5] && c[1.5] <= c[2] + 1e-6, 'sprint speed rises smoothly: ' + JSON.stringify(c));
+      assert.ok(c[1] < S.sprintMax * 0.99, 'still building up at 1 s');
+      assert.ok(c[2.6] > S.sprintMax * 0.985 && c[2.6] <= S.sprintMax * 1.01, 'reaches top sprint speed ~2 s: ' + JSON.stringify(c));
+    }
+    assert.ok(Math.abs(S.c30[1] - S.c144[1]) / S.c60[1] < 0.04, 'sprint build-up is frame-rate independent');
+    assert.ok(S.after01 > S.walk * 1.05 && S.after01 < S.sprintMax, 'sprint release decelerates smoothly');
+    assert.ok(Math.abs(S.after07 - S.walk) / S.walk < 0.04, 'back to walking speed ~0.6 s after release');
+    assert.ok(r.jump.top > 0.9 && r.jump.top < 1.4 && r.jump.landed, 'jump height');
+    for (const k of ['timed60', 'timed30', 'timed144']) {
+      const b = r.bhop[k];
+      assert.ok(!b.nan && b.hops >= 6, 'bhop hops happen: ' + k);
+      assert.ok(b.max <= b.cap + 0.02, 'bhop never exceeds the hard cap: ' + JSON.stringify(b));
+      assert.ok(b.max >= S.sprintMax * 1.04, 'timed hops keep and slightly build momentum: ' + JSON.stringify(b));
+    }
+    assert.ok(Math.abs(r.bhop.timed30.max - r.bhop.timed144.max) / r.bhop.timed60.max < 0.06, 'bhop gain does not depend much on FPS');
+    assert.ok(r.bhop.late.max < r.bhop.timed60.max - 0.15, 'late hops lose the momentum bonus: ' + JSON.stringify(r.bhop.late));
+    assert.ok(r.bhop.aim.max <= r.bhop.aim.cap + 0.02 && r.bhop.aim.cap < r.bhop.timed60.cap * 0.75, 'aiming shrinks bhop: ' + JSON.stringify(r.bhop.aim));
+    assert.ok(r.air.airMax <= r.air.wish + 0.08, 'air control is limited: ' + JSON.stringify(r.air));
     assert.ok(!r.nan);
     assert.deepEqual(errors, []);
     console.log('PASS movement');

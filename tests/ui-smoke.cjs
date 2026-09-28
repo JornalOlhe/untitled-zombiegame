@@ -302,8 +302,92 @@ const server = http.createServer((req, res) => {
       await page.screenshot({path:`test-results/game-${width}.png`});
       await page.evaluate(() => document.dispatchEvent(new Event('deadrecoil-native-pause')));
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PAUSED);
+      // Settings sliders: the visual fill is (value - min) / (max - min) — MIN empty, MAX full.
+      await page.locator('#pausesettings').click();
+      await page.locator('[data-settings-tab="audio"]').click();
+      const sliders = await page.evaluate(() => {
+        const out = {};
+        const probe = (key) => {
+          const el = document.querySelector(`[data-setting="${key}"]`);
+          const res = {};
+          const min = Number(el.min), max = Number(el.max);
+          for (const [label, v] of [['min', min], ['q1', min + (max - min) * 0.25], ['mid', min + (max - min) * 0.5], ['q3', min + (max - min) * 0.75], ['max', max]]) {
+            el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true }));
+            const r = el.getBoundingClientRect();
+            res[label] = { fill: el.style.getPropertyValue('--range-fill'), progress: Number(el.style.getPropertyValue('--range-progress')), out: document.querySelector(`[data-out="${key}"]`)?.textContent, w: r.width };
+          }
+          el.value = String(DR.Settings.defaults[key] ?? max); el.dispatchEvent(new Event('input', { bubbles: true }));
+          return res;
+        };
+        out.master = probe('master');
+        document.querySelector('[data-settings-tab="camera"]').click();
+        out.fov = probe('fov'); out.sensitivity = probe('sensitivity');
+        document.querySelector('[data-settings-tab="graphics"]').click();
+        out.resolution = probe('resolution');
+        return out;
+      });
+      for (const [k, s] of Object.entries(sliders)) {
+        assert.equal(s.min.fill, '0%', `slider ${k}: MIN is empty`);
+        assert.equal(s.max.fill, '100%', `slider ${k}: MAX is completely full`);
+        assert.ok(Math.abs(s.q1.progress - 0.25) < 0.02 && Math.abs(s.mid.progress - 0.5) < 0.02 && Math.abs(s.q3.progress - 0.75) < 0.02, `slider ${k}: 25/50/75% progress`);
+      }
+      assert.equal(sliders.master.max.out, '100%');
+      await page.evaluate(() => { if (DeadRecoilTest.state !== DeadRecoilTest.GameState.PAUSED) DeadRecoilTest.pause(); });
       assert.deepEqual(errors,[]);
       console.log(`PASS ${width}x${height}: maps, modes, difficulty, deployment, movement, pause, no JS errors`);
+      await context.close();
+    }
+    {
+      // Desktop (mouse) context for the Pointer Lock / mouse-look regression.
+      const context = await browser.newContext({ viewport:{width:1280,height:720}, deviceScaleFactor:1 });
+      const page = await context.newPage();
+      const errors = [];
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
+      await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
+      // Mouse-look state machine (headless browsers can't take Pointer Lock, so this drives the
+      // compatibility source): one source per state, nothing moves in menus, spikes/NaN dropped,
+      // the capture click never fires.
+      const look = await page.evaluate(async () => {
+        const T = DeadRecoilTest;
+        T.setMap(0); T.PlayerController.start(); T.pause();
+        const world = document.getElementById('world');
+        const move = (x, y) => world.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const res = {};
+        T.resume(); await wait(120);
+        res.afterResume = T.mouseMode();
+        const y0 = T.getYaw(); move(300, 200); move(340, 200); res.unlockedMoves = T.getYaw() !== y0;
+        world.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        res.captureClickFired = T.mouse.down; await wait(80);
+        // Headless Chromium grants Pointer Lock: the capture click leads to LOCKED.
+        await wait(120);
+        res.capturedMode = T.mouseMode();
+        const moveBy = (dx) => world.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, movementX: dx, movementY: 0 }));
+        const yl = T.getYaw(); moveBy(25); res.lockedMoves = T.getYaw() !== yl;
+        // Compatibility source (lock unavailable): only cursor deltas over the arena.
+        document.exitPointerLock(); await wait(60);
+        T.resume(); T.lockState({ lockPending: false, fallback: true }); T.MouseLook.quiet(0); await wait(5);
+        res.fallbackMode = T.mouseMode();
+        move(300, 200); const y1 = T.getYaw(); move(330, 200); res.fallbackMoves = T.getYaw() !== y1;
+        T.freeMouse(true); const y2 = T.getYaw(); move(400, 200); move(420, 200); res.freedMoves = T.getYaw() !== y2; res.freedMode = T.mouseMode();
+        T.freeMouse(false); await wait(120);
+        T.pause(); const y3 = T.getYaw(); move(100, 100); move(500, 400); res.pausedMoves = T.getYaw() !== y3; res.pausedMode = T.mouseMode();
+        res.nan = T.MouseLook.filter(NaN, 1, performance.now()) === null && T.MouseLook.filter(Infinity, 0, performance.now()) === null;
+        T.MouseLook.lastMag = 5; res.spike = T.MouseLook.filter(900, 0, T.MouseLook.lastAt + 10) === null;
+        T.MouseLook.lastMag = 0; let ok = true; for (const d of [60, 180, 320, 400, 260, 90]) ok = ok && !!T.MouseLook.filter(d, 0, T.MouseLook.lastAt + 8); res.flick = ok;
+        return res;
+      });
+      assert.equal(look.afterResume, 'UNLOCKED', 'resume waits for a click to capture');
+      assert.ok(!look.unlockedMoves, 'no camera movement before capture');
+      assert.ok(!look.captureClickFired, 'the capture click never fires the weapon');
+      assert.ok(look.capturedMode === 'LOCKED' && look.lockedMoves, 'Pointer Lock moves the camera');
+      assert.ok(look.fallbackMode === 'FALLBACK' && look.fallbackMoves, 'compatibility mode moves the camera');
+      assert.ok(!look.freedMoves && look.freedMode === 'MENU', 'freed mouse never moves the camera');
+      assert.ok(!look.pausedMoves && look.pausedMode === 'MENU', 'no camera movement in menus');
+      assert.ok(look.nan && look.spike && look.flick, 'NaN and isolated spikes are rejected, real flicks are kept');
+      assert.deepEqual(errors,[]);
+      console.log('PASS mouse-look state machine');
       await context.close();
     }
   } finally { await browser.close(); server.close(); }

@@ -50,14 +50,46 @@ const server = http.createServer((req, res) => {
       const climbed = readPitch() - start;
       for (let i = 0; i < 60; i++) { T.setTime(T.time + 1 / 30); W.recoverRecoil(1 / 30, w); }
       out.recoil = { climbed: +climbed.toFixed(3), afterRecover: +(readPitch() - start).toFixed(3) };
-      // Spread: moving and sprinting are wider than standing; ADS is tighter.
-      P.motion.vx = P.motion.vz = 0; W.sinceLastShot = 0;
-      const stand = W.spreadFor(w);
-      P.motion.vx = 4; const move = W.spreadFor(w);
-      P.motion.vx = 8; const sprint = W.spreadFor(w);
-      P.motion.vx = 0; T.mouse.aim = true; const ads = W.spreadFor(w); T.mouse.aim = false;
-      W.sinceLastShot = 2; const first = W.spreadFor(w);
-      out.spread = { stand, move, sprint, ads, first };
+      // Spread per weapon family: stand < move < sprint, air wider than standing, ADS and crouch
+      // tighter, first shot from a settled stance tighter than a follow-up shot.
+      const walk = 5.6 * T.classValue('speed', 1);
+      const measure = (name) => {
+        const w = equip(name); w.ammo = 999;
+        const at = (fn) => { P.motion.vx = P.motion.vz = 0; p.jump = 0; T.mouse.aim = false; T.keys.delete('ControlLeft'); W.bloom = 0; T.setTime(T.time + 3); fn && fn(); const v = W.spreadFor(w, { power: 1 }); P.motion.vx = 0; p.jump = 0; T.mouse.aim = false; T.keys.delete('ControlLeft'); return +v.toFixed(5); };
+        const r = {
+          stand: at(), move: at(() => { P.motion.vx = walk * 0.9; }), sprint: at(() => { P.motion.vx = walk * 1.4; }),
+          air: at(() => { p.jump = 0.6; }), ads: at(() => { T.mouse.aim = true; }), crouch: at(() => { T.keys.add('ControlLeft'); }),
+        };
+        // Follow-up shot: fired just now (no settled bonus, plus bloom where the family has it).
+        T.setTime(T.time + 3); W.bloom = 0; P.shoot(); r.followUp = +W.spreadFor(w).toFixed(5); r.bloom = +W.bloom.toFixed(5);
+        return r;
+      };
+      out.spread = {};
+      for (const n of ['MP5', 'Crimson AK', 'Wraith M4A1', 'Riot Breaker', 'Widowmaker', 'Titanbreaker', 'Thundergrave', 'Bow', 'Cerberus Laser']) out.spread[n] = measure(n);
+      // Bloom grows with sustained fire and recovers; recoil (camera) and spread stay separate.
+      w = equip('Crimson AK'); w.ammo = 999; W.bloom = 0; T.setTime(T.time + 3);
+      const s0 = W.spreadFor(w);
+      for (let i = 0; i < 10; i++) { T.setTime(T.time + w.rate + 0.001); P.shoot(); }
+      const s10 = W.spreadFor(w), bloom10 = W.bloom;
+      for (let i = 0; i < 90; i++) { T.setTime(T.time + 1 / 30); W.recoverBloom(1 / 30, w); }
+      T.setTime(T.time + 3);
+      const sRec = W.spreadFor(w);
+      const pitchA = T.getPitch(), bloomA = W.bloom; W.applyRecoil(w); const recoilMovesPitch = T.getPitch() !== pitchA, recoilKeepsBloom = W.bloom === bloomA;
+      const pitchB = T.getPitch(); W.addBloom(w); const bloomKeepsPitch = T.getPitch() === pitchB && W.bloom > bloomA;
+      W.bloom = 0;
+      out.bloom = { s0: +s0.toFixed(4), s10: +s10.toFixed(4), bloom10: +bloom10.toFixed(4), sRec: +sRec.toFixed(4), recoilMovesPitch, recoilKeepsBloom, bloomKeepsPitch };
+      // Shotgun pellets stay inside their own cone.
+      w = equip('Riot Breaker'); T.setTime(T.time + 3);
+      const cone = W.spreadFor(w), fwd = new THREE.Vector3(0, 0, -1);
+      let worst = 0; for (let i = 0; i < 400; i++) worst = Math.max(worst, W.coneDir(fwd, cone).angleTo(fwd));
+      out.shotgun = { cone: +cone.toFixed(4), worst: +worst.toFixed(4) };
+      // Crosshair gap is the projected spread.
+      w = equip('Crimson AK'); T.setTime(T.time + 3); W.bloom = 0; P.motion.vx = 0;
+      W.crosshair(w); const gapStand = W.crosshairGap;
+      P.motion.vx = walk * 1.4; W.crosshair(w); const gapSprint = W.crosshairGap;
+      const expect = Math.tan(W.spreadFor(w)) / Math.tan(T.camera.fov * Math.PI / 360) * innerHeight / 2;
+      P.motion.vx = 0;
+      out.crosshair = { gapStand, gapSprint, expect: +expect.toFixed(2), css: document.querySelector('.crosshair').style.getPropertyValue('--gap') };
       // Sniper scope when aiming.
       w = equip('Titanbreaker');
       T.mouse.aim = true; T.stepPlayer(1 / 30, 20);
@@ -82,7 +114,19 @@ const server = http.createServer((req, res) => {
     assert.ok(r.tracer, 'tracer must start at the muzzle and end at the logical impact');
     assert.ok(r.recoil.climbed > 0.05, 'automatic fire must climb');
     assert.ok(r.recoil.afterRecover < r.recoil.climbed * 0.2, 'recoil must recover');
-    assert.ok(r.spread.move > r.spread.stand && r.spread.sprint > r.spread.move && r.spread.ads < r.spread.stand && r.spread.first < r.spread.stand, 'spread states');
+    for (const [n, x] of Object.entries(r.spread)) {
+      assert.ok(x.stand < x.move && x.move < x.sprint && x.stand < x.air, 'stand < move < sprint, air wider: ' + n + ' ' + JSON.stringify(x));
+      assert.ok(x.ads < x.stand && x.crouch <= x.stand, 'ADS / crouch tighter: ' + n);
+      assert.ok(x.sprint <= 0.14 && x.air <= 0.14, 'spread within limits: ' + n);
+    }
+    for (const n of ['MP5', 'Crimson AK', 'Wraith M4A1', 'Thundergrave']) assert.ok(r.spread[n].stand < r.spread[n].followUp, 'first-shot accuracy: ' + n);
+    assert.ok(r.spread['Crimson AK'].stand < 0.01 && r.spread['Wraith M4A1'].stand < 0.005, 'rifles are precise from a settled stance');
+    assert.ok(r.spread['Titanbreaker'].ads < 0.002 && r.spread['Titanbreaker'].sprint > 0.08, 'sniper: precise scoped, punished running');
+    assert.ok(r.spread['Riot Breaker'].sprint / r.spread['Riot Breaker'].stand < 1.4, 'shotgun keeps its own pattern while moving');
+    assert.ok(r.bloom.s10 > r.bloom.s0 * 1.5 && r.bloom.bloom10 > 0 && Math.abs(r.bloom.sRec - r.bloom.s0) < 1e-4, 'bloom grows with sustained fire and recovers: ' + JSON.stringify(r.bloom));
+    assert.ok(r.bloom.recoilMovesPitch && r.bloom.recoilKeepsBloom && r.bloom.bloomKeepsPitch, 'recoil and spread are separate systems');
+    assert.ok(r.shotgun.worst <= r.shotgun.cone + 1e-6, 'pellets stay inside the cone');
+    assert.ok(r.crosshair.gapSprint > r.crosshair.gapStand && Math.abs(r.crosshair.gapSprint - Math.max(3, r.crosshair.expect)) <= 0.6, 'crosshair shows the real spread: ' + JSON.stringify(r.crosshair));
     assert.ok(r.scoped && r.unscoped, 'sniper scope toggles with aim');
     assert.ok(r.arrows.weak && r.arrows.full && r.arrows.full.speed > r.arrows.weak.speed * 2, 'full draw is much faster');
     assert.ok(r.arrowsAfter === 0 && r.cleaned === 0, 'arrows land and are cleaned up');

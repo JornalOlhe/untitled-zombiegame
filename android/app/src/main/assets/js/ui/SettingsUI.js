@@ -5,6 +5,23 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => DR.escapeHtml(String(s));
 
+  // Slider fill from the real value: progress = (value - min) / (max - min). MIN is exactly
+  // empty and MAX exactly full for every range (volume 0..100, FOV 60..120, resolution
+  // 0.5..1.5…). In between the fill edge follows the thumb centre.
+  function rangeProgress(el) {
+    const min = Number(el.min || 0),
+      max = Number(el.max || 100),
+      v = Number(el.value);
+    if (!(max > min) || !Number.isFinite(v)) return 0;
+    return Math.min(1, Math.max(0, (v - min) / (max - min)));
+  }
+  function paintRange(el) {
+    const p = rangeProgress(el);
+    el.style.setProperty("--range-progress", String(p));
+    el.style.setProperty("--range-fill", p <= 0 ? "0%" : p >= 1 ? "100%" : `calc(9px + (100% - 18px) * ${p})`);
+  }
+  DR.paintRange = paintRange;
+  DR.rangeProgress = rangeProgress;
   const TABS = [
     ["graphics", "Gráficos"],
     ["audio", "Áudio"],
@@ -80,6 +97,7 @@
       body.innerHTML = this[this.tab]();
       body.scrollTop = 0;
       body.querySelectorAll("[data-setting]").forEach((el) => (el.oninput = () => this.change(el)));
+      body.querySelectorAll('input[type="range"]').forEach(paintRange);
       const fs = body.querySelector("[data-fullscreen]");
       if (fs) fs.onchange = () => this.hooks.fullscreen(fs.checked).finally(() => (fs.checked = !!document.fullscreenElement));
     },
@@ -141,6 +159,7 @@
       s[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? Number(el.value) : el.value;
       const out = $("settingsfields").querySelector(`[data-out="${k}"]`);
       if (out) out.textContent = this.fmt(k)(s[k]);
+      if (el.type === "range") paintRange(el);
       if (k === "graphics") {
         s.shadows = { low: "off", medium: "low", high: "medium", ultra: "high" }[s.graphics];
         s.vfx = s.graphics === "low" ? "low" : "high";

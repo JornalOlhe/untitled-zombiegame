@@ -306,7 +306,7 @@ form.busy { opacity: .7; }
 .slot { border-radius: 0; background: rgba(12,10,8,.86); clip-path: var(--cut-s); }
 .slot.active { background: rgba(40,14,12,.92); }
 .feed { font-family: var(--mono); font-size: 12px; }
-.crosshair::before, .crosshair::after { background: #f3ede4cc; box-shadow: 0 0 2px #000; }
+.crosshair i { background: #f3ede4cc; box-shadow: 0 0 2px #000; }
 #revivetouch { position: absolute; right: calc(var(--safe-r) + 140px); bottom: calc(var(--safe-b) + 150px); }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
@@ -730,3 +730,35 @@ body.mouse-free #world { cursor: default; }
 #scope .scope-v { height: min(72vh, 72vw); width: 1.5px; transform: translate(-50%, -50%); }
 #scope b { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: #ff3a2a; transform: translate(-50%, -50%); box-shadow: 0 0 6px #ff3a2a; }
 body:has(#scope.on) .crosshair { opacity: 0; }
+
+/* Range sliders: the fill is drawn from --range-fill (set by SettingsUI.paintRange from
+   (value - min) / (max - min)), so MIN is empty and MAX is completely full. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --range-fill: 0%;
+}
+input[type="range"]:focus { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(255, 190, 90, .45); }
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--red, #b3141b) 0, var(--red, #b3141b) var(--range-fill), rgba(255, 255, 255, .16) var(--range-fill), rgba(255, 255, 255, .16) 100%);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #f1e6d6;
+  border: 3px solid var(--red, #b3141b);
+  box-sizing: border-box;
+}
+input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .16); }
+input[type="range"]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--red, #b3141b); }
+input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #f1e6d6; border: 3px solid var(--red, #b3141b); box-sizing: border-box; }
