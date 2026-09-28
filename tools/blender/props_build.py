@@ -621,8 +621,10 @@ def horn(name):
         box(bm, (math.cos(a) * 0.075 + 0.02, math.sin(a) * 0.075, 0.005), (0.035, 0.03, 0.03), rot_z=a)
         if k % 2 == 0:
             cyl(bm, Vector((math.cos(a) * 0.09 + 0.02, math.sin(a) * 0.09, 0.0)), Vector((math.cos(a) * 0.13 + 0.02, math.sin(a) * 0.13, 0.03)), 0.012, 0.0, 4)
-    paint(bm, lambda co, n, c: jitter((0.72, 0.6, 0.5), 0.05, int(c.x * 70 + c.z * 40)))
-    obj_from_bm("spikes", bm, bone)
+    # v29 (ARCHDEMON template): horn spikes are dark obsidian like the horn itself; the glow
+    # veins below carry the crimson.
+    paint(bm, lambda co, n, c: jitter((0.16, 0.1, 0.1), 0.04, int(c.x * 70 + c.z * 40)))
+    obj_from_bm("spikes", bm, obs)
     bm = bmesh.new()
     for i in range(1, N - 3, 3):
         a2, b2 = pts[i], pts[i + 1]
@@ -630,6 +632,16 @@ def horn(name):
         r = 0.078 * (1 - i / N) ** 0.9
         mid = (a2 + b2) / 2 + inn * r * 0.85
         cyl(bm, mid - (b2 - a2) * 0.45, mid + (b2 - a2) * 0.45, 0.008, 0.006, 4)
+    for i in range(2, N - 1, 2):  # glowing tips on the outer spikes
+        out = outs[i]
+        r = 0.078 * (1 - i / N) ** 0.9
+        tipdir = (out + Vector((0, -0.25, 0.15))).normalized()
+        tip = pts[i] + out * r * 0.8 + tipdir * (0.05 + 0.03 * (1 - i / N))
+        cyl(bm, tip - tipdir * 0.018, tip, 0.006, 0.0, 4)
+    for i in range(0, N - 2, 2):  # crimson cracks on the outer face
+        p0 = pts[i] + outs[i] * 0.078 * (1 - i / N) ** 0.9 * 0.98
+        p1 = pts[i + 1] + outs[i + 1] * 0.078 * (1 - (i + 1) / N) ** 0.9 * 0.98
+        cyl(bm, p0, p1 + Vector((0.01, 0, 0)), 0.006, 0.004, 4)
     g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.022)
     for v in g["verts"]:
         v.co += Vector((0.02, 0.085, 0.01))
