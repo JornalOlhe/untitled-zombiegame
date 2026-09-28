@@ -21065,15 +21065,50 @@ body.netgame #revivetouch{display:flex}
                 // rotor tip whirls, shedding embers.
                 secret.fly = (secret.fly || 0) + ((flying ? 1 : 0) - (secret.fly || 0)) * (1 - Math.exp(-dt * 4));
                 const f = secret.fly;
-                secret.tail.rotation.x = -0.35 * f;
+                // World motion of the body drives secondary motion: the tail lags behind turns,
+                // streams back when running and whips forward when stopping.
+                g.getWorldPosition((secret._pw ||= new V()));
+                const wp = secret._pw, lp = (secret._lp ||= wp.clone());
+                const yaw = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(new THREE.Quaternion()), "YXZ").y;
+                const dy = secret._yaw == null ? 0 : Math.atan2(Math.sin(yaw - secret._yaw), Math.cos(yaw - secret._yaw));
+                secret._yaw = yaw;
+                const yawRate = dt > 0 ? dy / dt : 0,
+                  vel = dt > 0 ? Math.hypot(wp.x - lp.x, wp.z - lp.z) / dt : 0;
+                lp.copy(wp);
+                secret.lagY = (secret.lagY || 0) + (clamp(-yawRate * 0.12, -0.6, 0.6) - (secret.lagY || 0)) * (1 - Math.exp(-dt * 6));
+                secret.lagX = (secret.lagX || 0) + (clamp(vel * 0.03, 0, 0.3) - (secret.lagX || 0)) * (1 - Math.exp(-dt * 5));
+                const moving = Math.min(1, vel / 5), act = Math.max(moving, f);
+                secret.spin = (secret.spin || 0) + dt * (2.2 + f * 11);
+                secret.tail.rotation.x = -0.35 * f - secret.lagX * (1 - f) * 0.5;
+                // Flight: the tail rolls around its own axis so the whole curve visibly spins.
+                secret.tail.rotation.z = f * secret.spin;
                 secret.segs?.forEach((seg, i) => {
-                  const ph = t * 9 - i * 0.62,
-                    sway = t * 1.5 - i * 0.45;
-                  seg.rotation.x = seg.userData.base * (1 - f * 0.7) + Math.sin(sway) * 0.05 * (1 - f) + Math.sin(ph) * 0.26 * f;
-                  seg.rotation.y = Math.sin(sway * 0.8) * 0.13 * (1 - f) + Math.cos(ph) * 0.26 * f;
+                  const k = i / 12,
+                    ph = t * 10 - i * 0.55,
+                    sway = t * (2.4 + moving * 3) - i * 0.5,
+                    walk = 0.09 + moving * 0.16;
+                  seg.rotation.x =
+                    seg.userData.base * (1 - f * 0.55) - secret.lagX * (1 - f) * 0.35 +
+                    (Math.sin(sway * 0.9) * walk * 0.6 * (1 - f) + Math.sin(ph) * 0.22 * f);
+                  seg.rotation.y =
+                    Math.sin(sway) * walk * (1 - f) + secret.lagY * (0.4 + k) * (1 - f * 0.6) + Math.cos(ph) * 0.22 * f;
                 });
-                secret.rotor.rotation.z += dt * (flying ? 26 : 1.4);
-                if (flying && Math.random() < 0.35 && g.visible) {
+                secret.rotor.rotation.z += dt * (flying ? 30 : 2.5);
+                if (!secret.trail) {
+                  secret.trail = new BladeTrail(scene, 0xff2a14, 1, 0.4);
+                  g.userData.tailTrail = secret.trail;
+                }
+                if (g.visible) {
+                  secret.rotor.updateMatrixWorld(true);
+                  const tip = secret.rotor.getWorldPosition(new V()),
+                    side = new V(0, 0.05 + 0.02 * f, 0).applyQuaternion(secret.rotor.getWorldQuaternion(new THREE.Quaternion()));
+                  secret.trail.color.setHex(flying ? 0xc42410 : 0x6a0c0c);
+                  secret.trail.maxAge = 0.18 + 0.32 * act;
+                  secret.trail.push(tip.clone().add(side), tip.clone().sub(side), simulationTime);
+                }
+                secret.trail.update(simulationTime);
+                secret.trail.mesh.visible = g.visible && secret.trail.pts.length > 1;
+                if (g.visible && (flying ? Math.random() < 0.5 : moving > 0.4 && Math.random() < 0.12)) {
                   secret.rotor.updateMatrixWorld(true);
                   ParticleSystem.emit(secret.rotor.getWorldPosition(new V()), Math.random() < 0.5 ? 0xff2a14 : 0x3a0808, 1, 1);
                 }
