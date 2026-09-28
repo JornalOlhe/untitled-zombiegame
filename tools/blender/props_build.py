@@ -488,6 +488,16 @@ def halo(name):
             a, b = rings[i][j], rings[i][(j + 1) % m]
             c, d = rings[(i + 1) % n][(j + 1) % m], rings[(i + 1) % n][j]
             bm.faces.new((a, b, c, d))
+    # v29 (ARCHANGEL template): an upper and a lower thin ring stacked on the main band.
+    for dz, rr, RR in ((0.034, 0.008, R * 0.97), (-0.03, 0.007, R * 1.02)):
+        rs = []
+        for i in range(n):
+            a = i / n * math.tau
+            ca, sa = math.cos(a), math.sin(a)
+            rs.append([bm.verts.new(((RR + rr * math.cos(b)) * ca, (RR + rr * math.cos(b)) * sa, dz + rr * math.sin(b))) for b in (j / 6 * math.tau for j in range(6))])
+        for i in range(n):
+            for j in range(6):
+                bm.faces.new((rs[i][j], rs[i][(j + 1) % 6], rs[(i + 1) % n][(j + 1) % 6], rs[(i + 1) % n][j]))
     # Small spires at the four quarters (gold), pointing out.
     for i in range(4):
         a = i / 4 * math.tau
@@ -501,11 +511,21 @@ def halo(name):
         for v in g["verts"]:
             v.co.z *= 1.7
             v.co += Vector((math.cos(a) * R, math.sin(a) * R, 0))
-    g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.04)
+    # Front centre gem with a four-point star: tall top spire and a shorter bottom spire.
+    for sx, sz, h in ((0.0, 1.0, 0.13), (0.0, -1.0, 0.07)):
+        g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.03)
+        for v in g["verts"]:
+            v.co.z = v.co.z * (h / 0.03) * 0.5 + sz * (0.02 + h * 0.5)
+            v.co.y -= R
+    for sx in (-1, 1):
+        g = bmesh.ops.create_icosphere(bm, subdivisions=0, radius=0.02)
+        for v in g["verts"]:
+            v.co.x = v.co.x * 2.4 + sx * 0.05
+            v.co.y -= R
+    g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.034)
     for v in g["verts"]:
-        v.co.z = v.co.z * 2.2 + 0.07
-        v.co.y -= R
-    paint(bm, lambda co, n, c: (0.55, 0.9, 1.0))
+        v.co.y -= R + 0.01
+    paint(bm, lambda co, n, c: (0.3, 0.72, 1.0))
     obj_from_bm("glow", bm, glowm)
     export(name)
 

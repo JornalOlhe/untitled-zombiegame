@@ -36,7 +36,12 @@ def cut(part):
     lum = rgb.mean(2)
     sat = rgb.max(2) - rgb.min(2)
     bg = part.get("bg", 0.84)
-    fg = (lum < bg) | (sat > part.get("sat", 0.2))
+    if part.get("dark"):  # artwork over a dark background: keep the bright / saturated pixels
+        fg = (lum > part.get("light", 0.6)) | ((sat > part.get("sat", 0.25)) & (lum > part.get("min", 0.3)))
+    else:
+        fg = (lum < bg) | (sat > part.get("sat", 0.2))
+    for x0_, y0_, x1_, y1_ in part.get("clear", []):  # rectangles (crop-relative) to drop
+        fg[y0_:y1_, x0_:x1_] = False
     fg = nd.binary_opening(fg, structure=np.ones((part.get("open", 3),) * 2))
     lab, n = nd.label(fg)
     if n == 0:
@@ -140,6 +145,8 @@ class Builder:
 
         def world(a, b, c):
             # a: along the image's width (metres, left -> right), b: up the image, c: thickness (+x)
+            if axis == "x":  # flat piece facing the camera: width -> +x, thickness -> z
+                return (cx + a, cy + b, cz + c)
             if axis == "z":
                 y, z = b, -a
             else:  # vertical part: image left = top (+y), image top = forward (-z)
