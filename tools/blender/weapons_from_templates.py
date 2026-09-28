@@ -116,8 +116,9 @@ class Builder:
         h0, w0 = mask.shape
         axis = part.get("axis", "z")
         L = part["L"]
-        W = max(2, int(round(L * PPM)))
-        H = max(1, int(round(part["H"] * PPM))) if part.get("H") else max(1, int(round(W * h0 / w0)))
+        ppm = part.get("ppm", PPM)
+        W = max(2, int(round(L * ppm)))
+        H = max(1, int(round(part["H"] * ppm))) if part.get("H") else max(1, int(round(W * h0 / w0)))
         col, m = resample(rgb, mask, W, H)
         if os.environ.get("DEBUG_DIR"):
             dbg = np.concatenate([col * m[..., None] + (1 - m[..., None]) * np.array([1, 0, 1]), np.repeat(m[..., None], 3, 2).astype(np.float32)], 1)
@@ -152,6 +153,8 @@ class Builder:
             else:  # vertical part: image left = top (+y), image top = forward (-z)
                 y, z = -a, -b
             y, z = y * ca - z * sa, y * sa + z * ca
+            if part.get("roll"):  # same piece turned 90° around its long axis (cross-shaped projectiles)
+                return (cx + y, cy - c, cz + z)
             return (cx + c, cy + y, cz + z)
 
         def A(i):
@@ -256,6 +259,8 @@ def build(slug, spec):
     for part in spec["parts"]:
         part["_slug"] = slug
         b.part(part, spec.get("glow", False))
+        if part.get("cross"):  # round projectiles: add the same relief turned 90°
+            b.part(dict(part, roll=True, cross=False), spec.get("glow", False))
     atlas, emit, uvs, AW = b.pack()
 
     def to_image(name, arr):

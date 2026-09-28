@@ -5345,6 +5345,16 @@ body.netgame #revivetouch{display:flex}
                 pivot.add(node);
               }
             }
+            if (w.kind === "bow" && parts.arrow && this.scenes.get("Proj " + w.name)) {
+              // The nocked arrow is this bow's own arrow from its UV template, tail on the string.
+              for (const c of parts.arrow.children) c.visible = false;
+              const arrow = this.scenes.get("Proj " + w.name).clone(true);
+              arrow.rotation.y = Math.PI; // template nose +Z -> viewmodel forward -Z
+              arrow.updateMatrixWorld(true);
+              const bb = new THREE.Box3().setFromObject(arrow);
+              arrow.position.z = -bb.max.z + 0.02;
+              parts.arrow.add(arrow);
+            }
             if (w.kind === "bow" && parts.string) {
               // Hook the live string to the real limb tips of the model (the extreme top/bottom
               // vertices), so the string, the nock and the arrow sit on this bow's geometry.
@@ -6007,11 +6017,12 @@ body.netgame #revivetouch{display:flex}
             )
               return;
             while (this.items.length > 35) this.remove(0);
-            const mesh = new THREE.Mesh(
-              VisualArt.geometries.cylinder,
-              VisualArt.mat(w.kind === "shotgun" ? 0xa85039 : 0xc7a05b),
-            );
-            mesh.scale.set(0.014, 0.045, 0.014);
+            const calibre = w.kind === "shotgun" ? "Shell 12g" : w.kind === "antimaterial" ? "Shell .50" : w.name === "MP5" ? "Shell 9mm" : w.name === "Crimson AK" ? "Shell 7.62" : "Shell 5.56";
+            let mesh = templateProjectile(calibre);
+            if (!mesh) {
+              mesh = new THREE.Mesh(VisualArt.geometries.cylinder, VisualArt.mat(w.kind === "shotgun" ? 0xa85039 : 0xc7a05b));
+              mesh.scale.set(0.014, 0.045, 0.014);
+            }
             const origin = WeaponSystem.model.localToWorld(
               new V(0.1, 0.04, -0.14),
             );
@@ -10824,8 +10835,21 @@ body.netgame #revivetouch{display:flex}
             if (t >= this.END) this.cancel();
           },
         };
+        // Projectile / casing models built from the weapon UV templates (weapons_from_templates.py):
+        // nose along +Z, so lookAt(velocity) flies them point-first.
+        function templateProjectile(name, scale = 1) {
+          const src = WeaponModels.scenes.get(name);
+          if (!src) return null;
+          const g = new THREE.Group(),
+            m = src.clone(true);
+          m.scale.setScalar(scale);
+          g.add(m);
+          return g;
+        }
         const ArrowArt = {
-          mesh() {
+          mesh(weapon) {
+            const own = weapon && templateProjectile("Proj " + weapon.name);
+            if (own) return own;
             if (!this.parts) {
               this.parts = {
                 shaft: new THREE.BoxGeometry(0.022, 0.022, 0.82),
@@ -10928,7 +10952,7 @@ body.netgame #revivetouch{display:flex}
         };
         function spawnProjectile(kind, pos, dir, damage, extra = {}) {
           if (kind === "arrow") {
-            const g = ArrowArt.mesh();
+            const g = ArrowArt.mesh(extra.weapon);
             g.position.copy(pos);
             scene.add(g);
             const p = { kind, mesh: g, pos: g.position, vel: dir.clone().multiplyScalar(extra.speed || 50), life: 5, damage, ...extra };
@@ -10938,8 +10962,9 @@ body.netgame #revivetouch{display:flex}
           }
           if (kind === "spear") return SpearThrow.spawn(pos, dir, damage, extra);
           if (kind === "missile") {
-            // Real missile: the rocket model flying nose-first, smoke trail + rear flame.
-            const g = CyborgRockets.model();
+            // Real missile: the launcher's own rocket from its UV template (nose-first), smoke trail
+            // + rear flame. Falls back to the generic rocket.
+            const g = templateProjectile("Proj " + (extra.weapon?.name || ""), 1.1) || CyborgRockets.model();
             g.position.copy(pos);
             scene.add(g);
             const p = { kind, mesh: g, pos: g.position, vel: dir.clone().multiplyScalar(19), life: 6, damage, missile: true, ...extra };
