@@ -5499,6 +5499,150 @@ body.netgame #revivetouch{display:flex}
         // Detailed first-person weapons assembled from cached geometry and PBR materials.
         // Voxel weapon models made in Blender (tools/blender/weapons_build.py). They load once at
         // boot; until then (or if a model is missing) the procedural weapon is used.
+        // ---------------------------------------------------------------------------------------
+        // Melee animation sets. Each melee weapon points at its own set (machete, knife, spear,
+        // scythe, staff) with several attacks that play in sequence. A key is
+        // [t, px, py, pz, rx, ry, rz]: offsets added to the rest pose at normalised time t;
+        // anticipation → strike → follow-through → recovery, eased between keys.
+        // ---------------------------------------------------------------------------------------
+        const MeleeAnim = {
+          type(w) {
+            if (!w || w.kind !== "melee") return null;
+            if (w.specter) return "angelic";
+            if (w.scythe) return "scythe";
+            if (w.spear) return "spear";
+            if (/blood|fang|knife|faca/i.test(w.name)) return "knife";
+            if (/frost|staff|cajado/i.test(w.name)) return "staff";
+            return "machete";
+          },
+          SETS: {
+            machete: {
+              dur: 0.42,
+              trail: 0xdfe6ea,
+              moves: [
+                [[0.22, 0.1, 0.16, 0.06, -1.1, 0.2, -0.7], [0.46, -0.3, -0.14, -0.12, 0.75, -0.35, 0.9], [0.7, -0.34, -0.18, -0.08, 0.85, -0.4, 1.0]], // diagonal cut
+                [[0.22, 0.22, 0.02, 0.04, -0.25, -1.0, -1.45], [0.46, -0.3, -0.02, -0.16, -0.25, 0.95, -1.45], [0.7, -0.34, -0.03, -0.12, -0.2, 1.05, -1.4]], // side cut
+                [[0.25, 0.02, 0.26, 0.12, -1.5, 0, -0.1], [0.48, -0.04, -0.2, -0.22, 0.95, 0, -0.1], [0.7, -0.05, -0.24, -0.18, 1.05, 0, -0.1]], // overhead chop
+              ],
+            },
+            knife: {
+              dur: 0.28,
+              trail: 0xff4a4a,
+              moves: [
+                [[0.2, 0.02, -0.03, 0.12, 0.15, 0, 0], [0.42, -0.1, 0.04, -0.36, -0.1, 0.1, 0], [0.62, -0.1, 0.04, -0.34, -0.1, 0.1, 0]], // stab
+                [[0.2, -0.18, 0.06, 0.02, -0.2, 0.6, 0.9], [0.45, 0.16, -0.06, -0.14, 0.1, -0.7, -0.6], [0.65, 0.18, -0.07, -0.12, 0.1, -0.75, -0.65]], // reverse slash
+                [[0.2, 0.14, 0, 0.02, -0.3, -0.7, -1.4], [0.45, -0.22, 0, -0.16, -0.3, 0.7, -1.4], [0.62, -0.24, 0, -0.14, -0.3, 0.75, -1.4]], // quick horizontal
+                [[0.2, 0.08, 0.1, 0.04, -0.8, 0.1, -0.5], [0.45, -0.16, -0.08, -0.12, 0.5, -0.2, 0.6], [0.62, -0.18, -0.1, -0.1, 0.55, -0.2, 0.65]], // diagonal strike
+              ],
+            },
+            spear: {
+              dur: 0.45,
+              trail: 0xffe7a8,
+              twoHands: true,
+              moves: [
+                [[0.25, 0.03, -0.01, 0.18, 0.03, 0, 0], [0.45, -0.06, 0.03, -0.62, -0.03, 0, 0], [0.6, -0.06, 0.03, -0.6, -0.03, 0, 0]], // thrust
+                [[0.25, 0.06, -0.03, 0.16, 0.05, -0.12, 0], [0.45, -0.16, 0.02, -0.6, -0.02, 0.15, 0], [0.6, -0.16, 0.02, -0.58, -0.02, 0.15, 0]], // thrust left
+                [[0.25, 0.02, -0.08, 0.18, 0.2, 0, 0], [0.45, -0.05, 0.1, -0.6, -0.14, 0, 0], [0.6, -0.05, 0.1, -0.58, -0.14, 0, 0]], // rising thrust
+              ],
+            },
+            scythe: {
+              dur: 0.62,
+              trail: 0xff2a1a,
+              aura: true,
+              moves: [
+                [[0.22, -0.42, 0.08, 0.05, 0, 1.25, -1.3], [0.5, 0.42, -0.05, -0.3, 0, -1.0, -1.3], [0.7, 0.46, -0.06, -0.25, 0, -1.1, -1.3]], // left → right
+                [[0.22, 0.42, 0.08, 0.05, 0, -1.1, -1.3], [0.5, -0.42, -0.05, -0.3, 0, 1.2, -1.3], [0.7, -0.46, -0.06, -0.25, 0, 1.3, -1.3]], // right → left
+                [[0.22, 0.3, -0.3, 0, 0.7, -0.4, -0.9], [0.5, -0.3, 0.3, -0.3, -0.9, 0.5, -0.6], [0.7, -0.32, 0.32, -0.28, -1.0, 0.5, -0.6]], // low → high
+                [[0.3, 0.05, 0.38, 0.16, -1.6, 0, -0.2], [0.55, 0, -0.3, -0.4, 1.1, 0, -0.2], [0.75, 0, -0.32, -0.38, 1.2, 0, -0.2]], // heavy overhead
+                [[0.2, 0, 0.05, 0.05, 0, 0, -1.3], [0.7, 0, 0, -0.2, 0, -6.283, -1.3], [0.85, 0, 0, -0.2, 0, -6.283, -1.3], [1, 0, 0, 0, 0, -6.283, 0]], // spin
+              ],
+              slow: [1, 1, 1, 1.3, 1.25],
+            },
+            staff: {
+              dur: 0.5,
+              trail: 0x9fe4ff,
+              moves: [
+                [[0.25, 0.1, 0.2, 0.08, -1.2, 0, -0.3], [0.5, -0.05, -0.15, -0.3, 0.7, 0, -0.2], [0.7, -0.06, -0.17, -0.28, 0.75, 0, -0.2]],
+                [[0.25, 0.25, 0.02, 0.04, -0.3, -0.9, -1.3], [0.5, -0.28, -0.02, -0.2, -0.3, 0.9, -1.3], [0.7, -0.3, -0.03, -0.18, -0.3, 1.0, -1.3]],
+              ],
+            },
+          },
+          ease: (k) => k * k * (3 - 2 * k),
+          // Pose for a strike `since` seconds old; null when idle.
+          sample(w, since, combo) {
+            const type = this.type(w),
+              set = this.SETS[type];
+            if (!set) return null;
+            const i = Math.abs(combo || 0) % set.moves.length,
+              dur = set.dur * (set.slow?.[i] || 1),
+              k = since / dur;
+            if (!(k >= 0 && k < 1)) return null;
+            const keys = [[0, 0, 0, 0, 0, 0, 0], ...set.moves[i]];
+            if (keys.at(-1)[0] < 1) keys.push([1, 0, 0, 0, 0, keys.at(-1)[5] === -6.283 ? -6.283 : 0, 0]);
+            let a = keys[0],
+              b = keys[1];
+            for (let j = 1; j < keys.length; j++)
+              if (k <= keys[j][0]) {
+                a = keys[j - 1];
+                b = keys[j];
+                break;
+              }
+            const f = this.ease(clamp((k - a[0]) / Math.max(1e-4, b[0] - a[0]), 0, 1)),
+              v = a.map((x, n) => x + (b[n] - x) * f);
+            return { type, set, k, move: i, p: new V(v[1], v[2], v[3]), r: [v[4], v[5], v[6]], striking: k > (set.moves[i][0][0] - 0.02) && k < set.moves[i][1][0] + 0.06 };
+          },
+        };
+        // Ribbon trail that follows a blade tip (view-model or world space).
+        class BladeTrail {
+          constructor(parent, color, width = 1, maxAge = 0.14) {
+            this.max = 24;
+            this.pts = [];
+            this.maxAge = maxAge;
+            this.geo = new THREE.BufferGeometry();
+            this.pos = new Float32Array(this.max * 2 * 3);
+            this.col = new Float32Array(this.max * 2 * 3);
+            this.geo.setAttribute("position", new THREE.BufferAttribute(this.pos, 3));
+            this.geo.setAttribute("color", new THREE.BufferAttribute(this.col, 3));
+            const idx = [];
+            for (let i = 0; i < this.max - 1; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+            this.geo.setIndex(idx);
+            this.mesh = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+            this.mesh.frustumCulled = false;
+            this.mesh.renderOrder = 5;
+            this.color = new THREE.Color(color);
+            parent.add(this.mesh);
+          }
+          push(a, b, now) {
+            this.pts.unshift({ a: a.clone(), b: b.clone(), t: now });
+            if (this.pts.length > this.max) this.pts.length = this.max;
+          }
+          update(now) {
+            while (this.pts.length && now - this.pts.at(-1).t > this.maxAge) this.pts.pop();
+            const n = this.pts.length;
+            for (let i = 0; i < this.max; i++) {
+              const p = this.pts[Math.min(i, Math.max(0, n - 1))];
+              const fade = p ? clamp(1 - (now - p.t) / this.maxAge, 0, 1) * (i < n ? 1 : 0) : 0;
+              for (const [s, q] of [[0, p?.a], [1, p?.b]]) {
+                const o = (i * 2 + s) * 3;
+                this.pos[o] = q?.x || 0;
+                this.pos[o + 1] = q?.y || 0;
+                this.pos[o + 2] = q?.z || 0;
+                const c = fade * (s ? 0.35 : 1);
+                this.col[o] = this.color.r * c;
+                this.col[o + 1] = this.color.g * c;
+                this.col[o + 2] = this.color.b * c;
+              }
+            }
+            this.geo.attributes.position.needsUpdate = true;
+            this.geo.attributes.color.needsUpdate = true;
+            this.mesh.visible = n > 1;
+          }
+          dispose() {
+            this.mesh.parent?.remove(this.mesh);
+            this.geo.dispose();
+            this.mesh.material.dispose();
+          }
+        }
         const WeaponModels = {
           scenes: new Map(),
           ready: false,
@@ -10450,6 +10594,42 @@ body.netgame #revivetouch{display:flex}
             const p = new V(ndc.x, ndc.y, 0.5).unproject(camera);
             return camera.position.clone().add(p.sub(camera.position).normalize().multiplyScalar(dist));
           },
+          // Angelic Specter: never held. It floats on an anchor off the right hand, bobbing, and each
+          // strike sweeps across the view, alternating right→left and left→right, then glides back.
+          // While its orbit ability runs it leaves the view (it circles the player in the world).
+          floatSpecter(w, dt) {
+            const t = simulationTime,
+              spinning = SecretWeaponSkills.spinUntil > t,
+              since = t - lastShot,
+              dur = 0.5,
+              k = since / dur,
+              dir = (this.combo || 0) % 2 ? -1 : 1; // 1 = right → left
+            this.model.visible = !spinning && !(w.spear && SpearThrow.active);
+            const anchor = new V(0.44 + Math.sin(t * 1.3) * 0.012, -0.06 + Math.sin(t * 2.1) * 0.022, -0.82);
+            let pos = anchor,
+              tilt = 0.18 + Math.sin(t * 1.15) * 0.04,
+              lean = 0;
+            this.specterStriking = false;
+            if (k >= 0 && k < 1 && lastShot > 0) {
+              const e = MeleeAnim.ease;
+              const start = new V(dir * 0.58, 0.06, -0.9),
+                end = new V(-dir * 0.58, -0.06, -0.9);
+              if (k < 0.2) pos = anchor.clone().lerp(start, e(k / 0.2));
+              else if (k < 0.55) {
+                const s = e((k - 0.2) / 0.35);
+                pos = start.clone().lerp(end, s);
+                pos.z -= Math.sin(s * Math.PI) * 0.18;
+                pos.y += Math.sin(s * Math.PI) * 0.05;
+                this.specterStriking = true;
+              } else pos = end.clone().lerp(anchor, e((k - 0.55) / 0.45));
+              const swing = k < 0.2 ? e(k / 0.2) : k < 0.55 ? 1 : 1 - e((k - 0.55) / 0.45);
+              tilt += dir * 1.05 * swing * (k < 0.55 ? 1 : -1) * (k < 0.2 ? -1 : 1);
+              lean = swing * 0.35;
+            }
+            this.basePos.copy(this.basePos.clone().lerp(pos, k < 1 ? 1 : 1 - Math.exp(-dt * 10)));
+            this.model.position.copy(this.basePos);
+            this.model.rotation.set(Math.PI / 2 - 0.22 - lean, Math.sin(t * 0.8) * 0.05, tilt);
+          },
           buildModel() {
             this.model.traverse((o) => {
               if (o.isMesh && o.geometry?.type === "ExtrudeGeometry")
@@ -10460,9 +10640,40 @@ body.netgame #revivetouch{display:flex}
             this.model = new THREE.Group();
             Viewmodel.camera.add(this.model);
             const w = this.current();
-            this.model.scale.setScalar(w?.kind === "melee" ? 0.54 : 0.72);
+            this.model.scale.setScalar(w?.specter ? 0.42 : w?.kind === "melee" ? 0.54 : 0.72);
+            this.trail?.dispose();
+            this.trail = null;
             if (!w) return;
             this.parts = ArsenalArt.build(w, this.model);
+            if (w.kind === "melee") {
+              // Blade tip (model space) = the bounding-box corner farthest from the grip; the trail
+              // is drawn from it to a point halfway down the blade.
+              const box = new THREE.Box3(),
+                inv = new THREE.Matrix4();
+              this.model.updateMatrixWorld(true);
+              inv.copy(this.model.matrixWorld).invert();
+              this.model.traverse((o) => {
+                if (!o.isMesh || !o.visible || !o.geometry) return;
+                o.geometry.computeBoundingBox();
+                box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)));
+              });
+              let tip = new V(0, 0, -0.6);
+              if (!box.isEmpty()) {
+                let best = -1;
+                for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+                  const c = new V((box.min.x + box.max.x) / 2, y, z),
+                    d = c.length();
+                  if (d > best) {
+                    best = d;
+                    tip = c;
+                  }
+                }
+              }
+              this.tip = tip;
+              const set = MeleeAnim.SETS[MeleeAnim.type(w)];
+              this.trail = new BladeTrail(Viewmodel.camera, w.specter ? 0xa8e6ff : set?.trail || 0xffffff);
+              if (w.specter) this.parts.rightHand.visible = this.parts.leftHand.visible = false;
+            }
             this.flash = this.parts.flash;
             this.magazine = this.parts.magazine;
             this.kick = 0;
@@ -10499,21 +10710,16 @@ body.netgame #revivetouch{display:flex}
               : new V(0.255, -0.24, -0.42);
             if (w.scythe && !aiming) target.x += 0.14; // keep the blade clear of the crosshair
             if (w.kind === "bow" && !aiming) {
-              // A bow is held upright in front of the body, left of centre, with its belly turned
+              // A bow is held upright on the right side (bow hand), with its belly turned
               // a little toward the camera so the curved limbs and the string read clearly.
-              target.x -= 0.24;
-              target.y += 0.1;
-              target.z -= 0.3;
+              target.x += 0.03;
+              target.y += 0.08;
+              target.z -= 0.26;
             }
-            if (w.specter) {
-              const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
-                orbit = simulationTime * (spinning ? 8.5 : 0.7),
-                radius = spinning ? 0.22 : 0.07;
-              target.set(
-                0.48 + Math.sin(orbit) * radius,
-                0.01 + Math.sin(orbit * 1.7) * (spinning ? 0.12 : 0.055),
-                -0.66 + Math.cos(orbit) * radius,
-              );
+            // Combo counter: every new strike advances to the next move of the weapon's set.
+            if (lastShot !== this.comboShot) {
+              this.comboShot = lastShot;
+              if (w.kind === "melee") this.combo = (this.combo || 0) + 1;
             }
             this.kickVelocity +=
               (-this.kick * 170 - this.kickVelocity * 23) * dt;
@@ -10532,7 +10738,8 @@ body.netgame #revivetouch{display:flex}
             target.z += this.kick * 0.07;
             target.y -= GrenadeThrow.drop * 0.3;
             target.x += GrenadeThrow.drop * 0.08;
-            this.model.position.lerp(target, 1 - Math.exp(-dt * 16));
+            this.basePos = (this.basePos || target.clone()).lerp(target, 1 - Math.exp(-dt * 16));
+            this.model.position.copy(this.basePos);
             if (this.scoped) this.model.position.y = -2; // looking through the scope
             this.model.rotation.set(
               this.kick * 0.075 + swayY * 0.3,
@@ -10550,9 +10757,11 @@ body.netgame #revivetouch{display:flex}
               this.model.rotation.y += 0.75;
               this.model.rotation.z -= 0.18;
             }
-            if (w.specter) {
-              this.model.rotation.y += Math.sin(simulationTime * 0.8) * 0.003;
-              this.model.rotation.z += Math.sin(simulationTime * 1.15) * 0.006;
+            if (w.specter) this.floatSpecter(w, dt);
+            if (w.spear && !aiming) {
+              // Lance held level, point forward, both hands on the shaft.
+              this.model.rotation.x -= 1.45;
+              this.model.position.y -= 0.04;
             }
             this.parts.leftHand.position.copy(this.parts.leftBase);
             this.parts.leftHand.rotation.set(0, 0, 0);
@@ -10657,12 +10866,34 @@ body.netgame #revivetouch{display:flex}
                 AudioManager.noise(0.025, 0.06);
               }
             } else this.reloadSoundStep = 0;
-            if (w.kind === "melee" && since < w.rate) {
-              const swing = Math.sin((since / w.rate) * Math.PI);
-              this.model.rotation.z -= swing * 1.05;
-              this.model.rotation.x += swing * 0.55;
-              this.model.position.x -= swing * 0.18;
-              this.model.position.z -= swing * 0.14;
+            const mp = w.kind === "melee" && !w.specter ? MeleeAnim.sample(w, since, this.combo || 0) : null;
+            if (mp) {
+              const env = Math.sin(Math.min(1, mp.k * 1.4) * Math.PI) > 0 || mp.k < 0.9 ? 1 : 0;
+              if (w.scythe && !aiming) {
+                // Leave the shoulder carry while striking.
+                this.model.rotation.x += 0.42 * env;
+                this.model.rotation.y -= 0.75 * env;
+                this.model.rotation.z += 0.18 * env;
+              }
+              this.model.position.add(mp.p);
+              this.model.rotation.x += mp.r[0];
+              this.model.rotation.y += mp.r[1];
+              this.model.rotation.z += mp.r[2];
+              if (mp.set.twoHands) {
+                this.parts.leftHand.position.set(0, -0.01, -0.42);
+                this.parts.leftHand.rotation.x = 0;
+              }
+            }
+            if (this.trail) {
+              const on = w.specter ? this.specterStriking : !!mp?.striking;
+              if (on && this.tip) {
+                this.model.updateMatrixWorld(true);
+                const a = Viewmodel.camera.worldToLocal(this.model.localToWorld(this.tip.clone())),
+                  b = Viewmodel.camera.worldToLocal(this.model.localToWorld(this.tip.clone().multiplyScalar(0.55)));
+                this.trail.push(a, b, simulationTime);
+                if (mp?.set.aura && Math.random() < 0.5) ParticleSystem.emit(player.pos.clone().add(forward().multiplyScalar(1.2)).add(new V(rand(-0.6, 0.6), rand(-0.5, 0.3), 0)), 0xff2a1a, 1, 1.2);
+              }
+              this.trail.update(simulationTime);
             }
             // The Dawn Spear leaves the hand while it is thrown and comes back when caught.
             const spearOut = !!(w.spear && SpearThrow.active);
@@ -16609,6 +16840,11 @@ body.netgame #revivetouch{display:flex}
           fires: [],
           reset() {
             this.cooldown = this.tridentReady = this.spinUntil = this.nextSpinHit = 0;
+            if (this.orbit) {
+              scene.remove(this.orbit.g);
+              this.orbit.trail.dispose();
+              this.orbit = null;
+            }
             for (const fx of this.throws) scene.remove(fx.group);
             for (const f of this.fires) {
               scene.remove(f.mesh);
@@ -16793,6 +17029,43 @@ body.netgame #revivetouch{display:flex}
           },
           update(dt) {
             const w = WeaponSystem.current();
+            // Orbit mode: the Angelic Specter leaves its hand anchor and circles the player on a
+            // real orbit (angle += speed·dt, position = player + R·(cos, sin)), blade leading along
+            // the path, with a light trail; it glides back to the hand when the ability ends.
+            const orbiting = this.spinUntil > simulationTime && w?.specter;
+            if (orbiting && !this.orbit) {
+              const src = WeaponModels.scenes.get(w.name);
+              const g = src ? src.clone(true) : new THREE.Group();
+              g.scale.setScalar(0.72);
+              scene.add(g);
+              this.orbit = { g, angle: yaw + Math.PI / 2, trail: new BladeTrail(scene, 0xa8e6ff, 1, 0.3), next: 0 };
+            }
+            if (this.orbit) {
+              const o = this.orbit,
+                blend = orbiting ? Math.min(1, (o.t = (o.t || 0) + dt * 3)) : Math.max(0, (o.t = Math.min(o.t, 1) - dt * 3));
+              o.angle += dt * 6.2;
+              const R = 1.7 * blend,
+                pos = player.pos.clone().add(new V(Math.cos(o.angle) * R, -0.55 + Math.sin(simulationTime * 3) * 0.12, Math.sin(o.angle) * R)),
+                tangent = new V(-Math.sin(o.angle), 0, Math.cos(o.angle));
+              o.g.position.copy(pos);
+              o.g.lookAt(pos.clone().add(tangent));
+              o.g.rotateZ(Math.PI / 2);
+              o.g.updateMatrixWorld(true);
+              o.trail.push(o.g.localToWorld(new V(0, 0, -1.3)), o.g.localToWorld(new V(0, 0, 0.9)), simulationTime);
+              o.trail.update(simulationTime);
+              if (Math.random() < 0.4) ParticleSystem.emit(pos.clone(), Math.random() < 0.5 ? 0xffffff : 0x70dcff, 1, 0.8);
+              if (orbiting && simulationTime >= o.next) {
+                o.next = simulationTime + 0.12;
+                for (const z of ZombieManager.list)
+                  if (!z.dead && Math.hypot(z.group.position.x - pos.x, z.group.position.z - pos.z) < 1.4 + (z.size || 1) * 0.4)
+                    ZombieManager.hit(z, weaponDamage(w) * 0.45, false, z.group.position.clone().add(new V(0, 1, 0)), w, true);
+              }
+              if (!orbiting && blend <= 0) {
+                scene.remove(o.g);
+                o.trail.dispose();
+                this.orbit = null;
+              }
+            }
             if (this.spinUntil > simulationTime && w?.specter) {
               if (simulationTime >= this.nextSpinHit) {
                 this.nextSpinHit = simulationTime + .25;
@@ -20565,15 +20838,22 @@ body.netgame #revivetouch{display:flex}
               const quiver = A.pivot(chest, 0.1, 0.24, -0.2);
               quiver.rotation.z = -0.35;
               quiver.rotation.x = 0.12;
-              A.tube(quiver, [0, 0, 0], 0.075, 0.5, 0x5a3a22, "cloth", "y");
-              A.tube(quiver, [0, -0.25, 0], 0.08, 0.04, 0x2f2218, "cloth", "y");
-              A.tube(quiver, [0, 0.22, 0], 0.082, 0.05, 0x8a6a3a, "steel", "y");
-              for (let i = 0; i < 6; i++) {
+              const own = WeaponModels.scenes.get("Quiver");
+              if (own) {
+                // Quiver built from the Bow UV template (body, straps, arrows with red fletching).
+                const q = own.clone(true);
+                q.scale.setScalar(0.9);
+                quiver.add(q);
+                A.link(chest, [0.2, 0.46, 0.14], [-0.18, 0.05, 0.14], 0.03, 0.012, 0x3a2a1c, "cloth");
+              } else A.tube(quiver, [0, 0, 0], 0.075, 0.5, 0x5a3a22, "cloth", "y");
+              if (!own) A.tube(quiver, [0, -0.25, 0], 0.08, 0.04, 0x2f2218, "cloth", "y");
+              if (!own) A.tube(quiver, [0, 0.22, 0], 0.082, 0.05, 0x8a6a3a, "steel", "y");
+              for (let i = 0; !own && i < 6; i++) {
                 const ax = Math.cos(i * 1.1) * 0.035, az = Math.sin(i * 1.1) * 0.035;
                 A.tube(quiver, [ax, 0.33, az], 0.006, 0.22, 0xc7b28a, "polymer", "y");
                 A.block(quiver, [ax, 0.44, az], [0.004, 0.06, 0.03], i % 2 ? 0xb23c3c : 0xe8e2d0, "cloth");
               }
-              A.link(chest, [0.2, 0.46, 0.14], [-0.18, 0.05, 0.14], 0.03, 0.012, 0x3a2a1c, "cloth"); // strap
+              if (!own) A.link(chest, [0.2, 0.46, 0.14], [-0.18, 0.05, 0.14], 0.03, 0.012, 0x3a2a1c, "cloth"); // strap
             }
             const gun = new THREE.Group(),
               parts = ArsenalArt.build(weapon, gun);
@@ -20598,6 +20878,7 @@ body.netgame #revivetouch{display:flex}
               secretAccessories,
               specterWeapon: !!weapon?.specter,
               tridentWeapon: !!weapon?.trident,
+              weapon,
               blend: 0,
             };
             return g;
@@ -20647,16 +20928,20 @@ body.netgame #revivetouch{display:flex}
             }
             r.gun.rotation.z = Math.sin(t * 1.7) * 0.006;
             if (r.specterWeapon) {
-              const orbit = t * 0.75;
-              r.gun.position.set(
-                0.48 + Math.sin(orbit) * 0.08,
-                0.28 + Math.sin(orbit * 1.6) * 0.07,
-                0.18 + Math.cos(orbit) * 0.07,
-              );
-              r.gun.rotation.y = Math.PI + Math.sin(orbit) * 0.3;
-              r.gun.rotation.z = Math.sin(t * 2.4) * 0.28;
-              r.arms[1].rotation.x = -0.25 + Math.sin(t * 2.4) * 0.22;
-              r.elbows[1].rotation.x = -0.45;
+              // Floats off the right hand (never held), upright; strikes sweep across the body
+              // alternating sides; hidden while it orbits the player in the world.
+              const k = attack / 0.5,
+                dir = (WeaponSystem.combo || 0) % 2 ? -1 : 1,
+                sweep = k >= 0 && k < 1 ? Math.sin(Math.min(1, k / 0.55) * Math.PI * 0.5) : 0,
+                back = k >= 0.55 && k < 1 ? (k - 0.55) / 0.45 : 0;
+              r.gun.visible = !(SecretWeaponSkills.spinUntil > simulationTime);
+              const x = k >= 0 && k < 1 ? (back ? -dir * 0.6 * (1 - back) + 0.46 * back : dir * 0.6 - dir * 1.2 * sweep) : 0.46;
+              r.gun.position.set(x + Math.sin(t * 1.3) * 0.02, 0.3 + Math.sin(t * 2.1) * 0.04, 0.34 + (k >= 0 && k < 1 ? Math.sin(sweep * Math.PI) * 0.25 : 0));
+              r.gun.rotation.set(Math.PI / 2 - 0.2, Math.PI, (k >= 0 && k < 1 ? dir * 1.1 * (1 - back) : 0) + Math.sin(t * 1.15) * 0.05);
+              r.gun.scale.setScalar(0.45);
+              r.arms[1].rotation.x = -0.9 + (k >= 0 && k < 1 ? -0.5 * (1 - back) : Math.sin(t * 2.4) * 0.1);
+              r.arms[1].rotation.z = -0.5 + (k >= 0 && k < 1 ? dir * 0.4 : 0);
+              r.elbows[1].rotation.x = -0.3;
             } else if (r.tridentWeapon) {
               r.gun.position.set(0.02, 0.2, 0.34);
               r.arms[0].rotation.x = -0.82;
@@ -20697,14 +20982,28 @@ body.netgame #revivetouch{display:flex}
               r.elbows[0].rotation.x = -1.1 + Math.sin(t * 6) * 0.4;
               r.gun.rotation.z = 0.18;
             }
-            if (attack < 0.3) {
+            const mp = r.weapon?.kind === "melee" && !r.specterWeapon ? MeleeAnim.sample(r.weapon, attack, WeaponSystem.combo || 0) : null;
+            if (mp) {
+              // Same move set as first person, mirrored into the avatar's frame.
+              r.gun.position.set(0.01 - mp.p.x * 0.9, 0.19 + mp.p.y * 0.9, 0.37 - mp.p.z * 0.9);
+              r.gun.rotation.set(-mp.r[0] * 0.9, Math.PI + mp.r[1] * 0.9, -mp.r[2] * 0.9);
+              r.chest.rotation.y = -mp.p.x * 0.8;
+              r.arms[0].rotation.x = -0.6 - Math.max(0, mp.p.y) * 2 + mp.p.z * 1.5;
+              if (mp.set.twoHands) r.arms[1].rotation.x = -0.9 + mp.p.z * 1.2;
+            } else if (attack < 0.3 && r.weapon?.kind !== "melee") {
               const a = Math.sin((attack / 0.3) * Math.PI);
               r.chest.rotation.y = a * 0.25;
               r.gun.position.z = 0.37 + a * 0.07;
               r.arms[0].rotation.x -= a * 0.45;
             } else {
               r.chest.rotation.y *= Math.exp(-dt * 8);
-              r.gun.position.z = 0.37;
+              if (!r.specterWeapon) r.gun.position.z = 0.37;
+              if (r.weapon?.kind === "melee" && !r.specterWeapon && !r.tridentWeapon) {
+                r.gun.position.x = 0.01;
+                r.gun.position.y = 0.19;
+                r.gun.rotation.x = 0;
+                r.gun.rotation.y = Math.PI;
+              }
             }
             if (dead)
               g.rotation.z += (1.4 - g.rotation.z) * (1 - Math.exp(-dt * 3));
@@ -22882,6 +23181,8 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            Viewmodel,
+            MeleeAnim,
             Survivor,
             Account,
             SecretWeaponSkills,
