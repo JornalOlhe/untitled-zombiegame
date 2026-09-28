@@ -7278,7 +7278,15 @@ body.netgame #revivetouch{display:flex}
               #devmenu header b{font-family:var(--display,inherit);font-weight:400;font-size:26px;letter-spacing:.14em;color:#eafff2}
               #devmenu header small{font:600 10px/1 var(--mono,monospace);letter-spacing:.2em;color:#6fbf8e;margin-left:2px}
               #devmenu header .x{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid #28543c;background:#0d1d15;color:#bfe9cf;font-size:16px;cursor:pointer}
-              #devmenu nav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 18px 12px}
+              #devmenu nav{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:0 18px 12px}
+              #devmenu .field{display:grid;grid-template-columns:96px 1fr 64px;gap:8px;align-items:center;margin-bottom:8px}
+              #devmenu .field label{font:700 10px/1.2 var(--mono,monospace);letter-spacing:.14em;color:#8fb8a0}
+              #devmenu .field output{font:700 12px/1 var(--mono,monospace);color:#eafff2;text-align:right}
+              #devmenu input[type=range]{padding:0;accent-color:#3fd07a;background:transparent;border:0}
+              #devmenu .card.sel{border-color:#ffd24a;box-shadow:inset 0 0 0 2px #ffd24a}
+              #devmenu .card.sel:after{content:"✓";position:absolute;top:5px;right:7px;color:#ffd24a;font-weight:900}
+              #devmenu .bar{position:sticky;bottom:-18px;margin:10px -18px -18px;padding:10px 18px;background:#07100bf2;border-top:1px solid #1f3a2c;display:flex;gap:8px}
+              #devmenu .bar .act{flex:1;text-align:center}
               #devmenu nav button{padding:9px 0;border-radius:10px;border:1px solid #1f3a2c;background:#0b1510;color:#8fb8a0;font:700 11px/1 var(--head,inherit);letter-spacing:.14em;cursor:pointer;transition:all .15s}
               #devmenu nav button.on{background:linear-gradient(180deg,#1d5a37,#113522);color:#eafff2;border-color:#3fb86c;box-shadow:0 6px 18px rgba(40,200,110,.18)}
               #devmenu .dv-body{flex:1;overflow:auto;padding:4px 18px 18px}
@@ -7353,7 +7361,7 @@ body.netgame #revivetouch{display:flex}
           render() {
             const root = $("devmenu");
             if (!root) return;
-            const tabs = [["powers", "PODERES"], ["spawn", "INVOCAR"], ["arsenal", "ARSENAL"], ["world", "MUNDO"]];
+            const tabs = [["powers", "PODERES"], ["player", "JOGADOR"], ["spawn", "INVOCAR"], ["arsenal", "ARSENAL"], ["world", "MUNDO"]];
             root.querySelector("nav").innerHTML = tabs.map(([k, t]) => `<button data-dev="tab:${k}" class="${this.tab === k ? "on" : ""}">${t}</button>`).join("");
             const body = root.querySelector(".dv-body");
             const sw = (k, icon, title, sub) => `<div class="sw ${this.flags[k] ? "on" : ""}" data-dev="flag:${k}"><i>${icon}</i><span><b>${title}</b><small>${sub}</small></span><em></em></div>`;
@@ -7369,15 +7377,32 @@ body.netgame #revivetouch{display:flex}
                 ${sw("infiniteGrenades", "💣", "GRANADAS INFINITAS", "G nunca acaba")}
                 <h5>AÇÕES</h5>
                 <div class="acts"><button class="act" data-dev="heal">❤ CURAR TUDO</button><button class="act" data-dev="cooldowns">↺ ZERAR COOLDOWNS</button></div>`;
+            } else if (this.tab === "player") {
+              const maxhp = (player?.maxhp || 100) + (player?.bonus || 0),
+                field = (id, label, min, max, value, step = 1) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-dev-change="set:${id}" oninput="this.nextElementSibling.value=this.value" /><output>${value}</output></div>`;
+              body.innerHTML = `<h5>ATRIBUTOS</h5>
+                ${field("dev-hp", "VIDA", 1, maxhp, Math.round(player?.hp || maxhp))}
+                <div class="row" style="margin-bottom:8px"><input id="dev-coins" type="number" min="0" placeholder="Moedas da partida (${player?.coins ?? 0})" /><button class="act" data-dev="set-coins">APLICAR</button></div>
+                <div class="row"><input id="dev-kills" type="number" min="0" placeholder="Kills (${player?.kills ?? 0})" /><button class="act" data-dev="set-kills">APLICAR</button></div>
+                <h5>CLASSE SECRETA · 100 KILLS</h5>
+                <div class="acts"><button class="act" data-dev="charge">⚡ CARGA 100 (Q LIBERA O VOO)</button><button class="act" data-dev="burst">🕊 ATIVAR VOO AGORA</button></div>
+                <h5>CÂMERA</h5>
+                <div class="acts"><button class="act" data-dev="cam:0">👁 PRIMEIRA PESSOA</button><button class="act" data-dev="cam:3">🎥 TERCEIRA PESSOA</button></div>
+                <h5>POSIÇÃO</h5>
+                <div class="acts"><button class="act" data-dev="tp:center">⌖ CENTRO DO MAPA</button><button class="act" data-dev="tp:spawn">⚑ INÍCIO DO MAPA</button><button class="act" data-dev="tp:boss">☠ PERTO DO CHEFE</button><button class="act" data-dev="tp:up">⤒ SUBIR 10 m</button></div>`;
             } else if (this.tab === "spawn") {
               const counts = [1, 5, 10, 25];
+              this.picked ||= new Set();
               const R = WaveManager.bossRoster,
                 rankName = ["", "MINI-BOSS I", "MINI-BOSS II", "BOSS I", "BOSS II"],
                 mapName = ["CIDADE", "HOSPITAL", "FLORESTA", "LAB", "NEVE"],
                 bosses = Object.entries(R).map(([k, b]) => ({ k, b, map: ["city", "hospital", "forest", "lab", "snow"].indexOf(b.theme) }));
-              const card = (dev, portrait, name, sub, color) => `<button class="card" data-dev="${dev}" style="--c:${color}"><span class="pt" data-portrait="${portrait}">☠</span><b>${DR.escapeHtml(name)}</b><small>${sub}</small></button>`;
+              const card = (dev, portrait, name, sub, color) => `<button class="card ${this.multi && this.picked.has(dev.slice(11)) && dev.startsWith("spawn-boss:") ? "sel" : ""}" data-dev="${dev}" style="--c:${color}"><span class="pt" data-portrait="${portrait}">☠</span><b>${DR.escapeHtml(name)}</b><small>${sub}</small></button>`;
               const byRank = [4, 3, 2, 1].map((r) => `<h5>${rankName[r]}</h5><div class="grid">${Object.entries(R).filter(([, b]) => b.rank === r).map(([k, b]) => card("spawn-boss:" + k, k, b.name, (b.title.split("·")[1] || "").trim(), r >= 3 ? "#ff5a4a" : "#ffb23e")).join("")}</div>`).join("");
-              body.innerHTML = `<h5>QUANTIDADE (ZUMBIS)</h5><div class="chips">${counts.map((n) => `<button class="chip ${this.count === n ? "on" : ""}" data-dev="count:${n}">x${n}</button>`).join("")}<button class="chip" data-dev="horde">HORDA MISTA</button><button class="chip" data-dev="clear">LIMPAR</button></div>
+              const mapKeys = WaveManager.mapRosters[selectedMap] || [];
+              body.innerHTML = `<h5>VÁRIOS CHEFES DE UMA VEZ</h5><div class="chips"><button class="chip ${this.multi ? "on" : ""}" data-dev="multi">${this.multi ? "✓ SELEÇÃO MÚLTIPLA" : "SELEÇÃO MÚLTIPLA"}</button><button class="chip" data-dev="bosses-map">4 CHEFES DESTE MAPA</button><button class="chip" data-dev="bosses-all">TODOS OS BOSS I/II</button></div>
+                ${this.multi ? `<div class="bar" style="position:static;margin:8px 0 0;border:0;padding:0;background:none"><button class="act" data-dev="spawn-picked">▶ INVOCAR ${this.picked.size} SELECIONADO(S)</button><button class="act warn" data-dev="unpick">LIMPAR</button></div>` : ""}
+                <h5>QUANTIDADE (ZUMBIS)</h5><div class="chips">${counts.map((n) => `<button class="chip ${this.count === n ? "on" : ""}" data-dev="count:${n}">x${n}</button>`).join("")}<button class="chip" data-dev="horde">HORDA MISTA</button><button class="chip" data-dev="clear">LIMPAR</button></div>
                 <h5>ZUMBIS</h5><div class="grid">${zombieTypes.map((t, i) => card("spawn-type:" + i, ENEMY_KEYS[i] || "zombie", t.name, "COMUM", "#6fbf8e")).join("")}</div>${byRank}`;
               MonsterPortraits.fill(body);
             } else if (this.tab === "arsenal") {
@@ -7458,9 +7483,73 @@ body.netgame #revivetouch{display:flex}
                 return this.log(`${this.count}x ${zombieTypes[t].name} invocado(s).`);
               }
               const key = cmd.slice(11);
+              if (this.multi) {
+                this.picked.has(key) ? this.picked.delete(key) : this.picked.add(key);
+                this.render();
+                return this.log(`${this.picked.size} chefe(s) selecionado(s).`);
+              }
               this.hide();
               WaveManager.boss(key);
               return;
+            }
+            if (cmd === "multi") {
+              this.multi = !this.multi;
+              return this.render();
+            }
+            if (cmd === "unpick") {
+              this.picked?.clear();
+              return this.render();
+            }
+            if (cmd === "spawn-picked" || cmd === "bosses-map" || cmd === "bosses-all") {
+              if (!this.playing()) return;
+              const keys =
+                cmd === "spawn-picked"
+                  ? [...(this.picked || [])]
+                  : cmd === "bosses-map"
+                    ? WaveManager.mapRosters[selectedMap] || []
+                    : Object.keys(WaveManager.bossRoster).filter((k) => WaveManager.bossRoster[k].intro);
+              if (!keys.length) return this.log("Selecione pelo menos um chefe.");
+              this.hide();
+              // Intros queue one after another; everyone arrives spread over the map at the end.
+              for (const k of keys) WaveManager.boss(k);
+              return;
+            }
+            if (cmd.startsWith("set:")) {
+              if (!this.playing()) return;
+              if (cmd === "set:dev-hp") player.hp = clamp(+button.value, 1, player.maxhp + player.bonus);
+              return this.log("Vida: " + Math.round(player.hp));
+            }
+            if (cmd === "set-coins" || cmd === "set-kills") {
+              if (!this.playing()) return;
+              const v = Math.max(0, Math.floor(+val(cmd === "set-coins" ? "dev-coins" : "dev-kills") || 0));
+              if (cmd === "set-coins") player.coins = v;
+              else player.kills = v;
+              return this.log((cmd === "set-coins" ? "Moedas: " : "Kills: ") + v);
+            }
+            if (cmd === "charge" || cmd === "burst") {
+              if (!this.playing()) return;
+              player.classCharge = 100;
+              player.cooldown = 0;
+              if (cmd === "burst") {
+                this.hide();
+                PlayerController.ability();
+              }
+              return this.log("Carga da classe em 100.");
+            }
+            if (cmd.startsWith("cam:")) {
+              CameraRig.target = +cmd.slice(4);
+              return this.log(CameraRig.target ? "Terceira pessoa." : "Primeira pessoa.");
+            }
+            if (cmd.startsWith("tp:")) {
+              if (!this.playing()) return;
+              const where = cmd.slice(3),
+                boss = ZombieManager.list.find((q) => q.boss && !q.dead && !q.introQueued);
+              if (where === "up") player.pos.y += 10;
+              else {
+                const p = where === "spawn" ? MapManager.playerStart || [0, 10] : where === "boss" && boss ? [boss.group.position.x + 8, boss.group.position.z + 8] : [0, 0];
+                player.pos.set(p[0], (MapManager.groundAt(p[0], p[1], 0.3, 50) || 0) + 1.7, p[1]);
+              }
+              return this.log("Teleportado: " + where);
             }
             if (cmd === "disable") {
               this.hide();
