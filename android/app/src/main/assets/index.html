@@ -3072,6 +3072,7 @@ body.netgame #revivetouch{display:flex}
     <script src="js/ui/LobbyUI.js"></script>
     <script src="monsters/voxel-atlas.js"></script>
     <script src="monsters/monster-sfx.js"></script>
+    <script src="monsters/boss-sfx.js"></script>
     <script>
       "use strict";
       (async () => {
@@ -12690,7 +12691,7 @@ body.netgame #revivetouch{display:flex}
               const a = (i / 28) * Math.PI * 2;
               ParticleSystem.emit(at.clone().add(new V(Math.cos(a) * r * 0.5, 0.2, Math.sin(a) * r * 0.5)), i % 2 ? color : 0x7a6a5a, 4, 6);
             }
-            MonsterAudio.play("land", { volume: 1.1, rate: 1.1 });
+            MonsterAudio.play(window.DR_MONSTER_SFX?.boss_slam ? "boss_slam" : "land", { volume: 1.3, rate: 1.1 });
             const me = NetGame.realPos(),
               dist = Math.hypot(me.x - at.x, me.z - at.z);
             shake = Math.max(shake, dist < r * 2.5 ? 0.6 : 0.25);
@@ -12800,6 +12801,7 @@ body.netgame #revivetouch{display:flex}
           },
           // Thrown projectile mesh; the inner group spins around its long axis.
           projectile(z) {
+            if (window.DR_MONSTER_SFX?.boss_throw) MonsterAudio.play("boss_throw", { volume: 1.2 });
             const P = VoxelMonsters.P,
               kind = z.boss.projectile || "trident",
               g = new THREE.Group();
@@ -12841,6 +12843,9 @@ body.netgame #revivetouch{display:flex}
             const sfx = window.DR_MONSTER_SFX || {},
               own = `${z.boss.kind}_${event}`;
             if (sfx[own]) return MonsterAudio.play(own, { volume: 1.3 });
+            // Shared ElevenLabs sounds for the events every boss has (rage / death / abilities).
+            const shared = { rage: "boss_rage", death: "boss_death" }[event];
+            if (shared && sfx[shared]) return MonsterAudio.play(shared, { volume: 1.3, rate: z.boss.rank >= 3 ? 0.9 : 1.08 });
             const voice = z.boss.voice || (z.boss.kind === "demon" ? "demon" : "brute");
             const map = { brute: ["roar", 0.85], scream: ["demon", 1.25], whisper: ["demon", 1.45], robot: ["roar", 1.35], demon: ["demon", 1] },
               [name, rate] = map[voice] || map.brute;
@@ -12924,8 +12929,11 @@ body.netgame #revivetouch{display:flex}
               for (const c of tank.cracks) c.visible = false;
               for (const b of tank.bubbles) b.visible = false;
               tank.light.intensity = 1.2;
-              AudioManager.noise?.(0.5, 0.6);
-              for (let i = 0; i < 5; i++) AudioManager.tone(rand(2200, 3600), 0.25, "triangle", 0.07, 400, "effects");
+              if (window.DR_MONSTER_SFX?.mutant_glass) MonsterAudio.play("mutant_glass", { volume: 1.6 });
+              else {
+                AudioManager.noise?.(0.5, 0.6);
+                for (let i = 0; i < 5; i++) AudioManager.tone(rand(2200, 3600), 0.25, "triangle", 0.07, 400, "effects");
+              }
               shake = Math.max(shake, 0.7);
               for (let i = 0; i < 90; i++) {
                 const ang = rand(0, Math.PI * 2),
@@ -12958,7 +12966,7 @@ body.netgame #revivetouch{display:flex}
                 z.group.position.copy(a.dir.clone().multiplyScalar(2.2));
                 z.group.rotation.y = Math.atan2(a.dir.x, a.dir.z);
               }
-              BossVoice.play(z, "intro");
+              if (!window.DR_MONSTER_SFX?.mutant_rise) BossVoice.play(z, "intro");
             }
             // 1.6-2.3 s: falls face-first out of the tank; 2.3-3.4 s gets up; 3.4-4.2 s roars.
             if (z && !z.dead && t >= 1.6) {
@@ -12973,8 +12981,12 @@ body.netgame #revivetouch{display:flex}
               r.neck.rotation.x = t > 3.4 ? -0.5 * Math.sin(clamp((t - 3.4) / 0.8, 0, 1) * Math.PI) : 0;
               if (fall >= 1 && !a.flags.thud) {
                 a.flags.thud = true;
-                MonsterAudio.play("land", { volume: 1 });
+                MonsterAudio.play(window.DR_MONSTER_SFX?.mutant_fall ? "mutant_fall" : "land", { volume: 1.3 });
                 ParticleSystem.emit(z.group.position.clone().add(new V(0, 0.2, 0)), 0x7dff6a, 30, 4);
+              }
+              if (t >= 2.4 && !a.flags.rise) {
+                a.flags.rise = true;
+                if (window.DR_MONSTER_SFX?.mutant_rise) MonsterAudio.play("mutant_rise", { volume: 1.5 });
               }
               if (t >= 3.4 && !a.flags.title) {
                 a.flags.title = true;
