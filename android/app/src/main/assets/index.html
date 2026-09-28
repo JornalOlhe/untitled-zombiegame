@@ -10438,7 +10438,7 @@ body.netgame #revivetouch{display:flex}
           // the flash point to the screen and back into the world camera at the same distance.
           // ---- shot pipeline helpers (muzzle-coherent hit logic, spread states, camera recoil)
           shotRay(w, eye, camDir) {
-            if (CameraRig.distance >= 0.6 || !this.model?.visible) return { from: eye, dir: camDir.clone() };
+            if (CameraRig.distance < 0.6 && !this.model?.visible) return { from: eye, dir: camDir.clone() };
             const target = aimTarget(w.range || 80),
               muzzle = this.muzzleWorld(eye);
             if (!isFinite(muzzle.x + muzzle.y + muzzle.z)) return { from: eye, dir: camDir.clone() };
@@ -10583,8 +10583,15 @@ body.netgame #revivetouch{display:flex}
             return { pos: new V(0.16, -0.29, -0.42), fov: 0.75 };
           },
           muzzleWorld(fallback = player?.pos) {
+            if (CameraRig.distance > 0.6) {
+              // Third person: the barrel end of the gun in the avatar's hands.
+              const f3 = CameraRig.avatar?.userData.rig?.parts?.flash;
+              if (!f3) return fallback.clone();
+              CameraRig.avatar.updateMatrixWorld(true);
+              return f3.getWorldPosition(new V());
+            }
             const f = this.parts?.flash;
-            if (!f || !this.model.parent || CameraRig.distance > 0.6) return fallback.clone();
+            if (!f || !this.model.parent) return fallback.clone();
             Viewmodel.camera.updateMatrixWorld(true);
             this.model.updateMatrixWorld(true);
             const wp = f.getWorldPosition(new V()),
@@ -11242,17 +11249,57 @@ body.netgame #revivetouch{display:flex}
         }
         // Where the crosshair ray first meets a wall, prop or zombie (or far away): shots from the
         // barrel are aimed at this point so what you see leaving the muzzle lands on the crosshair.
+        // Free-aim (J): the camera stops turning and the crosshair follows the mouse instead of
+        // the OS cursor. Every shot uses camera ray → crosshair point → weapon muzzle.
+        const FreeAim = {
+          x: 0,
+          y: 0,
+          ray: new THREE.Raycaster(),
+          active() {
+            return mouseFreed && !touchMode && state === GameState.PLAYING;
+          },
+          // World point under the crosshair (walls, zombies, then ground / far point).
+          point(max = 140) {
+            this.ray.setFromCamera({ x: this.x, y: this.y }, camera);
+            this.ray.far = max;
+            const hit = this.ray.intersectObjects([...MapManager.walls, ...ZombieManager.hitMeshes])[0];
+            if (hit) return hit.point.clone();
+            const p = new V();
+            if (this.ray.ray.intersectPlane(new THREE.Plane(new V(0, 1, 0), 0), p) && p.distanceTo(camera.position) < max) return p;
+            return this.ray.ray.at(max, new V());
+          },
+          dirFrom(origin) {
+            return this.point().sub(origin).normalize();
+          },
+          place(clientX, clientY) {
+            const r = $("world").getBoundingClientRect();
+            this.x = ((clientX - r.left) / r.width) * 2 - 1;
+            this.y = -((clientY - r.top) / r.height) * 2 + 1;
+            const c = document.querySelector("#hud .crosshair") || document.querySelector(".crosshair");
+            if (c) {
+              c.style.left = clientX - r.left + "px";
+              c.style.top = clientY - r.top + "px";
+            }
+          },
+          reset() {
+            this.x = this.y = 0;
+            const c = document.querySelector("#hud .crosshair") || document.querySelector(".crosshair");
+            if (c) c.style.left = c.style.top = "";
+          },
+        };
+        const aimDir = () => (FreeAim.active() ? FreeAim.dirFrom(player.pos) : forward());
         function aimTarget(max = 80) {
-          raycaster.set(player.pos.clone(), forward());
+          raycaster.set(player.pos.clone(), aimDir());
           raycaster.far = max;
           let d = max;
           const wall = raycaster.intersectObjects(MapManager.walls);
           if (wall.length) d = Math.min(d, wall[0].distance);
           const zh = raycaster.intersectObjects(ZombieManager.hitMeshes);
           if (zh.length) d = Math.min(d, zh[0].distance);
-          return player.pos.clone().addScaledVector(forward(), Math.max(2, d));
+          return player.pos.clone().addScaledVector(aimDir(), Math.max(2, d));
         }
         function aimPoint() {
+          if (FreeAim.active()) return FreeAim.point(100);
           raycaster.set(player.pos.clone(), forward());
           raycaster.far = 100;
           const hits = raycaster.intersectObjects(MapManager.walls);
@@ -17504,7 +17551,8 @@ body.netgame #revivetouch{display:flex}
               NetGame.shot(origin, dir);
               // Projectiles leave from the real barrel end and fly toward the crosshair point.
               const muzzle = WeaponSystem.muzzleWorld(origin);
-              if (CameraRig.distance < 0.6) {
+              // First or third person: leave the barrel, fly to the crosshair point.
+              if (isFinite(muzzle.x + muzzle.y + muzzle.z) && muzzle.distanceTo(origin) < 3) {
                 dir.copy(aimTarget().sub(muzzle).normalize());
                 origin.copy(muzzle);
               }
@@ -21172,6 +21220,7 @@ body.netgame #revivetouch{display:flex}
             Viewmodel.camera.updateProjectionMatrix();
           },
           aim() {
+            if (FreeAim.active()) return FreeAim.dirFrom(player.pos);
             if (this.distance < 0.3) return forward();
             this.ray.set(camera.position, forward());
             this.ray.far = 140;
@@ -22546,6 +22595,7 @@ body.netgame #revivetouch{display:flex}
           if (state !== GameState.PLAYING || touchMode) return;
           mouseFreed = on;
           document.body.classList.toggle("mouse-free", on);
+          if (!on) FreeAim.reset();
           mouse.down = mouse.aim = false;
           fallbackPointer = null;
           if (on) unlock();
@@ -22597,6 +22647,12 @@ body.netgame #revivetouch{display:flex}
           const mode = MouseLook.mode();
           if (mode === "MENU" && !mouseFreed) return;
           if (mode === "LOCKING") return;
+          if (mouseFreed && !touchMode && state === GameState.PLAYING) {
+            // Free-aim: the click fires (or aims) at the crosshair; J returns to mouse-look.
+            FreeAim.place(e.clientX, e.clientY);
+            gameInput("Mouse" + e.button, true);
+            return;
+          }
           if (!touchMode && (mode === "UNLOCKED" || mouseFreed)) {
             // This click only captures the mouse; it never fires the weapon.
             mouse.down = false;
@@ -22621,6 +22677,7 @@ body.netgame #revivetouch{display:flex}
           if (state === GameState.PLAYING) e.preventDefault();
         });
         document.addEventListener("mousemove", (e) => {
+          if (mouseFreed && !touchMode) FreeAim.place(e.clientX, e.clientY);
           const mode = MouseLook.mode();
           if (mode !== "LOCKED" && mode !== "FALLBACK") return;
           if (!document.hasFocus()) return;
