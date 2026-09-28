@@ -20815,23 +20815,44 @@ body.netgame #revivetouch{display:flex}
               const tailModel = PropModels.group("acc_tail");
               if (tailModel) {
                 horns.forEach((h, i) => {
-                  const side = i ? 1 : -1, model = PropModels.group("acc_horn", 1.25);
+                  // Horn size matched to the template's on-character preview (about a head tall).
+                  const side = i ? 1 : -1, model = PropModels.group("acc_horn", 0.72);
                   if (!model) return;
                   h.clear();
                   model.scale.x *= side;
                   h.add(model);
                 });
-                tail.clear();
-                tail.add(tailModel);
-                const rotorModel = PropModels.group("acc_rotor", 0.9);
-                if (rotorModel) {
-                  rotor.clear();
-                  rotor.position.set(Math.sin(7 * 0.55) * 0.08, -0.355, -1.14);
-                  rotor.add(rotorModel);
-                  tail.add(rotor);
-                }
               }
-              secretAccessories = { type:"demon", horns, tail, rotor };
+              // Rigged tail (ARCHDEMON template): 13 armoured vertebrae chained bone-to-bone, thick
+              // at the base and tapering, a spine of obsidian spikes with crimson glowing joints,
+              // curving down then up, ending in the three-bladed rotor tip from the template.
+              tail.clear();
+              tail.position.set(0, 0.02, -0.12);
+              const segs = [], N = 13;
+              let parent = tail;
+              for (let j = 0; j < N; j++) {
+                const k = j / (N - 1), len = 0.095 - k * 0.035, rad = 0.065 - k * 0.042;
+                const seg = A.pivot(parent, 0, 0, j ? -segs[j - 1].userData.len : 0);
+                seg.userData.len = len;
+                seg.userData.base = j < 5 ? 0.2 : j < 9 ? 0.02 : -0.24; // down, level, then curling up
+                A.link(seg, [0, 0, 0], [0, 0, -len], rad, rad * 0.82, j % 2 ? horn : obsidian, "steel");
+                A.ellipsoid(seg, [0, 0, -len], [rad * 0.95, rad * 0.8, rad * 0.5], infernal, "steel", 0x5a0000);
+                A.link(seg, [0, rad * 0.7, -len * 0.4], [0, rad * 0.7 + 0.05 - k * 0.025, -len * 0.75], 0.012, 0.002, obsidian, "steel");
+                segs.push(seg);
+                parent = seg;
+              }
+              rotor.clear();
+              tail.remove(rotor);
+              rotor.position.set(0, 0, -segs[N - 1].userData.len - 0.02);
+              segs[N - 1].add(rotor);
+              const rotorModel = PropModels.group("acc_rotor", 0.62);
+              if (rotorModel) rotor.add(rotorModel);
+              else
+                for (let j = 0; j < 3; j++) {
+                  const a = (j * Math.PI * 2) / 3;
+                  A.link(rotor, [0, 0, 0], [Math.cos(a) * 0.2, Math.sin(a) * 0.2, 0], 0.03, 0.01, obsidian, "steel");
+                }
+              secretAccessories = { type:"demon", horns, tail, rotor, segs };
             }
             if (weapon?.kind === "bow") {
               // Quiver on the back with visible arrows (fletching up, over the right shoulder).
@@ -20959,15 +20980,47 @@ body.netgame #revivetouch{display:flex}
                   !!classBurst().flight;
               if (secret.type === "angel") {
                 secret.halo.position.y = Math.sin(t * 1.4) * 0.018;
-                const flap = Math.sin(t * (flying ? 9 : 2.1)) * (flying ? 0.34 : 0.08);
-                secret.left.rotation.y = 0.22 + flap;
-                secret.right.rotation.y = -0.22 - flap;
-                secret.left.rotation.z = -0.08 - flap * 0.35;
-                secret.right.rotation.z = 0.08 + flap * 0.35;
+                // Wing states: folded breathing on the ground; take-off = a few big fast beats;
+                // flight = steady beats with a fast downstroke and slower recovery; folding again
+                // on landing. Loose feathers and light motes fall from the wing tips in flight.
+                if (flying && !secret.wasFlying) secret.takeoff = t;
+                secret.wasFlying = flying;
+                secret.fly = (secret.fly || 0) + ((flying ? 1 : 0) - (secret.fly || 0)) * (1 - Math.exp(-dt * 3.5));
+                const f = secret.fly,
+                  takeoff = flying && t - (secret.takeoff || -9) < 0.9 ? 1 - (t - secret.takeoff) / 0.9 : 0;
+                secret.beat = (secret.beat || 0) + dt * (1.8 + f * 5.2 + takeoff * 4);
+                const sb = Math.sin(secret.beat),
+                  stroke = sb > 0 ? Math.pow(sb, 0.6) : -Math.pow(-sb, 1.6),
+                  amp = 0.05 + f * 0.5 + takeoff * 0.35,
+                  spread = 0.22 - f * 0.55;
+                secret.left.rotation.y = spread + stroke * amp * 0.35;
+                secret.right.rotation.y = -spread - stroke * amp * 0.35;
+                secret.left.rotation.z = -0.08 - stroke * amp;
+                secret.right.rotation.z = 0.08 + stroke * amp;
+                if (f > 0.5 && g.visible && Math.random() < 0.25 + takeoff) {
+                  const wing = Math.random() < 0.5 ? secret.left : secret.right;
+                  wing.updateMatrixWorld(true);
+                  const tip = wing.localToWorld(new V((wing === secret.left ? -1 : 1) * 0.6, -0.1, -0.1));
+                  ParticleSystem.emit(tip, Math.random() < 0.6 ? 0xffffff : 0xffe7a8, 1, 0.6);
+                }
               } else if (secret.type === "demon") {
-                const targetRaise = flying ? -1.05 : 0;
-                secret.tail.rotation.x += (targetRaise - secret.tail.rotation.x) * (1 - Math.exp(-dt * 7));
+                // Idle: slow sway travelling down the vertebrae. Flight: the whole tail winds into a
+                // corkscrew — every bone circles with a phase lag so the tail itself spins — and the
+                // rotor tip whirls, shedding embers.
+                secret.fly = (secret.fly || 0) + ((flying ? 1 : 0) - (secret.fly || 0)) * (1 - Math.exp(-dt * 4));
+                const f = secret.fly;
+                secret.tail.rotation.x = -0.35 * f;
+                secret.segs?.forEach((seg, i) => {
+                  const ph = t * 9 - i * 0.62,
+                    sway = t * 1.5 - i * 0.45;
+                  seg.rotation.x = seg.userData.base * (1 - f * 0.7) + Math.sin(sway) * 0.05 * (1 - f) + Math.sin(ph) * 0.26 * f;
+                  seg.rotation.y = Math.sin(sway * 0.8) * 0.13 * (1 - f) + Math.cos(ph) * 0.26 * f;
+                });
                 secret.rotor.rotation.z += dt * (flying ? 26 : 1.4);
+                if (flying && Math.random() < 0.35 && g.visible) {
+                  secret.rotor.updateMatrixWorld(true);
+                  ParticleSystem.emit(secret.rotor.getWorldPosition(new V()), Math.random() < 0.5 ? 0xff2a14 : 0x3a0808, 1, 1);
+                }
                 if (flying) {
                   r.arms[0].rotation.x = 0.08;
                   r.elbows[0].rotation.x = -0.15;
@@ -20976,6 +21029,16 @@ body.netgame #revivetouch{display:flex}
                   r.arms[0].rotation.z = 0.18;
                   r.arms[1].rotation.z = -0.18;
                 }
+              }
+            }
+            if (r.secretAccessories?.fly > 0.01) {
+              // Flight posture: chest pitched into the direction of travel, legs trailing and
+              // slightly bent, free arm opened for balance.
+              const f = r.secretAccessories.fly;
+              r.chest.rotation.x += 0.38 * f;
+              for (let i = 0; i < 2; i++) {
+                r.legs[i].rotation.x = r.legs[i].rotation.x * (1 - f) + (0.42 + Math.sin(t * 2 + i) * 0.06) * f;
+                r.knees[i].rotation.x = r.knees[i].rotation.x * (1 - f) + (0.35 + i * 0.12) * f;
               }
             }
             if (reloading) {
