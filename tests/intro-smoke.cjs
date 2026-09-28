@@ -56,6 +56,23 @@ const KINDS = ['juggernaut', 'wrecker', 'butcher', 'plague_host', 'wendigo', 'ab
         r.duration = a?.duration;
         out[k] = r;
       }
+      // Several bosses at once (dev mode): intros play one after another, never two at a time,
+      // and everyone arrives at the end on spread-out spots.
+      T.ZombieManager.clear(); T.MonsterFX.clear();
+      T.setMap(0);
+      const many = ['juggernaut', 'wrecker', 'quarterback', 'yeti', 'omega', 'butcher'].map((k) => T.WaveManager.boss(k));
+      const multi = { queued: BI.queue.length, maxActive: 0, order: [] };
+      let guard = 0;
+      while ((BI.active || BI.queue.length) && guard++ < 4000) {
+        if (BI.active && multi.order.at(-1) !== BI.active.kind) multi.order.push(BI.active.kind);
+        BI.update(1 / 30);
+      }
+      const landing = many.filter((z) => z.boss.intro).map((z) => z.dropping?.target).filter(Boolean);
+      let minGap = Infinity;
+      for (let i = 0; i < landing.length; i++) for (let j = i + 1; j < landing.length; j++) minGap = Math.min(minGap, Math.hypot(landing[i].x - landing[j].x, landing[i].z - landing[j].z));
+      multi.landing = landing.length; multi.minGap = +minGap.toFixed(1);
+      multi.hidden = many.filter((z) => !z.group.visible && !z.dropping).length;
+      out.multi = multi;
       return out;
     }, KINDS);
     console.log(JSON.stringify(res));
@@ -68,6 +85,11 @@ const KINDS = ['juggernaut', 'wrecker', 'butcher', 'plague_host', 'wendigo', 'ab
     for (const k of ['juggernaut', 'wrecker', 'plague_host', 'abomination', 'avalanche_titan']) assert.ok(res[k].debris > 0, `${k} set piece throws debris`);
     for (const k of KINDS) assert.equal(res[k].arrival, res[k].expected, `${k} arrives with its own entrance`);
     assert.ok(new Set(KINDS.map((k) => res[k].expected)).size >= 4, 'at least four different arrivals');
+    const m = res.multi;
+    assert.equal(m.order.length, 5, 'five intros played one after the other: ' + m.order.join(','));
+    assert.equal(m.landing, 5, 'all five intro bosses arrive once the queue is done');
+    assert.ok(m.minGap >= 10, 'arrivals are spread out (min gap ' + m.minGap + ' m)');
+    assert.equal(m.hidden, 0, 'no boss left hidden');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

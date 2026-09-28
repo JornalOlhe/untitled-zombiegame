@@ -11885,7 +11885,7 @@ body.netgame #revivetouch{display:flex}
                 NetGame.drivePuppet(z, dt);
                 continue;
               }
-              if (z.dropping || z.rig?.cinematic) continue;
+              if (z.dropping || z.introQueued || z.rig?.cinematic) continue;
               NetGame.aim(z);
               try {
               if (
@@ -13326,18 +13326,65 @@ body.netgame #revivetouch{display:flex}
           seg(time, a, b) {
             return this.ease((time - a) / (b - a));
           },
-          landingSpot(clearance) {
-            for (let r = 0; r <= 26; r += 1.5)
+          // Arrival point on the map: the closest free spot to the centre that is at least 13 m from
+          // every other boss (alive, landing or still waiting for its intro), so several bosses
+          // spawned together never land or animate on top of each other. Falls back to the spot
+          // that is furthest from the others.
+          landingSpot(clearance, self = null) {
+            const others = ZombieManager.list
+              .filter((o) => o.boss && o !== self && !o.dead && (!o.introQueued || o.awaitDrop))
+              .map((o) => (o.awaitDrop ? o.awaitDrop.target : o.dropping ? o.dropping.target : o.group.position));
+            const room = (x, z) => others.reduce((m, o) => Math.min(m, Math.hypot(o.x - x, o.z - z)), Infinity);
+            const maxR = Math.max(26, (MapManager.half || 40) - 6);
+            let best = null,
+              bestRoom = -1;
+            for (let r = 0; r <= maxR; r += 1.5)
               for (let i = 0; i < Math.max(1, Math.round(r * 2.2)); i++) {
-                const a = (i / Math.max(1, Math.round(r * 2.2))) * Math.PI * 2,
+                const a = (i / Math.max(1, Math.round(r * 2.2))) * Math.PI * 2 + r * 0.37,
                   x = Math.cos(a) * r,
                   z = Math.sin(a) * r;
-                if (!MapManager.collides(x, z, clearance)) return new V(x, 0, z);
+                if (MapManager.collides(x, z, clearance)) continue;
+                const d = room(x, z);
+                if (d >= 13) return new V(x, 0, z);
+                if (d > bestRoom) {
+                  bestRoom = d;
+                  best = new V(x, 0, z);
+                }
               }
-            return new V(0, 0, 0);
+            return best || new V(0, 0, 0);
+          },
+          // Cinematic queue: only one intro can own the camera. Bosses spawned while an intro is
+          // playing wait hidden (no AI, no damage) and play theirs, in order, right after.
+          queue: [],
+          slot: 0,
+          park(z) {
+            z.introQueued = true;
+            z.rig.cinematic = true;
+            z.group.visible = false;
+            z.group.position.set(0, -500, 0);
+          },
+          next() {
+            while (this.queue.length) {
+              const z = this.queue.shift();
+              z.introQueued = false;
+              z.group.visible = true;
+              if (z.dead || !ZombieManager.list.includes(z)) continue;
+              this.start(z);
+              return;
+            }
           },
           start(z) {
+            if (this.active) {
+              if (this.active.z !== z && !this.queue.includes(z)) {
+                this.queue.push(z);
+                this.park(z);
+              }
+              return;
+            }
             MonsterFX.init();
+            // Alternate the far-away stage between four slots so nothing left over from the
+            // previous set piece can ever share space with the next one.
+            this.ARENA = new V(-600 + (this.slot++ % 4) * 400, 0, -1600);
             const kind = z.boss.kind;
             const stage = new THREE.Group();
             stage.position.copy(this.ARENA);
@@ -13383,6 +13430,12 @@ body.netgame #revivetouch{display:flex}
           },
           abort() {
             if (this.active) this.finish(true);
+            this.release();
+            for (const z of this.queue.splice(0)) {
+              z.introQueued = false;
+              z.group.visible = true;
+              z.rig.cinematic = false;
+            }
             document.body.classList.remove("cinematic");
           },
           glow(color) {
@@ -14912,11 +14965,30 @@ body.netgame #revivetouch{display:flex}
               return;
             }
             // Drop the boss out of the sky onto the middle of the map.
-            const target = this.landingSpot(z.boss.kind === "yeti" ? 2.4 : 2),
+            const target = this.landingSpot(z.boss.kind === "yeti" ? 2.4 : 2, z),
               toPlayer = player.pos.clone().sub(target);
             z.group.position.set(target.x, 48, target.z);
             z.group.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
-            MonsterFX.startDrop(z, target, this.ARRIVE[z.boss.kind] || "drop", a.h || 3);
+            // While more intros are queued, hold this boss (hidden, reserved spot) so nothing lands
+            // on the player during the next cutscene; everyone arrives together at the end.
+            z.awaitDrop = { target, mode: this.ARRIVE[z.boss.kind] || "drop", h: a.h || 3 };
+            this.held = this.held || [];
+            this.held.push(z);
+            z.introQueued = true;
+            z.group.visible = false;
+            if (this.queue.length) this.next();
+            else this.release();
+          },
+          release() {
+            for (const z of (this.held || []).splice(0)) {
+              const d = z.awaitDrop;
+              z.awaitDrop = null;
+              z.introQueued = false;
+              z.group.visible = true;
+              if (z.dead || !ZombieManager.list.includes(z)) continue;
+              z.group.position.set(d.target.x, 48, d.target.z);
+              MonsterFX.startDrop(z, d.target, d.mode, d.h);
+            }
           },
         };
 
@@ -19707,7 +19779,7 @@ body.netgame #revivetouch{display:flex}
             if (mode === "timed") WaveManager.timeLeft = m.tl;
           },
           drivePuppet(z, dt) {
-            if (z.dropping || BossIntro.active?.z === z) return;
+            if (z.dropping || z.introQueued || BossIntro.active?.z === z) return;
             const b = z.netBuf;
             if (!b?.length) return;
             const now = performance.now() / 1000 - 0.14;
