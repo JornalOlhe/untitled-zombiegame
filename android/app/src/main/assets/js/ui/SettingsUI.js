@@ -70,7 +70,8 @@
         .map(([v, l]) => `<option value="${v}" ${this.s[k] === v ? "selected" : ""}>${l}</option>`)
         .join("")}</select></label>`;
     },
-    range(k, label, min, max, step, fmt = (v) => v, hint = "") {
+    range(k, label, min, max, step, fmt, hint = "") {
+      fmt = fmt || this.fmt(k);
       return `<label class="set-row"><span class="set-name">${label}${hint ? `<small>${hint}</small>` : ""}</span><span class="set-range"><input data-setting="${k}" type="range" min="${min}" max="${max}" step="${step}" value="${this.s[k]}" /><output data-out="${k}">${fmt(this.s[k])}</output></span></label>`;
     },
     check(k, label, hint = "") {

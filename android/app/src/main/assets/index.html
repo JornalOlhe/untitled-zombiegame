@@ -6802,70 +6802,194 @@ body.netgame #revivetouch{display:flex}
         // their max HP and a rolling 1 s window bounds the total damage per second, no
         // matter how many pellets, burn ticks, beams or explosions land at once.
         // Rank: 1 Miniboss I · 2 Miniboss II · 3 Boss I · 4 Boss II (strongest).
-        // Developer mode. The logo sequence D → E → A → D only *reveals* the menu, and only after the
-        // server confirms the signed-in UserId is on dev_whitelist. Account changes go through the
-        // dev_action RPC (validated server-side); match powers work only in solo runs of a
-        // whitelisted session.
+        // Developer mode (sandbox). Clicking the logo letters D → E → A → D (each letter hops)
+        // plays a short loading sequence and turns dev mode on for this device: infinite ammo,
+        // abilities and grenades, an in-game dev menu (spawn zombies/bosses, waves, god mode…)
+        // and "take any item": tapping a weapon/class in the Armory equips it straight away.
+        // Everything is a local sandbox: dev matches are never reported to the server, spins and
+        // wallet on the account are untouched, and the sandbox loadout/powers are off in
+        // multiplayer — so the sequence can't be used to farm or cheat the online economy.
+        // Server-side account tools (give/set wallet) still require the dev_whitelist.
         const DevMode = {
+          active: false,
           allowed: false,
+          serverAllowed: false,
           open: false,
+          pausedByMenu: false,
           seq: [],
           lastClick: 0,
-          flags: { god: false, infiniteDamage: false, infiniteAmmo: false, noReload: false, infiniteAbility: false },
+          sandbox: { weaponId: null, classId: null },
+          flags: { god: false, infiniteDamage: false, infiniteAmmo: true, noReload: true, infiniteAbility: true, infiniteGrenades: true },
           on(flag) {
-            return this.allowed && !NetGame.active && !!this.flags[flag];
+            return this.active && !NetGame.active && !!this.flags[flag];
           },
           infiniteDamage() {
             return this.on("infiniteDamage");
+          },
+          load() {
+            try {
+              const saved = JSON.parse(localStorage.getItem("deadrecoil.dev") || "null");
+              if (saved?.on) {
+                this.active = this.allowed = true;
+                this.sandbox = { weaponId: saved.weaponId ?? null, classId: saved.classId ?? null };
+              }
+            } catch {}
+            this.badge();
+          },
+          save() {
+            try {
+              if (this.active) localStorage.setItem("deadrecoil.dev", JSON.stringify({ on: true, ...this.sandbox }));
+              else localStorage.removeItem("deadrecoil.dev");
+            } catch {}
           },
           attachLogo() {
             const brand = document.querySelector("#menu .brand");
             if (!brand || brand.dataset.dev) return;
             brand.dataset.dev = "1";
+            this.css();
             // Each letter of "DEAD" becomes its own click target; the look is unchanged.
-            brand.innerHTML = `<span data-l="D0">D</span><span data-l="E">E</span><span data-l="A">A</span><span data-l="D1">D</span> <br />RECOIL`;
+            brand.innerHTML = `<span class="dev-l" data-l="D0">D</span><span class="dev-l" data-l="E">E</span><span class="dev-l" data-l="A">A</span><span class="dev-l" data-l="D1">D</span> <br />RECOIL`;
             brand.addEventListener("click", (e) => {
-              const l = e.target?.dataset?.l;
-              this.press(l ? l[0] : "x");
+              const el = e.target?.closest?.("[data-l]");
+              if (el) this.hop(el);
+              this.press(el ? el.dataset.l[0] : "x");
             });
+            this.load();
+          },
+          hop(el, delay = 0) {
+            el.classList.remove("hop");
+            void el.offsetWidth; // restart the animation
+            el.style.animationDelay = delay + "ms";
+            el.classList.add("hop");
           },
           press(letter) {
             const now = performance.now(),
               want = ["D", "E", "A", "D"];
-            if (now - this.lastClick > 2500) this.seq = [];
+            if (now - this.lastClick > 4000) this.seq = [];
             this.lastClick = now;
             if (letter !== want[this.seq.length]) {
               this.seq = letter === "D" ? ["D"] : [];
               return;
             }
             this.seq.push(letter);
+            AudioManager.tone?.(360 + this.seq.length * 120, 0.07, "triangle", 0.07, 900, "ui");
             if (this.seq.length === want.length) {
               this.seq = [];
               this.unlock();
             }
           },
           async refresh() {
-            this.allowed = false;
+            this.serverAllowed = false;
             if (!Account.signedIn?.() || !DR.Backend?.isOnline?.()) return false;
             try {
               const r = await DR.DevRepository.status();
-              this.allowed = !!r?.dev;
+              this.serverAllowed = !!r?.dev;
             } catch {
-              this.allowed = false;
+              this.serverAllowed = false;
             }
-            return this.allowed;
+            if (this.open) this.render();
+            return this.serverAllowed;
           },
-          async unlock() {
-            if (!(await this.refresh())) return; // silently ignored for everyone else
-            this.show();
+          unlock() {
+            // All four letters jump in a wave, then the loading bar runs and dev mode switches on
+            // (or off, if it already was).
+            document.querySelectorAll("#menu .brand .dev-l").forEach((el, i) => this.hop(el, i * 90));
+            const turningOn = !this.active;
+            this.css();
+            let ov = $("devload");
+            if (!ov) {
+              ov = document.createElement("div");
+              ov.id = "devload";
+              document.body.appendChild(ov);
+            }
+            ov.innerHTML = `<div class="dl-card"><b>${turningOn ? "MODO DESENVOLVEDOR" : "DESATIVANDO MODO DEV"}</b><small>${turningOn ? "carregando ferramentas…" : "voltando ao jogo normal…"}</small><i><em></em></i><span class="dl-log"></span></div>`;
+            ov.className = "show";
+            const lines = turningOn ? ["recursos infinitos", "menu de invocação", "arsenal completo", "pronto"] : ["limpando sandbox", "pronto"];
+            lines.forEach((t, i) => setTimeout(() => { const l = ov.querySelector(".dl-log"); if (l) l.textContent = "› " + t; }, 250 + i * 300));
+            setTimeout(() => {
+              ov.className = "";
+              this.active = this.allowed = turningOn;
+              if (!turningOn) this.sandbox = { weaponId: null, classId: null };
+              this.save();
+              this.badge();
+              UIManager.toast(turningOn ? "MODO DESENVOLVEDOR ATIVO · F8 ou botão DEV abre o menu. Toque num item do Armory para pegar." : "Modo desenvolvedor desativado.");
+              if (turningOn) this.refresh();
+            }, 1500);
+          },
+          // Small DEV chip on the home menu and a DEV button on the HUD while active.
+          badge() {
+            let chip = $("devchip");
+            if (!chip) {
+              chip = document.createElement("button");
+              chip.id = "devchip";
+              chip.type = "button";
+              chip.textContent = "DEV";
+              chip.title = "Menu do desenvolvedor (F8)";
+              chip.onclick = (e) => {
+                e.stopPropagation();
+                this.toggle();
+              };
+              document.body.appendChild(chip);
+            }
+            chip.classList.toggle("hidden", !this.active);
           },
           toggle() {
-            if (!this.allowed) return;
+            if (!this.active) return;
             this.open ? this.hide() : this.show();
           },
           hide() {
             this.open = false;
             $("devmenu")?.classList.add("hidden");
+            if (this.pausedByMenu && state === GameState.PAUSED) {
+              this.pausedByMenu = false;
+              resume();
+            }
+            this.pausedByMenu = false;
+          },
+          css() {
+            if ($("devcss")) return;
+            const style = document.createElement("style");
+            style.id = "devcss";
+            style.textContent = `
+              #menu .brand .dev-l{display:inline-block;cursor:pointer;transform-origin:50% 100%}
+              #menu .brand .dev-l.hop{animation:devHop .52s cubic-bezier(.3,1.6,.5,1) both}
+              @keyframes devHop{0%{transform:translateY(0) scale(1,1)}18%{transform:translateY(0) scale(1.12,.86)}45%{transform:translateY(-.32em) scale(.94,1.08)}70%{transform:translateY(0) scale(1.08,.92)}100%{transform:none}}
+              #devload{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,rgba(20,60,34,.55),rgba(0,0,0,.82));}
+              #devload.show{display:flex;animation:devFade .25s ease both}
+              #devload .dl-card{min-width:min(420px,86vw);padding:22px 24px;border:1px solid #2f6b44;border-radius:12px;background:#07110b;box-shadow:0 0 50px #2bff7a22;font-family:var(--mono,monospace);color:#bfffd6}
+              #devload b{display:block;font-size:18px;letter-spacing:.24em;color:#7dffb0}
+              #devload small{display:block;margin:6px 0 14px;color:#6c9c7c;letter-spacing:.12em}
+              #devload i{display:block;height:6px;border-radius:3px;background:#12301d;overflow:hidden}
+              #devload em{display:block;height:100%;width:0;background:linear-gradient(90deg,#2bd46a,#9dffbe);animation:devBar 1.35s cubic-bezier(.4,.1,.2,1) forwards}
+              #devload .dl-log{display:block;margin-top:10px;font-size:12px;color:#8fd9a9;min-height:15px}
+              @keyframes devBar{to{width:100%}}
+              @keyframes devFade{from{opacity:0}}
+              #devchip{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:60;padding:4px 12px;border-radius:99px;border:1px solid #2f6b44;background:#0b1a11e6;color:#7dffb0;font:700 11px/1.4 var(--mono,monospace);letter-spacing:.2em;cursor:pointer}
+              #devchip.hidden{display:none}
+              .rarity-item.dev-take small{color:#7dffb0!important}`;
+            document.head.appendChild(style);
+          },
+          // Armory: in dev mode tapping any item equips it for dev matches.
+          take(kind, id) {
+            if (!this.active) return false;
+            this.sandbox[kind === "weapon" ? "weaponId" : "classId"] = id;
+            this.save();
+            const item = Progression.economy.catalogs[kind][id];
+            UIManager.toast(`DEV · ${item.name} equipado (sandbox).`);
+            AudioManager.tone?.(980, 0.09, "triangle", 0.08, 1500, "ui");
+            return true;
+          },
+          current(kind, real) {
+            if (!this.active) return real;
+            const v = this.sandbox[kind === "weapon" ? "weaponId" : "classId"];
+            return v ?? real;
+          },
+          // Called by PlayerController.start: sandbox loadout and resources for solo dev matches.
+          applyToRun() {
+            if (!this.active || NetGame.active) return;
+            if (this.sandbox.weaponId != null && WeaponSystem.weapons[this.sandbox.weaponId]) player.inventory[player.slot] = WeaponSystem.create(this.sandbox.weaponId);
+            player.coins = 999999;
+            player.grenades = 99;
           },
           ensureUi() {
             if ($("devmenu")) return;
@@ -6884,14 +7008,16 @@ body.netgame #revivetouch{display:flex}
               #devmenu button,#devmenu select,#devmenu input{font:inherit;font-size:12px;border-radius:7px;border:1px solid #2b3a4d;background:#162131;color:#e6eef8;padding:6px 9px;margin:2px}
               #devmenu button:hover{background:#1f3048;border-color:#4a6a90}
               #devmenu button.on{background:#1b4a2e;border-color:#43b66e;color:#bfffd6}
+              #devmenu button.warn{background:#3a1616;border-color:#8a3a3a;color:#ffd6d6}
               #devmenu .row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:6px}
               #devmenu input{width:90px}
+              #devmenu .dev-note{font-size:11px;color:#7f93a8;margin:4px 0 0}
               #devmenu .dev-log{font-size:11px;color:#8fa3b8;min-height:16px;margin-top:8px}`;
             document.head.appendChild(style);
             const el = document.createElement("div");
             el.id = "devmenu";
             el.className = "hidden";
-            el.innerHTML = `<div class="dev-card" role="dialog" aria-label="Developer"><header><b>DEVELOPER</b><span>SERVER VERIFIED</span><button data-dev="close">FECHAR ✕</button></header><div class="dev-grid"></div><div class="dev-log" id="dev-log"></div></div>`;
+            el.innerHTML = `<div class="dev-card" role="dialog" aria-label="Developer"><header><b>DEVELOPER</b><span>SANDBOX LOCAL</span><button data-dev="close">FECHAR ✕</button></header><div class="dev-grid"></div><div class="dev-log" id="dev-log"></div></div>`;
             document.body.appendChild(el);
             el.addEventListener("click", (e) => {
               const b = e.target.closest("[data-dev]");
@@ -6903,7 +7029,10 @@ body.netgame #revivetouch{display:flex}
             this.open = true;
             this.render();
             $("devmenu").classList.remove("hidden");
-            if (state === GameState.PLAYING) unlock?.();
+            if (state === GameState.PLAYING && !NetGame.active) {
+              pause(false);
+              this.pausedByMenu = true;
+            } else if (state === GameState.PLAYING) unlock?.();
           },
           log(msg) {
             const l = $("dev-log");
@@ -6914,29 +7043,39 @@ body.netgame #revivetouch{display:flex}
               roster = WaveManager.bossRoster,
               opt = (list) => list.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
             const flag = (k, label) => `<button data-dev="flag:${k}" class="${this.flags[k] ? "on" : ""}">${label}</button>`;
-            $("devmenu").querySelector(".dev-grid").innerHTML = `
-              <section><h4>CONTA · SERVIDOR</h4>
+            const serverSection = this.serverAllowed ? `
+              <section><h4>CONTA · SERVIDOR (WHITELIST)</h4>
                 <div class="row"><select id="dev-weapon">${opt(W.map((w, i) => [i, `${w.name} · ${rarityNames[w.tier]}`]))}</select><select id="dev-wslot">${opt([0, 1, 2, 3, 4].map((i) => [i, "Slot " + (i + 1)]))}</select><button data-dev="give-weapon">DAR ARMA</button></div>
                 <div class="row"><select id="dev-class">${opt(classes.map((c, i) => [i, `${c.name} · ${rarityNames[c.tier]}`]))}</select><select id="dev-cslot">${opt([0, 1, 2].map((i) => [i, "Slot " + (i + 1)]))}</select><button data-dev="give-class">DAR CLASSE</button></div>
                 <div class="row"><button data-dev="unlock-slots">DESBLOQUEAR TODOS OS SLOTS</button><button data-dev="reset-pity">ZERAR PITY</button></div>
                 <div class="row"><input id="dev-coins" type="number" min="0" placeholder="moedas" /><input id="dev-normal" type="number" min="0" placeholder="normal" /><input id="dev-lucky" type="number" min="0" placeholder="lucky" /><button data-dev="wallet">APLICAR</button></div>
+              </section>` : "";
+            const sel = (arr, cur) => arr.map(([v, t]) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${t}</option>`).join("");
+            $("devmenu").querySelector(".dev-grid").innerHTML = `
+              <section><h4>LOADOUT · PEGAR DIRETO</h4>
+                <div class="row"><select id="dev-sbweapon">${sel(W.map((w, i) => [i, `${w.name} · ${rarityNames[w.tier]}`]), this.sandbox.weaponId ?? Progression.data.weaponId)}</select><button data-dev="sb-weapon">PEGAR ARMA</button></div>
+                <div class="row"><select id="dev-sbclass">${sel(classes.map((c, i) => [i, `${c.name} · ${rarityNames[c.tier]}`]), this.sandbox.classId ?? Progression.data.classId)}</select><button data-dev="sb-class">PEGAR CLASSE</button></div>
+                <p class="dev-note">Vale na hora (partida solo) e nas próximas partidas dev. No Armory, toque em qualquer item para pegá-lo.</p>
               </section>
               <section><h4>PODERES · SOLO</h4>
-                <div class="row">${flag("god", "GOD MODE / INVENCÍVEL")}${flag("infiniteDamage", "DANO INFINITO")}</div>
-                <div class="row">${flag("infiniteAmmo", "MUNIÇÃO INFINITA")}${flag("noReload", "SEM RECARGA")}${flag("infiniteAbility", "HABILIDADE INFINITA")}</div>
-                <div class="row"><button data-dev="cooldowns">RESETAR COOLDOWNS</button></div>
+                <div class="row">${flag("god", "INVENCÍVEL")}${flag("infiniteDamage", "DANO INFINITO")}</div>
+                <div class="row">${flag("infiniteAmmo", "MUNIÇÃO INFINITA")}${flag("noReload", "SEM RECARGA")}${flag("infiniteAbility", "HABILIDADE INFINITA")}${flag("infiniteGrenades", "GRANADAS INFINITAS")}</div>
+                <div class="row"><button data-dev="cooldowns">RESETAR COOLDOWNS</button><button data-dev="heal">CURAR</button></div>
               </section>
-              <section><h4>INIMIGOS & ONDAS</h4>
-                <div class="row"><select id="dev-ztype">${opt(zombieTypes.map((t, i) => [i, t.name]))}</select><button data-dev="spawn-zombie">SPAWN ZUMBI</button></div>
-                <div class="row"><select id="dev-boss">${opt(Object.entries(roster).map(([k, b]) => [k, `${b.name} · ${b.title}`]))}</select><button data-dev="spawn-boss">SPAWN BOSS</button></div>
-                <div class="row"><button data-dev="wave-start">INICIAR ONDA</button><button data-dev="wave-next">AVANÇAR ONDA</button><button data-dev="wave-stop">PARAR ONDA</button><button data-dev="clear">LIMPAR INIMIGOS</button></div>
+              <section><h4>INVOCAR</h4>
+                <div class="row"><select id="dev-ztype">${opt(zombieTypes.map((t, i) => [i, t.name]))}</select><select id="dev-zcount">${opt([[1, "x1"], [5, "x5"], [10, "x10"], [25, "x25"]])}</select><button data-dev="spawn-zombie">INVOCAR ZUMBI</button></div>
+                <div class="row"><select id="dev-boss">${opt(Object.entries(roster).map(([k, b]) => [k, `${b.name} · ${b.title}`]))}</select><button data-dev="spawn-boss">INVOCAR BOSS</button></div>
+                <div class="row"><button data-dev="horde">HORDA MISTA (15)</button><button data-dev="clear">LIMPAR INIMIGOS</button></div>
+              </section>
+              <section><h4>ONDAS</h4>
+                <div class="row"><button data-dev="wave-start">INICIAR ONDA</button><button data-dev="wave-next">AVANÇAR ONDA</button><button data-dev="wave-stop">PARAR SPAWNS</button></div>
+                <div class="row"><input id="dev-wave" type="number" min="1" max="200" placeholder="onda" /><button data-dev="wave-set">IR PARA ONDA</button></div>
               </section>
               <section><h4>MAPAS & TESTES</h4>
-                <div class="row"><select id="dev-map">${opt(maps.map((m, i) => [i, m.name]))}</select><button data-dev="teleport">IR PARA O MAPA</button></div>
-                <div class="row"><button data-dev="fx">TESTAR PARTÍCULAS</button><button data-dev="anim">TESTAR ANIMAÇÕES</button></div>
-                <div class="row"><select id="dev-testweapon">${opt(W.map((w, i) => [i, w.name]))}</select><button data-dev="test-weapon">TESTAR ARMA</button></div>
-                <div class="row"><select id="dev-testclass">${opt(classes.map((c, i) => [i, c.name]))}</select><button data-dev="test-class">TESTAR CLASSE</button></div>
-              </section>`;
+                <div class="row"><select id="dev-map">${opt(maps.map((m, i) => [i, m.name]))}</select><button data-dev="teleport">JOGAR NESTE MAPA</button></div>
+                <div class="row"><button data-dev="fx">TESTAR PARTÍCULAS</button><button data-dev="anim">TESTAR ANIMAÇÕES DO BOSS</button></div>
+                <div class="row"><button data-dev="disable" class="warn">DESATIVAR MODO DEV</button></div>
+              </section>${serverSection}`;
           },
           playing() {
             if (state !== GameState.PLAYING && state !== GameState.PAUSED) {
@@ -6960,7 +7099,7 @@ body.netgame #revivetouch{display:flex}
             }
           },
           act(cmd, button) {
-            if (!this.allowed) return this.hide();
+            if (!this.active) return this.hide();
             const val = (id) => $(id)?.value;
             if (cmd === "close") return this.hide();
             if (cmd.startsWith("flag:")) {
@@ -6968,6 +7107,26 @@ body.netgame #revivetouch{display:flex}
               this.flags[k] = !this.flags[k];
               button.classList.toggle("on", this.flags[k]);
               return this.log(`${k}: ${this.flags[k] ? "ON" : "OFF"}`);
+            }
+            if (cmd === "disable") {
+              this.hide();
+              return this.unlock();
+            }
+            if (cmd === "sb-weapon" || cmd === "sb-class") {
+              const kind = cmd === "sb-weapon" ? "weapon" : "class",
+                id = +val(kind === "weapon" ? "dev-sbweapon" : "dev-sbclass");
+              this.take(kind, id);
+              if ((state === GameState.PLAYING || state === GameState.PAUSED) && !NetGame.active) {
+                if (kind === "weapon") {
+                  player.inventory[player.slot] = WeaponSystem.create(id);
+                  WeaponSystem.buildModel();
+                } else {
+                  selectedClass = id;
+                  player.cooldown = 0;
+                }
+              }
+              if (state === GameState.CLASS_SELECT) Armory.render();
+              return this.log(`${kind === "weapon" ? "Arma" : "Classe"} aplicada.`);
             }
             if (cmd === "give-weapon") return this.server("give", { kind: "weapon", id: +val("dev-weapon"), slot: +val("dev-wslot") });
             if (cmd === "give-class") return this.server("give", { kind: "class", id: +val("dev-class"), slot: +val("dev-cslot") });
@@ -6992,7 +7151,29 @@ body.netgame #revivetouch{display:flex}
               player.cooldown = 0;
               return this.log("Cooldowns zerados.");
             }
-            if (cmd === "spawn-zombie") return void ZombieManager.spawn(+val("dev-ztype"), null, ahead);
+            if (cmd === "heal") {
+              player.hp = player.maxhp + player.bonus;
+              return this.log("Vida cheia.");
+            }
+            if (cmd === "spawn-zombie") {
+              const n = +val("dev-zcount") || 1;
+              for (let i = 0; i < n; i++) ZombieManager.spawn(+val("dev-ztype"), null, ahead.clone().add(new V(rand(-3, 3), 0, rand(-3, 3))));
+              return this.log(`${n} zumbi(s) invocado(s).`);
+            }
+            if (cmd === "horde") {
+              for (let i = 0; i < 15; i++) ZombieManager.spawn(Math.floor(Math.random() * zombieTypes.length), null, ahead.clone().add(new V(rand(-6, 6), 0, rand(-6, 6))));
+              return this.log("Horda invocada.");
+            }
+            if (cmd === "wave-set") {
+              const n = clamp(Math.floor(+val("dev-wave") || 1), 1, 200);
+              ZombieManager.clear();
+              WaveManager.remaining = 0;
+              WaveManager.bossPending = false;
+              WaveManager.clearedAt = 0;
+              WaveManager.wave = n - 1;
+              WaveManager.start();
+              return this.log("Onda " + n + ".");
+            }
             if (cmd === "spawn-boss") {
               this.hide();
               return void WaveManager.boss(val("dev-boss"));
@@ -14893,7 +15074,7 @@ body.netgame #revivetouch{display:flex}
           chargeHeldSince: null,
           start() {
             if (Progression.busy) return;
-            selectedClass = Progression.data.classId;
+            selectedClass = NetGame.active ? Progression.data.classId : DevMode.current("class", Progression.data.classId);
             runId++;
             this.motion.reset();
             MutationManager.reset();
@@ -14976,6 +15157,7 @@ body.netgame #revivetouch{display:flex}
               player.inventory[0] = WeaponSystem.create(0);
               player.slot = 0;
             }
+            DevMode.applyToRun();
             yaw = 0;
             pitch = 0;
             lastShot = -100;
@@ -15120,7 +15302,7 @@ body.netgame #revivetouch{display:flex}
               return;
             }
             if (GrenadeThrow.active) return;
-            player.grenades--;
+            if (!DevMode.on("infiniteGrenades")) player.grenades--;
             GrenadeThrow.start(() => {
               if (state !== GameState.PLAYING && !NetGame.active) return;
               const dir = forward(),
@@ -16444,7 +16626,7 @@ body.netgame #revivetouch{display:flex}
           // Opens a server run (or an offline run that syncs later). Never blocks solo play.
           async begin(lobbyId = null) {
             this.lastCheckpoint = 0;
-            if (!this.signedIn()) {
+            if (!this.signedIn() || (DevMode.active && !lobbyId)) {
               this.run = null;
               return;
             }
@@ -18957,7 +19139,7 @@ body.netgame #revivetouch{display:flex}
               const list = expanded ? `<div class="rarity-items" style="--rarity:${rarityColors[e.tier]}">${items.map(({ item, id }) => {
                 const equipped = current === id, stored = slots.includes(id), star = pref === id;
                 const chance = +(Armory.itemChance(kind, id, mode === "lucky")).toFixed(3);
-                const stateLabel = star ? "PREFERIDO · CHANCE x1.5" : equipped ? "EQUIPADO" : stored ? "NO LOADOUT" : "TOQUE PARA PREFERIR";
+                const stateLabel = DevMode.active ? (DevMode.current(kind, current) === id ? "EQUIPADO · DEV" : "TOQUE PARA PEGAR · DEV") : star ? "PREFERIDO · CHANCE x1.5" : equipped ? "EQUIPADO" : stored ? "NO LOADOUT" : "TOQUE PARA PREFERIR";
                 return `<button type="button" class="rarity-item ${equipped ? "equipped" : ""} ${star ? "preferred" : ""}" data-preview-id="${id}" style="--rarity:${rarityColors[e.tier]}"><span><strong>${star ? "✦ " : ""}${item.name}${star ? ' <em class="boost">x1.5</em>' : ""}</strong><small>${stateLabel}</small></span><b>${chance}%</b></button>`;
               }).join("")}</div>` : "";
               return `<button type="button" class="rarity-line ${expanded ? "active" : ""} ${boosted ? "boosted" : ""}" data-rarity-tier="${e.tier}" aria-expanded="${expanded}" style="--rarity:${rarityColors[e.tier]}"><span>${e.name.toUpperCase()}${boosted ? " ✦" : ""}</span><b>${e.rate}%</b><i>${expanded ? "−" : "+"}</i></button>${list}`;
@@ -19005,12 +19187,12 @@ body.netgame #revivetouch{display:flex}
               this.customization(); updatePreview(); Account.badge(); return;
             }
             title.textContent = "ARMORY"; subtitle.textContent = "Spins, slots e loadout.";
-            const kind = this.tab === "weapon" ? "weapon" : "class", currentId = d[kind + "Id"], item = Progression.economy.catalogs[kind][currentId], mode = this.oddsMode;
+            const kind = this.tab === "weapon" ? "weapon" : "class", currentId = DevMode.current(kind, d[kind + "Id"]), item = Progression.economy.catalogs[kind][currentId], mode = this.oddsMode;
             const spinPreview = this.previewSpin?.kind === kind ? this.previewSpin.id : null;
             const displayId = spinPreview != null ? spinPreview : (Number.isInteger(this.selection) && Progression.economy.catalogs[kind][this.selection] ? this.selection : currentId);
             const displayItem = Progression.economy.catalogs[kind][displayId];
             if (this.rarityFilter == null || Progression.economy.rates[mode][this.rarityFilter] <= 0) this.rarityFilter = displayItem.tier;
-            $("bank").textContent = `◈ ${d.coins.toLocaleString("pt-BR")}  ·  ${d.normal} NORMAL  ·  ${d.lucky} LUCKY`;
+            $("bank").textContent = DevMode.active ? "◈ ∞  ·  ∞ NORMAL  ·  ∞ LUCKY  ·  DEV" : `◈ ${d.coins.toLocaleString("pt-BR")}  ·  ${d.normal} NORMAL  ·  ${d.lucky} LUCKY`;
             $("armory-identity").style.setProperty("--rarity", rarityColors[displayItem.tier]);
             const identityState = spinPreview != null ? "NOVO SPIN" : displayId === currentId ? "EQUIPADO" : "PRÉVIA";
             $("armory-identity").innerHTML = `<span class="item-index">#${String(displayId + 1).padStart(3, "0")} · ${identityState}</span><h2>${displayItem.name}</h2><b>${rarityNames[displayItem.tier].toUpperCase()}</b><p>${kind === "class" ? displayItem.desc : (displayItem.kind === "melee" ? "Arma corpo a corpo. Ataques rápidos e silenciosos." : `${["Curto", "Médio", "Longo"][displayItem.cat] || "Médio"} alcance · ${Math.round(displayItem.damage * rarityMult[displayItem.tier])} de dano base.`)}</p>`;
@@ -19019,26 +19201,33 @@ body.netgame #revivetouch{display:flex}
             const prefChip = prefId != null ? `<button type="button" class="pref-chip" data-pref-clear="1" style="--rarity:${rarityColors[Progression.economy.catalogs[kind][prefId].tier]}">✦ ${Progression.economy.catalogs[kind][prefId].name} <em>x1.5</em><small>remover</small></button>` : `<div class="pref-hint">Abra uma raridade e toque num item para aumentar levemente a chance dele (x1.5).</div>`;
             $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${+this.itemChance(kind, displayId, mode === "lucky").toFixed(3)}%</b></div>${prefChip}${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity"><div class="pity-title">${kind === "weapon" ? "WEAPON" : "CLASS"} PITY <span>NORMAL +1 · LUCKY +2</span></div><div class="pity-row"><span>DIVINO</span><i><em style="width:${Math.min(100, dvp)}%;background:${rarityColors[6]}"></em></i><b>${dvp}/100</b></div><div class="pity-row"><span>SECRETO</span><i><em style="width:${Math.min(100, scp / 3)}%;background:${rarityColors[7]}"></em></i><b>${scp}/300</b></div>${scp + pts >= 300 ? '<strong class="pity-guarantee">SECRETO GARANTIDO NESTE SPIN</strong>' : dvp + pts >= 100 ? '<strong class="pity-guarantee">DIVINO GARANTIDO NESTE SPIN</strong>' : ""}</div>`;
             const costNormal = Progression.economy.cost(false), costLucky = Progression.economy.cost(true);
-            const normalLabel = d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
-            const luckyLabel = d.lucky > 0 ? `1 ticket · ${d.lucky} restante${d.lucky === 1 ? "" : "s"}` : `◈ ${costLucky}`;
-            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Resultado direto · aviso antes de girar novamente só com Mítico ou Divino equipado.</p>`;
+            const devFree = DevMode.active;
+            const normalLabel = devFree ? "GRÁTIS · DEV" : d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
+            const luckyLabel = devFree ? "GRÁTIS · DEV" : d.lucky > 0 ? `1 ticket · ${d.lucky} restante${d.lucky === 1 ? "" : "s"}` : `◈ ${costLucky}`;
+            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (!devFree && d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (!devFree && d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Resultado direto · aviso antes de girar novamente só com Mítico ou Divino equipado.</p>`;
             $("armory-list").innerHTML = this.slotCards(kind);
             $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => Progression.slotEquip(kind, +b.dataset.slotEquip));
             $("armory-list").querySelectorAll("[data-buy-slot]").forEach((b) => b.onclick = () => (kind === "weapon" ? Progression.buyWeaponSlot() : Progression.buyClassSlot()));
             $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => Progression.roll(kind, b.dataset.reroll === "true", b.dataset.pay));
             $("rarity-board").querySelectorAll("[data-odds-mode]").forEach((b) => b.onclick = () => { this.oddsMode = b.dataset.oddsMode; this.rarityFilter = null; this.selection = null; this.render(); });
             $("rarity-board").querySelectorAll("[data-rarity-tier]").forEach((b) => b.onclick = () => { const tier = +b.dataset.rarityTier; this.rarityFilter = this.rarityFilter === tier ? null : tier; if (this.rarityFilter != null) { const first = Progression.economy.catalogs[kind].findIndex((item) => item.tier === tier); if (first >= 0) this.selection = first; } this.render(); });
-            $("rarity-board").querySelectorAll("[data-preview-id]").forEach((b) => b.onclick = (event) => { event.stopPropagation(); const id = +b.dataset.previewId; this.selection = id; this.pref[kind] = this.pref[kind] === id ? null : id; const item = Progression.economy.catalogs[kind][id]; this.rarityFilter = item.tier; AudioManager.tone(this.pref[kind] === id ? 880 : 440, 0.08, "triangle", 0.08, 1200, "ui"); this.render(); });
+            $("rarity-board").querySelectorAll("[data-preview-id]").forEach((b) => b.onclick = (event) => { event.stopPropagation(); const id = +b.dataset.previewId; if (DevMode.take(kind, id)) { this.selection = id; this.rarityFilter = Progression.economy.catalogs[kind][id].tier; this.render(); return; } this.selection = id; this.pref[kind] = this.pref[kind] === id ? null : id; const item = Progression.economy.catalogs[kind][id]; this.rarityFilter = item.tier; AudioManager.tone(this.pref[kind] === id ? 880 : 440, 0.08, "triangle", 0.08, 1200, "ui"); this.render(); });
             $("rarity-board").querySelectorAll("[data-pref-clear]").forEach((b) => b.onclick = () => { this.pref[kind] = null; this.render(); });
             document.querySelectorAll("[data-armory-tab]").forEach((b) => { b.classList.toggle("selected", b.dataset.armoryTab === this.tab); b.setAttribute("aria-selected", b.dataset.armoryTab === this.tab); b.disabled = Progression.busy; });
             $("classcontinue").disabled = Progression.busy; $("armory-back").disabled = Progression.busy; updatePreview(); Account.badge();
           },
           slotCards(kind) {
-            const d = Progression.data, current = d[kind + "Id"];
+            const d = Progression.data, realCurrent = d[kind + "Id"], current = DevMode.current(kind, realCurrent);
             const max = kind === "weapon" ? WEAPON_SLOT_MAX : CLASS_SLOT_MAX;
             const owned = kind === "weapon" ? d.weaponSlotsOwned : d.classSlotsOwned;
             const prices = kind === "weapon" ? Progression.economy.weaponSlotPrices : Progression.economy.classSlotPrices;
             const slots = d[loadoutSlotKey(kind)].slice(0, owned);
+            const devId = DevMode.active ? DevMode.sandbox[kind === "weapon" ? "weaponId" : "classId"] : null;
+            if (devId != null) {
+              // Dev sandbox: the equipped slot shows the item taken in dev mode.
+              const at = kind === "weapon" ? clamp(d.weaponSlot || 0, 0, owned - 1) : Math.max(0, slots.indexOf(realCurrent));
+              slots[at] = devId;
+            }
             const short = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v));
             const cards = slots.map((id, slot) => {
               if (id === null) return `<article class="slot-card empty"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span>RESERVA</span></div><h3 class="slot-name">VAZIO</h3><div class="slot-meta">O próximo spin pode ocupar este espaço.</div></article>`;
@@ -19235,7 +19424,7 @@ body.netgame #revivetouch{display:flex}
         Progression.roll = async function (kind, lucky, payment, confirmed = false) {
           if (state !== GameState.CLASS_SELECT || this.busy) return;
           const current = this.economy.catalogs[kind]?.[this.data[kind + "Id"]];
-          if (!confirmed && current && requiresRerollConfirm(current.tier)) {
+          if (!confirmed && !DevMode.active && current && requiresRerollConfirm(current.tier)) {
             Armory.confirmReroll(kind, lucky, payment);
             return;
           }
@@ -19243,7 +19432,12 @@ body.netgame #revivetouch{display:flex}
           this.busy = true; Armory.selection = null; Armory.render();
           try {
             let result;
-            if (Account.user) {
+            if (DevMode.active) {
+              // Dev sandbox: free local spin, never sent to the server.
+              const tier = this.economy.drawTier(lucky, 0),
+                eligible = this.economy.catalogs[kind].map((item, id) => ({ item, id })).filter((e) => e.item.tier === tier);
+              result = this.economy.pick(eligible, Armory.preference(kind));
+            } else if (Account.user) {
               const r = await Account.queue("roll", { kind, lucky, payment: resolvedPayment, pref: Armory.preference(kind) });
               Account.apply(r.profile); result = { id: r.id, item: this.economy.catalogs[kind][r.id] };
             } else result = this.economy.roll(kind, lucky, resolvedPayment, Armory.preference(kind));
@@ -19271,6 +19465,11 @@ body.netgame #revivetouch{display:flex}
           return equipped >= 0 ? equipped : 0;
         };
         Progression.applySpin = async function (kind, id) {
+          if (DevMode.active) {
+            DevMode.sandbox[kind === "weapon" ? "weaponId" : "classId"] = id;
+            DevMode.save();
+            return;
+          }
           normalizeLoadoutState(this.data);
           const item = this.economy.catalogs[kind][id];
           if (!item) throw Error("Item inválido.");
@@ -20190,7 +20389,7 @@ body.netgame #revivetouch{display:flex}
           keys.add(c);
           if (repeat) return true;
           if (c === "KeyR") PlayerController.reload();
-          if (c === "F8" && DevMode.allowed) DevMode.toggle();
+          if (c === "F8" && DevMode.active) DevMode.toggle();
           if (c === "KeyQ") PlayerController.ability();
           if (c === "KeyF") SecretWeaponSkills.use();
           if (c === "KeyG") PlayerController.grenade();
@@ -20915,6 +21114,8 @@ body.netgame #revivetouch{display:flex}
             getPitch: () => pitch,
             classValue: (k, f) => classValue(k, f),
             MouseLook,
+            DevMode,
+            get selectedClass() { return selectedClass; },
             mouseMode: () => MouseLook.mode(),
             resume: () => resume(),
             freeMouse: (on) => freeMouse(on),
