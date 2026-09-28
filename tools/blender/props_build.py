@@ -110,43 +110,65 @@ def export(name):
 
 # ------------------------------------------------------------------ trees
 def broadleaf(name, seed, dark=False):
+    """v29: fuller crown — two orders of branches and ~24 foliage clumps spread over an
+    ellipsoidal crown shell (lighter on top, darker and cooler underneath), bark with streaks."""
     reset()
     random.seed(seed)
     bark = mat("M_bark", 0.95)
     leafm = mat("M_leaves", 0.9)
     bm = bmesh.new()
-    H = random.uniform(4.2, 5.2)
+    H = random.uniform(4.4, 5.4)
     lean = Vector((random.uniform(-0.25, 0.25), random.uniform(-0.25, 0.25), 0))
     top = Vector((0, 0, H)) + lean
-    cyl(bm, (0, 0, -0.2), top, 0.32, 0.16, 9)
-    # Root flare.
-    for i in range(5):
+    cyl(bm, (0, 0, -0.2), top, 0.32, 0.15, 10)
+    for i in range(5):  # root flare
         a = i / 5 * math.tau + random.uniform(-0.3, 0.3)
-        cyl(bm, (0, 0, 0.45), (math.cos(a) * 0.75, math.sin(a) * 0.75, -0.05), 0.14, 0.05, 5)
-    # Branches from the upper trunk.
+        cyl(bm, (0, 0, 0.45), (math.cos(a) * 0.78, math.sin(a) * 0.78, -0.05), 0.15, 0.05, 5)
     tips = []
-    for i in range(6):
-        a = i / 6 * math.tau + random.uniform(-0.4, 0.4)
-        z = random.uniform(H * 0.55, H * 0.95)
+    for i in range(7):  # main limbs
+        a = i / 7 * math.tau + random.uniform(-0.35, 0.35)
+        z = random.uniform(H * 0.5, H * 0.92)
         base = Vector((0, 0, z)) + lean * (z / H)
-        L = random.uniform(1.4, 2.3)
-        tip = base + Vector((math.cos(a) * L, math.sin(a) * L, random.uniform(0.6, 1.4)))
-        cyl(bm, base, tip, 0.11, 0.04, 6)
+        L = random.uniform(1.5, 2.4)
+        tip = base + Vector((math.cos(a) * L, math.sin(a) * L, random.uniform(0.7, 1.5)))
+        cyl(bm, base, tip, 0.12, 0.045, 6)
         tips.append(tip)
-    paint(bm, lambda co, n, c: jitter((0.27, 0.2, 0.15) if co.z > 0.3 else (0.22, 0.17, 0.12), 0.06, int(c.x * 97 + c.z * 13)))
-    trunk = obj_from_bm("trunk", bm, bark)
+        for k in range(2):  # twigs
+            t = random.uniform(0.45, 0.85)
+            p0 = base.lerp(tip, t)
+            b2 = a + random.uniform(-0.9, 0.9)
+            p1 = p0 + Vector((math.cos(b2) * 0.8, math.sin(b2) * 0.8, random.uniform(0.3, 0.8)))
+            cyl(bm, p0, p1, 0.05, 0.02, 4)
+            tips.append(p1)
+
+    def bark_col(co, n, c):
+        streak = 0.85 + 0.25 * (0.5 + 0.5 * math.sin(math.atan2(co.y, co.x) * 7 + co.z * 1.3))
+        base = (0.3, 0.22, 0.16) if co.z > 0.3 else (0.24, 0.18, 0.13)
+        return jitter(tuple(v * streak for v in base), 0.05, int(c.x * 97 + c.z * 13))
+
+    paint(bm, bark_col)
+    obj_from_bm("trunk", bm, bark)
     bm = bmesh.new()
-    base_g = (0.13, 0.21, 0.09) if dark else (0.2, 0.3, 0.12)
-    for i, t in enumerate(tips + [top + Vector((0, 0, 0.6))]):
-        r = random.uniform(1.1, 1.6)
-        blob(bm, t, r, (1, 1, 0.78), 1, seed * 10 + i, 0.22)
-    for i in range(3):
-        a = random.uniform(0, math.tau)
-        blob(bm, top + Vector((math.cos(a) * 0.9, math.sin(a) * 0.9, random.uniform(-0.6, 0.4))), random.uniform(1.0, 1.4), (1, 1, 0.8), 1, seed * 20 + i, 0.22)
+    crown_c = top + Vector((0, 0, 0.5))
+    RX, RZ = random.uniform(2.3, 2.8), random.uniform(1.7, 2.1)
+    centers = [t for t in tips]
+    for i in range(16):  # fill the crown shell
+        u, v = random.uniform(0, math.tau), random.uniform(-0.35, 1.0)
+        r = math.sqrt(max(0.0, 1 - v * v))
+        centers.append(crown_c + Vector((math.cos(u) * r * RX * 0.85, math.sin(u) * r * RX * 0.85, v * RZ * 0.8)))
+    for i, cpos in enumerate(centers):
+        blob(bm, cpos, random.uniform(0.8, 1.2), (1, 1, 0.82), 1, seed * 10 + i, 0.26)
+    hue = (0.16, 0.25, 0.09) if dark else (0.24, 0.36, 0.13)
 
     def leaf_col(co, n, c):
-        shade = 0.75 + 0.35 * max(0, n.z) + 0.1 * noise.noise(c * 0.9)
-        return jitter(tuple(v * shade for v in base_g), 0.07, int(c.x * 131 + c.y * 71 + c.z * 7))
+        up = (c.z - crown_c.z) / RZ  # -1 bottom .. +1 top
+        shade = 0.62 + 0.28 * max(0, n.z) + 0.22 * max(-0.6, min(1, up)) + 0.12 * noise.noise(c * 0.8)
+        g = hue
+        if noise.noise(c * 0.35 + Vector((seed, 0, 0))) > 0.35:  # a few olive / sun-bleached clumps
+            g = (g[0] * 1.25, g[1] * 1.08, g[2] * 0.8)
+        if up < -0.2:  # cooler, darker underside
+            g = (g[0] * 0.8, g[1] * 0.9, g[2] * 1.05)
+        return jitter(tuple(min(1, x * shade) for x in g), 0.06, int(c.x * 131 + c.y * 71 + c.z * 7))
 
     paint(bm, leaf_col)
     obj_from_bm("leaves", bm, leafm)
@@ -154,40 +176,48 @@ def broadleaf(name, seed, dark=False):
 
 
 def pine(name, seed, snow=False):
+    """v29: denser conifer — 9 whorls of drooping, star-shaped branch skirts with tier-to-tier
+    colour variation and a pointed leader; snow sits on the upper faces of the snowy variant."""
     reset()
     random.seed(seed)
     bark = mat("M_bark", 0.95)
     leafm = mat("M_leaves", 0.9)
     bm = bmesh.new()
-    H = random.uniform(6.5, 8.0)
-    cyl(bm, (0, 0, -0.2), (0, 0, H), 0.26, 0.05, 8)
-    paint(bm, lambda co, n, c: jitter((0.25, 0.18, 0.13), 0.05, int(c.z * 50)))
+    H = random.uniform(6.8, 8.2)
+    cyl(bm, (0, 0, -0.2), (0, 0, H), 0.27, 0.05, 8)
+    paint(bm, lambda co, n, c: jitter((0.27, 0.19, 0.14), 0.05, int(c.z * 50)))
     obj_from_bm("trunk", bm, bark)
     bm = bmesh.new()
-    tiers = 6
+    tiers = 9
     for i in range(tiers):
-        t = i / tiers
-        z0 = 1.3 + t * (H - 1.8)
-        r = (2.1 - t * 1.6) * random.uniform(0.92, 1.08)
-        h = 1.9 - t * 0.6
-        geom = bmesh.ops.create_cone(bm, cap_ends=True, segments=9, radius1=r, radius2=0.12, depth=h)
+        t = i / (tiers - 1)
+        z0 = 1.1 + t * (H - 1.9)
+        r = (2.25 - t * 1.85) * random.uniform(0.92, 1.08)
+        h = 1.55 - t * 0.55
+        seg = 14
+        geom = bmesh.ops.create_cone(bm, cap_ends=True, segments=seg, radius1=r, radius2=0.1, depth=h)
         vs = geom["verts"]
-        # Jagged, drooping edge.
+        k = random.uniform(0, 10)
         for v in vs:
             if v.co.z < 0:
                 a = math.atan2(v.co.y, v.co.x)
-                v.co.x *= 1 + 0.18 * math.sin(a * 5 + seed + i)
-                v.co.y *= 1 + 0.18 * math.sin(a * 5 + seed + i)
-                v.co.z -= 0.25 * random.random()
+                star = 1 + 0.26 * math.cos(a * 7 + k)  # branch tips
+                v.co.x *= star
+                v.co.y *= star
+                v.co.z -= 0.18 + 0.28 * max(0, math.cos(a * 7 + k)) + 0.1 * random.random()  # tips droop
         bmesh.ops.rotate(bm, verts=vs, cent=Vector((0, 0, 0)), matrix=Matrix.Rotation(random.uniform(0, 3), 3, "Z"))
         bmesh.ops.translate(bm, vec=Vector((0, 0, z0 + h / 2)), verts=vs)
+    geom = bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=0.25, radius2=0.0, depth=0.9)
+    bmesh.ops.translate(bm, vec=Vector((0, 0, H + 0.2)), verts=geom["verts"])
+    tone = [random.uniform(0.85, 1.15) for _ in range(tiers + 2)]
 
     def col(co, n, c):
-        if snow and n.z > 0.55 and noise.noise(c * 1.3) > -0.25:
+        if snow and n.z > 0.5 and noise.noise(c * 1.3) > -0.3:
             return jitter((0.86, 0.9, 0.95), 0.04, int(c.x * 77 + c.z * 33))
-        shade = 0.7 + 0.4 * max(0, n.z)
-        g = (0.09, 0.17, 0.11) if not snow else (0.1, 0.18, 0.14)
-        return jitter(tuple(v * shade for v in g), 0.05, int(c.x * 51 + c.y * 91 + c.z * 3))
+        tier = max(0, min(tiers, int((c.z - 1.1) / max(0.1, (H - 1.9)) * (tiers - 1))))
+        shade = (0.62 + 0.42 * max(0, n.z)) * tone[tier]
+        g = (0.1, 0.2, 0.12) if not snow else (0.1, 0.19, 0.15)
+        return jitter(tuple(min(1, v * shade) for v in g), 0.05, int(c.x * 51 + c.y * 91 + c.z * 3))
 
     paint(bm, col)
     obj_from_bm("leaves", bm, leafm)
@@ -402,9 +432,10 @@ def rock(name, seed, flat=False):
         blob(bm, (math.cos(a) * 0.9, math.sin(a) * 0.9, 0.05), random.uniform(0.35, 0.5), (1, 1, 0.6), 1, seed * 3 + i, 0.3)
 
     def col(co, n, c):
-        v = 0.62 + 0.25 * noise.noise(c * 2.1) + 0.12 * max(0, n.z)
+        # v29: darker, more contrasted stone (crevices darker, weathered tops lighter).
+        v = 0.44 + 0.2 * noise.noise(c * 2.1) + 0.14 * max(0, n.z) - 0.1 * max(0, -n.z)
         if flat or n.z > 0.75:
-            v += 0.08
+            v += 0.05
         return jitter((v, v, v * 0.97), 0.05, int(c.x * 43 + c.y * 19 + c.z * 7))
 
     paint(bm, col)

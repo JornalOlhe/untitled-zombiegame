@@ -6912,7 +6912,7 @@ body.netgame #revivetouch{display:flex}
               if (!turningOn) this.sandbox = { weaponId: null, classId: null };
               this.save();
               this.badge();
-              UIManager.toast(turningOn ? "MODO DESENVOLVEDOR ATIVO · F8 ou botão DEV abre o menu. Toque num item do Armory para pegar." : "Modo desenvolvedor desativado.");
+              UIManager.toast(turningOn ? "MODO DESENVOLVEDOR ATIVO · dentro da partida, F8 ou o botão DEV abre o console. No Armory, toque num item para pegar." : "Modo desenvolvedor desativado.");
               if (turningOn) this.refresh();
             }, 1500);
           },
@@ -6923,7 +6923,7 @@ body.netgame #revivetouch{display:flex}
               chip = document.createElement("button");
               chip.id = "devchip";
               chip.type = "button";
-              chip.textContent = "DEV";
+              chip.textContent = "DEV · F8";
               chip.title = "Menu do desenvolvedor (F8)";
               chip.onclick = (e) => {
                 e.stopPropagation();
@@ -6931,7 +6931,10 @@ body.netgame #revivetouch{display:flex}
               };
               document.body.appendChild(chip);
             }
-            chip.classList.toggle("hidden", !this.active);
+            // The console lives inside matches only: the chip shows while playing.
+            const inMatch = state === GameState.PLAYING && !NetGame.menuOpen;
+            chip.classList.toggle("hidden", !this.active || !inMatch || this.open);
+            if (!this.chipTimer) this.chipTimer = setInterval(() => this.badge(), 400);
           },
           toggle() {
             if (!this.active) return;
@@ -6964,7 +6967,7 @@ body.netgame #revivetouch{display:flex}
               #devload .dl-log{display:block;margin-top:10px;font-size:12px;color:#8fd9a9;min-height:15px}
               @keyframes devBar{to{width:100%}}
               @keyframes devFade{from{opacity:0}}
-              #devchip{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:60;padding:4px 12px;border-radius:99px;border:1px solid #2f6b44;background:#0b1a11e6;color:#7dffb0;font:700 11px/1.4 var(--mono,monospace);letter-spacing:.2em;cursor:pointer}
+              #devchip{position:fixed;top:calc(env(safe-area-inset-top,0px) + 96px);right:calc(env(safe-area-inset-right,0px) + 22px);z-index:60;display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:99px;border:1px solid #2f6b44;background:#0b1a11e6;color:#7dffb0;font:700 11px/1.2 var(--mono,monospace);letter-spacing:.2em;cursor:pointer;pointer-events:auto;box-shadow:0 6px 20px rgba(0,0,0,.4)}#devchip:before{content:'';width:7px;height:7px;border-radius:50%;background:#43f28a;box-shadow:0 0 8px #43f28a}
               #devchip.hidden{display:none}
               .rarity-item.dev-take small{color:#7dffb0!important}`;
             document.head.appendChild(style);
@@ -6991,40 +6994,84 @@ body.netgame #revivetouch{display:flex}
             player.coins = 999999;
             player.grenades = 99;
           },
+          tab: "powers",
+          count: 1,
           ensureUi() {
             if ($("devmenu")) return;
             const style = document.createElement("style");
             style.textContent = `
-              #devmenu{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.72);backdrop-filter:blur(6px);font-family:inherit}
+              #devmenu{position:fixed;inset:0;z-index:95;pointer-events:none;font-family:var(--head,inherit)}
               #devmenu.hidden{display:none}
-              #devmenu .dev-card{width:min(980px,94vw);max-height:90vh;overflow:auto;background:linear-gradient(160deg,#10161f,#0a0d12);border:1px solid #2c3a4c;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);padding:18px 20px;color:#dfe8f2}
-              #devmenu header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-              #devmenu header b{font-size:20px;letter-spacing:.2em;color:#7dffb0}
-              #devmenu header span{font-size:11px;letter-spacing:.14em;padding:3px 8px;border-radius:99px;background:#16301f;color:#7dffb0;border:1px solid #2f6b44}
-              #devmenu header button{margin-left:auto}
-              #devmenu .dev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
-              #devmenu section{background:#0d131b;border:1px solid #1f2a38;border-radius:10px;padding:12px}
-              #devmenu h4{margin:0 0 8px;font-size:12px;letter-spacing:.2em;color:#8aa4c0}
-              #devmenu button,#devmenu select,#devmenu input{font:inherit;font-size:12px;border-radius:7px;border:1px solid #2b3a4d;background:#162131;color:#e6eef8;padding:6px 9px;margin:2px}
-              #devmenu button:hover{background:#1f3048;border-color:#4a6a90}
-              #devmenu button.on{background:#1b4a2e;border-color:#43b66e;color:#bfffd6}
-              #devmenu button.warn{background:#3a1616;border-color:#8a3a3a;color:#ffd6d6}
-              #devmenu .row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:6px}
-              #devmenu input{width:90px}
-              #devmenu .dev-note{font-size:11px;color:#7f93a8;margin:4px 0 0}
-              #devmenu .dev-log{font-size:11px;color:#8fa3b8;min-height:16px;margin-top:8px}`;
+              #devmenu .dv-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0) 30%,rgba(2,6,4,.55));pointer-events:auto}
+              #devmenu .dv-panel{position:absolute;top:0;right:0;bottom:0;width:min(470px,100vw);display:flex;flex-direction:column;pointer-events:auto;
+                background:linear-gradient(170deg,rgba(10,20,15,.94),rgba(5,9,8,.96));border-left:1px solid #1f4a33;box-shadow:-30px 0 80px rgba(0,0,0,.55),inset 1px 0 0 rgba(125,255,176,.08);
+                animation:dvIn .28s cubic-bezier(.2,.9,.2,1) both;color:#dcebe2}
+              @keyframes dvIn{from{transform:translateX(40px);opacity:0}}
+              #devmenu header{display:flex;align-items:center;gap:10px;padding:16px 18px 10px}
+              #devmenu header .dot{width:9px;height:9px;border-radius:50%;background:#43f28a;box-shadow:0 0 12px #43f28a;animation:dvPulse 1.4s ease-in-out infinite}
+              @keyframes dvPulse{50%{opacity:.35}}
+              #devmenu header b{font-family:var(--display,inherit);font-weight:400;font-size:26px;letter-spacing:.14em;color:#eafff2}
+              #devmenu header small{font:600 10px/1 var(--mono,monospace);letter-spacing:.2em;color:#6fbf8e;margin-left:2px}
+              #devmenu header .x{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid #28543c;background:#0d1d15;color:#bfe9cf;font-size:16px;cursor:pointer}
+              #devmenu nav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 18px 12px}
+              #devmenu nav button{padding:9px 0;border-radius:10px;border:1px solid #1f3a2c;background:#0b1510;color:#8fb8a0;font:700 11px/1 var(--head,inherit);letter-spacing:.14em;cursor:pointer;transition:all .15s}
+              #devmenu nav button.on{background:linear-gradient(180deg,#1d5a37,#113522);color:#eafff2;border-color:#3fb86c;box-shadow:0 6px 18px rgba(40,200,110,.18)}
+              #devmenu .dv-body{flex:1;overflow:auto;padding:4px 18px 18px}
+              #devmenu h5{margin:14px 0 8px;font:700 10px/1 var(--mono,monospace);letter-spacing:.24em;color:#5f9c78}
+              #devmenu .sw{display:flex;align-items:center;gap:12px;padding:11px 12px;margin-bottom:7px;border-radius:12px;background:#0c1712;border:1px solid #173024;cursor:pointer;transition:border-color .15s,background .15s}
+              #devmenu .sw:hover{border-color:#2f6b47}
+              #devmenu .sw i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#132a1e;font-style:normal;font-size:15px}
+              #devmenu .sw span{flex:1;display:flex;flex-direction:column;gap:3px}
+              #devmenu .sw span b{font-size:14px;letter-spacing:.04em}
+              #devmenu .sw span small{font:500 11px/1.25 var(--mono,monospace);color:#7c9c8a}
+              #devmenu .sw em{width:40px;height:22px;border-radius:11px;background:#223329;position:relative;transition:background .15s;flex:none}
+              #devmenu .sw em:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#8aa596;transition:all .18s cubic-bezier(.3,1.4,.5,1)}
+              #devmenu .sw.on{background:#10251a;border-color:#2f8a55}
+              #devmenu .sw.on em{background:#2fcf73}
+              #devmenu .sw.on em:after{left:21px;background:#effff5}
+              #devmenu .chips{display:flex;gap:6px;flex-wrap:wrap}
+              #devmenu .chip{padding:7px 12px;border-radius:99px;border:1px solid #214432;background:#0b1510;color:#a9d3b9;font:700 12px/1 var(--head,inherit);cursor:pointer}
+              #devmenu .chip.on{background:#1f6b40;border-color:#46c47a;color:#fff}
+              #devmenu .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+              #devmenu .card{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px 9px;border-radius:12px;border:1px solid #1a3326;background:radial-gradient(circle at 50% 30%,#15291e,#0a120e);cursor:pointer;transition:transform .12s,border-color .12s;--c:#6fbf8e}
+              #devmenu .card:hover{transform:translateY(-2px);border-color:var(--c)}
+              #devmenu .card:active{transform:scale(.97)}
+              #devmenu .card .pt{width:64px;height:64px;background-size:cover;background-position:center;border-radius:8px;display:grid;place-items:center;font-size:22px;color:#4d7a60}
+              #devmenu .card b{font-size:12px;text-align:center;line-height:1.1}
+              #devmenu .card small{font:600 9px/1 var(--mono,monospace);letter-spacing:.08em;color:var(--c);text-align:center}
+              #devmenu .wlist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+              #devmenu .wbtn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 10px;border-radius:10px;border:1px solid #1a3326;border-left:3px solid var(--c);background:#0b1510;color:#e6f3ea;cursor:pointer;text-align:left}
+              #devmenu .wbtn b{font-size:13px}
+              #devmenu .wbtn small{font:600 9px/1 var(--mono,monospace);letter-spacing:.1em;color:var(--c)}
+              #devmenu .wbtn.on{background:#133021;box-shadow:inset 0 0 0 1px var(--c)}
+              #devmenu .acts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+              #devmenu .act{padding:11px 10px;border-radius:11px;border:1px solid #214432;background:#0d1a13;color:#dff3e6;font:700 12px/1.2 var(--head,inherit);letter-spacing:.06em;cursor:pointer;text-align:left}
+              #devmenu .act:hover{border-color:#3d9c66}
+              #devmenu .act.warn{border-color:#5a2424;background:#1a0d0d;color:#ffcaca}
+              #devmenu .row{display:flex;gap:7px;align-items:center}
+              #devmenu input,#devmenu select{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid #214432;background:#08110c;color:#e6f3ea;font:600 13px/1 var(--head,inherit)}
+              #devmenu .dv-foot{padding:10px 18px 14px;border-top:1px solid #15291f;font:500 11px/1.3 var(--mono,monospace);color:#6f9a82;min-height:18px}
+              @media (max-width:560px){#devmenu .grid{grid-template-columns:repeat(2,1fr)}}`;
             document.head.appendChild(style);
             const el = document.createElement("div");
             el.id = "devmenu";
             el.className = "hidden";
-            el.innerHTML = `<div class="dev-card" role="dialog" aria-label="Developer"><header><b>DEVELOPER</b><span>SANDBOX LOCAL</span><button data-dev="close">FECHAR ✕</button></header><div class="dev-grid"></div><div class="dev-log" id="dev-log"></div></div>`;
+            el.innerHTML = `<div class="dv-scrim" data-dev="close"></div><aside class="dv-panel" role="dialog" aria-label="Console do desenvolvedor"><header><i class="dot"></i><div><b>DEV CONSOLE</b><br /><small>SANDBOX LOCAL · F8</small></div><button class="x" data-dev="close" aria-label="Fechar">✕</button></header><nav></nav><div class="dv-body"></div><div class="dv-foot" id="dev-log">Nada disso vale para a conta online.</div></aside>`;
             document.body.appendChild(el);
             el.addEventListener("click", (e) => {
               const b = e.target.closest("[data-dev]");
               if (b) this.act(b.dataset.dev, b);
             });
+            el.addEventListener("change", (e) => {
+              const t = e.target.closest("[data-dev-change]");
+              if (t) this.act(t.dataset.devChange, t);
+            });
           },
           show() {
+            if (!this.active || !(state === GameState.PLAYING || state === GameState.PAUSED)) {
+              if (this.active) UIManager.toast("O console dev abre dentro das partidas (F8 ou botão DEV).");
+              return;
+            }
             this.ensureUi();
             this.open = true;
             this.render();
@@ -7039,43 +7086,47 @@ body.netgame #revivetouch{display:flex}
             if (l) l.textContent = msg;
           },
           render() {
-            const W = WeaponSystem.weapons,
-              roster = WaveManager.bossRoster,
-              opt = (list) => list.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
-            const flag = (k, label) => `<button data-dev="flag:${k}" class="${this.flags[k] ? "on" : ""}">${label}</button>`;
-            const serverSection = this.serverAllowed ? `
-              <section><h4>CONTA · SERVIDOR (WHITELIST)</h4>
-                <div class="row"><select id="dev-weapon">${opt(W.map((w, i) => [i, `${w.name} · ${rarityNames[w.tier]}`]))}</select><select id="dev-wslot">${opt([0, 1, 2, 3, 4].map((i) => [i, "Slot " + (i + 1)]))}</select><button data-dev="give-weapon">DAR ARMA</button></div>
-                <div class="row"><select id="dev-class">${opt(classes.map((c, i) => [i, `${c.name} · ${rarityNames[c.tier]}`]))}</select><select id="dev-cslot">${opt([0, 1, 2].map((i) => [i, "Slot " + (i + 1)]))}</select><button data-dev="give-class">DAR CLASSE</button></div>
-                <div class="row"><button data-dev="unlock-slots">DESBLOQUEAR TODOS OS SLOTS</button><button data-dev="reset-pity">ZERAR PITY</button></div>
-                <div class="row"><input id="dev-coins" type="number" min="0" placeholder="moedas" /><input id="dev-normal" type="number" min="0" placeholder="normal" /><input id="dev-lucky" type="number" min="0" placeholder="lucky" /><button data-dev="wallet">APLICAR</button></div>
-              </section>` : "";
-            const sel = (arr, cur) => arr.map(([v, t]) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${t}</option>`).join("");
-            $("devmenu").querySelector(".dev-grid").innerHTML = `
-              <section><h4>LOADOUT · PEGAR DIRETO</h4>
-                <div class="row"><select id="dev-sbweapon">${sel(W.map((w, i) => [i, `${w.name} · ${rarityNames[w.tier]}`]), this.sandbox.weaponId ?? Progression.data.weaponId)}</select><button data-dev="sb-weapon">PEGAR ARMA</button></div>
-                <div class="row"><select id="dev-sbclass">${sel(classes.map((c, i) => [i, `${c.name} · ${rarityNames[c.tier]}`]), this.sandbox.classId ?? Progression.data.classId)}</select><button data-dev="sb-class">PEGAR CLASSE</button></div>
-                <p class="dev-note">Vale na hora (partida solo) e nas próximas partidas dev. No Armory, toque em qualquer item para pegá-lo.</p>
-              </section>
-              <section><h4>PODERES · SOLO</h4>
-                <div class="row">${flag("god", "INVENCÍVEL")}${flag("infiniteDamage", "DANO INFINITO")}</div>
-                <div class="row">${flag("infiniteAmmo", "MUNIÇÃO INFINITA")}${flag("noReload", "SEM RECARGA")}${flag("infiniteAbility", "HABILIDADE INFINITA")}${flag("infiniteGrenades", "GRANADAS INFINITAS")}</div>
-                <div class="row"><button data-dev="cooldowns">RESETAR COOLDOWNS</button><button data-dev="heal">CURAR</button></div>
-              </section>
-              <section><h4>INVOCAR</h4>
-                <div class="row"><select id="dev-ztype">${opt(zombieTypes.map((t, i) => [i, t.name]))}</select><select id="dev-zcount">${opt([[1, "x1"], [5, "x5"], [10, "x10"], [25, "x25"]])}</select><button data-dev="spawn-zombie">INVOCAR ZUMBI</button></div>
-                <div class="row"><select id="dev-boss">${opt(Object.entries(roster).map(([k, b]) => [k, `${b.name} · ${b.title}`]))}</select><button data-dev="spawn-boss">INVOCAR BOSS</button></div>
-                <div class="row"><button data-dev="horde">HORDA MISTA (15)</button><button data-dev="clear">LIMPAR INIMIGOS</button></div>
-              </section>
-              <section><h4>ONDAS</h4>
-                <div class="row"><button data-dev="wave-start">INICIAR ONDA</button><button data-dev="wave-next">AVANÇAR ONDA</button><button data-dev="wave-stop">PARAR SPAWNS</button></div>
-                <div class="row"><input id="dev-wave" type="number" min="1" max="200" placeholder="onda" /><button data-dev="wave-set">IR PARA ONDA</button></div>
-              </section>
-              <section><h4>MAPAS & TESTES</h4>
-                <div class="row"><select id="dev-map">${opt(maps.map((m, i) => [i, m.name]))}</select><button data-dev="teleport">JOGAR NESTE MAPA</button></div>
-                <div class="row"><button data-dev="fx">TESTAR PARTÍCULAS</button><button data-dev="anim">TESTAR ANIMAÇÕES DO BOSS</button></div>
-                <div class="row"><button data-dev="disable" class="warn">DESATIVAR MODO DEV</button></div>
-              </section>${serverSection}`;
+            const root = $("devmenu");
+            if (!root) return;
+            const tabs = [["powers", "PODERES"], ["spawn", "INVOCAR"], ["arsenal", "ARSENAL"], ["world", "MUNDO"]];
+            root.querySelector("nav").innerHTML = tabs.map(([k, t]) => `<button data-dev="tab:${k}" class="${this.tab === k ? "on" : ""}">${t}</button>`).join("");
+            const body = root.querySelector(".dv-body");
+            const sw = (k, icon, title, sub) => `<div class="sw ${this.flags[k] ? "on" : ""}" data-dev="flag:${k}"><i>${icon}</i><span><b>${title}</b><small>${sub}</small></span><em></em></div>`;
+            if (this.tab === "powers") {
+              body.innerHTML = `<h5>JOGADOR</h5>
+                ${sw("fly", "🕊", "VOAR", "Espaço sobe · Ctrl desce · 1,8x mais rápido")}
+                ${sw("god", "🛡", "INVENCÍVEL", "Nenhum dano de monstros ou explosões")}
+                ${sw("infiniteDamage", "💥", "DANO INFINITO", "Qualquer golpe elimina, inclusive chefes")}
+                <h5>RECURSOS</h5>
+                ${sw("infiniteAmmo", "∞", "BALA INFINITA", "O pente nunca esvazia")}
+                ${sw("noReload", "⚡", "SEM RECARGA", "Recarregar é instantâneo")}
+                ${sw("infiniteAbility", "⏱", "SEM COOLDOWN", "Habilidade Q e F de armas secretas sempre prontas")}
+                ${sw("infiniteGrenades", "💣", "GRANADAS INFINITAS", "G nunca acaba")}
+                <h5>AÇÕES</h5>
+                <div class="acts"><button class="act" data-dev="heal">❤ CURAR TUDO</button><button class="act" data-dev="cooldowns">↺ ZERAR COOLDOWNS</button></div>`;
+            } else if (this.tab === "spawn") {
+              const counts = [1, 5, 10, 25];
+              const R = WaveManager.bossRoster,
+                rankName = ["", "MINI-BOSS I", "MINI-BOSS II", "BOSS I", "BOSS II"],
+                mapName = ["CIDADE", "HOSPITAL", "FLORESTA", "LAB", "NEVE"],
+                bosses = Object.entries(R).map(([k, b]) => ({ k, b, map: ["city", "hospital", "forest", "lab", "snow"].indexOf(b.theme) }));
+              const card = (dev, portrait, name, sub, color) => `<button class="card" data-dev="${dev}" style="--c:${color}"><span class="pt" data-portrait="${portrait}">☠</span><b>${DR.escapeHtml(name)}</b><small>${sub}</small></button>`;
+              const byRank = [4, 3, 2, 1].map((r) => `<h5>${rankName[r]}</h5><div class="grid">${Object.entries(R).filter(([, b]) => b.rank === r).map(([k, b]) => card("spawn-boss:" + k, k, b.name, (b.title.split("·")[1] || "").trim(), r >= 3 ? "#ff5a4a" : "#ffb23e")).join("")}</div>`).join("");
+              body.innerHTML = `<h5>QUANTIDADE (ZUMBIS)</h5><div class="chips">${counts.map((n) => `<button class="chip ${this.count === n ? "on" : ""}" data-dev="count:${n}">x${n}</button>`).join("")}<button class="chip" data-dev="horde">HORDA MISTA</button><button class="chip" data-dev="clear">LIMPAR</button></div>
+                <h5>ZUMBIS</h5><div class="grid">${zombieTypes.map((t, i) => card("spawn-type:" + i, ENEMY_KEYS[i] || "zombie", t.name, "COMUM", "#6fbf8e")).join("")}</div>${byRank}`;
+              MonsterPortraits.fill(body);
+            } else if (this.tab === "arsenal") {
+              const W = WeaponSystem.weapons,
+                curW = player?.inventory?.[player.slot]?.name,
+                list = (arr, kind, cur) => arr.map((x, i) => ({ x, i })).sort((a, b) => b.x.tier - a.x.tier).map(({ x, i }) => `<button class="wbtn ${cur === (kind === "w" ? x.name : i) ? "on" : ""}" data-dev="equip-${kind}:${i}" style="--c:${rarityColors[x.tier]}"><b>${DR.escapeHtml(x.name)}</b><small>${rarityNames[x.tier].toUpperCase()}</small></button>`).join("");
+              body.innerHTML = `<h5>ARMAS · TOQUE PARA PEGAR NA HORA</h5><div class="wlist">${list(W, "w", curW)}</div><h5>CLASSES</h5><div class="wlist">${list(classes, "c", selectedClass)}</div>`;
+            } else {
+              body.innerHTML = `<h5>ONDAS</h5><div class="acts"><button class="act" data-dev="wave-start">▶ INICIAR ONDA</button><button class="act" data-dev="wave-next">⏭ AVANÇAR ONDA</button><button class="act" data-dev="wave-stop">⏸ PARAR SPAWNS</button><button class="act" data-dev="clear">✖ LIMPAR INIMIGOS</button></div>
+                <div class="row" style="margin-top:8px"><input id="dev-wave" type="number" min="1" max="200" placeholder="Ir para a onda…" /><button class="act" data-dev="wave-set">IR</button></div>
+                <h5>MAPA</h5><div class="row"><select id="dev-map">${maps.map((m, i) => `<option value="${i}" ${i === selectedMap ? "selected" : ""}>${DR.escapeHtml(m.name)}</option>`).join("")}</select><button class="act" data-dev="teleport">JOGAR</button></div>
+                <h5>TESTES</h5><div class="acts"><button class="act" data-dev="fx">✦ PARTÍCULAS</button><button class="act" data-dev="anim">🎬 ANIMAÇÕES DO BOSS</button></div>
+                <h5>MODO DEV</h5><div class="acts"><button class="act warn" data-dev="disable">DESATIVAR MODO DEV</button></div>`;
+            }
           },
           playing() {
             if (state !== GameState.PLAYING && state !== GameState.PAUSED) {
@@ -7106,7 +7157,45 @@ body.netgame #revivetouch{display:flex}
               const k = cmd.slice(5);
               this.flags[k] = !this.flags[k];
               button.classList.toggle("on", this.flags[k]);
-              return this.log(`${k}: ${this.flags[k] ? "ON" : "OFF"}`);
+              if (k === "fly" && !this.flags[k]) player.flightDescentUntil = simulationTime + 2.5;
+              return this.log(`${button.querySelector("b")?.textContent || k}: ${this.flags[k] ? "LIGADO" : "DESLIGADO"}`);
+            }
+            if (cmd.startsWith("tab:")) {
+              this.tab = cmd.slice(4);
+              return this.render();
+            }
+            if (cmd.startsWith("count:")) {
+              this.count = +cmd.slice(6) || 1;
+              return this.render();
+            }
+            if (cmd.startsWith("equip-w:") || cmd.startsWith("equip-c:")) {
+              const id = +cmd.slice(8),
+                kind = cmd[6] === "w" ? "weapon" : "class";
+              this.take(kind, id);
+              if (!NetGame.active) {
+                if (kind === "weapon") {
+                  player.inventory[player.slot] = WeaponSystem.create(id);
+                  WeaponSystem.buildModel();
+                } else {
+                  selectedClass = id;
+                  player.cooldown = 0;
+                }
+              }
+              this.render();
+              return this.log(`${kind === "weapon" ? WeaponSystem.weapons[id].name : classes[id].name} equipado.`);
+            }
+            if (cmd.startsWith("spawn-type:") || cmd.startsWith("spawn-boss:")) {
+              if (!this.playing()) return;
+              const ahead = player.pos.clone().add(new V(-Math.sin(yaw) * 7, -player.pos.y, -Math.cos(yaw) * 7));
+              if (cmd.startsWith("spawn-type:")) {
+                const t = +cmd.slice(11);
+                for (let i = 0; i < this.count; i++) ZombieManager.spawn(t, null, ahead.clone().add(new V(rand(-3, 3), 0, rand(-3, 3))));
+                return this.log(`${this.count}x ${zombieTypes[t].name} invocado(s).`);
+              }
+              const key = cmd.slice(11);
+              this.hide();
+              WaveManager.boss(key);
+              return;
             }
             if (cmd === "disable") {
               this.hide();
@@ -7656,10 +7745,31 @@ body.netgame #revivetouch{display:flex}
               s = Math.sin(ry);
             return [x + ox * c + oz * s, z - ox * s + oz * c];
           },
+          // Collider for a box rotated by ry. Colliders are axis-aligned, so a single AABB around
+          // a diagonal car/cabin leaves big invisible corners. Near-axis boxes get one AABB; any
+          // other angle is split into slices along its long side, each wrapped by its own small
+          // AABB — the union hugs the real outline (≤ ~15 cm of extra reach).
           rotCol(x, z, ry, w, d, top) {
-            const c = Math.abs(Math.cos(ry)),
-              s = Math.abs(Math.sin(ry));
-            this.col(x, z, w * c + d * s, w * s + d * c, top);
+            const c = Math.cos(ry),
+              s = Math.sin(ry),
+              ac = Math.abs(c),
+              as = Math.abs(s);
+            if (Math.min(ac, as) < 0.08) {
+              this.col(x, z, w * ac + d * as, w * as + d * ac, top);
+              return;
+            }
+            const long = Math.max(w, d),
+              short = Math.min(w, d),
+              alongZ = d >= w,
+              n = Math.max(1, Math.min(12, Math.ceil(long / Math.max(0.35, short * 0.45)))),
+              seg = long / n;
+            for (let i = 0; i < n; i++) {
+              const t = -long / 2 + seg * (i + 0.5),
+                [cx, cz] = alongZ ? this.at(x, z, ry, 0, t) : this.at(x, z, ry, t, 0),
+                sw = alongZ ? short : seg,
+                sd = alongZ ? seg : short;
+              this.col(cx, cz, sw * ac + sd * as, sw * as + sd * ac, top);
+            }
           },
           // A building volume with a photo-textured shell (tileUV keeps bricks their real size).
           building(M, x, z, w, d, h, surface, tint, tile = 3.2) {
@@ -10034,6 +10144,13 @@ body.netgame #revivetouch{display:flex}
               ? ads.pos.clone()
               : new V(0.255, -0.24, -0.42);
             if (w.scythe && !aiming) target.x += 0.14; // keep the blade clear of the crosshair
+            if (w.kind === "bow" && !aiming) {
+              // A bow is held upright in front of the body, left of centre, with its belly turned
+              // a little toward the camera so the curved limbs and the string read clearly.
+              target.x -= 0.2;
+              target.y += 0.02;
+              target.z -= 0.06;
+            }
             if (w.specter) {
               const spinning = SecretWeaponSkills?.spinUntil > simulationTime,
                 orbit = simulationTime * (spinning ? 8.5 : 0.7),
@@ -10068,6 +10185,10 @@ body.netgame #revivetouch{display:flex}
               swayX * 0.3,
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
+            if (w.kind === "bow") {
+              this.model.rotation.y += aiming ? 0.18 : 0.55;
+              this.model.rotation.z += aiming ? 0.12 : 0.22;
+            }
             if (w.scythe && !aiming) {
               // Scythe carried on the shoulder: head leans away and the blade turns its flat
               // side toward the camera instead of cutting the view edge-on.
@@ -10709,10 +10830,13 @@ body.netgame #revivetouch{display:flex}
             const model = WeaponModels.scenes.get(extra.weapon?.name || "Dawn Spear");
             const mesh = new THREE.Group();
             if (model) {
+              // Spear models stand upright (shaft +y, point at the top); lookAt() aims +z along
+              // the flight, so tip the model forward and centre it: it flies point-first.
               const m = model.clone(true);
-              m.rotation.x = -Math.PI / 2; // model shaft is +y: point it along +z (lookAt forward)
-              m.position.z = -0.4;
+              m.rotation.set(Math.PI / 2, 0, 0);
               m.scale.setScalar(1.25);
+              const bb = new THREE.Box3().setFromObject(m);
+              m.position.z = -(bb.min.z + bb.max.z) / 2;
               mesh.add(m);
             } else mesh.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6).rotateX(Math.PI / 2), VoxelMonsters.flat(0xf2e6c0, 0x6a5010)));
             mesh.position.copy(pos);
@@ -14958,10 +15082,17 @@ body.netgame #revivetouch{display:flex}
               }
             }
             g.position.copy(from);
+            // Thrown weapons fly point-first (their tip is -z) and only roll around the shaft.
+            const heading = to.clone().sub(from);
+            if (heading.lengthSq() < 1e-6) heading.set(0, 0, -1);
+            heading.normalize();
+            const out = new THREE.Quaternion().setFromUnitVectors(new V(0, 0, -1), heading),
+              back = new THREE.Quaternion().setFromUnitVectors(new V(0, 0, -1), heading.clone().negate());
+            g.quaternion.copy(out);
             scene.add(g);
             this.throws.push({
               group:g, from:from.clone(), to:to.clone(), start:simulationTime,
-              duration:style==="specter"?.72:.82, style,
+              duration:style==="specter"?.72:.82, style, out, back, roll: 0,
             });
           },
           throwTrident(w, infernalFlight = false) {
@@ -15042,8 +15173,8 @@ body.netgame #revivetouch{display:flex}
                 outbound=p<.52 ? p/.52 : 1-(p-.52)/.48,
                 ease=outbound*outbound*(3-2*outbound);
               fx.group.position.lerpVectors(fx.from,fx.to,ease);
-              fx.group.rotation.z += dt*(fx.style==="specter"?18:9);
-              fx.group.rotation.y += dt*(fx.style==="specter"?12:5);
+              fx.roll += dt*(fx.style==="specter"?14:8);
+              fx.group.quaternion.copy(p<.52 ? fx.out : fx.back).multiply(new THREE.Quaternion().setFromAxisAngle(new V(0,0,1), fx.roll));
               if(p>=1){scene.remove(fx.group);this.throws.splice(i,1);}
             }
             for(let i=this.fires.length-1;i>=0;i--) {
@@ -15596,7 +15727,8 @@ body.netgame #revivetouch{display:flex}
             }
             const crouched =
               keys.has("ControlLeft") || keys.has("ControlRight");
-            const flyingNow = !!classBurst().flight;
+            const devFly = DevMode.on("fly"),
+              flyingNow = !!classBurst().flight || devFly;
             // Sprint builds up gradually (GroundMotion.sprintMultiplier); it only charges while
             // actually moving, not aiming and not crouched.
             const sprintHeld = keys.has("ShiftLeft") && Math.hypot(x, z) > 0.1 && !mouse.aim && !crouched && !player.climb;
@@ -15608,10 +15740,10 @@ body.netgame #revivetouch{display:flex}
               (mouse.aim ? 0.65 : 1) *
               (w?.modelId === 2 ? 1.15 : 1);
             if (player.slowUntil > simulationTime) walkSpeed *= 1 - (player.slowFactor || 0);
-            let speed = walkSpeed * sprintMult;
+            let speed = walkSpeed * sprintMult * (devFly ? 1.8 : 1);
             // Hard momentum cap: bunny hops never exceed BHOP_CAP × this stance's max sprint
             // (aiming or crouching shrink it with the stance speed).
-            const speedCap = walkSpeed * GroundMotion.SPRINT_MULT * GroundMotion.BHOP_CAP;
+            const speedCap = walkSpeed * GroundMotion.SPRINT_MULT * GroundMotion.BHOP_CAP * (devFly ? 1.8 : 1);
             this.speedCap = speedCap;
             // Input as a world-space vector (for ladder intent).
             const moveWX = x * Math.cos(yaw) + z * Math.sin(yaw),
@@ -15655,7 +15787,7 @@ body.netgame #revivetouch{display:flex}
             // Ladders: a small state machine. Walking into a ladder (or jumping at it) grabs it;
             // while climbing gravity is off, forward/back move along the ladder only, and at the
             // top the player is carried over the edge onto the roof instead of being launched.
-            const flying = !!classBurst().flight;
+            const flying = flyingNow;
             let climbing = false;
             if (!player.climb && !flying) {
               const l = MapManager.ladders?.find((l) => Math.hypot(player.pos.x - l.x, player.pos.z - l.z) < 0.9 && feet < l.top - 0.25);
@@ -15719,10 +15851,10 @@ body.netgame #revivetouch{display:flex}
               const up =
                 (keys.has("Space") ? 1 : 0) -
                 (keys.has("ControlLeft") || keys.has("ControlRight") ? 1 : 0);
-              player.vy = up * 4.2;
+              player.vy = up * (devFly ? 7 : 4.2);
               feet += player.vy * dt;
-              feet = clamp(feet, ground + 1.8, ground + 10);
-              player.flightDescentUntil = simulationTime + 2.5;
+              feet = devFly ? clamp(feet, ground, ground + 40) : clamp(feet, ground + 1.8, ground + 10);
+              player.flightDescentUntil = simulationTime + (devFly ? 0.8 : 2.5);
             } else {
               const gravity = player.flightDescentUntil > simulationTime ? 3.2 : 16;
               player.vy -= gravity * dt;
@@ -15787,6 +15919,7 @@ body.netgame #revivetouch{display:flex}
             Account.update();
             HordeAI.update(dt);
             ReaperAllies.update(dt);
+            if (DevMode.on("infiniteAbility")) { SecretWeaponSkills.cooldown = 0; player.cooldown = 0; }
             SecretWeaponSkills.update(dt);
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
