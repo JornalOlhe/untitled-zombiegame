@@ -212,7 +212,8 @@ def pine(name, seed, snow=False):
     tone = [random.uniform(0.85, 1.15) for _ in range(tiers + 2)]
 
     def col(co, n, c):
-        if snow and n.z > 0.5 and noise.noise(c * 1.3) > -0.3:
+        # Snow rests in patches on the upward faces of every whorl (more near the top).
+        if snow and n.z > 0.3 and noise.noise(c * 2.2) > 0.15 - 0.25 * min(1.0, c.z / H):
             return jitter((0.86, 0.9, 0.95), 0.04, int(c.x * 77 + c.z * 33))
         tier = max(0, min(tiers, int((c.z - 1.1) / max(0.1, (H - 1.9)) * (tiers - 1))))
         shade = (0.62 + 0.42 * max(0, n.z)) * tone[tier]

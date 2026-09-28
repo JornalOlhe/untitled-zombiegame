@@ -11687,7 +11687,7 @@ body.netgame #revivetouch{display:flex}
                 for (const detail of z.rig.detail) detail.visible = showDetail;
               }
               if (walking) {
-                let dir = z.detourUntil > simulationTime ? z.detourDir.clone() : z.canSee ? to.clone().normalize() : MapManager.direction(pos);
+                let dir = z.detourUntil > simulationTime ? z.detourDir.clone() : z.canSee && !(z.flowUntil > simulationTime) ? to.clone().normalize() : MapManager.direction(pos);
                 if (z.boss?.kind === "necro" && dist < 11)
                   dir.multiplyScalar(-0.5);
                 for (const other of HordeAI.neighbors(pos)) {
@@ -11731,6 +11731,9 @@ body.netgame #revivetouch{display:flex}
                     const side = new V(-to.z, 0, to.x).normalize().multiplyScalar(z.detourSide).add(to.clone().normalize().multiplyScalar(0.25));
                     z.detourDir = MapManager.escapeDirection(pos, side.normalize());
                     z.detourUntil = simulationTime + 0.9;
+                    // Seeing the player straight across an obstacle (a car at an angle, a corner)
+                    // must not pull it back into the same pocket: follow the flow field for a while.
+                    z.flowUntil = simulationTime + 3;
                   }
                   z.progressDist = metric;
                   z.progressClock = 0;
