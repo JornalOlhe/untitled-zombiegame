@@ -13078,6 +13078,13 @@ body.netgame #revivetouch{display:flex}
             stage.add(this.active.light);
             if (kind === "demon") this.buildHell(this.active);
             else this.buildMountain(this.active);
+            // Boss I / Boss II: each boss adds its own set piece to the themed den.
+            if (this["intro_" + kind]) {
+              const box = new THREE.Box3().setFromObject(z.group);
+              this.active.h = Math.max(1.5, box.max.y - z.group.position.y);
+              this.active.debris = [];
+              this["stage_" + kind]?.(this.active);
+            }
             document.body.classList.add("cinematic");
             announcementEnd = 0;
             $("announcement").style.opacity = 0;
@@ -13287,7 +13294,11 @@ body.netgame #revivetouch{display:flex}
               S = a.z.size;
             WeaponSystem.model.visible = false;
             if (a.kind === "demon") this.demon(a, tt, dt, r, S);
-            else this.yeti(a, tt, dt, r, S);
+            else if (this["intro_" + a.kind]) {
+              this.pose(r);
+              this["intro_" + a.kind](a, tt, dt, r, S);
+              this.debrisTick(a, dt);
+            } else this.yeti(a, tt, dt, r, S);
             if (a.snow) this.drift(a.snow, dt, 9, -2.5);
             if (a.embers) this.drift(a.embers, dt, 1.2, 2.2);
             if (tt >= a.duration) this.finish(false);
@@ -13468,6 +13479,757 @@ body.netgame #revivetouch{display:flex}
             const eye = a.stage.worldToLocal(a.z.group.position.clone()).add(new V(0, 2.2 + roar * 0.6, 0));
             this.camera(a, new V(-1.6, 2.3, 11.5), new V(0.3, 1.7, 7.2), Math.min(1, tt / 3.6), eye, shaking);
           },
+          // ---- Boss I / Boss II intros: every boss has its own set piece and choreography ----
+          // Shared toolkit: rest pose, stage-local boss position, strides, the roar beat, flying debris.
+          pose(r) {
+            r.body.position.y = r.hipY;
+            r.body.rotation.set(0, 0, 0);
+            r.upper.rotation.set(0, 0, 0);
+            r.neck.rotation.set(0, 0, 0);
+            for (const l of r.legs) l.rotation.set(0, 0, 0);
+            for (const m of r.arms) m.rotation.set(0, 0, 0);
+          },
+          bp(a) {
+            return a.stage.worldToLocal(a.z.group.position.clone());
+          },
+          place(a, x, y, z) {
+            a.z.group.position.copy(a.stage.localToWorld(new V(x, y, z)));
+          },
+          stride(a, r, tt, dt, speed, amp, dust, stomp) {
+            const w = tt * speed,
+              s = Math.sin(w);
+            r.legs[0].rotation.x = s * amp;
+            r.legs[1].rotation.x = -s * amp;
+            r.arms[0].rotation.x = -0.3 - s * amp * 0.8;
+            r.arms[1].rotation.x = -0.3 + s * amp * 0.8;
+            r.body.position.y = r.hipY + Math.abs(s) * 0.05;
+            if (s * Math.sin(w - dt * speed) < 0) {
+              shake = Math.max(shake, stomp);
+              ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 0.15, 0)), dust, 12, 2.4);
+              return true;
+            }
+            return false;
+          },
+          lines() {
+            const lines = $("speedlines");
+            lines.classList.remove("show");
+            void lines.offsetWidth;
+            lines.classList.add("show");
+          },
+          // The roar: ElevenLabs intro voice, speed lines, a burst in the boss colour and the title card.
+          roarBeat(a, color) {
+            if (a.flags.roar) return;
+            a.flags.roar = true;
+            this.lines();
+            a.sounds.push(BossVoice.play(a.z, "intro"));
+            const p = a.z.group.position;
+            for (let i = 0; i < 24; i++) {
+              const ang = (i / 24) * Math.PI * 2;
+              ParticleSystem.emit(p.clone().add(new V(Math.cos(ang) * 2, a.h * 0.6, Math.sin(ang) * 2)), color, 4, 6);
+            }
+            $("cinebars").classList.add("show-title");
+          },
+          roarPose(r, k, tt) {
+            r.upper.rotation.x += -0.3 * k;
+            r.neck.rotation.x += -0.55 * k + Math.sin(tt * 40) * 0.03 * k;
+            r.arms[0].rotation.x += (-2.2 - r.arms[0].rotation.x) * k;
+            r.arms[1].rotation.x += (-2.2 - r.arms[1].rotation.x) * k;
+            r.arms[0].rotation.z += (-0.8 - r.arms[0].rotation.z) * k;
+            r.arms[1].rotation.z += (0.8 - r.arms[1].rotation.z) * k;
+          },
+          punch(a, tt, t0, t1, amount = 16) {
+            if (tt <= t0 || tt >= t1) return;
+            camera.fov = a.fov - amount * Math.sin(this.seg(tt, t0, t1) * Math.PI);
+            camera.updateProjectionMatrix();
+          },
+          own(mesh) {
+            mesh.userData.ownGeo = true;
+            mesh.userData.ownMaterial = true;
+            return mesh;
+          },
+          // Loose blocks thrown by the set pieces: gravity, spin, a couple of bounces, then rest.
+          // Blender prop model (PropModels) placed on the stage, or a textured block when not loaded.
+          model(a, name, pos, ry, s, fallback) {
+            const g = PropModels.group(name, s);
+            if (!g) return this.block(a.stage, fallback[0], [pos[0], pos[1] + fallback[0][1] / 2, pos[2]], fallback[1], ry);
+            g.position.set(pos[0], pos[1], pos[2]);
+            g.rotation.y = ry;
+            a.stage.add(g);
+            return g;
+          },
+          restHeight(mesh) {
+            if (mesh.isMesh && mesh.geometry === unitBox) return mesh.scale.y / 2;
+            const box = new THREE.Box3().setFromObject(mesh);
+            return mesh.position.y - (box.min.y - this.ARENA.y);
+          },
+          fling(a, mesh, v, spin, opts = {}) {
+            a.debris.push({ m: mesh, v, w: spin || new V(), floor: opts.floor ?? this.restHeight(mesh), delay: opts.delay || 0, onLand: opts.onLand, rest: false });
+          },
+          debrisTick(a, dt) {
+            for (const d of a.debris) {
+              if (d.rest) continue;
+              if (d.delay > 0) {
+                d.delay -= dt;
+                d.m.visible = d.delay <= 0;
+                continue;
+              }
+              d.v.y -= 20 * dt;
+              d.m.position.addScaledVector(d.v, dt);
+              d.m.rotation.x += d.w.x * dt;
+              d.m.rotation.y += d.w.y * dt;
+              d.m.rotation.z += d.w.z * dt;
+              if (d.m.position.y < d.floor && d.v.y < 0) {
+                d.m.position.y = d.floor;
+                if (d.onLand) {
+                  d.onLand(d);
+                  d.onLand = null;
+                }
+                d.v.y *= -0.3;
+                d.v.x *= 0.55;
+                d.v.z *= 0.55;
+                d.w.multiplyScalar(0.45);
+                if (Math.abs(d.v.y) < 1.4) d.rest = true;
+              }
+            }
+          },
+          world(a, x, y, z) {
+            return a.stage.localToWorld(new V(x, y, z));
+          },
+
+          // JUGGERNAUT (city): four ground-shaking steps out of the den, the parked wrecks jump on
+          // every footfall, a double-fist slam tosses them, roar, leap.
+          stage_juggernaut(a) {
+            a.cars = [this.model(a, "car_burnt", [-3.7, 0, 2.1], 0.25, 1, [[1.9, 1.25, 4], "carBurnt"]), this.model(a, "car_sedan", [3.9, 0, 0.9], -0.4, 1, [[1.9, 1.25, 4], "carGray"])];
+            for (const c of a.cars) c.userData.y0 = c.position.y;
+            this.block(a.stage, [0.16, 4.6, 0.16], [-4.8, 2.3, -0.2], "metal");
+            a.lamp = this.block(a.stage, [0.9, 0.18, 0.35], [-4.45, 4.55, -0.2], "lightAmber");
+            a.hop = 0;
+          },
+          intro_juggernaut(a, tt, dt, r, S) {
+            const walk = this.seg(tt, 0.5, 2.5),
+              moving = tt > 0.5 && tt < 2.5;
+            if (!a.launchFrom) this.place(a, 0, 0, -3.2 + walk * 3.9);
+            if (moving && this.stride(a, r, tt - 0.5, dt, Math.PI * 2, 0.5, 0x8a7a6a, 0.55)) {
+              a.hop = 0.28;
+              a.sounds.push(MonsterAudio.play("land", { volume: 1.1, rate: 0.62 }));
+            }
+            if (moving) r.upper.rotation.x = 0.18;
+            a.hop = Math.max(0, a.hop - dt * 1.6);
+            if (!a.flags.slam) for (const c of a.cars) c.position.y = c.userData.y0 + Math.abs(Math.sin(a.hop * 11)) * a.hop;
+            a.lamp.visible = Math.sin(tt * 31) + Math.sin(tt * 13) > -0.6;
+            const lift = this.seg(tt, 2.5, 3.0),
+              drop = this.seg(tt, 3.0, 3.12),
+              roar = this.seg(tt, 3.25, 3.5) * (1 - this.seg(tt, 3.75, 3.9));
+            if (tt >= 2.5) {
+              r.arms[0].rotation.x = r.arms[1].rotation.x = -3.0 * lift + drop * 2.1;
+              r.arms[0].rotation.z = -0.25 * lift;
+              r.arms[1].rotation.z = 0.25 * lift;
+              r.upper.rotation.x = -0.25 * lift + drop * 0.75 * (1 - roar);
+              r.body.position.y = r.hipY * (1 - 0.18 * drop * (1 - roar));
+              r.legs[0].rotation.x = -0.5 * drop * (1 - roar);
+              r.legs[1].rotation.x = 0.35 * drop * (1 - roar);
+            }
+            if (!a.flags.slam && tt >= 3.08) {
+              a.flags.slam = true;
+              const p = a.z.group.position.clone().add(new V(0, 0.05, 1.1 * S));
+              a.sounds.push(MonsterAudio.play("boss_slam", { volume: 1.6 }));
+              shake = 1.3;
+              MonsterFX.ring(p, 9 * S, a.z.boss.fx, 0.8);
+              MonsterFX.ring(p, 4.5 * S, 0xffffff, 0.45);
+              CombatFX.mark(p, 0x1a1410, 3 * S);
+              for (let i = 0; i < 40; i++) ParticleSystem.emit(p.clone().add(new V(rand(-2, 2), 0.1, rand(-1.5, 1.5))), i % 3 ? 0x7a6a5a : a.z.boss.fx, 3, 7);
+              a.cars.forEach((c, i) => this.fling(a, c, new V(i ? 2.5 : -2.5, 7.5, 1.5), new V(rand(-2, 2), rand(-1, 1), i ? -3.2 : 3.2)));
+            }
+            if (tt >= 3.25) {
+              this.roarBeat(a, a.z.boss.fx);
+              this.roarPose(r, roar, tt);
+            }
+            this.punch(a, tt, 3.2, 3.9);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.copy(this.bp(a)).add(new V(0, a.h * 0.85, 0.4));
+            a.light.intensity = tt < 0.6 ? 2.5 + Math.sin(tt * 14) : Math.max(0.3, 2.5 - (tt - 0.6) * 1.5) + (a.flags.slam ? 4 * (1 - this.seg(tt, 3.1, 3.6)) : 0);
+            const shaking = tt > 3.08 && tt < 3.8 ? 1.2 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            const look = this.bp(a).add(new V(0, 1.1 + this.seg(tt, 0.3, 3) * (a.h * 0.75 - 1.1), 0));
+            if (flying) look.y += 1.5 * S;
+            this.camera(a, new V(2.6, 0.45, 9.8), new V(1.1, 1.15, 6.3), Math.min(1, tt / 3.8), look, shaking);
+          },
+
+          // THE WRECKER (city): the den is walled up — two blows from behind, the third brings the
+          // wall down in a shower of bricks, it walks out, rips up a slab, roars and hurls it.
+          stage_wrecker(a) {
+            a.wall = [];
+            for (let row = 0; row < 8; row++)
+              for (let col = 0; col < 4; col++) {
+                const x = -1.45 + col * 0.97 + (row % 2 ? 0.24 : 0);
+                a.wall.push(this.block(a.stage, [0.94, 0.54, 0.5], [x, 0.28 + row * 0.56, -0.75], "brick"));
+              }
+            a.slab = this.block(a.stage, [1.3, 0.55, 1.0], [2.2, 0.28, 1.6], "concrete", 0.4);
+          },
+          intro_wrecker(a, tt, dt, r, S) {
+            for (const t of [0.45, 1.0])
+              if (!a.flags["thud" + t] && tt >= t) {
+                a.flags["thud" + t] = true;
+                shake = Math.max(shake, 0.55);
+                a.jolt = 1;
+                a.sounds.push(MonsterAudio.play("boss_slam", { volume: 0.7, rate: 0.8 }));
+                for (let i = 0; i < 14; i++) ParticleSystem.emit(this.world(a, rand(-1.8, 1.8), rand(0.1, 4), -0.4), 0xb0907a, 2, 2.5);
+              }
+            a.jolt = Math.max(0, (a.jolt || 0) - dt * 5);
+            if (!a.flags.burst)
+              a.wall.forEach((b, i) => {
+                b.position.z = -0.75 + Math.sin(i * 7.1) * 0.05 * a.jolt;
+                b.rotation.z = Math.sin(i * 3.3) * 0.04 * a.jolt;
+              });
+            if (!a.flags.burst && tt >= 1.35) {
+              a.flags.burst = true;
+              shake = 1.3;
+              this.lines();
+              a.sounds.push(MonsterAudio.play("boss_slam", { volume: 1.6 }));
+              for (const b of a.wall) this.fling(a, b, new V(b.position.x * 1.6 + rand(-1, 1), rand(1.5, 6), rand(5, 12)), new V(rand(-6, 6), rand(-6, 6), rand(-6, 6)));
+              for (let i = 0; i < 40; i++) ParticleSystem.emit(this.world(a, rand(-2, 2), rand(0.2, 4.2), -0.3), i % 2 ? 0xb0907a : 0x6a5a4a, 3, 6);
+            }
+            const charge = this.seg(tt, 1.25, 1.6),
+              walk = this.seg(tt, 1.6, 2.6);
+            if (!a.launchFrom) this.place(a, 0, 0, -3.2 + charge * 2.2 + walk * 1.8);
+            if (tt < 1.6) {
+              // Behind the wall: shoulder-charging blows.
+              const blow = Math.max(0, Math.sin(tt * 11));
+              r.upper.rotation.x = 0.35 + blow * 0.2;
+              r.arms[0].rotation.x = -1.4 - blow * 0.4;
+              r.arms[1].rotation.x = -0.4;
+            } else if (tt < 2.6) this.stride(a, r, tt, dt, 6, 0.45, 0x8a7a6a, 0.35);
+            const grab = this.seg(tt, 2.6, 3.0),
+              throwK = this.seg(tt, 3.45, 3.6);
+            if (tt >= 2.6) {
+              const arms = -0.9 * grab * (1 - this.seg(tt, 2.8, 3.0)) - 3.0 * this.seg(tt, 2.8, 3.0) + throwK * 1.9;
+              r.arms[0].rotation.x = r.arms[1].rotation.x = arms;
+              r.upper.rotation.x = 0.55 * grab * (1 - this.seg(tt, 2.8, 3.0)) - 0.2 * this.seg(tt, 2.8, 3.0) + throwK * 0.5;
+              r.neck.rotation.x = -0.4 * this.seg(tt, 2.95, 3.1) * (1 - throwK) + Math.sin(tt * 40) * 0.03 * this.seg(tt, 2.95, 3.1);
+            }
+            if (tt >= 2.8 && !a.flags.thrown) {
+              const p = this.bp(a),
+                up = this.seg(tt, 2.8, 3.0);
+              a.slab.position.set(p.x, 0.8 + up * (a.h * 1.05 - 0.8), p.z + 0.5 * (1 - up) + 0.1);
+              a.slab.rotation.set(0, 0, 0);
+            }
+            if (tt >= 3.0) this.roarBeat(a, a.z.boss.fx);
+            if (!a.flags.thrown && tt >= 3.5) {
+              a.flags.thrown = true;
+              a.sounds.push(MonsterAudio.play("boss_throw", { volume: 1.4 }));
+              this.fling(a, a.slab, new V(-5, 5, 13), new V(4, 2, 5), {
+                onLand: (d) => {
+                  shake = Math.max(shake, 0.8);
+                  for (let i = 0; i < 20; i++) ParticleSystem.emit(a.stage.localToWorld(d.m.position.clone()), 0x8a7a6a, 3, 5);
+                },
+              });
+            }
+            this.punch(a, tt, 2.95, 3.7);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.copy(this.bp(a)).add(new V(0, a.h * 0.85, 0.4));
+            a.light.intensity = tt < 1.35 ? 0.4 * a.jolt : 1.5 + (tt > 3 ? 3 * (1 - this.seg(tt, 3, 3.6)) : 0);
+            const shaking = tt > 1.35 && tt < 1.7 ? 1.2 : tt > 3 && tt < 3.6 ? 0.9 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            const look = tt < 1.3 ? new V(0, 2.2, -0.7) : this.bp(a).add(new V(0, a.h * 0.72, 0));
+            if (tt >= 1.3 && tt < 1.8) look.lerpVectors(new V(0, 2.2, -0.7), look, this.seg(tt, 1.3, 1.8));
+            if (flying) look.y += 1.5 * S;
+            this.camera(a, new V(-2.4, 1.6, 11), new V(0.7, 1.8, 6.8), Math.min(1, tt / 3.8), look, shaking);
+          },
+
+          // THE BUTCHER (hospital): a dying ceiling light; it gets closer every flicker, dragging the
+          // cleaver in sparks, raises it and splits the gurney in two, then roars.
+          stage_butcher(a) {
+            const g = a.stage;
+            a.tube = this.block(g, [1.8, 0.12, 0.35], [0, 4.1, 0.7], "lightWhite");
+            this.block(g, [0.04, 0.4, 0.04], [-0.8, 4.35, 0.7], "metal");
+            this.block(g, [0.04, 0.4, 0.04], [0.8, 4.35, 0.7], "metal");
+            a.tubeGlow = this.glow(0xe8f4ff);
+            a.tubeGlow.scale.set(5, 2.4, 1);
+            a.tubeGlow.position.set(0, 4.0, 0.9);
+            g.add(a.tubeGlow);
+            a.gurney = [-1, 1].map((side) => {
+              const half = new THREE.Group();
+              half.position.set(0.35 + side * 0.28, 0, 2.6);
+              half.rotation.y = 0.18;
+              this.block(half, [0.54, 0.08, 2.1], [0, 0.82, 0], "metal");
+              this.block(half, [0.5, 0.14, 2.0], [0, 0.93, 0], "mattress");
+              for (const z of [-0.9, 0.9]) this.block(half, [0.05, 0.8, 0.05], [side * 0.22, 0.4, z], "metal");
+              g.add(half);
+              return half;
+            });
+            this.block(g, [0.9, 0.9, 0.5], [-3.4, 0.45, 0.4], "equip", 0.3);
+          },
+          intro_butcher(a, tt, dt, r, S) {
+            const on = tt > 2.3 || Math.sin(tt * 37) + Math.sin(tt * 23.3) > 0.35;
+            a.tube.visible = on;
+            a.tubeGlow.intensity = on ? 3.5 : 0;
+            a.z.group.visible = tt > 1.6 || on;
+            const walk = this.seg(tt, 0.1, 2.3),
+              moving = tt > 0.1 && tt < 2.3;
+            if (!a.launchFrom) this.place(a, 0, 0, -3.2 + walk * 3.3);
+            if (moving) {
+              this.stride(a, r, tt, dt, 3.6, 0.35, 0x6a6a6a, 0.12);
+              r.upper.rotation.x = 0.28;
+              r.neck.rotation.x = -0.2;
+              r.arms[0].rotation.set(0.3, 0, -0.18); // dragging the cleaver behind
+              if (a.z.group.visible)
+                for (let i = 0; i < 2; i++) ParticleSystem.emit(a.z.group.position.clone().add(new V(-0.55 * S, 0.05, -0.55 * S)), i ? 0xffb040 : 0xffe080, 1, 2.5);
+            }
+            const raise = this.seg(tt, 2.3, 2.8),
+              chop = this.seg(tt, 2.8, 2.93),
+              roar = this.seg(tt, 3.1, 3.35) * (1 - this.seg(tt, 3.7, 3.85));
+            if (tt >= 2.3) {
+              r.arms[0].rotation.x = -3.0 * raise + chop * 2.1 - roar * 1.2;
+              r.arms[0].rotation.z = -0.15;
+              r.upper.rotation.x = -0.22 * raise + chop * 0.62 * (1 - roar);
+              r.arms[1].rotation.x = -0.5 * raise;
+            }
+            if (!a.flags.chop && tt >= 2.92) {
+              a.flags.chop = true;
+              shake = 1.0;
+              a.sounds.push(MonsterAudio.play("boss_slam", { volume: 1.3, rate: 1.2 }));
+              a.gurney.forEach((h, i) => this.fling(a, h, new V(i ? 2.2 : -2.2, 3.2, 1.2), new V(0, i ? -1.5 : 1.5, i ? -2.2 : 2.2), { floor: 0 }));
+              const p = this.world(a, 0.35, 1, 2.4);
+              for (let i = 0; i < 30; i++) ParticleSystem.emit(p, i % 3 ? 0x8a0c0c : 0xffc060, 2, 5);
+            }
+            if (tt >= 3.1) {
+              this.roarBeat(a, a.z.boss.fx);
+              r.upper.rotation.x += -0.3 * roar;
+              r.neck.rotation.x += -0.55 * roar + Math.sin(tt * 40) * 0.03 * roar;
+              r.arms[1].rotation.set(-2.1 * roar, 0, 0.8 * roar);
+            }
+            this.punch(a, tt, 3.05, 3.8);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.copy(this.bp(a)).add(new V(0, a.h * 0.85, 0.4));
+            a.light.intensity = on ? 1.5 : 3.2;
+            const shaking = tt > 2.9 && tt < 3.8 ? 1 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            const look = this.bp(a).add(new V(0, a.h * 0.7, 0));
+            if (flying) look.y += 1.5 * S;
+            this.camera(a, new V(1.9, 1.5, 9.8), new V(0.5, 1.7, 6.2), Math.min(1, tt / 3.8), look, shaking);
+          },
+
+          // PLAGUE HOST (hospital): a bubbling pool of contamination; it rises out of it reaching
+          // upward, spreads its arms and screams a cloud of gas at the camera.
+          stage_plague_host(a) {
+            const g = a.stage;
+            const pool = this.own(new THREE.Mesh(new THREE.CircleGeometry(2.6, 40), new THREE.MeshBasicMaterial({ color: 0x2a5a12 })));
+            pool.rotation.x = -Math.PI / 2;
+            pool.position.set(0, 0.02, 0.6);
+            g.add(pool);
+            a.poolGlow = MonsterFX.groundPlane(0x8cff3c, 0.5, "glow");
+            a.poolGlow.scale.setScalar(7);
+            a.poolGlow.position.set(0, 0.05, 0.6);
+            g.add(a.poolGlow);
+            this.block(g, [0.7, 1.0, 0.7], [-3.3, 0.5, 1.2], "barrel");
+            this.block(g, [0.7, 1.0, 0.7], [3.1, 0.35, 0.2], "barrel").rotation.set(Math.PI / 2, 0.6, 0);
+            this.block(g, [0.9, 0.9, 0.5], [3.4, 0.45, -1], "hazard", -0.3);
+            a.gas = this.particles(g, 140, 0x8cff3c, 0.09, [-3.5, 3.5], [0, 2.2], [-1.5, 3]);
+            a.sky = scene.fog ? scene.fog.color.clone() : null;
+          },
+          intro_plague_host(a, tt, dt, r, S) {
+            const rise = this.seg(tt, 0.8, 2.4);
+            if (!a.launchFrom) this.place(a, 0, -(a.h + 0.2) * (1 - rise), 0.6);
+            const bubbles = tt < 2.6 ? (tt < 0.8 ? 2 : 5) : 1;
+            for (let i = 0; i < bubbles; i++) {
+              const ang = rand(0, Math.PI * 2),
+                rr = rand(0, 2.4);
+              ParticleSystem.emit(this.world(a, Math.cos(ang) * rr, 0.08, 0.6 + Math.sin(ang) * rr), i % 2 ? 0x8cff3c : 0x3a7a1a, 1, 1.6);
+            }
+            if (!a.flags.rise && tt >= 0.85) {
+              a.flags.rise = true;
+              a.sounds.push(MonsterAudio.play("mutant_rise", { volume: 1.1, rate: 0.85 }));
+            }
+            // Rising: arms clawing upward, then hunched.
+            r.arms[0].rotation.x = -2.7 * (1 - this.seg(tt, 1.8, 2.5));
+            r.arms[1].rotation.x = -2.5 * (1 - this.seg(tt, 1.9, 2.5));
+            r.arms[0].rotation.z = -0.3;
+            r.arms[1].rotation.z = 0.3;
+            r.upper.rotation.x = 0.35 + Math.sin(tt * 3) * 0.05;
+            r.neck.rotation.x = -0.25;
+            const spread = this.seg(tt, 2.4, 2.8) * (1 - this.seg(tt, 3.6, 3.8));
+            if (tt >= 2.4) {
+              r.arms[0].rotation.set(-1.1 * spread, 0, -0.3 - 1.1 * spread);
+              r.arms[1].rotation.set(-1.1 * spread, 0, 0.3 + 1.1 * spread);
+              r.upper.rotation.x = 0.35 - 0.6 * spread;
+              r.neck.rotation.x = -0.25 - 0.45 * spread + Math.sin(tt * 45) * 0.04 * spread;
+            }
+            if (tt >= 2.8) {
+              if (!a.flags.roar)
+                for (let i = 0; i < 70; i++) {
+                  const head = a.z.group.position.clone().add(new V(rand(-0.4, 0.4), a.h * 0.85, 0.5));
+                  ParticleSystem.emit(head, i % 3 ? 0x8cff3c : 0x5aa020, 2, 9);
+                }
+              this.roarBeat(a, a.z.boss.fx);
+            }
+            if (scene.fog && a.sky) {
+              const gas = this.seg(tt, 2.8, 3.2) * (1 - this.seg(tt, 3.6, 4.4));
+              scene.fog.color.copy(a.sky).lerp(new THREE.Color(0x2a4a10), gas);
+              scene.fog.density = 0.04 + gas * 0.05;
+            }
+            if (a.gas) this.drift(a.gas, dt * 0.25, 0.5, 0.8 + (tt > 2.8 ? 3 : 0));
+            a.poolGlow.material.opacity = 0.35 + Math.sin(tt * 7) * 0.12 + (tt > 2.8 ? 0.2 : 0);
+            this.punch(a, tt, 2.8, 3.7);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.set(0, 0.6 + rise * a.h * 0.7, 1.2);
+            a.light.material.color.set(0x8cff3c);
+            a.light.intensity = 2 + Math.sin(tt * 9) * 0.6;
+            const orbit = -0.65 + this.seg(tt, 0, 3.8) * 0.9,
+              rad = 8.5 - this.seg(tt, 0, 3.8) * 2.2,
+              from = new V(Math.sin(orbit) * rad, 1.1 + rise * 0.9, 0.6 + Math.cos(orbit) * rad);
+            const look = this.bp(a).add(new V(0, Math.max(0.4, a.h * 0.75 - (a.h + 0.2) * (1 - rise) * 0.3), 0));
+            if (flying) look.y += 1.5 * S;
+            const shaking = tt > 0.8 && tt < 2.4 ? 0.3 : tt > 2.8 && tt < 3.6 ? 0.9 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            this.camera(a, from, from, 1, look, shaking);
+          },
+
+          // WENDIGO (forest): the den looks empty — the camera tilts up to find it perched on the
+          // rock, twitching; it drops in front of the lens on all fours, rises and shrieks.
+          stage_wendigo(a) {
+            const g = a.stage;
+            for (let i = 0; i < 12; i++) this.block(g, [rand(0.25, 0.7), 0.1, 0.12], [rand(-2.5, 2.5), 0.06, rand(-0.5, 3)], "bone", rand(0, 3));
+            const moon = this.glow(0xdfe8ff);
+            moon.material.opacity = 0.9;
+            moon.scale.setScalar(9);
+            moon.position.set(-6, 15, -26);
+            g.add(moon);
+            a.perch = new V(-2.2, 6.45, -1.4);
+          },
+          intro_wendigo(a, tt, dt, r, S) {
+            const jump = this.seg(tt, 1.7, 2.2),
+              land = new V(0.3, 0, 1.4);
+            if (!a.launchFrom) {
+              const p = a.perch.clone().lerp(land, jump);
+              p.y = a.perch.y * (1 - jump) + Math.sin(jump * Math.PI) * 1.4;
+              if (tt < 1.7) p.y = a.perch.y;
+              this.place(a, p.x, p.y, p.z);
+            }
+            a.z.group.rotation.y = tt < 1.7 ? 0.5 : 0.5 * (1 - jump);
+            if (tt < 1.7) {
+              // Perched: deep crouch, hands hanging, twitching head.
+              const prep = this.seg(tt, 1.45, 1.7);
+              r.body.position.y = r.hipY * (0.62 - prep * 0.1);
+              r.legs[0].rotation.x = r.legs[1].rotation.x = -1.2;
+              r.upper.rotation.x = 0.85;
+              r.arms[0].rotation.x = r.arms[1].rotation.x = -0.9 - prep * 0.8;
+              r.neck.rotation.x = -0.6;
+              r.neck.rotation.z = Math.sin(tt * 3) > 0.7 ? Math.sin(tt * 60) * 0.25 : 0.15;
+            } else if (tt < 2.2) {
+              r.legs[0].rotation.x = -0.9;
+              r.legs[1].rotation.x = 0.4;
+              r.arms[0].rotation.set(0.9, 0, -0.9);
+              r.arms[1].rotation.set(0.9, 0, 0.9);
+              r.upper.rotation.x = 0.3;
+            }
+            if (!a.flags.land && tt >= 2.2) {
+              a.flags.land = true;
+              shake = 0.9;
+              a.sounds.push(MonsterAudio.play("land", { volume: 1.3 }));
+              const p = a.z.group.position.clone().setY(0.1);
+              MonsterFX.ring(p, 5 * S, 0xd8c8a8, 0.5);
+              for (let i = 0; i < 40; i++) ParticleSystem.emit(p.clone().add(new V(rand(-1.2, 1.2), 0, rand(-1.2, 1.2))), [0x6a7a30, 0x3a2a1a, 0x9aa860][i % 3], 2, 5);
+            }
+            const crouched = this.seg(tt, 2.2, 2.25) * (1 - this.seg(tt, 2.55, 2.9)),
+              shriek = this.seg(tt, 2.6, 2.9) * (1 - this.seg(tt, 3.65, 3.8));
+            if (tt >= 2.2) {
+              r.body.position.y = r.hipY * (1 - 0.4 * crouched);
+              r.legs[0].rotation.x = r.legs[1].rotation.x = -0.9 * crouched;
+              r.upper.rotation.x = 0.95 * crouched - 0.5 * shriek;
+              r.arms[0].rotation.set(-1.4 * crouched - 1.0 * shriek, 0, -1.5 * shriek);
+              r.arms[1].rotation.set(-1.4 * crouched - 1.0 * shriek, 0, 1.5 * shriek);
+              r.neck.rotation.x = -0.4 * crouched - 0.6 * shriek + Math.sin(tt * 50) * 0.05 * shriek;
+            }
+            if (tt >= 2.65) this.roarBeat(a, a.z.boss.fx);
+            this.punch(a, tt, 2.6, 3.7, 18);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.copy(this.bp(a)).add(new V(0, a.h * 0.8, 0.4));
+            a.light.material.color.set(0xff3a20);
+            a.light.intensity = tt < 1.7 ? 1.5 + Math.sin(tt * 5) * 0.5 : 2;
+            // Looks into the den, tilts up to the perch, then follows the drop.
+            const den = new V(0, 1.8, -2),
+              head = this.bp(a).add(new V(0, a.h * (tt < 1.7 ? 0.5 : 0.72), 0)),
+              look = den.clone().lerp(head, this.seg(tt, 0.9, 1.5));
+            if (flying) look.y += 1.5 * S;
+            const shaking = tt > 2.2 && tt < 2.4 ? 1 : tt > 2.65 && tt < 3.6 ? 1.1 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            this.camera(a, new V(1.4, 1.4, 9.4), new V(0.9, 1.3, 6.2), this.seg(tt, 0.8, 3.8), look, shaking);
+          },
+
+          // ABOMINATION (lab): chunks of flesh crawl across the floor and spiral into a pulsing mass
+          // that grows into the Abomination — heartbeat, acid burst, it flexes and roars.
+          stage_abomination(a) {
+            const g = a.stage;
+            a.center = new V(0, 0, 0.8);
+            a.blobs = [];
+            const colors = [0xa87a6a, 0x8a3a3a, 0x6a2020, 0xb08878, 0x9dff45];
+            for (let i = 0; i < 30; i++) {
+              const ang = (i / 30) * Math.PI * 2 + rand(-0.2, 0.2),
+                rr = rand(2.2, 5.5),
+                s = rand(0.25, 0.6),
+                m = this.block(g, [s, s * rand(0.6, 1), s], [0, 0, 0], VoxelMonsters.flat(colors[i % 5], i % 5 === 4 ? 0x4a8a20 : 0));
+              a.blobs.push({ m, ang, rr, y: rand(0, 3.2), s, spin: rand(-4, 4) });
+            }
+            const acid = MonsterFX.groundPlane(0x9dff45, 0.45, "glow");
+            acid.scale.setScalar(6);
+            acid.position.set(0, 0.05, 0.8);
+            g.add(acid);
+            a.acid = acid;
+          },
+          intro_abomination(a, tt, dt, r, S) {
+            if (!a.launchFrom) this.place(a, 0, 0, 0.8);
+            const form = this.seg(tt, 0.3, 2.2),
+              pulse = tt < 2.2 ? Math.pow(Math.max(0, Math.sin(tt * (7 + tt * 3))), 6) : 0;
+            a.z.group.visible = tt > 0.3;
+            const grown = tt < 2.2 ? 0.2 + 0.7 * form : 1 + 0.12 * (1 - this.seg(tt, 2.2, 2.6));
+            if (!a.flags.launch) a.z.group.scale.setScalar(S * grown * (1 + pulse * 0.06));
+            a.blobs.forEach((b, i) => {
+              const k = this.seg(tt, 0.1 + (i % 10) * 0.08, 1.4 + (i % 10) * 0.08),
+                ang = b.ang + k * 2.4,
+                rr = b.rr * (1 - k);
+              b.m.position.set(Math.cos(ang) * rr, b.s / 2 + (b.y + 0.6) * Math.sin(k * Math.PI) * 0.5 + k * a.h * 0.4, 0.8 + Math.sin(ang) * rr);
+              b.m.rotation.y += b.spin * dt;
+              b.m.visible = k < 0.98 && tt < 2.2;
+            });
+            if (tt < 2.2 && Math.floor(tt * (2 + tt)) !== a.beat) {
+              a.beat = Math.floor(tt * (2 + tt));
+              AudioManager.tone(58, 0.2, "sine", 0.55, 34);
+            }
+            // Forming: hunched, arms twitching.
+            r.upper.rotation.x = 0.6 * (1 - this.seg(tt, 2.2, 2.5));
+            r.arms[0].rotation.x = -0.6 + Math.sin(tt * 23) * 0.3 * (tt < 2.2 ? 1 : 0);
+            r.arms[1].rotation.x = -0.6 + Math.sin(tt * 19 + 1) * 0.3 * (tt < 2.2 ? 1 : 0);
+            r.neck.rotation.z = tt < 2.2 ? Math.sin(tt * 13) * 0.2 : 0;
+            if (!a.flags.formed && tt >= 2.2) {
+              a.flags.formed = true;
+              shake = 1.0;
+              a.sounds.push(MonsterAudio.play("boss_slam", { volume: 1.3, rate: 0.75 }));
+              const p = a.z.group.position.clone();
+              MonsterFX.ring(p, 7 * S, 0x9dff45, 0.6);
+              for (let i = 0; i < 60; i++) ParticleSystem.emit(p.clone().add(new V(rand(-1, 1), rand(0.3, a.h), rand(-1, 1))), i % 3 ? 0x9dff45 : 0x8a3a3a, 2, 7);
+            }
+            const flex = this.seg(tt, 2.3, 2.6) * (1 - this.seg(tt, 3.6, 3.8));
+            if (tt >= 2.3) {
+              r.arms[0].rotation.set(-1.5 * flex, 0, -1.1 * flex);
+              r.arms[1].rotation.set(-1.5 * flex, 0, 1.1 * flex);
+              r.upper.rotation.x = -0.3 * flex;
+              r.neck.rotation.x = -0.5 * flex + Math.sin(tt * 40) * 0.03 * flex;
+              r.body.position.y = r.hipY * (1 - 0.06 * flex);
+            }
+            if (tt >= 2.5) this.roarBeat(a, a.z.boss.fx);
+            a.acid.material.opacity = 0.3 + pulse * 0.4 + (tt > 2.2 ? 0.3 * (1 - this.seg(tt, 2.2, 3)) : 0);
+            this.punch(a, tt, 2.45, 3.7);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.set(0, 1.4, 1.6);
+            a.light.material.color.set(0x9dff45);
+            a.light.intensity = 1.5 + pulse * 3;
+            const look = this.bp(a).add(new V(0, 0.6 + form * (a.h * 0.7 - 0.6), 0));
+            if (flying) look.y += 1.5 * S;
+            const shaking = tt > 2.2 && tt < 2.5 ? 1 : tt > 2.5 && tt < 3.6 ? 0.8 : pulse > 0.8 ? 0.15 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            this.camera(a, new V(2.3, 1.7, 9.8), new V(0.6, 1.6, 6.3), Math.min(1, tt / 3.8), look, shaking);
+          },
+
+          // EXPERIMENT OMEGA (lab): held in a containment beam between four pylons, arcs crawling
+          // over it, red alarms; it wakes, the containment fails, it drops, arms up and roars,
+          // then leaves on thrusters.
+          stage_omega(a) {
+            const g = a.stage;
+            this.block(g, [2.6, 0.3, 2.6], [0, 0.15, 0.8], "metal");
+            this.block(g, [2.0, 0.06, 2.0], [0, 0.33, 0.8], "hazard");
+            a.column = this.own(
+              new THREE.Mesh(
+                new THREE.CylinderGeometry(1.15, 1.15, 8, 28, 1, true),
+                new THREE.MeshBasicMaterial({ color: 0x6dff3a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+              ),
+            );
+            a.column.position.set(0, 4, 0.8);
+            g.add(a.column);
+            a.pylons = [];
+            for (const [x, z] of [[-1.9, -0.3], [1.9, -0.3], [-1.9, 1.9], [1.9, 1.9]]) {
+              this.block(g, [0.35, 2.6, 0.35], [x, 1.3, z], "metal");
+              a.pylons.push(this.block(g, [0.45, 0.3, 0.45], [x, 2.7, z], "lightGreen"));
+            }
+            a.arcs = a.pylons.map(() => {
+              const geo = new THREE.BufferGeometry();
+              geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(8 * 3), 3));
+              const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xc8ffb0, transparent: true, blending: THREE.AdditiveBlending }));
+              line.frustumCulled = false;
+              g.add(line);
+              return line;
+            });
+            a.alarms = [-3.2, 3.2].map((x) => {
+              const s = this.glow(0xff1a10);
+              s.scale.setScalar(2.6);
+              s.position.set(x, 4.2, -0.4);
+              this.block(g, [0.4, 0.3, 0.3], [x, 4.2, -0.6], "lightRed");
+              g.add(s);
+              return s;
+            });
+            a.sky = scene.fog ? scene.fog.color.clone() : null;
+          },
+          intro_omega(a, tt, dt, r, S) {
+            const drop = this.seg(tt, 2.0, 2.18),
+              hover = 0.75 + Math.sin(tt * 2.4) * 0.08;
+            if (!a.launchFrom) this.place(a, 0, tt < 2 ? hover : hover * (1 - drop), 0.8);
+            const contained = tt < 2;
+            if (contained) {
+              r.arms[0].rotation.set(0.15, 0, -0.25);
+              r.arms[1].rotation.set(0.15, 0, 0.25);
+              r.legs[0].rotation.x = 0.15;
+              r.legs[1].rotation.x = 0.05;
+              r.neck.rotation.x = tt < 1.6 ? 0.55 : 0.55 - this.seg(tt, 1.6, 1.7) * 0.8;
+              r.upper.rotation.x = 0.2;
+              a.column.material.opacity = 0.22 + Math.random() * 0.15;
+              if (Math.random() < 0.12) AudioManager.tone(rand(90, 160), 0.08, "square", 0.12, 60);
+            }
+            // Electric arcs from the pylons to the chest.
+            const chest = this.bp(a).add(new V(0, a.h * 0.55, 0));
+            a.arcs.forEach((line, i) => {
+              line.visible = contained;
+              if (!contained) return;
+              const from = a.pylons[i].position,
+                arr = line.geometry.attributes.position.array;
+              for (let k = 0; k < 8; k++) {
+                const t = k / 7,
+                  j = k === 0 || k === 7 ? 0 : 0.35;
+                arr[k * 3] = from.x + (chest.x - from.x) * t + rand(-j, j);
+                arr[k * 3 + 1] = from.y + (chest.y - from.y) * t + rand(-j, j);
+                arr[k * 3 + 2] = from.z + (chest.z - from.z) * t + rand(-j, j);
+              }
+              line.geometry.attributes.position.needsUpdate = true;
+            });
+            const alarm = tt > 1.6 ? Math.max(0, Math.sin(tt * 10)) : 0;
+            for (const s of a.alarms) s.material.opacity = alarm;
+            if (scene.fog && a.sky) scene.fog.color.copy(a.sky).lerp(new THREE.Color(0x3a0606), alarm * 0.6);
+            if (!a.flags.breach && tt >= 2.0) {
+              a.flags.breach = true;
+              a.column.visible = false;
+              shake = 0.9;
+              a.sounds.push(MonsterAudio.play("mutant_glass", { volume: 1.2 }));
+              for (let i = 0; i < 70; i++) ParticleSystem.emit(this.world(a, rand(-1.2, 1.2), rand(0.3, 5), 0.8 + rand(-1.2, 1.2)), i % 3 ? 0x6dff3a : 0xffffff, 2, 6);
+              for (const p of a.pylons) {
+                p.visible = false;
+                ParticleSystem.emit(a.stage.localToWorld(p.position.clone()), 0xffd060, 12, 5);
+              }
+            }
+            if (!a.flags.land && tt >= 2.18) {
+              a.flags.land = true;
+              shake = 1.0;
+              a.sounds.push(MonsterAudio.play("land", { volume: 1.3, rate: 0.8 }));
+              MonsterFX.ring(a.z.group.position, 6 * S, a.z.boss.fx, 0.5);
+            }
+            const crouch = this.seg(tt, 2.18, 2.22) * (1 - this.seg(tt, 2.3, 2.6)),
+              arm = this.seg(tt, 2.6, 2.9) * (1 - this.seg(tt, 3.6, 3.8));
+            if (!contained) {
+              r.body.position.y = r.hipY * (1 - 0.3 * crouch);
+              r.legs[0].rotation.x = r.legs[1].rotation.x = -0.8 * crouch;
+              r.upper.rotation.x = 0.6 * crouch - 0.15 * arm;
+              r.arms[0].rotation.set(-0.6 * crouch - 1.6 * arm, 0, -0.2 - 0.3 * arm);
+              r.arms[1].rotation.set(-0.6 * crouch - 1.6 * arm, 0, 0.2 + 0.3 * arm);
+              r.neck.rotation.x = -0.3 * arm + (tt > 2.6 ? Math.sin(tt * 60) * 0.02 : 0);
+            }
+            if (tt >= 2.6) this.roarBeat(a, a.z.boss.fx);
+            this.punch(a, tt, 2.55, 3.7);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            if (flying > 0 && flying < 0.7)
+              for (let i = 0; i < 3; i++) ParticleSystem.emit(a.z.group.position.clone().add(new V(rand(-0.3, 0.3), 0.1, rand(-0.3, 0.3))), i ? 0xff8a20 : 0xffe080, 1, 4);
+            a.light.position.copy(chest).add(new V(0, a.h * 0.3, 0.4));
+            a.light.material.color.set(tt < 2 ? 0x6dff3a : 0xff2a20);
+            a.light.intensity = contained ? 2 + Math.random() * 1.5 : 1.5 + arm * 2;
+            const look = this.bp(a).add(new V(0, a.h * 0.65, 0));
+            if (flying) look.y += 1.5 * S;
+            const shaking = tt > 2.0 && tt < 2.35 ? 1 : tt > 2.6 && tt < 3.6 ? 0.8 : flying > 0 && flying < 0.3 ? 1.5 : 0;
+            this.camera(a, new V(-2.6, 1.2, 9.6), new V(-0.6, 1.9, 6.2), Math.min(1, tt / 3.8), look, shaking);
+          },
+
+          // AVALANCHE TITAN (snow): the mountain rumbles, rocks rain down, the Titan tears up out of
+          // the snow, lifts a boulder overhead, roars in a frost blast and smashes it at the camera.
+          stage_avalanche_titan(a) {
+            const g = a.stage;
+            a.mound = [];
+            for (let i = 0; i < 9; i++) {
+              const ang = (i / 9) * Math.PI * 2,
+                s = rand(0.9, 1.5);
+              a.mound.push(this.block(g, [s, s * 0.6, s], [Math.cos(ang) * 1.1, s * 0.3, 0.8 + Math.sin(ang) * 1.1], i % 3 ? "snow" : "stone", rand(0, 3)));
+            }
+            for (let i = 0; i < 10; i++) {
+              const s = rand(0.5, 1.1),
+                b = this.block(g, [s, s * 0.8, s], [rand(-5, 5), rand(10, 14), rand(-2, 4)], i % 2 ? "stone" : "snow", rand(0, 3));
+              b.visible = false;
+              this.fling(a, b, new V(0, -4, 0), new V(rand(-3, 3), rand(-3, 3), rand(-3, 3)), {
+                delay: 0.1 + i * 0.13,
+                onLand: (d) => {
+                  shake = Math.max(shake, 0.35);
+                  ParticleSystem.emit(a.stage.localToWorld(d.m.position.clone()), 0xffffff, 10, 3.5);
+                },
+              });
+            }
+            a.boulder = this.block(g, [1.4, 1.1, 1.2], [0, -5, 0.8], "stone");
+            a.boulder.visible = false;
+          },
+          intro_avalanche_titan(a, tt, dt, r, S) {
+            const rise = this.seg(tt, 1.4, 2.6);
+            if (!a.launchFrom) this.place(a, 0, -(a.h + 0.3) * (1 - rise), 0.8);
+            if (tt < 1.5) shake = Math.max(shake, 0.3);
+            if (tt < 1.5) a.mound.forEach((m, i) => (m.position.y = m.scale.y / 2 + Math.abs(Math.sin(tt * 22 + i)) * 0.05));
+            if (!a.flags.erupt && tt >= 1.45) {
+              a.flags.erupt = true;
+              shake = 1.1;
+              this.lines();
+              a.sounds.push(MonsterAudio.play("boss_slam", { volume: 1.5, rate: 0.7 }));
+              for (const m of a.mound) {
+                const out = m.position.clone().sub(new V(0, 0, 0.8)).setY(0).normalize();
+                this.fling(a, m, new V(out.x * rand(4, 7), rand(5, 9), out.z * rand(4, 7) + 1), new V(rand(-5, 5), rand(-5, 5), rand(-5, 5)));
+              }
+              for (let i = 0; i < 70; i++) ParticleSystem.emit(this.world(a, rand(-1.8, 1.8), rand(0.2, 2), 0.8 + rand(-1.8, 1.8)), i % 4 ? 0xffffff : 0x9fe4ff, 3, 7);
+            }
+            if (tt >= 1.4 && tt < 2.6 && Math.random() < 0.6) ParticleSystem.emit(this.world(a, rand(-1.5, 1.5), 0.2, 0.8 + rand(-1.5, 1.5)), 0xffffff, 2, 3);
+            // Clawing out, then the boulder overhead, then the throw.
+            r.arms[0].rotation.x = -2.6 * (1 - this.seg(tt, 2.2, 2.6));
+            r.arms[1].rotation.x = -2.4 * (1 - this.seg(tt, 2.2, 2.6));
+            r.upper.rotation.x = 0.4 * (1 - this.seg(tt, 2.2, 2.6));
+            const lift = this.seg(tt, 2.6, 3.0),
+              hurl = this.seg(tt, 3.35, 3.5),
+              roar = this.seg(tt, 3.0, 3.2);
+            if (tt >= 2.6) {
+              r.arms[0].rotation.set(-3.0 * lift + hurl * 2.0, 0, -0.2);
+              r.arms[1].rotation.set(-3.0 * lift + hurl * 2.0, 0, 0.2);
+              r.upper.rotation.x = -0.25 * lift + hurl * 0.55;
+              r.neck.rotation.x = -0.5 * roar * (1 - hurl) + Math.sin(tt * 40) * 0.03 * roar * (1 - hurl);
+            }
+            if (tt >= 2.6 && !a.flags.hurl) {
+              const p = this.bp(a);
+              a.boulder.visible = true;
+              a.boulder.position.set(p.x, 0.6 + lift * (a.h * 1.08 - 0.6), p.z + 0.4 * (1 - lift) + 0.1);
+            }
+            if (tt >= 3.0) {
+              this.roarBeat(a, a.z.boss.fx);
+              if (!a.veil && MonsterFX.veil) {
+                a.veil = true;
+                MonsterFX.veil.style.opacity = 0.7;
+                a.sounds.push(MonsterAudio.play("frost", { volume: 1.1 }));
+              }
+            }
+            if (a.veil && tt > 3.4 && MonsterFX.veil) MonsterFX.veil.style.opacity = 0;
+            if (!a.flags.hurl && tt >= 3.42) {
+              a.flags.hurl = true;
+              a.sounds.push(MonsterAudio.play("boss_throw", { volume: 1.4, rate: 0.8 }));
+              this.fling(a, a.boulder, new V(0.8, 3, 11), new V(5, 1, 2), {
+                onLand: (d) => {
+                  shake = 1.2;
+                  a.sounds.push(MonsterAudio.play("boss_slam", { volume: 1.2 }));
+                  const p = a.stage.localToWorld(d.m.position.clone());
+                  MonsterFX.ring(p, 6, 0x9fe4ff, 0.6);
+                  for (let i = 0; i < 40; i++) ParticleSystem.emit(p, i % 3 ? 0xffffff : 0x9fe4ff, 3, 7);
+                },
+              });
+            }
+            this.punch(a, tt, 2.95, 3.7);
+            const flying = tt > 3.8 ? this.leap(a, tt, r, S, 3.8, 5) : 0;
+            a.light.position.copy(this.bp(a)).add(new V(0, a.h * 0.85, 0.4));
+            a.light.material.color.set(0x9fe4ff);
+            a.light.intensity = rise > 0 ? 2 : 0.5;
+            const look = this.bp(a).add(new V(0, Math.max(0.6, a.h * 0.7 - (a.h + 0.3) * (1 - rise) * 0.4), 0));
+            if (tt < 1.4) look.set(0, 1 + tt * 0.6, 0.8);
+            if (flying) look.y += 1.5 * S;
+            const shaking = tt < 1.45 ? 0.35 : tt < 1.8 ? 1.2 : tt > 3.0 && tt < 3.7 ? 1 : flying > 0 && flying < 0.25 ? 1.4 : 0;
+            this.camera(a, new V(2.2, 1.4, 11.5), new V(0.5, 1.9, 7.2), Math.min(1, tt / 3.8), look, shaking);
+          },
           finish(aborted) {
             const a = this.active;
             this.active = null;
@@ -13479,11 +14241,13 @@ body.netgame #revivetouch{display:flex}
             for (const s of a.sounds) s?.stop(aborted ? 0.1 : a.kind === "yeti" ? 1.2 : 0.8);
             MonsterFX.dispose(a.stage);
             a.stage.traverse((o) => {
-              if (o.isPoints) {
+              if (o.isPoints || o.isLine) {
                 o.geometry.dispose();
                 o.material.dispose();
-              } else if (o.isMesh && o.userData.propBatch) o.geometry.dispose();
+              } else if (o.isMesh && (o.userData.propBatch || o.userData.ownGeo)) o.geometry.dispose();
             });
+            if (a.veil && MonsterFX.veil) MonsterFX.veil.style.opacity = 0;
+            a.z.group.visible = true;
             if (a.fog && scene.fog) {
               scene.fog.color.copy(a.fog.color);
               scene.fog.density = a.fog.density;
