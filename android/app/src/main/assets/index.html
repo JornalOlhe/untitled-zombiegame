@@ -11245,6 +11245,22 @@ body.netgame #revivetouch{display:flex}
             }
             p.spin = new V(rand(8, 12), rand(-3, 3), rand(-2, 2));
           }
+          if (kind === "quantum") {
+            // Quantum orb: the emitter core from the Quantum Annihilator UV template, spinning,
+            // inside a blue halo (one shared halo material for every orb).
+            const orb = templateProjectile("Proj Quantum Annihilator", 1);
+            if (orb) {
+              templateProjectile.halo ||= new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0x3aa8ff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+              const halo = new THREE.Sprite(templateProjectile.halo);
+              halo.scale.setScalar(0.75);
+              orb.add(halo);
+              orb.position.copy(mesh.position);
+              scene.remove(mesh);
+              scene.add(orb);
+              p.mesh = orb;
+              p.pos = orb.position;
+            }
+          }
           if (kind === "orbital") {
             mesh.position.copy(extra.target);
             mesh.position.y = 0.08;
@@ -17537,6 +17553,10 @@ body.netgame #revivetouch{display:flex}
               );
             }
             if (p.kind === "grenade") p.vel.y -= 18 * dt;
+            if (p.kind === "quantum") {
+              p.mesh.rotation.x += 7 * dt;
+              p.mesh.rotation.y += 5 * dt;
+            }
             const previous = p.pos.clone(),
               movement = p.vel.clone().multiplyScalar(dt);
             let collided = false;
@@ -17572,7 +17592,7 @@ body.netgame #revivetouch{display:flex}
               ParticleSystem.line(
                 previous,
                 p.pos,
-                p.kind === "enemy" ? 0xb076ff : p.kind === "spear" ? 0xffe7a8 : 0xffbe67,
+                p.kind === "enemy" ? 0xb076ff : p.kind === "spear" ? 0xffe7a8 : p.kind === "quantum" ? 0x5ab8ff : 0xffbe67,
                 0.12,
               );
             else ParticleSystem.line(previous, p.pos, 0x9a9a9a, 0.2);
@@ -17585,14 +17605,21 @@ body.netgame #revivetouch{display:flex}
                 continue;
               }
             } else if (p.kind !== "grenade") {
+              // Test the flight segment against the zombie's whole body axis (feet to head), not
+              // one point at hip height: rockets and orbs aimed at the head used to pass through.
+              const segment = new THREE.Line3(previous, p.pos),
+                closest = new V(),
+                probe = new V();
               hit = ZombieManager.list.find((z) => {
-                const center = z.group.position
-                  .clone()
-                  .add(new V(0, z.size, 0));
-                const segment = new THREE.Line3(previous, p.pos),
-                  closest = new V();
-                segment.closestPointToPoint(center, true, closest);
-                return center.distanceTo(closest) < z.size * 0.65;
+                if (z.dead) return false;
+                const base = z.group.position,
+                  S = z.size || 1;
+                for (let k = 0; k < 5; k++) {
+                  probe.set(base.x, base.y + S * (0.35 + k * 0.38), base.z);
+                  segment.closestPointToPoint(probe, true, closest);
+                  if (probe.distanceTo(closest) < S * 0.55) return true;
+                }
+                return false;
               });
             }
             if (
@@ -17621,7 +17648,7 @@ body.netgame #revivetouch{display:flex}
                 else
                   ParticleSystem.emit(
                     p.pos,
-                    p.kind === "spear" ? 0xffe7a8 : 0xff4833,
+                    p.kind === "spear" ? 0xffe7a8 : 0x5ab8ff,
                     10,
                     2,
                   );

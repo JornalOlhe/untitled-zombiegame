@@ -10,7 +10,7 @@ NAMES = {"machete": "Machete", "mp5": "MP5", "bow": "Bow", "riot_breaker": "Riot
          "heavenfall_bazooka": "Heavenfall Bazooka", "absolute_zero": "Absolute Zero", "grenade": "Grenade",
          "demonic_fury": "Demonic Fury", "angelic_specter": "Angelic Specter",
          "proj_bow": "Proj Bow", "proj_stormpiercer": "Proj Stormpiercer", "proj_wraithpiercer": "Proj Wraithpiercer",
-         "proj_doomsday": "Proj Doomsday Launcher", "proj_heavenfall": "Proj Heavenfall Bazooka",
+         "proj_doomsday": "Proj Doomsday Launcher", "proj_heavenfall": "Proj Heavenfall Bazooka", "proj_quantum": "Proj Quantum Annihilator",
          "shell_9mm": "Shell 9mm", "shell_762": "Shell 7.62", "shell_556": "Shell 5.56", "shell_50": "Shell .50", "shell_12g": "Shell 12g"}
 data = {}
 for slug, name in NAMES.items():

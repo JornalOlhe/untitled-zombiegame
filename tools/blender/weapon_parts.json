@@ -2037,6 +2037,19 @@
     }
    ]
   },
+  "proj_quantum": {
+   "glow": true,
+   "parts": [
+    {
+     "pg": "p6",
+     "box": [415, 395, 490, 477],
+     "L": 0.2,
+     "t": 0.2,
+     "c": [0, 0, 0],
+     "cross": true
+    }
+   ]
+  },
   "proj_heavenfall": {
    "glow": true,
    "parts": [
