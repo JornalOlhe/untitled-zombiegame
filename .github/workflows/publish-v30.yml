@@ -150,7 +150,7 @@ jobs:
           "$BT/apksigner" verify --print-certs dist/DeadRecoil-v30.apk | head -5
           BADGING=$("$BT/aapt" dump badging dist/DeadRecoil-v30.apk)
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
-          echo "$BADGING" | grep -q "versionCode='29'"
+          echo "$BADGING" | grep -q "versionCode='30'"
           echo "$BADGING" | grep -q "versionName='0.29.0'"
           python3 - <<'PY'
           import zipfile
