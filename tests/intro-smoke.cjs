@@ -1,5 +1,5 @@
 // Boss I / Boss II intros: each of the 8 bosses plays its own cutscene to the end without JS errors,
-// runs its own set piece (not the shared yeti one), fires the roar/title beat and hands the boss
+// runs its own set piece in its own location (not the shared den), arrives on the map its own way, fires the roar/title beat and hands the boss
 // back to the match in a clean state (visible, normal scale, fog restored, cinematic off).
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
@@ -51,6 +51,9 @@ const KINDS = ['juggernaut', 'wrecker', 'butcher', 'plague_host', 'wendigo', 'ab
         r.fog = fog == null || Math.abs(T.scene.fog.density - fog) < 1e-6;
         r.cinematicOff = !document.body.classList.contains('cinematic');
         r.risesFromGround = minY < -0.5;
+        r.arrival = z.dropping?.mode || null;
+        r.expected = BI.ARRIVE[k];
+        r.duration = a?.duration;
         out[k] = r;
       }
       return out;
@@ -61,8 +64,10 @@ const KINDS = ['juggernaut', 'wrecker', 'butcher', 'plague_host', 'wendigo', 'ab
       for (const f of ['started', 'own', 'finished', 'roared', 'titled', 'visible', 'fog', 'cinematicOff']) assert.ok(r[f], `${k}: ${f}`);
       assert.equal(r.scale, 1, `${k}: scale restored`);
     }
-    for (const k of ['plague_host', 'avalanche_titan']) assert.ok(res[k].risesFromGround, `${k} must rise out of the ground`);
-    for (const k of ['juggernaut', 'wrecker', 'butcher', 'avalanche_titan']) assert.ok(res[k].debris > 0, `${k} set piece throws debris`);
+    assert.ok(res.avalanche_titan.risesFromGround, 'avalanche_titan must rise out of the snow');
+    for (const k of ['juggernaut', 'wrecker', 'plague_host', 'abomination', 'avalanche_titan']) assert.ok(res[k].debris > 0, `${k} set piece throws debris`);
+    for (const k of KINDS) assert.equal(res[k].arrival, res[k].expected, `${k} arrives with its own entrance`);
+    assert.ok(new Set(KINDS.map((k) => res[k].expected)).size >= 4, 'at least four different arrivals');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
