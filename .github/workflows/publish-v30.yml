@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.29.0 (tag v30)
-# 0.29.0: boss cutscenes, gaits, silhouettes, projectile fixes.
+# 0.29.0: boss cutscenes, gaits, silhouettes, projectile fixes (run 3).
 
 on:
   workflow_dispatch:
