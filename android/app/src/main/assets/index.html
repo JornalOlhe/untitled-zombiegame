@@ -3078,7 +3078,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.29.0";
+        const GAME_VERSION = "0.30.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -8695,7 +8695,7 @@ body.netgame #revivetouch{display:flex}
             VisualArt.tileUV(floor, 2.6);
           }
           // Ceiling and outer walls.
-          K.soft("plaster", [0, CEIL + 0.15, 0], [H * 2, 0.3, H * 2], null, 0.3);
+          K.soft("tile", [0, CEIL + 0.15, 0], [H * 2, 0.3, H * 2], null, 0.8); // suspended ceiling panels
           for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
             const m = M.solid(x, CEIL / 2, z, w, CEIL, d, 0x8a958e);
             m.material = VisualArt.surface("concrete_wall_008", 0x9aa59c, "concrete");
