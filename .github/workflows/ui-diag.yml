@@ -1,0 +1,21 @@
+name: UI diag
+on:
+  push:
+    branches: [ui-diag]
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: ui
+        run: |
+          node tests/ui-smoke.cjs > ui.log 2>&1 && echo ok || { grep -v "^\s*at " ui.log | tail -c 3500 | tr '\n' ' ' | sed 's/^/::error::/'; echo; exit 1; }
+      - name: rest
+        if: always()
+        run: |
+          for t in intro-smoke projectiles-smoke; do node tests/$t.cjs > t.log 2>&1 && echo "$t ok" || { echo "::error::$t $(grep -v '^\s*at ' t.log | tail -c 1500 | tr '\n' ' ')"; }; done
