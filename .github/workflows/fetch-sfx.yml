@@ -1,0 +1,41 @@
+name: Fetch ElevenLabs SFX
+# Downloads the sound effects listed in tools/sfx/pending.json (short-lived signed links from an
+# ElevenLabs generation), re-encodes them small and commits monsters/boss-sfx.js to branch sfx-drop.
+on:
+  push:
+    branches: [sfx-fetch]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - name: Download and pack
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, base64, os, urllib.request
+          src = json.load(open("tools/sfx/pending.json"))
+          os.makedirs("sfx_tmp", exist_ok=True)
+          out = {}
+          for name, url in src.items():
+              raw = f"sfx_tmp/{name}.raw.mp3"; fin = f"sfx_tmp/{name}.mp3"
+              urllib.request.urlretrieve(url, raw)
+              subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", raw, "-ac", "1", "-ar", "44100", "-b:a", "80k", fin], check=True)
+              out[name] = "data:audio/mpeg;base64," + base64.b64encode(open(fin, "rb").read()).decode()
+              print(name, os.path.getsize(raw), os.path.getsize(fin))
+          path = "android/app/src/main/assets/monsters/boss-sfx.js"
+          with open(path, "w") as f:
+              f.write("/* Dead Recoil v29 boss voices, Mutant breakout and boss ability sounds (ElevenLabs Sound Effects). */\n")
+              f.write("window.DR_MONSTER_SFX = Object.assign(window.DR_MONSTER_SFX || {}, " + json.dumps(out) + ");\n")
+          print("bytes", os.path.getsize(path))
+          PY
+      - name: Commit to sfx-drop
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout -B sfx-drop
+          git add android/app/src/main/assets/monsters/boss-sfx.js
+          git commit -m "Add ElevenLabs boss SFX"
+          git push -f origin sfx-drop
