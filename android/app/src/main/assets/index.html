@@ -10363,6 +10363,15 @@ body.netgame #revivetouch{display:flex}
           current() {
             return player.inventory[player.slot];
           },
+          spearHeld: true,
+          setSpearHeld(held) {
+            this.spearHeld = !!held;
+            const w = this.current(),
+              fpVisible = this.spearHeld && CameraRig.distance < 0.6 && !!w?.spear;
+            if (w?.spear && this.model) this.model.visible = fpVisible;
+            const rig = CameraRig.avatar?.userData?.rig;
+            if (rig?.spearHold && rig.gun) rig.gun.visible = this.spearHeld;
+          },
           equip(w) {
             player.inventory = [w];
             player.slot = 0;
@@ -10582,6 +10591,7 @@ body.netgame #revivetouch{display:flex}
             this.model = new THREE.Group();
             Viewmodel.camera.add(this.model);
             const w = this.current();
+            this.spearHeld = !(w?.spear && SpearThrow.active);
             this.model.scale.setScalar(w?.specter ? 0.42 : w?.kind === "melee" ? 0.54 : 0.72);
             this.trail?.dispose();
             this.trail = null;
@@ -10858,11 +10868,9 @@ body.netgame #revivetouch{display:flex}
               this.trail.update(simulationTime);
             }
             // The Dawn Spear leaves the hand while it is thrown and comes back when caught.
-            const spearOut = !!(w.spear && SpearThrow.active);
-            if (spearOut !== !!this.spearHidden) {
-              this.spearHidden = spearOut;
-              this.model.visible = !spearOut;
-            }
+            const spearOut = !!(w.spear && (SpearThrow.active || !this.spearHeld));
+            if (spearOut !== !!this.spearHidden) this.spearHidden = spearOut;
+            if (w.spear) this.model.visible = !spearOut && CameraRig.distance < 0.6;
             // Small, quick muzzle flash; streams, bows and melee have none.
             this.flash.visible = w.kind !== "melee" && w.kind !== "bow" && !w.stream && since < 0.035;
             this.flash.material.color.set(
@@ -11452,6 +11460,7 @@ body.netgame #revivetouch{display:flex}
             mesh.lookAt(pos.clone().add(p.vel));
             projectiles.push(p);
             this.active = p;
+            PlayerController.onSpearReleased?.();
             return p;
           },
           sweep(p, from, to, seen) {
@@ -11503,6 +11512,7 @@ body.netgame #revivetouch{display:flex}
           },
           clear() {
             this.active = null;
+            WeaponSystem.spearHeld = true;
           },
         };
         function spawnProjectile(kind, pos, dir, damage, extra = {}) {
@@ -17649,9 +17659,13 @@ body.netgame #revivetouch{display:flex}
               };
             }
           },
+          onSpearReleased() {
+            WeaponSystem.setSpearHeld(false);
+          },
           onSpearCaught() {
             this.spearHeldSince = null;
             this.spearThrowPending = null;
+            WeaponSystem.setSpearHeld(true);
             const w = WeaponSystem.current();
             if (w?.spear) {
               lastShot = Math.min(lastShot, simulationTime - w.rate);
@@ -21957,7 +21971,7 @@ body.netgame #revivetouch{display:flex}
               r.spearThrowVis = r.spearThrowVis || { w: 0 };
               const st = r.spearThrowVis;
               st.w += ((ts ? (ts.phase === "flight" ? 1 - ease((ts.k - 0.35) / 0.4) : 1) : 0) - st.w) * (1 - Math.exp(-dt * (ts ? 14 : 6)));
-              r.gun.visible = !(ts && (ts.phase === "flight" || (ts.phase === "throw" && ts.k >= 1)));
+              r.gun.visible = WeaponSystem.spearHeld && !(ts && (ts.phase === "flight" || (ts.phase === "throw" && ts.k >= 1)));
               if (ts && st.w > 0.02) {
                 let wind = 0, whip = 0, follow = 0;
                 if (ts.phase === "prep") wind = ease(ts.k * 0.7 + 0.3);
@@ -24054,7 +24068,14 @@ body.netgame #revivetouch{display:flex}
           const sdt = dt * TimeFX.update(dt);
           if (DevMode.active) DebugDraw.update();
           WeaponSystem.model.visible =
-            inWorld && CameraRig.distance < 0.6 && !!WeaponSystem.current() && !BossIntro.active && !KillCam.active && !BossDeath.active && state !== GameState.DYING;
+            inWorld &&
+            CameraRig.distance < 0.6 &&
+            !!WeaponSystem.current() &&
+            !(WeaponSystem.current()?.spear && (SpearThrow.active || !WeaponSystem.spearHeld)) &&
+            !BossIntro.active &&
+            !KillCam.active &&
+            !BossDeath.active &&
+            state !== GameState.DYING;
           if (CameraRig.avatar)
             CameraRig.avatar.visible = inWorld && (CameraRig.distance > 0.6 || (!!CameraRig.avatar.userData.fallen && !(DeathFX.active && DeathFX.active.time < 1.25)));
           for (const item of MapManager.group.children)
