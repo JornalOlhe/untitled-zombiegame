@@ -10671,6 +10671,21 @@ body.netgame #revivetouch{display:flex}
                 this.parts.leftHand.rotation.x = 0;
               }
             }
+            if (w.spear) {
+              // First-person javelin: pull the spear back beside the shoulder while charging, then
+              // whip it forward through the release (it disappears when the projectile spawns).
+              const ts = PlayerController.spearThrowState();
+              if (ts && ts.phase !== "flight") {
+                const e = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); },
+                  wind = ts.phase === "prep" ? e(ts.k * 0.7 + 0.3) : 1 - e((ts.k - 0.2) * 1.4),
+                  fwd = ts.phase === "throw" ? e((ts.k - 0.15) * 1.3) : 0;
+                this.model.position.x += 0.1 * wind;
+                this.model.position.y += 0.05 * wind - 0.03 * fwd;
+                this.model.position.z += 0.3 * wind - 0.55 * fwd;
+                this.model.rotation.x += 0.28 * wind - 0.42 * fwd;
+                this.model.rotation.y -= 0.12 * wind;
+              }
+            }
             if (this.trail) {
               const on = w.specter ? this.specterStriking : !!mp?.striking;
               if (on && this.tip) {
@@ -11266,7 +11281,7 @@ body.netgame #revivetouch{display:flex}
             } else mesh.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6).rotateX(Math.PI / 2), VoxelMonsters.flat(0xf2e6c0, 0x6a5010)));
             mesh.position.copy(pos);
             scene.add(mesh);
-            const p = { kind: "spear", mesh, pos: mesh.position, vel: dir.clone().normalize().multiplyScalar(34), life: 7, damage, phase: "out", travelled: 0, range: 24, hitOut: new Set(), hitBack: new Set(), ...extra };
+            const p = { kind: "spear", mesh, pos: mesh.position, born: simulationTime, vel: dir.clone().normalize().multiplyScalar(34), life: 7, damage, phase: "out", travelled: 0, range: 24, hitOut: new Set(), hitBack: new Set(), ...extra };
             mesh.lookAt(pos.clone().add(p.vel));
             projectiles.push(p);
             this.active = p;
@@ -17077,6 +17092,7 @@ body.netgame #revivetouch{display:flex}
             lastShot = -100;
             reloadEnd = 0;
             this.spearHeldSince = null;
+            this.spearThrowPending = null;
             this.chargeHeldSince = null;
             shake = 0;
             recoil = 0;
@@ -17143,6 +17159,7 @@ body.netgame #revivetouch{display:flex}
             player.slot = slot;
             reloadEnd = 0;
             this.spearHeldSince = null;
+            this.spearThrowPending = null;
             this.chargeHeldSince = null;
             WeaponSystem.buildModel();
           },
@@ -17253,7 +17270,31 @@ body.netgame #revivetouch{display:flex}
           },
           // Divine spear: a quick click is a longer-reach poke; holding the attack button
           // charges a throw that releases a piercing spear projectile.
+          // Javelin throw state machine: Held -> Preparation (hold) -> Throw (hips, torso, arm) ->
+          // Release (the held spear disappears the same frame the projectile spawns) -> InFlight
+          // -> Return (SpearThrow) -> Held. Only one spear ever exists.
+          spearThrowPending: null,
+          spearThrowState() {
+            const t = simulationTime, w = WeaponSystem.current();
+            if (this.spearThrowPending) {
+              const q = this.spearThrowPending;
+              return { phase: "throw", k: clamp((t - q.start) / (q.at - q.start), 0, 1) };
+            }
+            if (SpearThrow.active) return { phase: "flight", k: clamp((t - (SpearThrow.active.born || t)) / 0.6, 0, 1) };
+            if (this.spearHeldSince != null && w?.spear) {
+              const held = t - this.spearHeldSince;
+              if (held > 0.1) return { phase: "prep", k: clamp((held - 0.1) / Math.max(0.05, (w.chargeTime || 0.32) - 0.1), 0, 1) };
+            }
+            return null;
+          },
           updateSpear(w, dt) {
+            if (this.spearThrowPending) {
+              if (simulationTime >= this.spearThrowPending.at) {
+                this.spearThrowPending = null;
+                this.throwSpear(w);
+              }
+              return;
+            }
             if (mouse.down) {
               if (
                 this.spearHeldSince == null &&
@@ -17266,11 +17307,13 @@ body.netgame #revivetouch{display:flex}
             if (this.spearHeldSince == null) return;
             const held = simulationTime - this.spearHeldSince;
             this.spearHeldSince = null;
+            this.spearThrowPending = null;
             lastShot = simulationTime;
             player.shots++;
             if (SpearThrow.active) return; // the spear is still flying back
             if (held >= (w.chargeTime || 0.32)) {
-              this.throwSpear(w);
+              // Wind the whole body through the throw first; the spear leaves the hand at `at`.
+              this.spearThrowPending = { start: simulationTime, at: simulationTime + 0.22 };
             } else {
               muzzleLight.intensity = 0;
               const ev = MeleeAnim.events(w, WeaponSystem.combo || 0);
@@ -21535,15 +21578,51 @@ body.netgame #revivetouch{display:flex}
                 r.gun.position.set(r.hold[0], r.hold[1], r.hold[2]);
               }
             }
+            if (r.spearHold) {
+              // Javelin throw pose (right-handed): cock the arm back beside the ear with the elbow
+              // down/behind and the point angled up, torso wound away from the target; then hips ->
+              // torso -> shoulder/elbow -> wrist whip through, release, and follow through. The
+              // left hand only points at the target for balance and never touches the shaft.
+              const ts = PlayerController.spearThrowState(),
+                ease = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+              r.spearThrowVis = r.spearThrowVis || { w: 0 };
+              const st = r.spearThrowVis;
+              st.w += ((ts ? (ts.phase === "flight" ? 1 - ease((ts.k - 0.35) / 0.4) : 1) : 0) - st.w) * (1 - Math.exp(-dt * (ts ? 14 : 6)));
+              r.gun.visible = !(ts && (ts.phase === "flight" || (ts.phase === "throw" && ts.k >= 1)));
+              if (ts && st.w > 0.02) {
+                let wind = 0, whip = 0, follow = 0;
+                if (ts.phase === "prep") wind = ease(ts.k * 0.7 + 0.3);
+                else if (ts.phase === "throw") { wind = 1; whip = ts.k; }
+                else follow = 1 - ts.k;
+                const hipK = ease(whip * 1.3), chestK = ease((whip - 0.08) * 1.25), armK = ease((whip - 0.2) * 1.3);
+                // wind-up -> throw -> follow-through blend
+                const yaw = -0.8 * wind * (1 - hipK) + 0.45 * chestK + 0.3 * follow;
+                r.hips.rotation.y += ((-0.35 * wind * (1 - hipK) + 0.25 * hipK + 0.12 * follow) - r.hips.rotation.y) * st.w;
+                r.chest.rotation.y += (yaw - r.chest.rotation.y) * st.w;
+                r.chest.rotation.x += (0.06 - 0.14 * armK * wind + 0.12 * follow - r.chest.rotation.x) * 0.5 * st.w;
+                const back = new V(-0.3, 0.6, -0.28), fwd = new V(-0.14, 0.52, 0.5);
+                const pos = back.clone().lerp(fwd, armK).lerp(new V(-0.05, 0.25, 0.62), follow);
+                r.gun.position.lerp(pos, st.w);
+                r.gun.rotation.x += ((1.1 + 0.4 * armK - 0.2 * follow) - r.gun.rotation.x) * st.w;
+                r.gun.rotation.y += (0 - r.gun.rotation.y) * st.w;
+                r.gun.rotation.z += (0 - r.gun.rotation.z) * st.w;
+                // Free (left) arm points at the target, then pulls back as a counterweight.
+                r.arms[1].rotation.set(-1.4 + 0.9 * armK * wind - 0.4 * follow, 0, 0.25);
+                r.elbows[1].rotation.x = -0.2;
+                r.throwArm = true;
+              } else r.throwArm = false;
+            }
             // Hands follow the weapon socket (one-hand melee, spear, bow) instead of posing by
             // guesswork: the right hand is the weapon hand; the left only joins where defined.
             if (!(r.secretAccessories?.fly > 0.5) && !reloading && !dead) {
               const gp = r.gun.position.clone().add(r.gripOff);
               if (r.oneHand) this.ik(r.arms[0], r.elbows[0], gp);
               else if (r.spearHold) {
-                const axis = new V(0, Math.cos(1.25), Math.sin(1.25));
+                const ax = r.throwArm ? r.gun.rotation.x : 1.25,
+                  axis = new V(0, Math.cos(ax), Math.sin(ax));
                 this.ik(r.arms[0], r.elbows[0], gp.clone().addScaledVector(axis, -0.02));
-                this.ik(r.arms[1], r.elbows[1], gp.clone().addScaledVector(axis, 0.42));
+                // During a throw only the right hand touches the spear; the left one is posed above.
+                if (!r.throwArm) this.ik(r.arms[1], r.elbows[1], gp.clone().addScaledVector(axis, 0.42));
               } else if (r.bowHold) {
                 const draw = PlayerController.chargeHeldSince != null ? clamp((simulationTime - PlayerController.chargeHeldSince) / (r.weapon?.chargeTime || 0.9), 0, 1) : 0;
                 this.ik(r.arms[0], r.elbows[0], gp);
