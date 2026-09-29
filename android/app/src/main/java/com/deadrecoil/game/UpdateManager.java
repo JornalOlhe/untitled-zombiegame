@@ -79,9 +79,7 @@ final class UpdateManager {
                     final String notes = trimNotes(newest.optString("body", "Melhorias e correções."));
                     final String page = newest.optString("html_url", "");
                     final JSONObject exactAsset = findAsset(newest.optJSONArray("assets"), "DeadRecoil.apk");
-                    final JSONObject anyApk = exactAsset != null
-                            ? exactAsset
-                            : findFirstApk(newest.optJSONArray("assets"));
+                    final JSONObject anyApk = findFirstApk(newest.optJSONArray("assets"));
 
                     releaseName = name;
                     releaseNotes = notes;
@@ -119,7 +117,9 @@ final class UpdateManager {
                 .append(" está disponível");
 
         if (prerelease) message.append(" como versão de testes");
-        message.append(".\n\nBaixar a versão mais recente agora?");
+        message.append(exactAsset != null
+                ? ".\n\nBaixar a versão mais recente agora?"
+                : ".\n\nEsta versão precisa de instalação manual porque não há um APK com assinatura estável para atualização automática.");
 
         if (!releaseNotes.isEmpty()) {
             message.append("\n\n").append(releaseNotes);
@@ -130,8 +130,8 @@ final class UpdateManager {
                 .setMessage(message.toString())
                 .setPositiveButton("Baixar mais recente", (d, w) -> {
                     promptVisible = false;
-                    if (anyApk != null) {
-                        startVerifiedDownload(anyApk);
+                    if (exactAsset != null) {
+                        startVerifiedDownload(exactAsset);
                     } else {
                         openExternal(releasePage);
                     }
