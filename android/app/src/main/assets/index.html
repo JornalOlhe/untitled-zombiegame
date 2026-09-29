@@ -5540,6 +5540,37 @@ body.netgame #revivetouch{display:flex}
             this.mesh.material.dispose();
           }
         }
+        // Angelic light ribbon: white-hot leading edge → pale gold → sky-blue tail, feathered shimmer
+        // running along the ribbon, soft falloff across its width (shader, additive, one draw).
+        class LightTrail extends BladeTrail {
+          constructor(parent, maxAge = 0.16, gain = 1) {
+            super(parent, 0xffffff, 1, maxAge);
+            this.uv = new Float32Array(this.max * 2 * 3);
+            this.geo.setAttribute("aUv", new THREE.BufferAttribute(this.uv, 3));
+            this.mesh.material.dispose();
+            this.mesh.material = new THREE.ShaderMaterial({
+              uniforms: { uTime: { value: 0 }, uGain: { value: gain }, uCore: { value: new THREE.Color(0xfffbef) }, uEdge: { value: new THREE.Color(0xffd98a) }, uTail: { value: new THREE.Color(0x7cc8ff) } },
+              vertexShader: "attribute vec3 aUv; varying vec3 vUv; void main(){ vUv = aUv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+              fragmentShader: "uniform float uTime, uGain; uniform vec3 uCore, uEdge, uTail; varying vec3 vUv;\n" +
+                "void main(){ float a = clamp(vUv.x, 0.0, 1.0), s = clamp(vUv.y, 0.0, 1.0);\n" +
+                " float life = (1.0 - a) * (1.0 - a); float edge = pow(1.0 - s, 1.2) * 0.8 + 0.2;\n" +
+                " float feather = 0.72 + 0.28 * sin(a * 34.0 - uTime * 22.0 + s * 5.0);\n" +
+                " vec3 col = mix(uCore, uEdge, smoothstep(0.0, 0.3, a + s * 0.25)); col = mix(col, uTail, smoothstep(0.3, 1.0, a));\n" +
+                " float al = life * edge * feather * vUv.z * uGain; gl_FragColor = vec4(col * al, al); }",
+              transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+            });
+          }
+          update(now) {
+            super.update(now);
+            const n = this.pts.length;
+            for (let i = 0; i < this.max; i++) {
+              const p = this.pts[Math.min(i, Math.max(0, n - 1))], age = p ? clamp((now - p.t) / this.maxAge, 0, 1) : 1;
+              for (let sd = 0; sd < 2; sd++) { const o = (i * 2 + sd) * 3; this.uv[o] = age; this.uv[o + 1] = sd; this.uv[o + 2] = i < n ? 1 : 0; }
+            }
+            this.geo.attributes.aUv.needsUpdate = true;
+            this.mesh.material.uniforms.uTime.value = now;
+          }
+        }
         const WeaponModels = {
           scenes: new Map(),
           ready: false,
@@ -17571,8 +17602,12 @@ body.netgame #revivetouch{display:flex}
                 pos: new V(), vel: new V(), q: new THREE.Quaternion(),
                 k: 46 + ((i * 37) % 5) * 4.5, zeta: 0.6 + ((i * 13) % 5) * 0.035,
                 ph: [i * 1.7, i * 2.3 + 0.4, i * 0.9 + 1.1], amp: 0.05 + (i % 3) * 0.018, spd: 0.9 + i * 0.11,
-                state: "idle", act: null, trail: new BladeTrail(scene, 0x6fb8f0, 1, 0.16), prev: new V(),
+                state: "idle", act: null, trail: new LightTrail(scene, 0.16, 1.7), prev: new V(), glow: 0,
               };
+              // soft holy glow around the blade (additive sprite, brightens and warms on strikes)
+              b.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xcfe9ff, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
+              b.halo.position.set(0, 0.2, 0);
+              g.add(b.halo);
               b.pos.copy(this.slotWorld(b, 0));
               b.prev.copy(b.pos);
               b.g.position.copy(b.pos);
@@ -17580,8 +17615,10 @@ body.netgame #revivetouch{display:flex}
             }
           },
           dispose() {
-            for (const b of this.blades) { scene.remove(b.g); b.trail.dispose(); }
+            for (const b of this.blades) { scene.remove(b.g); b.trail.dispose(); b.halo.material.dispose(); }
             this.blades.length = 0;
+            for (const x of this.fx) this.dropFx(x);
+            this.fx.length = 0;
             this.attacks.length = 0;
             this.active = false;
             this.gesture.r = this.gesture.l = this.gesture.open = 0;
@@ -17784,8 +17821,8 @@ body.netgame #revivetouch{display:flex}
                 b.pos.copy(p);
                 flying = true;
                 trailOn = k < 0.6;
-                if (Math.random() < dt * 14) ParticleSystem.emit(b.pos.clone(), Math.random() < 0.5 ? 0xffffff : 0x9fdcff, 1, 0.5);
-                if (k >= 1) { b.state = "idle"; b.act = null; }
+                if (Math.random() < dt * 14) ParticleSystem.emit(b.pos.clone(), Math.random() < 0.5 ? 0xfff4d6 : 0x9fdcff, 1, 0.5);
+                if (k >= 1) { b.state = "idle"; b.act = null; b.docked = t; }
               }
               if (!flying) {
                 if (!goal) goal = this.slotWorld(b, run);
@@ -17818,8 +17855,15 @@ body.netgame #revivetouch{display:flex}
               b.g.visible = !fp || dc > 0.75;
               // own trail (idle: none; swing: strong; return: short)
               b.g.updateMatrixWorld(true);
-              const tip = b.g.localToWorld(new V(0, 0.34, 0)), mid = b.g.localToWorld(new V(0, 0.2, 0));
+              const tip = b.g.localToWorld(new V(0, 0.35, 0)), mid = b.g.localToWorld(new V(0, 0.08, 0));
               b.trail.maxAge = b.state === "strike" ? 0.16 : orbit ? 0.22 : 0.08;
+              // glow: calm breathing at rest, bright and warm while striking, a pulse when docking
+              const dock = Math.max(0, 1 - (t - (b.docked ?? -9)) / 0.35);
+              const gT = b.state === "strike" && flying ? 1 : orbit ? 0.8 : b.state === "return" ? 0.55 : 0.28 + 0.08 * Math.sin(t * 2.1 + b.ph[0]) + 0.5 * dock;
+              b.glow += (gT - b.glow) * (1 - Math.exp(-dt * 14));
+              b.halo.material.opacity = (0.18 + 0.5 * b.glow) * (fp && dc < 1.4 ? 0.4 : 1);
+              b.halo.scale.setScalar(0.32 + 0.38 * b.glow);
+              b.halo.material.color.setRGB(0.8 + 0.2 * b.glow, 0.9, 1 - 0.2 * b.glow);
               if (trailOn && (!fp || dc > 1.1)) b.trail.push(tip, mid, t);
               b.trail.update(t);
               // swept hit test along this blade's own motion (previous → current), once per target
@@ -17828,6 +17872,39 @@ body.netgame #revivetouch{display:flex}
             const g = this.gesture, e = 1 - Math.exp(-dt * 12);
             g.r += (gr - g.r) * e; g.l += (gl - g.l) * e; g.sweep += (sweep - g.sweep) * e; g.open += (open - g.open) * e;
             this.attacks = this.attacks.filter((x) => t - x.t0 < 2);
+            this.tickFx(dt);
+          },
+          // ---- angelic impact kit: flash + four-point glint + light ring facing the camera ----
+          fx: [],
+          starTex() {
+            if (this._star) return this._star;
+            const c = document.createElement("canvas"); c.width = c.height = 64;
+            const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+            g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.18, "rgba(255,244,214,0.8)"); g.addColorStop(1, "rgba(255,220,150,0)");
+            x.fillStyle = g;
+            for (const [w, h, a] of [[3, 32, 0], [32, 3, 0], [1.6, 22, Math.PI / 4], [22, 1.6, Math.PI / 4]]) { x.beginPath(); x.ellipse(32, 32, w, h, a, 0, Math.PI * 2); x.fill(); }
+            x.globalCompositeOperation = "lighter"; x.beginPath(); x.arc(32, 32, 7, 0, Math.PI * 2); x.fill();
+            return (this._star = new THREE.CanvasTexture(c));
+          },
+          spawnFx(obj, life, tick) { scene.add(obj); const it = { obj, life, max: life, tick }; this.fx.push(it); return it; },
+          dropFx(it) { scene.remove(it.obj); it.obj.material.dispose(); it.obj.geometry && !it.obj.isSprite && it.obj.geometry.dispose(); },
+          impact(p, big = 1) {
+            if (p.distanceTo(camera.position) < 0.9) return; // never flash inside the camera
+            const add = (map, color, sc0, sc1, life, op, rot = 0) => {
+              const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, rotation: rot }));
+              s.position.copy(p); s.scale.setScalar(sc0); s.renderOrder = 6;
+              this.spawnFx(s, life, (it) => { const k = 1 - it.life / it.max; s.scale.setScalar(sc0 + (sc1 - sc0) * (1 - (1 - k) ** 3)); s.material.opacity = op * (1 - k) ** 1.5; });
+            };
+            add(VisualArt.texture("glow"), 0xfff1cf, 0.2 * big, 1.25 * big, 0.2, 1);
+            add(this.starTex(), 0xffffff, 0.9 * big, 0.35 * big, 0.3, 1, Math.random() * 0.6 - 0.3);
+            const ring = new THREE.Mesh(new THREE.RingGeometry(0.93, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+            ring.position.copy(p); ring.lookAt(camera.position); ring.renderOrder = 6;
+            this.spawnFx(ring, 0.24, (it) => { const k = 1 - it.life / it.max; ring.scale.setScalar(0.1 + 0.36 * big * (1 - (1 - k) ** 2)); ring.material.opacity = 0.7 * (1 - k) ** 2; });
+          },
+          tickFx(dt) {
+            for (const it of this.fx) { it.life -= dt; if (it.life > 0) it.tick(it); }
+            for (const it of this.fx) if (it.life <= 0) this.dropFx(it);
+            this.fx = this.fx.filter((it) => it.life > 0);
           },
           sweep(b, a, w) {
             const seg = new THREE.Line3(b.prev.clone(), b.pos.clone()), cp = new V();
@@ -17839,9 +17916,9 @@ body.netgame #revivetouch{display:flex}
               if (cp.distanceTo(c) <= rad && Math.abs(cp.y - c.y) < (z.size || 1) * 1.1) {
                 a.hits.add(z);
                 ZombieManager.hit(z, a.atk.dmg * a.mult, false, cp.clone(), w);
-                ParticleSystem.emit(cp.clone(), 0xffffff, 5, 2.4);
-                ParticleSystem.emit(cp.clone(), 0x8fd8ff, 4, 1.6);
-                ParticleSystem.emit(cp.clone(), 0xffd57a, 2, 1.2);
+                this.impact(cp, a.mult > 1.2 ? 1.35 : 1);
+                ParticleSystem.emit(cp.clone(), 0xfff4d6, 4, 2.2);
+                ParticleSystem.emit(cp.clone(), 0xffd57a, 3, 1.3);
                 AudioManager.tone(1320, 0.07, "sine", 0.07, 2100, "weapons");
               }
             }
