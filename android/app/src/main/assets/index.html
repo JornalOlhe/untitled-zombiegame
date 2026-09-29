@@ -19238,6 +19238,7 @@ body.netgame #revivetouch{display:flex}
               if (wh || previous.y + step.y < floor) {
                 // Stick into the wall / ground for a few seconds.
                 p.pos.copy(wh ? wh.point.clone().addScaledVector(dirN, 0.18) : previous.clone().add(step).setY(floor + 0.05));
+                p.pos.y = Math.min(p.pos.y, ceil); // an arrow stuck high on a wall never pokes through the ceiling
                 p.stuck = true;
                 p.life = 4;
                 ParticleSystem.emit(p.pos, 0x9a8a70, 5, 1.2);

@@ -35,6 +35,35 @@ const server = http.createServer((q, r) => { const f = path.resolve(root, '.' + 
     }
     return out;
   });
+  // Sweep: map points (centre, mid, corners), projectile speeds/angles/frame rates, third-person
+  // camera pressed into corners — nothing may cross the ceiling anywhere.
+  const sweep = await page.evaluate(() => {
+    const T = DeadRecoilTest, P = T.PlayerController, V = THREE.Vector3, out = {};
+    for (const map of [1, 3]) {
+      T.setMap(map); P.start(); T.setPlaying(); T.WaveManager.remaining = 0; T.ZombieManager.clear();
+      const pl = T.player, ceil = T.MapManager.ceiling, r = { ceil, head: 0, cam: 0, proj: 0 };
+      pl.hp = pl.maxhp = 1e9;
+      for (const [x, z] of [[0, 8], [20, -20], [-44, 44], [45, -45], [-30, 2]]) {
+        pl.pos.set(x, 1.7, z);
+        T.setClass(22); pl.classCharge = 100; pl.cooldown = 0; P.ability(); T.keys.add('Space');
+        for (let i = 0; i < 90; i++) { T.stepPlayer(1 / 144, 3); r.head = Math.max(r.head, pl.pos.y + 0.25); r.cam = Math.max(r.cam, T.camera.position.y); }
+        T.keys.delete('Space'); pl.activeUntil = 0; T.stepPlayer(1 / 30, 60);
+        T.CameraRig.scroll(800); T.CameraRig.scroll(800); T.setPitch(-1.3);
+        for (let i = 0; i < 20; i++) { T.stepPlayer(1 / 30, 1); r.cam = Math.max(r.cam, T.camera.position.y); }
+        for (const speed of [70, 220, 450]) for (const ang of [0.5, 1.0, 1.45]) for (const fps of [30, 144]) {
+          T.spawnProjectile('arrow', pl.pos.clone(), new V(Math.cos(ang), Math.sin(ang), 0).normalize(), 10, { weapon: T.WeaponSystem.weapons[2], speed });
+          for (let i = 0; i < fps; i++) { T.updateProjectiles(1 / fps); for (const q of T.projectiles) r.proj = Math.max(r.proj, q.pos.y); }
+        }
+      }
+      out[map] = r;
+    }
+    return out;
+  });
+  console.log(JSON.stringify(sweep));
+  for (const [m, r] of Object.entries(sweep)) {
+    assert.ok(r.head <= r.ceil + 0.01 && r.cam <= r.ceil - 0.15, `map ${m} sweep: head ${r.head.toFixed(2)} / camera ${r.cam.toFixed(2)} under ${r.ceil} at every point`);
+    assert.ok(r.proj <= r.ceil + 0.01, `map ${m} sweep: fast/angled projectiles stop at the ceiling (${r.proj.toFixed(2)})`);
+  }
   for (const m of ['1', '3']) {
     const r = res[m];
     assert.ok(Number.isFinite(r.ceil), `map ${m} has a solid ceiling`);
