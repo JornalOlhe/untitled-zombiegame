@@ -1,6 +1,6 @@
 # Atualizações do Dead Recoil
 
-Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quando o jogo abre. Uma tag numericamente maior que a versão instalada é tratada como atualização disponível.
+Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quando o jogo abre. O updater compara a versão semântica publicada no nome/tag da release com a versão instalada, evitando loops entre tags técnicas e versões do produto.
 
 ## Estado atual
 
@@ -11,6 +11,7 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 - v28 (tag v29): balanceamento de moedas/dano (sem drena-vida em chefes), hierarquia de 20 chefes por mapa com modelos dos templates UV, pity Divino 100 / Secreto 300, slots progressivos (armas até 300k, classes até 1M), preferência no spin, modo dev por whitelist no servidor, novas armas (lança-chamas, cajado de gelo, Zero Absoluto, lança que volta, foice), arcos verticais, mísseis, emblemas em 10 níveis, busca de jogadores/perfis públicos e 100 missões únicas por mês; Android usa `versionCode 29` / `0.28.0` e Windows usa `0.28.0`.
 - v30: cutscene própria por chefe (cenário, história, final e chegada ao mapa), andar próprio por chefe/mini-chefe, silhuetas novas dos templates UV, foguetes/orbes acertando o corpo inteiro e orbe quântico do template; Android usa `versionCode 30` / `0.29.0` e Windows usa `0.29.0`.
 - v31: fila de cutscenes para vários chefes, console dev com aba JOGADOR e invocação múltipla, golpes próprios por arma corpo a corpo, Angelic flutuante com órbita real, arco/aljava do template, mira livre no J, Arquidemônio/Arcanjo animados; Android usa `versionCode 31` / `0.30.0` e Windows usa `0.30.0`.
+- v32 (hotfix 30.1): hitboxes de lança-chamas/gelo reduzidas e bloqueadas pela primeira parede, VFX encerrando na colisão, balanceamento dos picos de dano e modo Developer totalmente isolado da conta real (DEAD entra, DAED sai, reinício limpo, LVL 1/0 moedas/tudo acessível); Android usa `versionCode 32` / `0.30.1` e Windows usa `0.30.1`.
 - v9: última release Android estável assinada com `DeadRecoil.apk`.
 - v10: build QA que introduziu o fluxo de atualização na inicialização para Android e Windows.
 - v11: build QA com a nova roleta de suspense, near-miss visual e animação Divina.
