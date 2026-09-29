@@ -5350,7 +5350,10 @@ body.netgame #revivetouch{display:flex}
               ],
             },
           },
-          ease: (k) => k * k * (3 - 2 * k),
+          ease: (k) => {
+            k = clamp(k, 0, 1);
+            return k * k * k * (k * (k * 6 - 15) + 10);
+          },
           // Animation events for the move that the NEXT click will play (combo advances on the
           // click): `swing` = blade leaves the wind-up (swing sound), `hit` = blade crosses the
           // target (damage frame), both in seconds after the click.
@@ -5361,7 +5364,7 @@ body.netgame #revivetouch{display:flex}
               dur = set.dur * (set.slow?.[i] || 1),
               k0 = set.moves[i][0][0],
               k1 = set.moves[i][1][0];
-            return { swing: k0 * dur * 0.85, hit: ((k0 + k1) / 2 + 0.03) * dur };
+            return { swing: k0 * dur * 0.85, hit: ((k0 + k1) / 2 + 0.03) * dur, duration: dur };
           },
           // Pose for a strike `since` seconds old; null when idle.
           sample(w, since, combo) {
@@ -6490,7 +6493,7 @@ body.netgame #revivetouch{display:flex}
                 const y0 = MapManager.groundAt(x, z, 0.3, 5);
                 if (!big) {
                   A.tube(g, [x, y0 + 0.5, z], 0.32, 1, 0x45554d, "steel", "y");
-                  WorldProps.collider(x, z, 0.7, 0.7, y0 + 1);
+                  WorldProps.collider(x, z, 0.7, 0.7, y0 + 1, y0);
                 }
                 const flame = new THREE.Sprite(
                   new THREE.SpriteMaterial({ map: A.texture("glow"), color: 0xff8c35, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -8141,8 +8144,8 @@ body.netgame #revivetouch{display:flex}
           soft(kind, pos, size, rot = null, density = 1) {
             PropKit.add(WorldProps.soft, kind, pos, size, rot, density);
           },
-          col(x, z, w, d, top) {
-            WorldProps.collider(x, z, w, d, top);
+          col(x, z, w, d, top, base = 0) {
+            WorldProps.collider(x, z, w, d, top, base);
           },
           // Local (ox, oz) around a pivot rotated by ry, in world space.
           at(x, z, ry, ox, oz) {
@@ -8508,7 +8511,7 @@ body.netgame #revivetouch{display:flex}
             K.ladder(M, lx, z, side, h);
             for (const [ox, oz] of [[-w / 4, -d / 4], [w / 4, d / 4]]) {
               K.hard("metal", [x + ox, h + 0.55, z + oz], [1.3, 1.1, 1.0]);
-              WorldProps.collider(x + ox, z + oz, 1.3, 1.0, h + 1.1);
+              WorldProps.collider(x + ox, z + oz, 1.3, 1.0, h + 1.1, h);
             }
           }
           // Story set pieces (few, readable).
@@ -9704,7 +9707,7 @@ body.netgame #revivetouch{display:flex}
           },
           solid(x, y, z, w, h, d, color) {
             const m = box(this.group, x, y, z, w, h, d, color);
-            this.obstacles.push({ x, z, w: w / 2, d: d / 2, h, top: y + h / 2 });
+            this.obstacles.push({ x, z, w: w / 2, d: d / 2, h, top: y + h / 2, base: y - h / 2 });
             this.walls.push(m);
             return m;
           },
@@ -9713,9 +9716,12 @@ body.netgame #revivetouch{display:flex}
           collides(x, z, r = 0.4, feet = 0) {
             const edge = this.half - 1.2;
             if (Math.abs(x) > edge - r || Math.abs(z) > edge - r) return true;
-            const limit = feet + this.STEP;
-            for (const o of this.near(x, z, r))
-              if (o.top > limit && (o.base === undefined || feet + 1.7 > o.base) && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return true;
+            const stepTop = feet + this.STEP,
+              bodyTop = feet + 1.7;
+            for (const o of this.near(x, z, r)) {
+              const base = Number.isFinite(o.base) ? o.base : 0;
+              if (o.top > stepTop && bodyTop > base + 0.03 && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return true;
+            }
             return false;
           },
           // Height of the surface under (x, z) that someone with feet at `feet` can stand on.
@@ -11464,6 +11470,7 @@ body.netgame #revivetouch{display:flex}
               this.sweep(p, prev, p.pos, p.hitBack);
               if (d < 1.1 || p.life <= 0) {
                 this.active = null;
+                PlayerController.onSpearCaught?.();
                 AudioManager.meleeSwing?.();
                 return true;
               }
@@ -12110,9 +12117,13 @@ body.netgame #revivetouch{display:flex}
               const enemy = !z.boss && ENEMY_KEYS[z.type];
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               ZombiePing.lastKill = simulationTime;
-              // v28 economy (mirrors the server report): 2 coins per kill, +1 on headshots.
-              const reward = z.boss ? z.boss.coins : head ? 3 : 2;
-              Progression.reward(Math.round(reward * diff[difficulty].coins));
+              // 100% coin reward. Normal zombies: 1 base coin, +1 on headshot.
+              // Bosses keep their authored special reward.
+              const reward = z.boss
+                ? Math.max(1, Math.round(z.boss.coins * diff[difficulty].coins))
+                : EconomyRewards.kill(head, diff[difficulty].coins);
+              Progression.reward(reward);
+              UIManager.number(`+${reward} ¤`, z.group.position.clone().add(new V(0, z.size * 1.9, 0)), "#f6d867");
               const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
               const heal =
                 (overkill ? classFx.overkillHeal || 0 : 0) +
@@ -12144,7 +12155,7 @@ body.netgame #revivetouch{display:flex}
                 Progression.reward(0, 1);
                 UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
               }
-            } else if (z.boss) Progression.reward(Math.round(z.boss.coins * diff[difficulty].coins));
+            }
             if (z.boss?.kind) RunStats.bosses[z.boss.kind] = (RunStats.bosses[z.boss.kind] || 0) + 1;
             NetGame.broadcastKill(z, head, overkill, w, NetGame.attacker);
             if (z.type === 9 && !z.remote && this.list.length < 80)
@@ -12169,7 +12180,7 @@ body.netgame #revivetouch{display:flex}
               rarityColors[w?.tier || 0],
             );
             if (byMe) KillFX.onKill(z, head, w, overkill);
-            AudioManager.coin();
+            if (byMe) AudioManager.coin();
             if (Math.random() < 0.25)
               AudioManager.tone(rand(90, 170), 0.3, "sawtooth", 0.1, 35);
           },
@@ -15790,8 +15801,8 @@ body.netgame #revivetouch{display:flex}
             this.soft = PropKit.batch();
             this.hard = PropKit.batch();
           },
-          collider(x, z, w, d, top) {
-            MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: top, top });
+          collider(x, z, w, d, top, base = 0) {
+            MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: Math.max(0, top - base), top, base });
           },
           free(x, z, r) {
             if (Math.abs(x) > MapManager.half - 3 - r || Math.abs(z) > MapManager.half - 3 - r) return false;
@@ -16465,7 +16476,21 @@ body.netgame #revivetouch{display:flex}
           },
         };
 
-        // WaveManager: paced spawns, eight-second breaks and banked rewards.
+        // Every credited zombie pays (100% chance), but values stay intentionally low so
+        // progression still requires playing several waves before buying/spinning.
+        const EconomyRewards = {
+          kill(head = false, multiplier = 1) {
+            return Math.max(1, Math.round((head ? 2 : 1) * multiplier));
+          },
+          waveBase(wave) {
+            return 3 + Math.min(12, Math.max(1, wave | 0));
+          },
+          wave(wave, multiplier = 1) {
+            return Math.max(1, Math.round(this.waveBase(wave) * multiplier));
+          },
+        };
+
+        // WaveManager: paced spawns, short breaks and guaranteed low-value rewards.
         const WaveManager = {
           wave: 0,
           remaining: 0,
@@ -16610,7 +16635,10 @@ body.netgame #revivetouch{display:flex}
                 this.clearedAt = simulationTime;
                 MutationManager.finishWave();
                 RunStats.waveCleared();
-                UIManager.announce(`ONDA ${this.wave} LIMPA`, `Onda ${this.wave + 1} chegando…`, 2.4);
+                const waveCoins = EconomyRewards.wave(this.wave, diff[difficulty].coins);
+                Progression.reward(waveCoins);
+                UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · Onda ${this.wave + 1} chegando…`, 2.4);
+                AudioManager.coin();
                 AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
               } else if (simulationTime - this.clearedAt >= 3) {
                 this.clearedAt = 0;
@@ -17261,6 +17289,7 @@ body.netgame #revivetouch{display:flex}
           nextCurse: 0,
           motion: new GroundMotion(),
           meleeStrike: null,
+          meleeLockUntil: 0,
           spearHeldSince: null,
           chargeHeldSince: null,
           start() {
@@ -17271,6 +17300,7 @@ body.netgame #revivetouch{display:flex}
             MutationManager.reset();
             HordeAI.clear();
             this.meleeStrike = null;
+            this.meleeLockUntil = 0;
             DeathFX.abort();
             KillFX.reset();
             TimeFX.reset();
@@ -17550,6 +17580,12 @@ body.netgame #revivetouch{display:flex}
             return null;
           },
           updateSpear(w, dt) {
+            // One physical spear: while it is out/returning, all spear attack input stays locked.
+            if (SpearThrow.active) {
+              this.spearHeldSince = null;
+              this.spearThrowPending = null;
+              return;
+            }
             if (this.spearThrowPending) {
               if (simulationTime >= this.spearThrowPending.at) {
                 this.spearThrowPending = null;
@@ -17561,6 +17597,7 @@ body.netgame #revivetouch{display:flex}
               if (
                 this.spearHeldSince == null &&
                 !reloadEnd &&
+                simulationTime >= this.meleeLockUntil &&
                 simulationTime - lastShot >= w.rate
               )
                 this.spearHeldSince = simulationTime;
@@ -17579,6 +17616,7 @@ body.netgame #revivetouch{display:flex}
             } else {
               muzzleLight.intensity = 0;
               const ev = MeleeAnim.events(w, WeaponSystem.combo || 0);
+              this.meleeLockUntil = simulationTime + Math.max(w.rate * 0.85, ev.duration * 0.92);
               this.meleeStrike = {
                 at: simulationTime + Math.min(ev.hit, w.rate * 0.9),
                 swingAt: simulationTime + ev.swing,
@@ -17586,6 +17624,15 @@ body.netgame #revivetouch{display:flex}
                 damage: weaponDamage(w),
                 reach: Math.min(w.range, 4.5),
               };
+            }
+          },
+          onSpearCaught() {
+            this.spearHeldSince = null;
+            this.spearThrowPending = null;
+            const w = WeaponSystem.current();
+            if (w?.spear) {
+              lastShot = Math.min(lastShot, simulationTime - w.rate);
+              this.meleeLockUntil = Math.min(this.meleeLockUntil, simulationTime);
             }
           },
           throwSpear(w) {
@@ -17635,6 +17682,7 @@ body.netgame #revivetouch{display:flex}
             if (NetGame.down || NetGame.dead) return;
             const w = WeaponSystem.current();
             if (!w || reloadEnd || simulationTime - lastShot < w.rate) return;
+            if (w.kind === "melee" && simulationTime < this.meleeLockUntil) return;
             if (w.ammo <= 0) {
               this.reload();
               return;
@@ -17645,6 +17693,7 @@ body.netgame #revivetouch{display:flex}
             if (w.kind === "melee") {
               muzzleLight.intensity = 0;
               const ev = MeleeAnim.events(w, WeaponSystem.combo || 0);
+              this.meleeLockUntil = simulationTime + Math.max(w.rate * 0.85, ev.duration * 0.92);
               this.meleeStrike = {
                 at: simulationTime + Math.min(ev.hit, w.rate * 0.9),
                 swingAt: simulationTime + ev.swing,
@@ -20177,6 +20226,7 @@ body.netgame #revivetouch{display:flex}
           types: {},
           noDamageWaves: 0,
           revives: 0,
+          wavesCleared: 0,
           waveStartedAt: 0,
           reset() {
             this.damage = 0;
@@ -20185,12 +20235,14 @@ body.netgame #revivetouch{display:flex}
             this.types = {};
             this.noDamageWaves = 0;
             this.revives = 0;
+            this.wavesCleared = 0;
             this.waveStartedAt = 0;
           },
           waveStarted() {
             this.waveStartedAt = simulationTime;
           },
           waveCleared() {
+            this.wavesCleared++;
             if (player.lastDamage < this.waveStartedAt) this.noDamageWaves++;
           },
           report() {
@@ -20199,6 +20251,7 @@ body.netgame #revivetouch{display:flex}
               kills: player.kills,
               headshots: player.headshots,
               wave: Math.max(1, WaveManager.wave),
+              wavesCleared: this.wavesCleared,
               damage: Math.round(this.damage),
               bosses: { ...this.bosses },
               families: { ...this.families },
@@ -24172,6 +24225,7 @@ body.netgame #revivetouch{display:flex}
             WeaponModels,
             ArsenalArt,
             Progression,
+            EconomyRewards,
             Armory,
             rarityNames,
             ZombieManager,
