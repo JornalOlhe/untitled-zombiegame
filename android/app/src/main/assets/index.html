@@ -6798,8 +6798,9 @@ body.netgame #revivetouch{display:flex}
               if (figure.visible && figure.userData.idleActor)
                 CreatureRig.animate(figure.userData.idleActor, dt, false);
             for (const [fogIndex, fog] of this.fogSheets.entries()) {
+              fog.drift = (fog.drift || 0) + WindManager.strength * dt * 0.25;
               fog.mesh.position.x =
-                fog.x + Math.sin(menuTime * 0.09 + fog.phase) * 3;
+                fog.x + Math.sin(menuTime * 0.09 + fog.phase) * 3 + Math.cos(WindManager.dirAngle) * Math.sin(fog.drift) * 4;
               fog.mesh.position.z =
                 fog.z + Math.cos(menuTime * 0.07 + fog.phase) * 2;
               fog.mesh.visible =
@@ -6835,9 +6836,12 @@ body.netgame #revivetouch{display:flex}
                 f[1] -= dt * 1.4 * f[3];
                 if (f[1] < 0) f[1] = 16;
                 const j = i * 3;
-                this.snowPos[j] = o.x + ((((f[0] + menuTime * 0.9 + 24) % 48) + 48) % 48) - 24 + Math.sin(menuTime * 0.8 + f[4]) * 0.6;
+                // flakes drift with the global wind: a gust bends every trajectory the same way
+                f[5] = (f[5] || 0) + WindManager.vec().x * dt * 3.2;
+                f[6] = (f[6] || 0) + WindManager.vec().z * dt * 3.2;
+                this.snowPos[j] = o.x + ((((f[0] + f[5] + menuTime * 0.25 + 24) % 48) + 48) % 48) - 24 + Math.sin(menuTime * 0.8 + f[4]) * 0.5;
                 this.snowPos[j + 1] = f[1];
-                this.snowPos[j + 2] = o.z + f[2] + Math.cos(menuTime * 0.6 + f[4]) * 0.4;
+                this.snowPos[j + 2] = o.z + ((((f[2] + f[6] + 24) % 48) + 48) % 48) - 24 + Math.cos(menuTime * 0.6 + f[4]) * 0.35;
               }
               this.snow.geometry.setDrawRange(0, n);
               this.snow.geometry.attributes.position.needsUpdate = true;
@@ -9451,6 +9455,296 @@ body.netgame #revivetouch{display:flex}
           }
           M.landscape = { inner: H - 1, peak: 50, snow: 1 };
         };
+        // ── Nature: one global wind, a sky dome per map, and GPU-animated vegetation ───────────
+        // WindManager is the single source of truth: foliage, grass, fog sheets, snow and the
+        // sky clouds all read the same strength/direction, so a gust moves everything together.
+        const WindManager = {
+          strength: 0.3, // 0 = calm … 1 = strong gust (smoothed)
+          target: 0.3,
+          dirAngle: 0.6,
+          next: 4,
+          uniforms: { windStrength: { value: 0.3 }, windDir: { value: new THREE.Vector2(1, 0) } },
+          update(dt) {
+            // mostly a light breeze; now and then a moderate gust that builds and fades smoothly
+            this.next -= dt;
+            if (this.next <= 0) {
+              const gust = Math.random() < 0.35;
+              this.target = gust ? rand(0.65, 0.95) : rand(0.18, 0.38);
+              this.next = gust ? rand(2.5, 4.5) : rand(5, 11);
+            }
+            this.strength += (this.target - this.strength) * (1 - Math.exp(-dt * 0.6));
+            this.dirAngle += Math.sin(menuTime * 0.05) * dt * 0.03;
+            this.uniforms.windStrength.value = this.strength;
+            this.uniforms.windDir.value.set(Math.cos(this.dirAngle), Math.sin(this.dirAngle));
+          },
+          vec() {
+            return new V(Math.cos(this.dirAngle), 0, Math.sin(this.dirAngle)).multiplyScalar(this.strength);
+          },
+        };
+        const Nature = {
+          group: null,
+          quality() {
+            return { low: 0.3, medium: 0.6, high: 1, ultra: 1.4 }[SettingsManager.data.graphics] || 0.6;
+          },
+          // Night skies (City/Forest/Hospital) and a cold overcast day (Snow): gradient, stars,
+          // moon with halo, fbm clouds drifting with the wind; horizon colour = fog colour.
+          SKIES: {
+            0: { zen: 0x03060e, hor: 0x0e1a24, stars: 1.0, moon: [0.35, 0.34, -0.87], moonCol: 0xdfe8f2, cloud: 0x1b2632, cover: 0.42, glow: 0x2a3a4a },
+            1: { zen: 0x040709, hor: 0x121c19, stars: 0.8, moon: [-0.45, 0.4, -0.8], moonCol: 0xe6e0c8, cloud: 0x1a221e, cover: 0.55, glow: 0x2a3228 },
+            2: { zen: 0x010305, hor: 0x0a1511, stars: 0.55, moon: [-0.5, 0.45, -0.74], moonCol: 0xcfe0e8, cloud: 0x0e1612, cover: 0.62, glow: 0x1f2c28 },
+            4: { zen: 0x5d7486, hor: 0x9aaebb, stars: 0, moon: [0.2, 0.28, -0.94], moonCol: 0xf2f6ff, cloud: 0xc6d2da, cover: 0.78, glow: 0xdfe8ef, day: 1 },
+          },
+          sky(index) {
+            const P = this.SKIES[index];
+            if (!P || MapManager.closed) return;
+            const fogCol = new THREE.Color(maps[index].fog);
+            const mat = new THREE.ShaderMaterial({
+              side: THREE.BackSide, depthWrite: false, fog: false,
+              uniforms: {
+                zen: { value: new THREE.Color(P.zen) }, hor: { value: fogCol.clone().lerp(new THREE.Color(P.hor), 0.5) },
+                cloudCol: { value: new THREE.Color(P.cloud) }, glowCol: { value: new THREE.Color(P.glow) }, moonCol: { value: new THREE.Color(P.moonCol) },
+                moonDir: { value: new V(...P.moon).normalize() }, stars: { value: P.stars }, cover: { value: P.cover }, day: { value: P.day || 0 },
+                time: PropKit.windTime, windDir: WindManager.uniforms.windDir, windStrength: WindManager.uniforms.windStrength,
+              },
+              vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
+              fragmentShader: `
+                uniform vec3 zen, hor, cloudCol, glowCol, moonCol, moonDir; uniform float stars, cover, day, time, windStrength; uniform vec2 windDir;
+                varying vec3 vDir;
+                float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+                float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+                float fbm(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<5;i++){ s+=a*n(p); p=p*2.03+vec2(1.7,9.2); a*=0.5; } return s; }
+                void main(){
+                  vec3 d = normalize(vDir); float el = max(d.y, 0.0);
+                  vec3 col = mix(hor, zen, pow(el, 0.55));
+                  // horizon glow (city light / cold haze) low on the sky
+                  col += glowCol * 0.35 * exp(-el * 9.0);
+                  // stars: hashed cells, twinkling, fading into the horizon haze
+                  vec2 sp = d.xz / (d.y + 0.35) * 180.0; vec2 cell = floor(sp); float r = h(cell);
+                  float star = step(0.985, r) * smoothstep(0.5, 0.0, length(fract(sp) - 0.5)) * (0.6 + 0.4 * sin(time * (1.0 + r * 3.0) + r * 40.0));
+                  col += vec3(0.85, 0.9, 1.0) * star * stars * smoothstep(0.05, 0.35, el);
+                  // moon + halo
+                  float md = dot(d, moonDir);
+                  col += moonCol * smoothstep(0.9993, 0.9996, md) * (1.0 - day * 0.6);
+                  col += moonCol * pow(max(md, 0.0), 180.0) * 0.35 + moonCol * pow(max(md, 0.0), 12.0) * 0.06 * (1.0 - day);
+                  // clouds drifting with the wind, lit on the moon side
+                  vec2 cp = d.xz / (d.y + 0.12) * 1.6 + windDir * time * (0.006 + windStrength * 0.02);
+                  float c = smoothstep(1.0 - cover, 1.0 - cover + 0.35, fbm(cp) + 0.12 * fbm(cp * 3.1 - time * 0.01));
+                  float lit = pow(max(md, 0.0), 6.0);
+                  vec3 cc = cloudCol + moonCol * lit * 0.25;
+                  col = mix(col, cc, c * smoothstep(0.0, 0.18, el) * 0.92);
+                  col = mix(col, hor, smoothstep(0.08, 0.0, el));
+                  gl_FragColor = vec4(col, 1.0);
+                }`,
+            });
+            const dome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), mat);
+            dome.renderOrder = -10;
+            dome.frustumCulled = false;
+            dome.onBeforeRender = (r, s, cam) => dome.position.copy(cam.position);
+            this.group.add(dome);
+            for (const o of MapManager.group.children) if (o.userData.moon) o.visible = false;
+          },
+          // Grass clump: 7 tapered blades, 2 segments each, leaning out from the centre.
+          grassGeo(frozen) {
+            const pos = [], col = [], hh = [], idx = [];
+            const base = new THREE.Color(frozen ? 0x6f7f7c : 0x142510), tip = new THREE.Color(frozen ? 0xcfdde2 : 0x3f5c26);
+            for (let b = 0; b < 7; b++) {
+              const a = rand(0, Math.PI * 2), r = rand(0, 0.14), cx = Math.cos(a) * r, cz = Math.sin(a) * r;
+              const H = rand(0.28, frozen ? 0.4 : 0.62), W = rand(0.035, 0.055), face = rand(0, Math.PI * 2), lean = rand(0.05, 0.25);
+              const fx = Math.cos(face), fz = Math.sin(face), lx = Math.cos(a) * lean, lz = Math.sin(a) * lean;
+              const o = pos.length / 3;
+              for (const [t, w] of [[0, W], [0.55, W * 0.7], [1, 0]]) {
+                const y = t * H, bend = t * t;
+                for (const s of w ? [-1, 1] : [0]) {
+                  pos.push(cx + fx * w * s * 0.5 + lx * bend * H, y, cz + fz * w * s * 0.5 + lz * bend * H);
+                  const c = base.clone().lerp(tip, t);
+                  col.push(c.r, c.g, c.b);
+                  hh.push(t);
+                }
+              }
+              idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2, o + 2, o + 3, o + 4);
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+            g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+            g.setAttribute("hgt", new THREE.Float32BufferAttribute(hh, 1));
+            g.setIndex(idx);
+            g.computeVertexNormals();
+            return g;
+          },
+          // Fern / small plant: arching fronds (quad strips) around a centre.
+          fernGeo(frozen) {
+            const pos = [], col = [], hh = [], idx = [];
+            const base = new THREE.Color(frozen ? 0x3e4a40 : 0x16280f), tip = new THREE.Color(frozen ? 0x8e9f98 : 0x3f6a26);
+            for (let b = 0; b < 6; b++) {
+              const a = (b / 6) * Math.PI * 2 + rand(-0.3, 0.3), L = rand(0.35, 0.6), fx = Math.cos(a), fz = Math.sin(a), px = -fz, pz = fx;
+              const o = pos.length / 3, N = 4;
+              for (let k = 0; k <= N; k++) {
+                const t = k / N, w = 0.09 * Math.sin(t * Math.PI) + 0.01, y = Math.sin(t * Math.PI * 0.8) * L * 0.55, d = t * L;
+                for (const s of [-1, 1]) {
+                  pos.push(fx * d + px * w * s, y, fz * d + pz * w * s);
+                  const c = base.clone().lerp(tip, t);
+                  col.push(c.r, c.g, c.b);
+                  hh.push(t * 0.8);
+                }
+                if (k < N) { const i = o + k * 2; idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2); }
+              }
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+            g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+            g.setAttribute("hgt", new THREE.Float32BufferAttribute(hh, 1));
+            g.setIndex(idx);
+            g.computeVertexNormals();
+            return g;
+          },
+          // Vertex wind for instanced plants: roots pinned, bend grows with height², per-instance
+          // phase + strength variation, gusts travel across the ground as a wave.
+          plantMat(stiff) {
+            const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
+            m.onBeforeCompile = (shader) => {
+              Object.assign(shader.uniforms, { windTime: PropKit.windTime, windStrength: WindManager.uniforms.windStrength, windDir: WindManager.uniforms.windDir });
+              shader.vertexShader = shader.vertexShader
+                .replace("#include <common>", "#include <common>\nattribute float hgt; uniform float windTime, windStrength; uniform vec2 windDir;")
+                .replace("#include <begin_vertex>", `#include <begin_vertex>
+                  vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+                  float ph = ip.x * 0.37 + ip.z * 0.29;
+                  float wave = 0.5 + 0.5 * sin(dot(ip.xz, windDir) * 0.18 - windTime * 1.6);
+                  float s = windStrength * (0.55 + 0.45 * wave) * (0.8 + 0.4 * fract(sin(ph) * 91.7));
+                  float bend = hgt * hgt * ${stiff.toFixed(2)};
+                  float sway = s * (0.55 + 0.25 * sin(windTime * 2.1 + ph)) + 0.08 * sin(windTime * 1.3 + ph * 2.0);
+                  float flutter = 0.03 * sin(windTime * 9.0 + ph * 7.0 + hgt * 3.0) * (0.3 + s);
+                  vec2 push = windDir * (sway + flutter) * bend * 0.45;
+                  vec3 pw = vec3(push.x, 0.0, push.y);
+                  vec3 c0 = instanceMatrix[0].xyz, c1 = instanceMatrix[1].xyz, c2 = instanceMatrix[2].xyz;
+                  vec3 lp = vec3(dot(c0, pw), dot(c1, pw), dot(c2, pw)) / max(dot(c0, c0), 1e-4);
+                  transformed.xz += lp.xz;
+                  transformed.y -= length(push) * bend * 0.35;`);
+            };
+            m.customProgramCacheKey = () => "plant" + stiff;
+            return m;
+          },
+          scatter(list, geo, mat, count, test, scale) {
+            const pts = [];
+            let tries = 0;
+            while (pts.length < count && tries++ < count * 6) {
+              const p = test();
+              if (p) pts.push(p);
+            }
+            // chunk into 16 m tiles so frustum culling and draw distance can skip whole patches
+            const tiles = new Map();
+            for (const p of pts) {
+              const k = Math.floor(p[0] / 22) + "," + Math.floor(p[2] / 22);
+              if (!tiles.has(k)) tiles.set(k, []);
+              tiles.get(k).push(p);
+            }
+            const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+            for (const arr of tiles.values()) {
+              const im = new THREE.InstancedMesh(geo, mat, arr.length);
+              let cx = 0, cz = 0;
+              arr.forEach((p, i) => {
+                const s = rand(scale[0], scale[1]);
+                q.setFromEuler(e.set(rand(-0.08, 0.08), rand(0, Math.PI * 2), rand(-0.08, 0.08)));
+                m4.compose(new V(p[0], p[1], p[2]), q, new V(s, s * rand(0.8, 1.25), s));
+                im.setMatrixAt(i, m4);
+                cx += p[0]; cz += p[2];
+              });
+              im.instanceMatrix.needsUpdate = true;
+              im.receiveShadow = true;
+              im.castShadow = false;
+              // three r128 culls instances by the shared clump's bounds: cull whole tiles ourselves
+              im.frustumCulled = false;
+              im.userData.centre = new V(cx / arr.length, 0, cz / arr.length);
+              this.group.add(im);
+              list.push(im);
+            }
+          },
+          vegetation(index) {
+            if (index !== 2 && index !== 4) return; // no random plants in City / Hospital / Lab
+            const q = this.quality(), H = MapManager.half - 2, frozen = index === 4;
+            const trees = MapManager.trees || [];
+            const test = (minClear) => () => {
+              // clustered, not uniform: accept more often near a random set of "moist" centres
+              const x = rand(-H, H), z = rand(-H, H);
+              const n = Math.sin(x * 0.11) * Math.cos(z * 0.13) + Math.sin((x + z) * 0.05) * 0.6;
+              if (Math.random() > 0.35 + 0.4 * n) return null;
+              if (MapManager.keepOut?.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr * 0.6)) return null;
+              if (MapManager.collides(x, z, minClear)) return null;
+              if (trees.some((t) => (t[0] - x) ** 2 + (t[1] - z) ** 2 < 0.8)) return null;
+              if (index === 2 && Math.abs(z - (26 + Math.sin(x * 0.06) * 5)) < 1.8) return null; // dirt road stays bare
+              const y = MapManager.groundAt(x, z, 0.15, 3);
+              return [x, y + 0.02, z];
+            };
+            this.plants = [];
+            const gm = this.plantMat(1.0), fm = this.plantMat(0.7);
+            this.scatter(this.plants, this.grassGeo(frozen), gm, Math.round((frozen ? 2600 : 9000) * q), test(0.3), frozen ? [0.7, 1.1] : [0.8, 1.5]);
+            this.scatter(this.plants, this.fernGeo(frozen), fm, Math.round((frozen ? 120 : 900) * q), test(0.4), [0.8, 1.6]);
+            // leaf litter / twigs on the forest floor (flat, no wind)
+            if (!frozen) {
+              const lit = new THREE.MeshStandardMaterial({ color: 0x3b2c18, roughness: 1, map: VisualArt.texture("stain"), transparent: true, opacity: 0.8, depthWrite: false });
+              const leaf = new THREE.PlaneGeometry(0.22, 0.14);
+              leaf.rotateX(-Math.PI / 2);
+              leaf.setAttribute("hgt", new THREE.Float32BufferAttribute(new Array(leaf.attributes.position.count).fill(0), 1));
+              this.scatter(this.plants, leaf, lit, Math.round(1600 * q), test(0.2), [0.8, 1.6]);
+            }
+            this.drawDist = { low: 26, medium: 38, high: 55, ultra: 75 }[SettingsManager.data.graphics] || 38;
+          },
+          fireflies(index) {
+            if (index !== 2) return;
+            const n = Math.round(90 * this.quality());
+            const pos = new Float32Array(n * 3);
+            this.flySeed = Array.from({ length: n }, () => [rand(-45, 45), rand(0.4, 2.4), rand(-45, 45), rand(0, 6)]);
+            const g = new THREE.BufferGeometry();
+            g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+            this.flies = new THREE.Points(g, new THREE.PointsMaterial({ map: VisualArt.texture("glow"), color: 0xd6ff8a, size: 0.14, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
+            this.flies.frustumCulled = false;
+            this.group.add(this.flies);
+          },
+          build(index) {
+            if (this.group) { scene.remove(this.group); this.group.traverse((o) => { if (o.isMesh && o.geometry && !o.isInstancedMesh) o.geometry.dispose(); }); }
+            this.group = new THREE.Group();
+            this.group.name = "Nature";
+            scene.add(this.group);
+            this.plants = [];
+            this.flies = null;
+            this.index = index;
+            this.sky(index);
+            this.vegetation(index);
+            this.fireflies(index);
+            if (index === 2 && scene.fog) {
+              // Dark Forest: depth fog that is thin near the player and thick in the distance
+              // (exp²), slightly lifted so zombies stay readable up close; a cold moon fill.
+              scene.fog.color.setHex(0x0b1714);
+              scene.fog.density = 0.052;
+              this.fogBase = scene.fog.density;
+            } else this.fogBase = scene.fog?.density || 0;
+          },
+          update(dt) {
+            WindManager.update(dt);
+            if (!this.group) return;
+            const cam = camera.position, t = menuTime;
+            if (this.plants?.length) {
+              const D = this.drawDist;
+              const fwd = camera.getWorldDirection(this._f || (this._f = new V()));
+              for (const p of this.plants) {
+                const dx = p.userData.centre.x - cam.x, dz = p.userData.centre.z - cam.z, d2 = dx * dx + dz * dz;
+                // tile radius ≈ 16 m: keep tiles we are inside of, drop far ones and ones behind us
+                p.visible = d2 < (D + 16) * (D + 16) && (d2 < 400 || dx * fwd.x + dz * fwd.z > -16 * Math.hypot(fwd.x, fwd.z));
+              }
+            }
+            if (this.flies) {
+              const a = this.flies.geometry.attributes.position.array, w = WindManager.vec();
+              this.flySeed.forEach((f, i) => {
+                a[i * 3] = f[0] + Math.sin(t * 0.3 + f[3]) * 1.5 + w.x * Math.sin(t * 0.1) * 2;
+                a[i * 3 + 1] = f[1] + Math.sin(t * 0.7 + f[3] * 2) * 0.4;
+                a[i * 3 + 2] = f[2] + Math.cos(t * 0.25 + f[3]) * 1.5;
+              });
+              this.flies.material.opacity = 0.45 + 0.35 * Math.sin(t * 2.3);
+              this.flies.geometry.attributes.position.needsUpdate = true;
+            }
+            // natural density breathing in the forest (never a white wall)
+            if (this.index === 2 && scene.fog && state === GameState.PLAYING && !BossIntro?.active) scene.fog.density = this.fogBase * (0.92 + 0.08 * Math.sin(t * 0.07) + 0.05 * WindManager.strength);
+          },
+        };
         const MapManager = {
           group: new THREE.Group(),
           obstacles: [],
@@ -9752,10 +10046,12 @@ body.netgame #revivetouch{display:flex}
               0x668a9b,
             );
             moon.castShadow = false;
+            moon.userData.moon = true;
             WorldProps.finish(index);
             this.validateSpawns();
             this.makeGrid();
             WorldArt.build(index);
+            Nature.build(index);
           },
           solid(x, y, z, w, h, d, color) {
             const m = box(this.group, x, y, z, w, h, d, color);
@@ -15774,8 +16070,10 @@ body.netgame #revivetouch{display:flex}
             const time = this.windTime;
             m.onBeforeCompile = (shader) => {
               shader.uniforms.windTime = time;
+              shader.uniforms.windStrength = WindManager.uniforms.windStrength;
+              shader.uniforms.windDir = WindManager.uniforms.windDir;
               shader.vertexShader = shader.vertexShader
-                .replace("#include <common>", "#include <common>\nuniform float windTime;")
+                .replace("#include <common>", "#include <common>\nuniform float windTime, windStrength; uniform vec2 windDir;")
                 .replace(
                   "#include <begin_vertex>",
                   `#include <begin_vertex>
@@ -15784,14 +16082,20 @@ body.netgame #revivetouch{display:flex}
                   #else
                   vec4 wpW = modelMatrix * vec4(transformed, 1.0);
                   #endif
+                  // trunk ≈ still, big branches small, twigs/tips most: height above the crown base
+                  // times the distance from the trunk axis (in the model's own frame)
                   float hW = clamp((wpW.y - 2.2) / 4.0, 0.0, 1.4) * ${amount.toFixed(2)};
+                  float rW = clamp(length(position.xz) / 2.2, 0.0, 1.3);
+                  float flex = hW * (0.35 + 0.65 * rW);
                   float phW = wpW.x * 0.21 + wpW.z * 0.17;
-                  float gust = 0.55 + 0.45 * sin(windTime * 0.37 + wpW.x * 0.03);
-                  float swayW = sin(windTime * 1.3 + phW) * 0.16 + sin(windTime * 2.9 + phW * 1.7) * 0.06;
-                  float flutterW = sin(windTime * 11.0 + wpW.y * 5.0 + phW * 9.0) * 0.025;
-                  transformed.x += (swayW * gust + flutterW) * hW;
-                  transformed.z += (swayW * 0.6 * gust - flutterW) * hW;
-                  transformed.y += flutterW * 0.5 * hW;`,
+                  float wave = 0.5 + 0.5 * sin(dot(wpW.xz, windDir) * 0.05 - windTime * 0.8);
+                  float gust = windStrength * (0.6 + 0.4 * wave);
+                  float swayW = (sin(windTime * 1.1 + phW) * 0.1 + sin(windTime * 2.6 + phW * 1.7) * 0.04) * (0.4 + gust);
+                  float bendW = gust * 0.22;
+                  float flutterW = sin(windTime * 11.0 + wpW.y * 5.0 + phW * 9.0) * (0.012 + 0.03 * gust) * rW;
+                  transformed.x += (windDir.x * (bendW + swayW) + flutterW) * flex;
+                  transformed.z += (windDir.y * (bendW + swayW) - flutterW) * flex;
+                  transformed.y += flutterW * 0.5 * flex - bendW * 0.15 * flex;`,
                 );
             };
             m.customProgramCacheKey = () => "wind" + amount;
@@ -24881,6 +25185,7 @@ body.netgame #revivetouch{display:flex}
               if (state === GameState.PLAYING) MonsterFX.update(sdt);
               if (state === GameState.PLAYING) PhysicsProps.update(sdt);
               PropKit.windTime.value += dt;
+              Nature.update(dt);
               if (player) {
                 const sx = Math.round(player.pos.x / 4) * 4,
                   sz = Math.round(player.pos.z / 4) * 4;
@@ -25043,6 +25348,8 @@ body.netgame #revivetouch{display:flex}
             SecretWeaponSkills,
             SpecterSwarm,
             AngelWings,
+            Nature,
+            WindManager,
             CameraRig,
             classBurst: () => classBurst(),
             CyborgRockets,
