@@ -6406,6 +6406,56 @@ body.netgame #revivetouch{display:flex}
         };
 
         // World detailing and atmospheric particles, with bounded draw calls.
+        // Map point lights rendered through a fixed pool sized by graphics level: every map lamp stays a
+        // source (flicker/alarm code keeps driving it), but only the N most relevant to the camera are
+        // real lights. Fixed count = no shader recompiles; swaps fade out/in far from the player.
+        const LightPool = {
+          real: [], sources: [], next: 0, group: null,
+          cap() { return { low: 4, medium: 6, high: 10, ultra: 16 }[SettingsManager.data.graphics] ?? 8; },
+          adopt(group) {
+            for (const r of this.real) r.light.parent?.remove(r.light);
+            for (const s of this.sources) s.visible = true;
+            this.real = []; this.sources = []; this.group = group; this.capNow = this.cap();
+            const found = [];
+            group.updateMatrixWorld(true);
+            group.traverse((o) => { if (o.isPointLight) found.push(o); });
+            if (found.length <= this.capNow) return;
+            for (const l of found) { l.userData.wpos = l.getWorldPosition(new V()); l.userData.base ??= l.intensity; l.visible = false; this.sources.push(l); }
+            for (let i = 0; i < this.capNow; i++) {
+              const light = new THREE.PointLight(0xffffff, 0, 10, 2);
+              light.name = "LightPool_" + i;
+              scene.add(light);
+              this.real.push({ light, src: null, nextSrc: undefined, w: 0 });
+            }
+            this.pick(true);
+          },
+          pick(force) {
+            const c = camera.position;
+            const score = (s) => (s.userData.base || 0.001) / (1 + c.distanceToSquared(s.userData.wpos) / Math.max(25, (s.distance || 20) ** 2));
+            const want = [...this.sources].sort((a, b) => score(b) - score(a)).slice(0, this.real.length);
+            const kept = new Set(this.real.map((r) => r.src).filter((q) => want.includes(q)));
+            const pending = want.filter((q) => !kept.has(q));
+            for (const r of this.real)
+              if (!r.src || !want.includes(r.src)) {
+                r.nextSrc = pending.shift() || null;
+                if (force) { r.src = r.nextSrc; r.nextSrc = undefined; r.w = 1; }
+              }
+          },
+          update(dt) {
+            if (this.group && this.cap() !== this.capNow) this.adopt(this.group);
+            if (!this.real.length) return;
+            if ((this.next -= dt) <= 0) { this.next = 0.3; this.pick(false); }
+            for (const r of this.real) {
+              if (r.nextSrc !== undefined && r.nextSrc !== r.src) {
+                r.w -= dt / 0.25;
+                if (r.w <= 0) { r.src = r.nextSrc; r.nextSrc = undefined; r.w = 0; }
+              } else { r.nextSrc = undefined; r.w = Math.min(1, r.w + dt / 0.25); }
+              const q = r.src, L = r.light;
+              if (!q) { L.intensity = 0; continue; }
+              L.position.copy(q.userData.wpos); L.color.copy(q.color); L.distance = q.distance; L.decay = q.decay; L.intensity = q.intensity * r.w;
+            }
+          },
+        };
         const WorldArt = {
           weather: null,
           weatherPositions: null,
@@ -10121,6 +10171,8 @@ body.netgame #revivetouch{display:flex}
               ambient.color.setHex(index === 1 ? 0xb4c4bc : 0x9aa6c0);
               ambient.groundColor.setHex(index === 1 ? 0x2a2e2b : 0x2a2e38);
             }
+            // underground the sun is a 0.06 fill: its shadow pass would redraw every caster for nothing
+            sun.castShadow = !this.closed;
             if (legacy && index === 0) {
               box(this.group, 0, 0.015, 0, 12, 0.03, 70, 0x19262d);
               box(this.group, 0, 0.018, 0, 70, 0.04, 10, 0x1e2a30);
@@ -10349,6 +10401,7 @@ body.netgame #revivetouch{display:flex}
             this.validateSpawns();
             this.makeGrid();
             WorldArt.build(index);
+            LightPool.adopt(this.group);
             Nature.build(index);
           },
           solid(x, y, z, w, h, d, color) {
@@ -25564,12 +25617,24 @@ body.netgame #revivetouch{display:flex}
           adaptiveSeconds = 0,
           slowWindows = 0,
           fastWindows = 0;
+        // Lightweight frame profiler (always on, a few numbers per frame): CPU ms spent in the
+        // simulation and in render submission, frame interval, draw calls and triangles of the frame.
+        const Perf = {
+          upd: 0, ren: 0, frame: 16.7, calls: 0, tris: 0, n: 0,
+          sample(u, r, wall) {
+            const k = this.n++ < 10 ? 0.5 : 0.05;
+            this.upd += (u - this.upd) * k; this.ren += (r - this.ren) * k; this.frame += (wall * 1000 - this.frame) * k;
+            this.calls = renderer.info.render.calls; this.tris = renderer.info.render.triangles;
+          },
+          reset() { this.n = 0; },
+        };
         function frame(now, background = false) {
           if (!background) requestAnimationFrame(frame);
           // Never cap 60 Hz gameplay at 58: that drops alternate vsync frames.
           if (nativeAndroid && state !== GameState.PLAYING && now - lastFrame < 1000 / 30 - 1) return;
           const wallDt = Math.max(0.001, (now - lastFrame) / 1000);
           const dt = Math.min(0.05, wallDt);
+          const perfT0 = performance.now();
           lastFrame = now;
           menuTime += dt;
           fpsFrames++;
@@ -25731,6 +25796,7 @@ body.netgame #revivetouch{display:flex}
             CombatFX.update(dt);
             BloodFX.update(dt);
             WorldArt.update(dt);
+            LightPool.update(dt);
             if (
               selectedMap === 4 &&
               state === GameState.PLAYING &&
@@ -25775,6 +25841,9 @@ body.netgame #revivetouch{display:flex}
           // The Spin HUD is opaque and full-screen: don't pay for the world render hidden behind it.
           if (state === GameState.CLASS_SELECT && Armory.hudActive && !$("classscreen").classList.contains("hidden")) return;
           renderer.autoClear = true;
+          const perfT1 = performance.now();
+          renderer.info.autoReset = false;
+          renderer.info.reset();
           if (!DepthOfField.render(dt)) renderer.render(scene, camera);
           if (inWorld && WeaponSystem.model.visible) {
             renderer.autoClear = false;
@@ -25782,6 +25851,7 @@ body.netgame #revivetouch{display:flex}
             renderer.render(Viewmodel.scene, Viewmodel.camera);
             renderer.autoClear = true;
           }
+          Perf.sample(perfT1 - perfT0, performance.now() - perfT1, wallDt);
         }
         requestAnimationFrame(frame);
         // Online matches keep running while the window is hidden or minimized (the browser stops
@@ -25810,6 +25880,8 @@ body.netgame #revivetouch{display:flex}
             AngelWings,
             BossKit,
             DepthOfField,
+            Perf,
+            LightPool,
             Nature,
             WindManager,
             CameraRig,
@@ -25839,6 +25911,7 @@ body.netgame #revivetouch{display:flex}
             Armory,
             rarityNames,
             ZombieManager,
+            ParticleSystem,
             WaveManager,
             MutationManager,
             HordeAI,
