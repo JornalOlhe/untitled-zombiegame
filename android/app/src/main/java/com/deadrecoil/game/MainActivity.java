@@ -5,9 +5,11 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -21,6 +23,7 @@ public class MainActivity extends Activity {
     private static final String AUTH_SCHEME = "untitledzombie";
     private WebView webView;
     private UpdateManager updateManager;
+    private int rendererRestarts = 0;
     // An OAuth / e-mail deep link that arrived before the page was ready to receive it.
     private volatile String pendingAuthUrl;
 
@@ -46,10 +49,27 @@ public class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setLoadWithOverviewMode(false);
         s.setUseWideViewPort(true);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // All game code ships inside the APK. Never mix cached assets from an older version
+        // with a freshly updated index.html; that can leave the WebView on a broken boot.
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webView.clearCache(true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) { deliverAuthUrl(); }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                Log.e("DeadRecoil", "WEBVIEW_RENDERER_GONE crashed=" + detail.didCrash());
+                if (webView != null) {
+                    try { ((android.view.ViewGroup) webView.getParent()).removeView(webView); } catch (Exception ignored) {}
+                    try { webView.destroy(); } catch (Exception ignored) {}
+                    webView = null;
+                }
+                if (rendererRestarts++ < 1 && !isFinishing() && !isDestroyed()) {
+                    runOnUiThread(() -> recreate());
+                }
+                return true;
+            }
         });
         pendingAuthUrl = authUrlFrom(getIntent());
         webView.setWebChromeClient(new WebChromeClient());
@@ -105,6 +125,14 @@ public class MainActivity extends Activity {
 
     public class NativeBridge {
         @JavascriptInterface public void quit() { runOnUiThread(() -> finishAndRemoveTask()); }
+
+        @JavascriptInterface public void reportReady(String version) {
+            Log.i("DeadRecoil", "DEAD_RECOIL_READY " + (version == null ? "" : version));
+        }
+
+        @JavascriptInterface public void reportError(String message) {
+            Log.e("DeadRecoil", "JS_BOOT_ERROR " + (message == null ? "" : message));
+        }
 
         // Official Google sign-in page in a Chrome Custom Tab (never inside the WebView).
         @JavascriptInterface public void openAuthUrl(String url) {
