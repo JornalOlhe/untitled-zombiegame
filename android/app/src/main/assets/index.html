@@ -10001,6 +10001,16 @@ body.netgame #revivetouch{display:flex}
             this.qscene.add(this.quad);
             this.qcam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
           },
+          // what the cinematic camera is framing: intro boss, kill-cam victim, dying boss, own body
+          subject() {
+            const bi = BossIntro.active?.z?.group;
+            if (bi) return bi.position.clone().setY(bi.position.y + 1.2 * (BossIntro.active.z.size || 1));
+            if (KillCam.active?.focus) return KillCam.active.focus;
+            const bd = BossDeath.active;
+            if (bd) return (bd.z?.group?.position || bd.pos)?.clone().setY(((bd.z?.group?.position || bd.pos).y || 0) + 1.2 * (bd.z?.size || 1));
+            if (DeathFX.active?.body && state === GameState.DYING) return DeathFX.active.body.clone().setY(DeathFX.active.body.y + 0.3);
+            return null;
+          },
           // returns true when it rendered the scene itself
           render(dt) {
             const cine = BossIntro.active || KillCam.active || BossDeath.active || (DeathFX.active && state === GameState.DYING);
@@ -10012,8 +10022,8 @@ body.netgame #revivetouch{display:flex}
             if (this.rt.width !== s.x || this.rt.height !== s.y) { this.rt.setSize(s.x, s.y); this.mat.uniforms.texel.value.set(1 / s.x, 1 / s.y); }
             // focus: the subject of the cinematic, else whatever the crosshair points at
             let target = 12;
-            const subj = BossIntro.active?.z?.group || null;
-            if (subj) target = camera.position.distanceTo(subj.position) + 0.5;
+            const subj = this.subject();
+            if (subj) target = Math.max(1.2, camera.position.distanceTo(subj));
             this.focus += (target - this.focus) * (1 - Math.exp(-dt * 5));
             const U = this.mat.uniforms;
             U.near.value = camera.near; U.far.value = camera.far;
