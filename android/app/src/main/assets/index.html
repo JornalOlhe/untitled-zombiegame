@@ -10081,9 +10081,9 @@ body.netgame #revivetouch{display:flex}
             ambient.color.setHex([0xb0c8dd, 0xbecbb1, 0xa8b8bb, 0xa8bed8, 0xd2e7f0][index]);
             ambient.groundColor.setHex([0x303a36, 0x36392b, 0x272f25, 0x282c3b, 0x505d65][index]);
             sun.color.setHex([0xc4daf1, 0xe9d4a0, 0xa8c6d1, 0xa9bde4, 0xe1efff][index]);
-            renderer.toneMappingExposure = index === 2 ? 1.08 : index === 4 ? 0.96 : 1.04;
-            ambient.intensity = index === 4 ? 0.65 : 0.4;
-            sun.intensity = index === 4 ? 0.6 : index === 2 ? 0.26 : 0.42;
+            renderer.toneMappingExposure = index === 2 ? 1.08 : index === 4 ? 0.93 : 1.04;
+            ambient.intensity = index === 4 ? 0.54 : 0.4;
+            sun.intensity = index === 4 ? 0.8 : index === 2 ? 0.26 : 0.42;
             const H = this.half;
             const legacy = !MapDesigns[index];
             box(this.group, 0, -0.3, 0, H * 2, 0.6, H * 2, m.ground);
@@ -16182,8 +16182,8 @@ body.netgame #revivetouch{display:flex}
                 fill([176, 176, 170], 12);
                 break;
               case "stripeWhite":
-                fill([226, 226, 216], 14);
-                dots([170, 170, 160], 12, 12);
+                fill([198, 198, 188], 16); // worn road paint: not a glowing white at night
+                dots([142, 142, 134], 16, 14);
                 break;
               case "stripeYellow":
                 fill([226, 188, 64], 16);
