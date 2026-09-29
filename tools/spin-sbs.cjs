@@ -61,7 +61,7 @@ const server = http.createServer((q, r) => {
       await page.waitForFunction(() => !DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.roll.revealed, null, { timeout: 60000, polling: 50 });
       await page.evaluate(() => { window.__fxAnims = document.getAnimations(); window.__fxAnims.forEach(a => a.pause()); clearTimeout(DeadRecoilTest.Armory.fxTimer); clearTimeout(DeadRecoilTest.Armory.popTimer); });
     }
-    await page.evaluate((t) => window.__fxAnims.forEach(a => { try { a.currentTime = t; } catch {} }), m.fx);
+    await page.evaluate((t) => { window.__fxAnims.forEach(a => { try { a.currentTime = t; } catch {} }); const S3 = DeadRecoilTest.SpinStage3D; if (S3?.built) { window.__scale = 0; window.__acc = S3.t0 + t; } }, m.fx);
     await page.waitForTimeout(350);
     await page.screenshot({ path: file }); shots.push(name);
   }
