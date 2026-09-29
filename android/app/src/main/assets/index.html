@@ -23231,10 +23231,18 @@ body.netgame #revivetouch{display:flex}
             // guesswork: the right hand is the weapon hand; the left only joins where defined.
             if (!(r.secretAccessories?.fly > 0.5) && !reloading && !dead) {
               const gp = r.gun.position.clone().add(r.gripOff);
+              // Reach limit: a strike may push the socket past arm's length — then the weapon is
+              // pulled back along the hand→shoulder line so the grip never floats off the hands.
+              const axis = r.spearHold ? new V(0, 1, 0).applyEuler(r.gun.rotation) : null;
+              const holds = r.spearHold ? (r.throwArm ? [[0, -0.02]] : [[0, -0.02], [1, 0.42]]) : [];
+              let worst = 0, pull = null;
+              for (const [h, off] of holds) {
+                const tgt = axis ? gp.clone().addScaledVector(axis, off) : gp, v = r.arms[h].position.clone().sub(tgt), ex = v.length() - 0.6;
+                if (ex > worst) { worst = ex; pull = v.normalize().multiplyScalar(ex); }
+              }
+              if (pull) { gp.add(pull); r.gun.position.add(pull); }
               if (r.oneHand) this.ik(r.arms[0], r.elbows[0], gp);
               else if (r.spearHold) {
-                const ax = r.throwArm ? r.gun.rotation.x : 1.25,
-                  axis = new V(0, Math.cos(ax), Math.sin(ax));
                 this.ik(r.arms[0], r.elbows[0], gp.clone().addScaledVector(axis, -0.02));
                 // During a throw only the right hand touches the spear; the left one is posed above.
                 if (!r.throwArm) this.ik(r.arms[1], r.elbows[1], gp.clone().addScaledVector(axis, 0.42));

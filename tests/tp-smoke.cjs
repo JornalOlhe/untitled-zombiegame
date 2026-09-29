@@ -14,7 +14,7 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
  const out=[];
  W.weapons.forEach((def,idx)=>{
   const g=S.create(0,def);T.scene.add(g);const r=g.userData.rig;
-  const rec={name:def.name,kind:def.kind,minLeft:1e9,maxRight:0,nan:false,oneHand:r.oneHand,spear:r.spearHold};
+  const rec={name:def.name,kind:def.kind,minLeft:1e9,maxLeftSpear:0,maxRight:0,nan:false,oneHand:r.oneHand,spear:r.spearHold};
   for(const mode of ['idle','walk','attack','reload']){
    for(let i=0;i<40;i++){
     const t=i/30;const atk=mode==='attack'?(i%20)/30:99;
@@ -25,9 +25,10 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
     const lh=hand(r.arms[1]),rh=hand(r.arms[0]);
     if(![lh.x,lh.y,lh.z,rh.x,rh.y,rh.z,gunP.x].every(Number.isFinite))rec.nan=true;
     // distance from left hand to the weapon's long axis (local +/-Z through gun origin)
-    const axis=new V(0,0,1).applyQuaternion(r.gun.getWorldQuaternion(new THREE.Quaternion()));
+    const axis=(r.spearHold?new V(0,1,0):new V(0,0,1)).applyQuaternion(r.gun.getWorldQuaternion(new THREE.Quaternion()));
     const rel=lh.clone().sub(gunP);const along=rel.dot(axis);const perp=rel.clone().addScaledVector(axis,-along).length();
     if(mode!=='reload')rec.minLeft=Math.min(rec.minLeft,perp);
+    if(r.spearHold&&mode!=='reload')rec.maxLeftSpear=Math.max(rec.maxLeftSpear,perp);
     rec.maxRight=Math.max(rec.maxRight,rh.distanceTo(gunP));
    }
   }
@@ -42,6 +43,7 @@ for(const r of res){
  const oneHandMelee=r.kind==='melee'&&r.oneHand;
  if(r.name==='Angelic Specter'&&r.minLeft<0.25)bad.push(r.name+': left hand near the floating specter ('+r.minLeft+')');
  if(oneHandMelee&&r.minLeft<0.2)bad.push(r.name+': left hand touches a one-hand melee weapon ('+r.minLeft+')');
+ if(r.spear&&r.maxLeftSpear>0.12)bad.push(r.name+': left hand leaves the spear shaft during idle/walk/attack ('+r.maxLeftSpear.toFixed(2)+')');
  if(r.maxRight>1.2)bad.push(r.name+': right hand far from weapon ('+r.maxRight+')');
 }
 await b.close();server.close();
