@@ -3078,7 +3078,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.30.0";
+        const GAME_VERSION = "0.30.1";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -6998,7 +6998,7 @@ body.netgame #revivetouch{display:flex}
         // Everything is a local sandbox: dev matches are never reported to the server, spins and
         // wallet on the account are untouched, and the sandbox loadout/powers are off in
         // multiplayer — so the sequence can't be used to farm or cheat the online economy.
-        // Server-side account tools (give/set wallet) still require the dev_whitelist.
+        // Account/server mutations are disabled while the isolated DEV sandbox is active.
         const DevMode = {
           active: false,
           allowed: false,
@@ -7053,7 +7053,8 @@ body.netgame #revivetouch{display:flex}
           },
           press(letter) {
             const now = performance.now(),
-              want = ["D", "E", "A", "D"];
+              // DEAD enters the isolated sandbox; while it is active, DAED exits it.
+              want = this.active ? ["D", "A", "E", "D"] : ["D", "E", "A", "D"];
             if (now - this.lastClick > 4000) this.seq = [];
             this.lastClick = now;
             if (letter !== want[this.seq.length]) {
@@ -7080,8 +7081,6 @@ body.netgame #revivetouch{display:flex}
             return this.serverAllowed;
           },
           unlock() {
-            // All four letters jump in a wave, then the loading bar runs and dev mode switches on
-            // (or off, if it already was).
             document.querySelectorAll("#menu .brand .dev-l").forEach((el, i) => this.hop(el, i * 90));
             const turningOn = !this.active;
             this.css();
@@ -7091,19 +7090,17 @@ body.netgame #revivetouch{display:flex}
               ov.id = "devload";
               document.body.appendChild(ov);
             }
-            ov.innerHTML = `<div class="dl-card"><b>${turningOn ? "MODO DESENVOLVEDOR" : "DESATIVANDO MODO DEV"}</b><small>${turningOn ? "carregando ferramentas…" : "voltando ao jogo normal…"}</small><i><em></em></i><span class="dl-log"></span></div>`;
+            ov.innerHTML = `<div class="dl-card"><b>${turningOn ? "MODO DESENVOLVEDOR" : "SAINDO DO MODO DEV"}</b><small>${turningOn ? "criando perfil sandbox isolado…" : "restaurando sua conta normal…"}</small><i><em></em></i><span class="dl-log"></span></div>`;
             ov.className = "show";
-            const lines = turningOn ? ["recursos infinitos", "menu de invocação", "arsenal completo", "pronto"] : ["limpando sandbox", "pronto"];
-            lines.forEach((t, i) => setTimeout(() => { const l = ov.querySelector(".dl-log"); if (l) l.textContent = "› " + t; }, 250 + i * 300));
-            setTimeout(() => {
-              ov.className = "";
-              this.active = this.allowed = turningOn;
-              if (!turningOn) this.sandbox = { weaponId: null, classId: null };
-              this.save();
-              this.badge();
-              UIManager.toast(turningOn ? "MODO DESENVOLVEDOR ATIVO · dentro da partida, F8 ou o botão DEV abre o console. No Armory, toque num item para pegar." : "Modo desenvolvedor desativado.");
-              if (turningOn) this.refresh();
-            }, 1500);
+            const lines = turningOn
+              ? ["perfil LVL 1 · 0 moedas", "arsenal liberado", "sincronização da conta bloqueada", "reiniciando"]
+              : ["apagando sessão sandbox", "conta real preservada", "reiniciando"];
+            lines.forEach((t, i) => setTimeout(() => { const l = ov.querySelector(".dl-log"); if (l) l.textContent = "› " + t; }, 220 + i * 260));
+            try {
+              if (turningOn) localStorage.setItem("deadrecoil.dev", JSON.stringify({ on: true, ...this.sandbox }));
+              else localStorage.removeItem("deadrecoil.dev");
+            } catch {}
+            setTimeout(() => location.reload(), 1350);
           },
           // Small DEV chip on the home menu and a DEV button on the HUD while active.
           badge() {
@@ -7176,11 +7173,42 @@ body.netgame #revivetouch{display:flex}
             const v = this.sandbox[kind === "weapon" ? "weaponId" : "classId"];
             return v ?? real;
           },
+          // Build a memory-only LVL 1 profile. No account/local economy storage is used.
+          bootstrap() {
+            if (!this.active || !Progression.economy) return;
+            const memory = { getItem: () => null, setItem() {}, removeItem() {} },
+              eco = new LoadoutEconomy(classes, WeaponSystem.weapons, memory),
+              weaponId = Number.isInteger(this.sandbox.weaponId) && WeaponSystem.weapons[this.sandbox.weaponId] ? this.sandbox.weaponId : 0,
+              classId = Number.isInteger(this.sandbox.classId) && classes[this.sandbox.classId] ? this.sandbox.classId : 0;
+            eco.key = "deadrecoil.dev-sandbox.memory";
+            eco.data = {
+              coins: 0, normal: 0, lucky: 0,
+              classId, classRosterVersion: 2, weaponId, weaponSlot: 0,
+              classDivinePity: 0, classSecretPity: 0, weaponDivinePity: 0, weaponSecretPity: 0,
+              weaponSlotsOwned: 5, classSlotsOwned: 3,
+              weaponSlots: [weaponId, 0, 1, 2, 3],
+              classSlots: [classId, 0, 1],
+              pendingLoadout: {},
+            };
+            Progression.economy = eco;
+            normalizeLoadoutState(eco.data);
+            selectedClass = classId;
+            player.coins = player.normal = player.lucky = 0;
+            Account.profile = {
+              devSandbox: true, username: "dev_sandbox", displayName: "DEV SANDBOX",
+              level: 1, xp: 0, xpNeeded: 310, coins: 0, normal: 0, lucky: 0, stats: {},
+            };
+            Account.user = null;
+            Account.run = null;
+            return eco.data;
+          },
           // Called by PlayerController.start: sandbox loadout and resources for solo dev matches.
           applyToRun() {
             if (!this.active || NetGame.active) return;
             if (this.sandbox.weaponId != null && WeaponSystem.weapons[this.sandbox.weaponId]) player.inventory[player.slot] = WeaponSystem.create(this.sandbox.weaponId);
-            player.coins = 999999;
+            player.coins = 0;
+            player.normal = 0;
+            player.lucky = 0;
             player.grenades = 99;
           },
           tab: "powers",
@@ -7354,6 +7382,10 @@ body.netgame #revivetouch{display:flex}
             return true;
           },
           async server(action, args) {
+            if (this.active) {
+              this.log("Sandbox isolado: nenhuma ferramenta DEV escreve na sua conta real.");
+              return;
+            }
             try {
               const r = await Account.queue("dev", { action, args });
               if (r?.profile) Account.apply(r.profile);
@@ -9913,13 +9945,13 @@ body.netgame #revivetouch{display:flex}
               tier: 1,
               kind: "fire",
               stream: true,
-              cone: 0.2,
-              damage: 5,
-              rate: 0.06,
+              cone: 0.12,
+              damage: 4,
+              rate: 0.07,
               mag: 90,
               reload: 2.2,
-              range: 11,
-              burn: { dps: 12, duration: 2.5 },
+              range: 9.5,
+              burn: { dps: 10, duration: 2.2 },
               ability: "Lança-chamas: jato contínuo em cone que incendeia os alvos.",
             },
             // Raro (×1.9)
@@ -9929,13 +9961,13 @@ body.netgame #revivetouch{display:flex}
               cat: 1,
               tier: 2,
               kind: "auto",
-              damage: 25,
+              damage: 20,
               rate: 0.115,
               mag: 30,
               reload: 1.8,
               range: 75,
               spread: 0.006,
-              head: 2.5,
+              head: 2.2,
               ability: "Suprimida: menos ruído, mira mais precisa.",
             },
             {
@@ -9974,7 +10006,7 @@ body.netgame #revivetouch{display:flex}
               cat: 1,
               tier: 3,
               kind: "laser",
-              damage: 24,
+              damage: 13,
               rate: 0.24,
               mag: 27,
               reload: 2,
@@ -10068,7 +10100,7 @@ body.netgame #revivetouch{display:flex}
               cat: 1,
               tier: 5,
               kind: "quantum",
-              damage: 22,
+              damage: 15,
               rate: 0.6,
               mag: 15,
               reload: 2.2,
@@ -10083,14 +10115,14 @@ body.netgame #revivetouch{display:flex}
               tier: 5,
               kind: "fire",
               stream: true,
-              cone: 0.3,
-              damage: 7,
-              rate: 0.05,
+              cone: 0.16,
+              damage: 5.5,
+              rate: 0.06,
               mag: 120,
               reload: 2.4,
-              range: 14,
-              burn: { dps: 22, duration: 3 },
-              ability: "Lança-chamas infernal: jato largo e contínuo, fogo forte e duradouro.",
+              range: 11.5,
+              burn: { dps: 16, duration: 2.6 },
+              ability: "Lança-chamas infernal: jato concentrado e contínuo, fogo forte e duradouro.",
             },
             {
               modelId: 23,
@@ -10121,7 +10153,7 @@ body.netgame #revivetouch{display:flex}
               kind: "melee",
               spear: true,
               oneHand: true,
-              damage: 78,
+              damage: 62,
               rate: 0.5,
               mag: Infinity,
               reload: 0,
@@ -10136,12 +10168,12 @@ body.netgame #revivetouch{display:flex}
               cat: 2,
               tier: 6,
               kind: "missile",
-              damage: 150,
+              damage: 125,
               rate: 1,
               mag: 3,
               reload: 3,
               range: 75,
-              burn: { dps: 20, duration: 2.5 },
+              burn: { dps: 16, duration: 2.2 },
               ability: "Explosão em área que também incendeia os alvos.",
             },
             {
@@ -10151,12 +10183,12 @@ body.netgame #revivetouch{display:flex}
               tier: 6,
               kind: "cryo",
               stream: true,
-              cone: 0.24,
-              damage: 6,
-              rate: 0.06,
+              cone: 0.13,
+              damage: 4.5,
+              rate: 0.07,
               mag: 110,
               reload: 2.2,
-              range: 13,
+              range: 10.5,
               chill: 0.09,
               freeze: { slow: 0.3, duration: 1.2 },
               ability: "Lança-gelo: desacelera cada vez mais até congelar. Zumbi comum congelado quebra com qualquer golpe.",
@@ -10171,7 +10203,7 @@ body.netgame #revivetouch{display:flex}
               scythe: true,
               oneHand: true,
               multiHit: 4,
-              damage: 64,
+              damage: 54,
               rate: 0.55,
               mag: Infinity,
               reload: 0,
@@ -10186,7 +10218,7 @@ body.netgame #revivetouch{display:flex}
               kind: "melee",
               specter: true,
               multiHit: 5,
-              damage: 58,
+              damage: 44,
               rate: 0.38,
               mag: Infinity,
               reload: 0,
@@ -16527,7 +16559,7 @@ body.netgame #revivetouch{display:flex}
               s.position.copy(from).addScaledVector(d, rand(0, 0.25));
               this.live.push({ s, vel: d.multiplyScalar(speed * rand(0.8, 1.1)), life: 0, max: rand(0.34, 0.5), kind, spin: rand(-3, 3) });
             }
-            while (this.live.length > 260) this.recycle(this.live.shift());
+            while (this.live.length > 180) this.recycle(this.live.shift());
           },
           recycle(p) {
             scene.remove(p.s);
@@ -16546,7 +16578,11 @@ body.netgame #revivetouch{display:flex}
               p.vel.multiplyScalar(Math.exp(-dt * 2.2));
               p.vel.y += (p.kind === "fire" ? 2.6 : -1.2) * dt;
               p.s.position.addScaledVector(p.vel, dt);
-              if (MapManager.collides(p.s.position.x, p.s.position.z, 0.05, p.s.position.y - 0.5)) p.vel.multiplyScalar(0.25);
+              if (MapManager.collides(p.s.position.x, p.s.position.z, 0.05, p.s.position.y - 0.5)) {
+                this.recycle(p);
+                this.live.splice(i, 1);
+                continue;
+              }
               const pal = this.PAL[p.kind] || this.PAL.fire,
                 seg = Math.min(2, Math.floor(k * 3)),
                 f = k * 3 - seg,
@@ -16562,30 +16598,42 @@ body.netgame #revivetouch{display:flex}
             this.live = [];
           },
           fire(w, damage) {
-            const origin = player.pos.clone(),
-              aim = CameraRig.aim(),
-              muzzle = WeaponSystem.muzzleWorld(origin),
+            const eye = player.pos.clone(),
+              aim = CameraRig.aim().normalize(),
+              muzzle = WeaponSystem.muzzleWorld(eye),
+              origin = isFinite(muzzle.x + muzzle.y + muzzle.z) && muzzle.distanceTo(eye) < 3 ? muzzle : eye,
               kind = w.kind === "cryo" ? "cryo" : "fire",
-              cosCone = Math.cos(w.cone || 0.22);
-            this.emit(muzzle, aim, kind, kind === "fire" ? 6 : 5, w.range);
+              cone = Math.max(0.06, w.cone || 0.12);
+            // One physical stream volume drives both visuals and damage. The first wall clamps
+            // the stream, so flames/ice and their hit volume end at the same surface.
+            raycaster.set(origin, aim);
+            raycaster.far = w.range;
+            const wall = raycaster.intersectObjects(MapManager.walls)[0],
+              reach = Math.max(0, Math.min(w.range, wall ? wall.distance - 0.04 : w.range));
+            this.emit(origin, aim, kind, kind === "fire" ? 5 : 4, reach);
             muzzleLight.color.set(kind === "fire" ? 0xff7a2a : 0x8fdcff);
-            muzzleLight.intensity = 1.6 + Math.random() * 0.8;
-            if (simulationTime - this.lastSound > 0.16) {
+            muzzleLight.intensity = 1.4 + Math.random() * 0.6;
+            if (simulationTime - this.lastSound > 0.18) {
               this.lastSound = simulationTime;
               AudioManager.noise?.(0.14, kind === "fire" ? 0.18 : 0.12);
             }
             syncHitMatrices();
-            for (const z of [...ZombieManager.list]) {
+            for (const z of ZombieManager.list) {
               if (z.dead) continue;
-              const c = z.group.position.clone().add(new V(0, 0.9 * (z.size || 1), 0)),
+              const size = Math.min(2, z.size || 1),
+                c = z.group.position.clone().add(new V(0, 0.9 * size, 0)),
                 to = c.clone().sub(origin),
-                d = to.length();
-              if (d > w.range + (z.size || 1) * 0.5 || d < 0.01) continue;
-              if (to.dot(aim) / d < cosCone - (z.size || 1) * 0.12 / Math.max(1, d)) continue;
-              if (!canReachZombie(origin, z)) continue; // wall blocks the jet and the damage
-              ZombieManager.hit(z, damage * (1 - 0.35 * (d / w.range)), false, c, w);
+                axial = to.dot(aim);
+              if (axial <= 0.08 || axial > reach) continue;
+              const lateralSq = Math.max(0, to.lengthSq() - axial * axial),
+                bodyRadius = Math.min(0.42, 0.18 + size * 0.09),
+                allowedRadius = Math.tan(cone) * axial + bodyRadius;
+              if (lateralSq > allowedRadius * allowedRadius) continue;
+              if (!canReachZombie(origin, z, 0.03)) continue;
+              const falloff = 1 - 0.3 * (axial / Math.max(0.01, w.range));
+              ZombieManager.hit(z, damage * falloff, false, c, w);
             }
-            WeaponSystem.lastImpact = origin.clone().addScaledVector(aim, w.range * 0.7);
+            WeaponSystem.lastImpact = origin.clone().addScaledVector(aim, reach);
           },
         };
         // A single ray of a hitscan weapon: raycast, apply damage/pierce, draw the tracer.
@@ -18404,13 +18452,26 @@ body.netgame #revivetouch{display:flex}
             return `deadrecoil.profile.${id}`;
           },
           signedIn() {
-            return !!this.userId;
+            return !!this.userId && !DevMode.active;
           },
           apply(profile) {
             if (!profile) return;
+            this.userId = profile.userId || this.userId;
+            if (DevMode.active) {
+              try {
+                if (this.userId) localStorage.setItem(this.profileCacheKey(this.userId), JSON.stringify(profile));
+              } catch {}
+              this.profile = {
+                devSandbox: true, username: "dev_sandbox", displayName: "DEV SANDBOX",
+                level: 1, xp: 0, xpNeeded: 310, coins: 0, normal: 0, lucky: 0, stats: {},
+              };
+              this.user = null;
+              if (Progression.economy?.key !== "deadrecoil.dev-sandbox.memory") DevMode.bootstrap();
+              this.badge();
+              return;
+            }
             this.profile = profile;
             this.user = profile.username || this.user;
-            this.userId = profile.userId || this.userId;
             // The economy object is the same shape offline and online; account data is cached
             // under its own key so a guest save is never overwritten.
             Progression.economy.key = `deadrecoil.account-economy.${this.userId}`;
@@ -18449,6 +18510,17 @@ body.netgame #revivetouch{display:flex}
           badge() {
             const online = DR.Backend.isOnline();
             const status = $("account-status");
+            if (DevMode.active) {
+              if (status) status.textContent = "DEV SANDBOX · LVL 1 · 0 moedas · sem sincronização";
+              const net = $("netstatus");
+              if (net) {
+                net.dataset.state = "guest";
+                net.querySelector("b").textContent = "DEV SANDBOX · CONTA REAL ISOLADA";
+              }
+              DR.ProfileUI?.chip();
+              DR.MissionUI?.render();
+              return;
+            }
             if (status)
               status.textContent = this.signedIn()
                 ? online
@@ -18495,12 +18567,14 @@ body.netgame #revivetouch{display:flex}
               const r = await DR.ProfileRepository.session();
               this.online = true;
               this.apply(r.profile);
-              if (r.profile.settings && Object.keys(r.profile.settings).length) {
-                SettingsManager.data = { ...SettingsManager.defaults, ...r.profile.settings };
-                SettingsManager.apply();
+              if (!DevMode.active) {
+                if (r.profile.settings && Object.keys(r.profile.settings).length) {
+                  SettingsManager.data = { ...SettingsManager.defaults, ...r.profile.settings };
+                  SettingsManager.apply();
+                }
+                this.flushOffline();
+                DR.MissionManager.refresh().catch(() => {});
               }
-              this.flushOffline();
-              DR.MissionManager.refresh().catch(() => {});
             } catch (e) {
               if (e.code === "not_authenticated") {
                 await this.expire();
@@ -18534,6 +18608,7 @@ body.netgame #revivetouch{display:flex}
           },
           onConnectivity(online) {
             this.badge();
+            if (DevMode.active) return;
             if (online && this.userId && !this.online) this.load().catch(() => {});
             if (!online) this.online = false;
           },
@@ -18560,6 +18635,7 @@ body.netgame #revivetouch{display:flex}
           // Serialised server calls. The request id is fixed per call, so a retry after a
           // dropped connection can never apply twice.
           queue(path, data = {}) {
+            if (DevMode.active) return Promise.reject(Error("DEV SANDBOX · alterações da conta real estão bloqueadas."));
             if (!DR.Backend.isOnline()) return Promise.reject(Error("OFFLINE · conecte-se para alterar o loadout da conta."));
             const request = DR.Backend.uuid();
             const run = () => {
@@ -18592,6 +18668,7 @@ body.netgame #revivetouch{display:flex}
             return op;
           },
           savePreferences() {
+            if (DevMode.active) return;
             clearTimeout(this.timer);
             this.timer = setTimeout(() => {
               if (this.signedIn() && DR.Backend.isOnline())
@@ -23608,6 +23685,7 @@ body.netgame #revivetouch{display:flex}
           await DR.LoginUI.callback(result);
         });
         Progression.load();
+        if (DevMode.active) DevMode.bootstrap();
         const bootQuery = new URLSearchParams(location.search);
         const bootState = await Account.init();
         App.configureNet();
