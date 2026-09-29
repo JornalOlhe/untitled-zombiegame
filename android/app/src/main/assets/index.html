@@ -22132,7 +22132,9 @@ body.netgame #revivetouch{display:flex}
                 state === GameState.GAMEOVER,
               );
             }
-            WeaponSystem.model.visible = distance < 0.6;
+            WeaponSystem.model.visible =
+              distance < 0.6 &&
+              !(WeaponSystem.current()?.spear && (SpearThrow.active || !WeaponSystem.spearHeld));
             const f = clamp(
               72 + (SettingsManager.data.fov - 85) * 0.55,
               58,
