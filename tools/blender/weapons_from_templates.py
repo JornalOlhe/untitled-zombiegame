@@ -129,6 +129,18 @@ class Builder:
         edt = nd.distance_transform_edt(np.pad(m, 1))[1:-1, 1:-1]
         bevel = part.get("bevel", 0.7)
         level = np.where(edt <= 1.0, bevel, 1.0)
+        prof = part.get("profile")
+        if prof:
+            # Real volume instead of a flat slab: the depth ramps with the distance to the silhouette
+            # edge (lens/diamond section for blades, cylinder-like for handles and shafts), in a few
+            # bevel steps so the chunky pixel look survives. "round" also makes the thickness equal
+            # to the part's own height so a handle is as deep as it is wide.
+            if prof == "round":
+                t = Hm * part.get("fill", 0.92)
+            R = part.get("R") or max(1.5, (H if prof == "round" else min(H, W) / 2) / 2.0)
+            steps = part.get("steps", 5)
+            frac = np.clip(edt / R, 0, 1) ** part.get("gamma", 0.75)
+            level = np.round(np.maximum(np.ceil(frac * steps) / steps, part.get("edge", 0.22)), 4)
         level[~m] = 0
         # emission: bright, saturated template pixels on glowing weapons
         hsv_v = col.max(2)
@@ -164,8 +176,8 @@ class Builder:
             return (0.5 - j / H) * Hm
 
         uvq = lambda i0, j0, i1, j1: [(tile, i0, j1), (tile, i1, j1), (tile, i1, j0), (tile, i0, j0)]
-        for lv in (bevel, 1.0):
-            sel = m & np.isclose(level, lv)
+        for lv in (sorted(set(np.round(level[m], 4).tolist())) if prof else (bevel, 1.0)):
+            sel = m & (np.abs(level - lv) < 1e-6)
             d = t / 2 * lv
             for (r0, c0, r1, c1) in greedy(sel):
                 a0, a1, b0, b1 = A(c0), A(c1), B(r1), B(r0)
