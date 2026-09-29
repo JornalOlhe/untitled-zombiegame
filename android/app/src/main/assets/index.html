@@ -8647,11 +8647,12 @@ body.netgame #revivetouch{display:flex}
         MapDesigns[1] = (M, H) => {
           const K = MapKit;
           K.seed = 1221;
-          const CEIL = 4.2,
+          const CEIL = 4.6,
             MAIN = 3, // main corridor half-width
             RING = 24,
             RW = 2; // ring corridor half-width
           M.closed = true;
+          M.ceiling = CEIL;
           M.playerStart = [0, 6];
           M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-RING, -46], [RING, 46], [46, -RING], [-46, RING], [RING, -46], [-RING, 46], [46, RING], [-46, -RING]];
           M.keepOut = [[0, 0, 7], [0, 6, 4]];
@@ -9135,6 +9136,7 @@ body.netgame #revivetouch{display:flex}
           M.spawns = [[0, -46], [46, 0], [0, 46], [-46, 0], [-46, -30], [46, 30], [30, -46], [-30, 46], [46, -30], [-46, 30]];
           M.keepOut = [[0, 0, R_OUT + 3], [0, 32, 4]];
           M.closed = true;
+          M.ceiling = CEIL;
           // Floor, ceiling, perimeter.
           const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
           if (floor) {
@@ -9787,6 +9789,7 @@ body.netgame #revivetouch{display:flex}
             this.landscape = null;
             this.capsule = null;
             this.closed = false;
+            this.ceiling = null;
             this.keepOut = null;
             this.playerStart = null;
             this.trees = [];
@@ -10073,6 +10076,11 @@ body.netgame #revivetouch{display:flex}
             return false;
           },
           // Height of the surface under (x, z) that someone with feet at `feet` can stand on.
+          // Solid ceiling of the closed maps: nothing (player, zombie, flight, knock-back, camera,
+          // projectile) goes through it. Returns Infinity outdoors.
+          ceilingAt() {
+            return this.ceiling ?? Infinity;
+          },
           groundAt(x, z, r = 0.3, feet = 0) {
             const limit = feet + this.STEP;
             let g = 0;
@@ -13725,6 +13733,7 @@ body.netgame #revivetouch{display:flex}
               pos.x = L.from.x + (L.to.x - L.from.x) * k;
               pos.z = L.from.z + (L.to.z - L.from.z) * k;
               pos.y = L.from.y + (L.to.y - L.from.y) * k + 6 * k * (1 - k) * (1 + z.size * 0.3);
+              pos.y = Math.min(pos.y, Math.max(0, MapManager.ceilingAt() - 1.9 * (z.size || 1) - 0.1));
               z.group.rotation.y = Math.atan2(L.to.x - L.from.x, L.to.z - L.from.z);
               return;
             }
@@ -14385,7 +14394,7 @@ body.netgame #revivetouch{display:flex}
             }
             if (a.launchFrom) {
               const h = flying * flying * 22 + flying * 16;
-              a.z.group.position.y = a.launchFrom.y + h;
+              a.z.group.position.y = Math.min(a.launchFrom.y + h, Math.max(0, MapManager.ceilingAt() - 2.2));
             }
             return flying;
           },
@@ -18700,6 +18709,13 @@ body.netgame #revivetouch{display:flex}
               feet += player.vy * dt;
               if (feet < ground) feet = ground;
             }
+            // Head against the ceiling: clamp the feet so eye + head clearance stays below it and
+            // kill any upward speed (jumps, flight, knock-backs, launches).
+            const ceilFeet = MapManager.ceilingAt() - this.motion.eye - 0.32;
+            if (feet > ceilFeet) {
+              feet = Math.max(ground, ceilFeet);
+              if (player.vy > 0) player.vy = 0;
+            }
             const groundNow = !climbing ? ground
               : player.climb?.phase === "climb" ? Math.min(feet, MapManager.groundAt(player.pos.x - player.climb.inward[0] * 0.45, player.pos.z - player.climb.inward[1] * 0.45, 0.1, feet))
               : MapManager.groundAt(player.pos.x, player.pos.z, 0.28, feet);
@@ -18818,6 +18834,14 @@ body.netgame #revivetouch{display:flex}
           for (let i = projectiles.length - 1; i >= 0; i--) {
             const p = projectiles[i];
             p.life -= dt;
+            // Solid ceiling indoors: things hit it instead of passing through.
+            const ceil = MapManager.ceilingAt() - 0.08;
+            if (p.pos && p.pos.y + Math.max(0, p.vel?.y || 0) * dt > ceil) {
+              p.pos.y = ceil;
+              if (p.vel) p.vel.y = -Math.abs(p.vel.y) * 0.25;
+              if (p.kind === "arrow") { p.stuck = true; p.life = Math.min(p.life, 6); }
+              else if (p.kind !== "spear") p.life = Math.min(p.life, 0);
+            }
             if (p.kind === "spear") {
               if (SpearThrow.step(p, dt)) removeProjectile(i);
               continue;
@@ -22954,7 +22978,7 @@ body.netgame #revivetouch{display:flex}
                   (distance - this.actual) * (1 - Math.exp(-dt * 7));
             distance = this.actual;
             camera.position.addScaledVector(back, distance);
-            camera.position.y = Math.max(0.22, camera.position.y);
+            camera.position.y = Math.min(MapManager.ceilingAt() - 0.2, Math.max(0.22, camera.position.y));
             if (this.avatar) {
               this.avatar.visible = distance > 0.6;
               this.avatar.position.set(player.pos.x, (player.ground || 0) + player.jump, player.pos.z);
@@ -25348,6 +25372,7 @@ body.netgame #revivetouch{display:flex}
             SecretWeaponSkills,
             SpecterSwarm,
             AngelWings,
+            BossKit,
             Nature,
             WindManager,
             CameraRig,
