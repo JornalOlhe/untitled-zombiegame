@@ -5294,6 +5294,37 @@ body.netgame #revivetouch{display:flex}
         // [t, px, py, pz, rx, ry, rz]: offsets added to the rest pose at normalised time t;
         // anticipation → strike → follow-through → recovery, eased between keys.
         // ---------------------------------------------------------------------------------------
+        // ── Grip profiles: ONE table decides how every weapon family is held, in first person
+        // (viewmodel hands) and third person (weapon socket, grip offset, which hands hold it).
+        // Equipping always rebuilds from the profile, so nothing of the previous weapon's pose,
+        // offsets or IK survives a swap.
+        const GripProfiles = {
+          of(w) {
+            if (!w) return "firearm";
+            if (w.specter) return "specter";
+            if (w.scythe) return "scythe";
+            if (w.spear) return "spear";
+            if (w.kind === "bow") return "bow";
+            if (w.kind === "melee") return w.iceStaff || /frost|staff/i.test(w.name) ? "staff" : /blood|fang|knife/i.test(w.name) ? "knife" : "sword";
+            return "firearm";
+          },
+          // fp.r / fp.l: viewmodel hand position + rotation.x (l: null = left hand not on the weapon)
+          // tp.hold: weapon socket in chest space; tp.grip: where the palm sits on the model;
+          // tp.mode: which IK chain drives the arms.
+          P: {
+            sword: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.29, 0.3, 0.5], grip: [0, 0, 0], mode: "oneHand" } },
+            knife: { fp: { r: [0, -0.15, -0.2, 0.05], l: null }, tp: { hold: [-0.28, 0.3, 0.46], grip: [0, 0, 0], mode: "oneHand" } },
+            staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.29, 0.3, 0.5], grip: [0, 0, 0.12], mode: "oneHand" } },
+            scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.29, 0.26, 0.24], grip: [0, 0.02, 0.24], mode: "oneHand" } },
+            spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], mode: "spear" } },
+            specter: { fp: { r: null, l: null }, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], mode: "conduct" } },
+            bow: { fp: null, tp: { hold: [-0.29, 0.28, 0.4], grip: [0, 0, 0.24], mode: "bow" } },
+            firearm: { fp: null, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], mode: "rifle" } },
+          },
+          get(w) {
+            return this.P[this.of(w)];
+          },
+        };
         const MeleeAnim = {
           type(w) {
             if (!w || w.kind !== "melee") return null;
@@ -6159,28 +6190,11 @@ body.netgame #revivetouch{display:flex}
             }
             parts.rightHand = hand(0.03, -0.19, 0.02, false);
             parts.leftHand = hand(-0.045, -0.115, -0.48, true);
-            if (w.kind === "melee") {
-              if (w.trident) {
-                parts.rightHand.position.set(0.075, -0.16, -0.22);
-                parts.leftHand.position.set(-0.055, -0.105, -0.62);
-                parts.leftHand.visible = true;
-                parts.rightHand.rotation.x = -0.18;
-                parts.leftHand.rotation.x = -0.28;
-              } else if (w.specter) {
-                parts.rightHand.visible = false;
-                parts.leftHand.visible = false;
-              } else if (w.spear) {
-                // TwoHandSpearProfile: the only ordinary melee that uses both hands — rear hand on
-                // the butt, front hand forward on the shaft.
-                parts.rightHand.position.set(0, -0.16, -0.12);
-                parts.leftHand.position.set(-0.03, -0.1, -0.5);
-                parts.leftHand.rotation.x = -0.2;
-                parts.leftHand.visible = true;
-              } else {
-                // OneHand profiles (machete, knife, scythe, ice staff): right hand only; the left
-                // hand never grips the weapon.
-                parts.rightHand.position.set(0, -0.16, -0.22);
-                parts.leftHand.visible = false;
+            const prof = GripProfiles.get(w).fp;
+            if (prof) {
+              for (const [hand, d] of [[parts.rightHand, prof.r], [parts.leftHand, prof.l]]) {
+                hand.visible = !!d;
+                if (d) { hand.position.set(d[0], d[1], d[2]); hand.rotation.set(d[3], 0, 0); }
               }
             }
             parts.leftBase = parts.leftHand.position.clone();
@@ -11016,6 +11030,8 @@ body.netgame #revivetouch{display:flex}
             this.trail = null;
             if (!w) return;
             this.parts = ArsenalArt.build(w, this.model);
+            // swap: the new weapon is raised into view (no popping into the hold pose)
+            if (this.builtName !== w.name) { this.equipAt = simulationTime; this.builtName = w.name; }
             if (w.kind === "melee") {
               // Blade tip (model space) = the bounding-box corner farthest from the grip; the trail
               // is drawn from it to a point halfway down the blade.
@@ -11114,9 +11130,11 @@ body.netgame #revivetouch{display:flex}
             target.x += GrenadeThrow.drop * 0.08;
             this.basePos = (this.basePos || target.clone()).lerp(target, 1 - Math.exp(-dt * 16));
             this.model.position.copy(this.basePos);
+            const eq = clamp((simulationTime - (this.equipAt ?? -9)) / 0.28, 0, 1), eqE = 1 - (1 - eq) * (1 - eq) * (1 - eq);
+            if (eq < 1) { this.model.position.y -= (1 - eqE) * 0.32; this.model.position.x += (1 - eqE) * 0.06; }
             if (this.scoped) this.model.position.y = -2; // looking through the scope
             this.model.rotation.set(
-              this.kick * 0.075 + swayY * 0.3,
+              this.kick * 0.075 + swayY * 0.3 - (1 - eqE) * 0.5,
               swayX * 0.3,
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
@@ -22504,17 +22522,20 @@ body.netgame #revivetouch{display:flex}
             // Hold profile per weapon family (RightHandWeaponSocket): one-hand melee and bows sit
             // at the right hand (character's right = -X); rifles/pistols stay centred; the spear
             // is the only ordinary melee that uses both hands.
-            const oneHand = weapon?.kind === "melee" && !weapon.spear && !weapon.specter && !weapon.trident,
-              hold = oneHand ? [-0.29, 0.3, 0.5] : weapon?.kind === "bow" ? [-0.29, 0.28, 0.4] : weapon?.spear ? [-0.05, 0.3, 0.5] : weapon?.scythe ? [-0.29, 0.26, 0.24] : [0.01, 0.19, 0.37];
+            const gp = GripProfiles.get(weapon).tp,
+              oneHand = gp.mode === "oneHand",
+              hold = gp.hold.slice();
             gun.position.set(...hold);
             chest.add(gun);
             g.userData.rig = {
               hold,
               // Where the hand grips relative to the model origin (bow riser / scythe snath / staff).
-              gripOff: new V(0, weapon?.scythe ? 0.02 : 0, weapon?.kind === "bow" || weapon?.scythe ? 0.24 : weapon?.iceStaff ? 0.12 : 0),
+              gripOff: new V(...gp.grip),
+              grip: GripProfiles.of(weapon),
+              equipAt: simulationTime,
               oneHand,
-              spearHold: !!weapon?.spear,
-              bowHold: weapon?.kind === "bow",
+              spearHold: gp.mode === "spear",
+              bowHold: gp.mode === "bow",
               hips,
               chest,
               head,
@@ -22945,6 +22966,9 @@ body.netgame #revivetouch{display:flex}
                 r.throwArm = true;
               } else r.throwArm = false;
             }
+            // Equip: the freshly built weapon comes up from the hip into its profile pose.
+            const eqK = clamp((simulationTime - (r.equipAt ?? -9)) / 0.3, 0, 1);
+            if (eqK < 1 && (r.oneHand || r.spearHold)) { const e = 1 - (1 - eqK) ** 3; r.gun.position.y -= (1 - e) * 0.28; r.gun.rotation.x -= (1 - e) * 0.6; }
             // Hands follow the weapon socket (one-hand melee, spear, bow) instead of posing by
             // guesswork: the right hand is the weapon hand; the left only joins where defined.
             if (!(r.secretAccessories?.fly > 0.5) && !reloading && !dead) {
