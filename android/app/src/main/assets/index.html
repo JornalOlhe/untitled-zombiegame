@@ -3899,8 +3899,11 @@ body.netgame #revivetouch{display:flex}
         // Hierarchical zombie skeleton. Hips, knees, shoulders, elbows, neck and jaw move separately.
         const CreatureRig = {
           create(group, type, boss) {
+            // Old procedural zombie is retired: every regular type and every boss wears a voxel
+            // template. There is deliberately no fallback to the legacy body below.
             const voxelKey = VoxelMonsters.skinFor(type, boss);
-            if (voxelKey) return VoxelMonsters.create(group, voxelKey);
+            if (voxelKey) return VoxelMonsters.create(group, voxelKey, boss ? null : VoxelMonsters.typeLooks[type] || null);
+            console.error("[Dead Recoil] voxel monster atlas missing — type", type);
             const A = VisualArt,
               skin =
                 type === 2
@@ -4304,6 +4307,17 @@ body.netgame #revivetouch{display:flex}
           matCache: new Map(),
           // Regular archetypes reskinned with the voxel roster (type index -> skin key).
           typeSkins: { 0: "03", 1: "01", 2: "08", 3: "07", 5: "02", 8: "05" },
+          // Every other regular type also wears a voxel template (never the old procedural body).
+          // They reuse a template atlas without its boss accessories, with their own proportions
+          // and tint so nothing is mistaken for the boss it borrows a skin from.
+          typeLooks: {
+            4: { key: "22", style: "zombie", shape: { tw: 8, td: 4, th: 12, aw: 3, ah: 13, lw: 4, lh: 12, hs: 9, drop: 1 } }, // Screamer: pale patient, wide jaw
+            6: { key: "03", style: "brute", tint: 0xd9b48f, shape: { tw: 12, td: 7, th: 12, aw: 6, ah: 13, lw: 5, lh: 11, hs: 8, drop: 2 } }, // Brute
+            7: { key: "18", style: "hunter", shape: { tw: 8, td: 4, th: 13, aw: 3, ah: 15, lw: 3, lh: 14, hs: 8, drop: 0 } }, // Stalker
+            9: { key: "23", style: "zombie", shape: { tw: 10, td: 6, th: 12, aw: 5, ah: 12, lw: 4, lh: 11, hs: 8, drop: 1 } }, // Parasite Host: swollen torso
+            10: { key: "07", style: "brute", tint: 0x8a94a6, shape: { tw: 13, td: 8, th: 13, aw: 7, ah: 14, lw: 6, lh: 11, hs: 8, drop: 2 } }, // Tank: armoured
+            11: { key: "06", style: "zombie", tint: 0xb6d68a, shape: { tw: 8, td: 4, th: 10, aw: 3, ah: 10, lw: 3, lh: 8, hs: 8, drop: 1 } }, // Parasite
+          },
           styles: {
             "01": "zombie", "02": "crawler", "03": "zombie", "04": "quarterback", "05": "zombie",
             "06": "mutant", "07": "swat", "08": "constructor", "09": "yeti", "10": "demon",
@@ -4343,8 +4357,8 @@ body.netgame #revivetouch{display:flex}
           },
           skinFor(type, boss) {
             if (!this.ready()) return null;
-            if (boss) return boss.voxel || null;
-            return this.typeSkins[type] || null;
+            if (boss) return boss.voxel || "03";
+            return this.typeSkins[type] || this.typeLooks[type]?.key || "03";
           },
           material(key, tint = null) {
             const id = key + (tint || "");
@@ -4413,10 +4427,10 @@ body.netgame #revivetouch{display:flex}
             parent.add(g);
             return g;
           },
-          create(group, key) {
-            const s = this.shapes[key] || this.shapes.default,
+          create(group, key, look = null) {
+            const s = look?.shape || this.shapes[key] || this.shapes.default,
               P = this.P,
-              mat = this.material(key),
+              mat = this.material(key, look?.tint || null),
               hits = [];
             const root = this.pivot(group, 0, 0, 0);
             const hipY = s.lh * P;
@@ -4447,7 +4461,8 @@ body.netgame #revivetouch{display:flex}
             const rig = {
               voxel: true,
               key,
-              style: this.styles[key] || "zombie",
+              style: look?.style || this.styles[key] || "zombie",
+              tint: look?.tint || null,
               shape: s,
               root,
               body,
@@ -4468,7 +4483,7 @@ body.netgame #revivetouch{display:flex}
               base: Math.random() * 6.28,
               lean: rand(-0.05, 0.05),
             };
-            this.accessories(rig, key, mat);
+            if (!look) this.accessories(rig, key, mat); // borrowed skins (regular types) skip boss accessories
             if (rig.style === "crawler") {
               // Crawl pose (CRAWLER ZOMBIE template): torso nearly flat with the chest propped up,
               // straight arms planted forward on the ground, head raised, legs dragging behind.
@@ -4579,7 +4594,7 @@ body.netgame #revivetouch{display:flex}
             if (!rig?.voxel) return;
             const variant = map === 3 ? "lab" : map === 4 ? "snow" : null;
             if (variant) {
-              const skin = this.material(rig.key),
+              const skin = this.material(rig.key, rig.tint),
                 alt = this.variantMaterial(rig.key, variant);
               rig.root?.traverse?.((o) => { if (o.isMesh && o.material === skin) o.material = alt; });
               if (!rig.root) for (const part of [rig.upper, rig.head, rig.neck, ...(rig.arms || []), ...(rig.legs || [])]) part?.traverse((o) => { if (o.isMesh && o.material === skin) o.material = alt; });
@@ -21511,7 +21526,7 @@ body.netgame #revivetouch{display:flex}
             this.previewSpin = { kind, id: pickVisual(-1).id };
             this.selection = null;
             this.rarityFilter = result.item.tier;
-            const duration = reduced ? 0.3 : lucky ? 2.3 : 1.8;
+            const duration = reduced ? 0.3 : lucky ? 1.8 : 1.3; // reference video: ~1.1 s of flicker then the burst
             this.roll = { kind, result, lucky, startWall: performance.now(), duration, next: 0, swaps: 0, pickVisual, revealed: false, hold: result.item.tier >= 6 ? 1.9 : result.item.tier >= 4 ? 1.1 : 0.75 };
             const rollRef = this.roll;
             clearTimeout(this.rollFallback);
@@ -21540,7 +21555,7 @@ body.netgame #revivetouch{display:flex}
               t = clamp((performance.now() - r.startWall) / (r.duration * 1000), 0, 1);
             if (!r.revealed && t < 1 && performance.now() >= r.next) {
               // Decelerating flicker through candidates.
-              r.next = performance.now() + (45 + 330 * Math.pow(t, 2.4)) ;
+              r.next = performance.now() + (85 + 300 * Math.pow(t, 2.2)); // video: ~0.1 s per name, last one held ~0.35 s
               r.swaps++;
               const e = r.pickVisual(this.previewSpin.id);
               this.previewSpin = { kind: r.kind, id: e.id };
