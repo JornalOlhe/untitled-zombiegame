@@ -4865,21 +4865,45 @@ body.netgame #revivetouch{display:flex}
           },
           // Every boss / miniboss walks in its own way (several share a base style, so without
           // this they all moved identically). Runs after the base gait, before the ability poses.
+          // Per-boss footstep signatures: `rate` pitches the shared ground-impact sample (lower = heavier),
+          // `tone` adds a synthesized body, `click` a hoof/servo tick, `hiss` steam every N steps.
+          FOOTSTEPS: {
+            "09": { rate: 0.5, vol: 1.5, tone: [66, 0.32, "sine", 0.5, 30], dust: 0xeaf4ff, puff: 8, shake: 0.2 }, // Yeti: snow-muffled boom
+            "10": { rate: 0.85, vol: 1.0, tone: [120, 0.14, "triangle", 0.3, 60], click: [1150, 0.09], dust: 0x5a2418, puff: 5, shake: 0.12 }, // Demon: hoof clop
+            "26": { vol: 0, tone: [240, 0.07, "square", 0.12, 140], click: [1500, 0.08], hiss: 3, dust: 0xcfd8e8, puff: 2, shake: 0.04 }, // Prototype X: servo clank + steam
+            "20": { vol: 0, tone: [170, 0.09, "square", 0.16, 80], click: [900, 0.07], dust: 0xb8b8c8, puff: 3, shake: 0.08 }, // Omega
+            "12": { rate: 0.55, vol: 1.5, tone: [58, 0.34, "sine", 0.5, 28], dust: 0xdfeaf5, puff: 10, shake: 0.25 }, // Avalanche Titan
+            "11": { rate: 0.7, vol: 1.2, tone: [85, 0.2, "sine", 0.35, 40], dust: 0x8a7a6a, puff: 6, shake: 0.14 }, // Juggernaut
+            "24": { rate: 0.75, vol: 1.1, tone: [95, 0.18, "sine", 0.3, 45], dust: 0x8a7a6a, puff: 6, shake: 0.12 }, // Wrecker
+            "13": { rate: 0.8, vol: 1.0, tone: [100, 0.16, "sine", 0.28, 50], dust: 0x6a7a4a, puff: 4, shake: 0.1 }, // Abomination (limp: uneven)
+            "23": { rate: 0.9, vol: 0.8, tone: [110, 0.14, "sine", 0.22, 60], dust: 0x6a7a4a, puff: 3, shake: 0.07 },
+            "21": { rate: 0.7, vol: 1.1, tone: [88, 0.2, "sine", 0.3, 42], dust: 0xdfeaf5, puff: 6, shake: 0.13 },
+            "15": { rate: 0.8, vol: 1.0, tone: [105, 0.16, "sine", 0.26, 50], dust: 0x6a4a3a, puff: 4, shake: 0.09 },
+            "19": { rate: 0.95, vol: 0.9, tone: [120, 0.12, "sine", 0.22, 60], dust: 0x8a7a6a, puff: 4, shake: 0.08 },
+            light: { rate: 1.15, vol: 0.5, dust: 0x6a5a4a, puff: 2, shake: 0.02 },
+          },
           CADENCE: { 11: 0.8, 12: 0.72, 13: 0.9, 14: 1.25, 15: 0.85, 16: 1.1, 17: 0.7, 18: 1.05, 19: 1.15, 20: 1, 21: 0.9, 22: 0.8, 23: 0.7, 24: 0.95, 25: 1, 26: 1.2 },
           bossGait(z, r, t, s, mb, bounce) {
             const [armR, armL] = r.arms,
               [legR, legL] = r.legs,
               c = Math.cos(t);
-            // Heel strikes: heavy bosses kick up dust and rumble the ground under the player's feet.
-            if (mb > 0.5 && z.group && player && (z._stepS ?? s) * s < 0) {
-              const heavyKey = { 10: [0x5a2418, 0.9], "09": [0xeaf4ff, 1.4], 11: [0x8a7a6a, 1], 12: [0xdfeaf5, 1.6], 24: [0x8a7a6a, 1.2], 26: [0xb8b8c8, 0.4] }[r.key];
-              if (heavyKey) {
-                const d = z.group.position.distanceTo(player.pos);
-                ParticleSystem.emit(z.group.position.clone().add(new V(0, 0.15, 0)), heavyKey[0], 6, 1.6);
-                if (d < 22) shake = Math.max(shake, 0.14 * heavyKey[1] * (1 - d / 22));
+            // Heel strike = the moment a foot plants (legs at full spread = cos crosses zero): footstep sound,
+            // dust and a small ground shake fire on the same frame, scaled by distance to the player.
+            if (mb > 0.5 && z.group && player && (z._stepC ?? c) * c < 0) {
+              const F = this.FOOTSTEPS[r.key] || this.FOOTSTEPS.light,
+                d = z.group.position.distanceTo(player.pos),
+                near = clamp(1 - d / 34, 0, 1) ** 1.3;
+              z._stepN = (z._stepN || 0) + 1;
+              if (F.dust) ParticleSystem.emit(z.group.position.clone().add(new V(0, 0.15, 0)), F.dust, F.puff, 1.6);
+              if (near > 0.02) {
+                if (F.rate) MonsterAudio.play("land", { volume: F.vol * near, rate: F.rate * (0.94 + Math.random() * 0.12) });
+                if (F.tone) AudioManager.tone(F.tone[0] * (z._stepN % 2 ? 1 : 0.93), F.tone[1], F.tone[2], F.tone[3] * near, F.tone[4], "effects");
+                if (F.click) AudioManager.tone(F.click[0], 0.035, "square", F.click[1] * near, F.click[0] * 0.5, "effects");
+                if (F.hiss && z._stepN % F.hiss === 0) AudioManager.noise(0.28, 0.1 * near);
+                shake = Math.max(shake, F.shake * near);
               }
             }
-            z._stepS = s;
+            z._stepC = c;
             switch (r.key) {
               case "10": {
                 // Demon: upright, heavy-shouldered predator. Slow deliberate steps, torso counter-rotating,
@@ -7008,7 +7032,8 @@ body.netgame #revivetouch{display:flex}
           seq: [],
           lastClick: 0,
           sandbox: { weaponId: null, classId: null },
-          flags: { god: false, infiniteDamage: false, infiniteAmmo: true, noReload: true, infiniteAbility: true, infiniteGrenades: true },
+          flags: { god: false, infiniteDamage: false, infiniteAmmo: true, noReload: true, infiniteAbility: true, infiniteGrenades: true, hitArc: false, aimRay: false, flameRays: false, iceRays: false, targetLines: false, wallBlocked: false, hitboxes: false },
+          zombieMap: null,
           on(flag) {
             return this.active && !NetGame.active && !!this.flags[flag];
           },
@@ -7310,15 +7335,31 @@ body.netgame #revivetouch{display:flex}
             const l = $("dev-log");
             if (l) l.textContent = msg;
           },
+          perfLines(info, live) {
+            const rows = [
+              ["FPS", $("fps")?.textContent || "-"],
+              ["Draw calls", info.render.calls],
+              ["Triângulos", info.render.triangles.toLocaleString("pt-BR")],
+              ["Geometrias / Texturas", `${info.memory.geometries} / ${info.memory.textures}`],
+              ["Inimigos vivos", live],
+              ["Projéteis", projectiles.length],
+              ["Partículas ativas", ParticleSystem.count?.() ?? ParticleSystem.list?.length ?? ParticleSystem.active ?? "-"],
+              ["Pixel ratio", (typeof renderScale === "number" ? renderScale : renderer.getPixelRatio()).toFixed(2)],
+            ];
+            return rows.map(([k, v]) => `<div class="sw" style="cursor:default"><span><b>${k}</b></span><output style="font:700 13px var(--mono,monospace);color:#eafff2">${v}</output></div>`).join("");
+          },
           render() {
             const root = $("devmenu");
             if (!root) return;
-            const tabs = [["powers", "PODERES"], ["player", "JOGADOR"], ["spawn", "INVOCAR"], ["arsenal", "ARSENAL"], ["world", "MUNDO"]];
+            const tabs = [["player", "PLAYER"], ["weapons", "WEAPONS"], ["classes", "CLASSES"], ["zombies", "ZOMBIES"], ["bosses", "BOSSES"], ["maps", "MAPS"], ["waves", "WAVES"], ["economy", "ECONOMY"], ["debug", "DEBUG"], ["performance", "PERFORMANCE"]];
+            if (!tabs.some(([k]) => k === this.tab)) this.tab = "player";
             root.querySelector("nav").innerHTML = tabs.map(([k, t]) => `<button data-dev="tab:${k}" class="${this.tab === k ? "on" : ""}">${t}</button>`).join("");
             const body = root.querySelector(".dv-body");
             const sw = (k, icon, title, sub) => `<div class="sw ${this.flags[k] ? "on" : ""}" data-dev="flag:${k}"><i>${icon}</i><span><b>${title}</b><small>${sub}</small></span><em></em></div>`;
-            if (this.tab === "powers") {
-              body.innerHTML = `<h5>JOGADOR</h5>
+            if (this.tab === "player") {
+              const maxhp = (player?.maxhp || 100) + (player?.bonus || 0),
+                field = (id, label, min, max, value, step = 1) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-dev-change="set:${id}" oninput="this.nextElementSibling.value=this.value" /><output>${value}</output></div>`;
+              body.innerHTML = `<h5>PODERES</h5>
                 ${sw("fly", "🕊", "VOAR", "Espaço sobe · Ctrl desce · 1,8x mais rápido")}
                 ${sw("god", "🛡", "INVENCÍVEL", "Nenhum dano de monstros ou explosões")}
                 ${sw("infiniteDamage", "💥", "DANO INFINITO", "Qualquer golpe elimina, inclusive chefes")}
@@ -7328,11 +7369,8 @@ body.netgame #revivetouch{display:flex}
                 ${sw("infiniteAbility", "⏱", "SEM COOLDOWN", "Habilidade Q e F de armas secretas sempre prontas")}
                 ${sw("infiniteGrenades", "💣", "GRANADAS INFINITAS", "G nunca acaba")}
                 <h5>AÇÕES</h5>
-                <div class="acts"><button class="act" data-dev="heal">❤ CURAR TUDO</button><button class="act" data-dev="cooldowns">↺ ZERAR COOLDOWNS</button></div>`;
-            } else if (this.tab === "player") {
-              const maxhp = (player?.maxhp || 100) + (player?.bonus || 0),
-                field = (id, label, min, max, value, step = 1) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-dev-change="set:${id}" oninput="this.nextElementSibling.value=this.value" /><output>${value}</output></div>`;
-              body.innerHTML = `<h5>ATRIBUTOS</h5>
+                <div class="acts"><button class="act" data-dev="heal">❤ CURAR TUDO</button><button class="act" data-dev="cooldowns">↺ ZERAR COOLDOWNS</button></div>
+                <h5>ATRIBUTOS</h5>
                 ${field("dev-hp", "VIDA", 1, maxhp, Math.round(player?.hp || maxhp))}
                 <div class="row" style="margin-bottom:8px"><input id="dev-coins" type="number" min="0" placeholder="Moedas da partida (${player?.coins ?? 0})" /><button class="act" data-dev="set-coins">APLICAR</button></div>
                 <div class="row"><input id="dev-kills" type="number" min="0" placeholder="Kills (${player?.kills ?? 0})" /><button class="act" data-dev="set-kills">APLICAR</button></div>
@@ -7342,7 +7380,7 @@ body.netgame #revivetouch{display:flex}
                 <div class="acts"><button class="act" data-dev="cam:0">👁 PRIMEIRA PESSOA</button><button class="act" data-dev="cam:3">🎥 TERCEIRA PESSOA</button></div>
                 <h5>POSIÇÃO</h5>
                 <div class="acts"><button class="act" data-dev="tp:center">⌖ CENTRO DO MAPA</button><button class="act" data-dev="tp:spawn">⚑ INÍCIO DO MAPA</button><button class="act" data-dev="tp:boss">☠ PERTO DO CHEFE</button><button class="act" data-dev="tp:up">⤒ SUBIR 10 m</button></div>`;
-            } else if (this.tab === "spawn") {
+            } else if (this.tab === "zombies" || this.tab === "bosses") {
               const counts = [1, 5, 10, 25];
               this.picked ||= new Set();
               const R = WaveManager.bossRoster,
@@ -7352,22 +7390,53 @@ body.netgame #revivetouch{display:flex}
               const card = (dev, portrait, name, sub, color) => `<button class="card ${this.multi && this.picked.has(dev.slice(11)) && dev.startsWith("spawn-boss:") ? "sel" : ""}" data-dev="${dev}" style="--c:${color}"><span class="pt" data-portrait="${portrait}">☠</span><b>${DR.escapeHtml(name)}</b><small>${sub}</small></button>`;
               const byRank = [4, 3, 2, 1].map((r) => `<h5>${rankName[r]}</h5><div class="grid">${Object.entries(R).filter(([, b]) => b.rank === r).map(([k, b]) => card("spawn-boss:" + k, k, b.name, (b.title.split("·")[1] || "").trim(), r >= 3 ? "#ff5a4a" : "#ffb23e")).join("")}</div>`).join("");
               const mapKeys = WaveManager.mapRosters[selectedMap] || [];
-              body.innerHTML = `<h5>VÁRIOS CHEFES DE UMA VEZ</h5><div class="chips"><button class="chip ${this.multi ? "on" : ""}" data-dev="multi">${this.multi ? "✓ SELEÇÃO MÚLTIPLA" : "SELEÇÃO MÚLTIPLA"}</button><button class="chip" data-dev="bosses-map">4 CHEFES DESTE MAPA</button><button class="chip" data-dev="bosses-all">TODOS OS BOSS I/II</button></div>
+              const zMaps = ["ATUAL", ...mapName],
+                bossHtml = `<h5>VÁRIOS CHEFES DE UMA VEZ</h5><div class="chips"><button class="chip ${this.multi ? "on" : ""}" data-dev="multi">${this.multi ? "✓ SELEÇÃO MÚLTIPLA" : "SELEÇÃO MÚLTIPLA"}</button><button class="chip" data-dev="bosses-map">4 CHEFES DESTE MAPA</button><button class="chip" data-dev="bosses-all">TODOS OS BOSS I/II</button></div>
                 ${this.multi ? `<div class="bar" style="position:static;margin:8px 0 0;border:0;padding:0;background:none"><button class="act" data-dev="spawn-picked">▶ INVOCAR ${this.picked.size} SELECIONADO(S)</button><button class="act warn" data-dev="unpick">LIMPAR</button></div>` : ""}
-                <h5>QUANTIDADE (ZUMBIS)</h5><div class="chips">${counts.map((n) => `<button class="chip ${this.count === n ? "on" : ""}" data-dev="count:${n}">x${n}</button>`).join("")}<button class="chip" data-dev="horde">HORDA MISTA</button><button class="chip" data-dev="clear">LIMPAR</button></div>
-                <h5>ZUMBIS</h5><div class="grid">${zombieTypes.map((t, i) => card("spawn-type:" + i, ENEMY_KEYS[i] || "zombie", t.name, "COMUM", "#6fbf8e")).join("")}</div>${byRank}`;
+                <h5>TESTE DE CHEFE (O MAIS PRÓXIMO)</h5><div class="acts"><button class="act" data-dev="boss-intro">🎬 REPETIR INTRO</button><button class="act" data-dev="boss-death">☠ TESTAR MORTE</button><button class="act" data-dev="anim">🎞 PRÓXIMA ANIMAÇÃO</button><button class="act warn" data-dev="clear">✖ LIMPAR INIMIGOS</button></div>${byRank}`,
+                zombieHtml = `<h5>VARIANTE DE MAPA (VISUAL)</h5><div class="chips">${zMaps.map((n, i) => `<button class="chip ${(this.zombieMap ?? -1) + 1 === i ? "on" : ""}" data-dev="zmap:${i - 1}">${n}</button>`).join("")}</div>
+                <h5>QUANTIDADE</h5><div class="chips">${counts.map((n) => `<button class="chip ${this.count === n ? "on" : ""}" data-dev="count:${n}">x${n}</button>`).join("")}<button class="chip" data-dev="horde">HORDA MISTA</button><button class="chip" data-dev="clear">LIMPAR</button></div>
+                <h5>ZUMBIS</h5><div class="grid">${zombieTypes.map((t, i) => card("spawn-type:" + i, ENEMY_KEYS[i] || "zombie", t.name, "COMUM", "#6fbf8e")).join("")}</div>`;
+              body.innerHTML = this.tab === "bosses" ? bossHtml : zombieHtml;
               MonsterPortraits.fill(body);
-            } else if (this.tab === "arsenal") {
+            } else if (this.tab === "weapons" || this.tab === "classes") {
               const W = WeaponSystem.weapons,
                 curW = player?.inventory?.[player.slot]?.name,
                 list = (arr, kind, cur) => arr.map((x, i) => ({ x, i })).sort((a, b) => b.x.tier - a.x.tier).map(({ x, i }) => `<button class="wbtn ${cur === (kind === "w" ? x.name : i) ? "on" : ""}" data-dev="equip-${kind}:${i}" style="--c:${rarityColors[x.tier]}"><b>${DR.escapeHtml(x.name)}</b><small>${rarityNames[x.tier].toUpperCase()}</small></button>`).join("");
-              body.innerHTML = `<h5>ARMAS · TOQUE PARA PEGAR NA HORA</h5><div class="wlist">${list(W, "w", curW)}</div><h5>CLASSES</h5><div class="wlist">${list(classes, "c", selectedClass)}</div>`;
-            } else {
+              body.innerHTML = this.tab === "weapons"
+                ? `<h5>ARMAS · TOQUE PARA PEGAR NA HORA (${W.length})</h5><div class="wlist">${list(W, "w", curW)}</div>`
+                : `<h5>CLASSES · TOQUE PARA USAR (${classes.length})</h5><div class="wlist">${list(classes, "c", selectedClass)}</div>`;
+            } else if (this.tab === "maps") {
+              body.innerHTML = `<h5>MAPA</h5><div class="row"><select id="dev-map">${maps.map((m, i) => `<option value="${i}" ${i === selectedMap ? "selected" : ""}>${DR.escapeHtml(m.name)}</option>`).join("")}</select><button class="act" data-dev="teleport">JOGAR</button></div>
+                <h5>POSIÇÃO</h5><div class="acts"><button class="act" data-dev="tp:center">⌖ CENTRO</button><button class="act" data-dev="tp:spawn">⚑ INÍCIO</button><button class="act" data-dev="tp:boss">☠ PERTO DO CHEFE</button><button class="act" data-dev="tp:up">⤒ SUBIR 10 m</button></div>
+                <h5>CÂMERA</h5><div class="acts"><button class="act" data-dev="cam:0">👁 PRIMEIRA PESSOA</button><button class="act" data-dev="cam:3">🎥 TERCEIRA PESSOA</button></div>`;
+            } else if (this.tab === "waves") {
               body.innerHTML = `<h5>ONDAS</h5><div class="acts"><button class="act" data-dev="wave-start">▶ INICIAR ONDA</button><button class="act" data-dev="wave-next">⏭ AVANÇAR ONDA</button><button class="act" data-dev="wave-stop">⏸ PARAR SPAWNS</button><button class="act" data-dev="clear">✖ LIMPAR INIMIGOS</button></div>
-                <div class="row" style="margin-top:8px"><input id="dev-wave" type="number" min="1" max="200" placeholder="Ir para a onda…" /><button class="act" data-dev="wave-set">IR</button></div>
-                <h5>MAPA</h5><div class="row"><select id="dev-map">${maps.map((m, i) => `<option value="${i}" ${i === selectedMap ? "selected" : ""}>${DR.escapeHtml(m.name)}</option>`).join("")}</select><button class="act" data-dev="teleport">JOGAR</button></div>
+                <div class="row" style="margin-top:8px"><input id="dev-wave" type="number" min="1" max="200" placeholder="Ir para a onda… (atual ${WaveManager.wave || 0})" /><button class="act" data-dev="wave-set">IR</button></div>
+                <p style="font:500 11px/1.4 var(--mono,monospace);color:#7c9c8a;margin-top:10px">Restantes na onda: ${WaveManager.remaining || 0} · inimigos vivos: ${ZombieManager.list.filter((z) => !z.dead).length}</p>`;
+            } else if (this.tab === "economy") {
+              const st = Progression?.data || {};
+              body.innerHTML = `<h5>CARTEIRA (SERVIDOR)</h5><div class="row" style="margin-bottom:8px"><input id="dev-coins" type="number" min="0" placeholder="Moedas (${st.coins ?? 0})" /><input id="dev-normal" type="number" min="0" placeholder="Normal (${st.normal ?? 0})" /><input id="dev-lucky" type="number" min="0" placeholder="Lucky (${st.lucky ?? 0})" /></div>
+                <div class="acts"><button class="act" data-dev="wallet">APLICAR CARTEIRA</button><button class="act" data-dev="unlock-slots">🔓 DESBLOQUEAR SLOTS</button></div>
+                <h5>PITY</h5><p style="font:500 11px/1.4 var(--mono,monospace);color:#7c9c8a;margin:0 0 8px">Arma: Mítico ${st.weaponMythicPity ?? 0}/75 · Divino ${st.weaponDivinePity ?? 0}/150 · Secreto ${st.weaponSecretPity ?? 0}/300<br>Classe: Mítico ${st.classMythicPity ?? 0}/75 · Divino ${st.classDivinePity ?? 0}/150 · Secreto ${st.classSecretPity ?? 0}/300</p>
+                <div class="acts"><button class="act warn" data-dev="reset-pity">↺ ZERAR PITY</button></div>
+                <h5>DAR ITEM</h5><div class="row" style="margin-bottom:8px"><select id="dev-weapon">${WeaponSystem.weapons.map((x, i) => `<option value="${i}">${DR.escapeHtml(x.name)}</option>`).join("")}</select><input id="dev-wslot" type="number" min="0" max="5" value="0" style="max-width:64px" /><button class="act" data-dev="give-weapon">DAR</button></div>
+                <div class="row"><select id="dev-class">${classes.map((x, i) => `<option value="${i}">${DR.escapeHtml(x.name)}</option>`).join("")}</select><input id="dev-cslot" type="number" min="0" max="5" value="0" style="max-width:64px" /><button class="act" data-dev="give-class">DAR</button></div>`;
+            } else if (this.tab === "debug") {
+              body.innerHTML = `<h5>COMBATE · OVERLAY 3D</h5>
+                ${sw("hitArc", "◔", "ARCO DE ACERTO MELEE", "Cone real do golpe; verde = alvo atingível")}
+                ${sw("aimRay", "➤", "RAIO DE MIRA / PROJÉTEIS", "Do cano até a parede; setas dos projéteis")}
+                ${sw("flameRays", "🔥", "COLISÃO DO LANÇA-CHAMAS", "3 sondas por alvo; vermelho = parede bloqueia")}
+                ${sw("iceRays", "❄", "COLISÃO DO GELO", "Mesmas sondas para o jato de gelo")}
+                ${sw("targetLines", "⌖", "LINHA ATÉ O ALVO", "Verde = visível, vermelho = bloqueado")}
+                ${sw("wallBlocked", "▦", "PAREDE BLOQUEANDO", "Marca X no alvo sem linha de visão")}
+                ${sw("hitboxes", "▢", "HITBOXES", "Caixa dos 12 inimigos mais próximos")}
                 <h5>TESTES</h5><div class="acts"><button class="act" data-dev="fx">✦ PARTÍCULAS</button><button class="act" data-dev="anim">🎬 ANIMAÇÕES DO BOSS</button></div>
                 <h5>MODO DEV</h5><div class="acts"><button class="act warn" data-dev="disable">DESATIVAR MODO DEV</button></div>`;
+            } else {
+              const info = renderer.info, live = ZombieManager.list.filter((z) => !z.dead).length;
+              body.innerHTML = `<h5>AO VIVO</h5><div class="acts" id="dev-perf" style="grid-template-columns:1fr">${this.perfLines(info, live)}</div>
+                <h5>AÇÕES</h5><div class="acts"><button class="act" data-dev="perf-refresh">↻ ATUALIZAR</button><button class="act" data-dev="perf-stress">🧪 ESTRESSE: +40 ZUMBIS</button></div>`;
             }
           },
           playing() {
@@ -7409,6 +7478,32 @@ body.netgame #revivetouch{display:flex}
             if (cmd.startsWith("tab:")) {
               this.tab = cmd.slice(4);
               return this.render();
+            }
+            if (cmd.startsWith("zmap:")) {
+              const m = +cmd.slice(5);
+              this.zombieMap = m < 0 ? null : m;
+              this.render();
+              return this.log(m < 0 ? "Variante de mapa: a do mapa atual." : "Zumbis novos usam a variante: " + maps[m]?.name);
+            }
+            if (cmd === "perf-refresh") {
+              const p = $("dev-perf");
+              if (p) p.innerHTML = this.perfLines(renderer.info, ZombieManager.list.filter((z) => !z.dead).length);
+              return this.log("Atualizado.");
+            }
+            if (cmd === "perf-stress") {
+              if (!this.playing()) return;
+              const at = player.pos.clone().add(new V(-Math.sin(yaw) * 14, -player.pos.y, -Math.cos(yaw) * 14));
+              for (let i = 0; i < 40; i++) ZombieManager.spawn(Math.floor(Math.random() * zombieTypes.length), null, at.clone().add(new V(rand(-10, 10), 0, rand(-10, 10))));
+              return this.log("+40 zumbis. Veja FPS/draw calls e toque em ATUALIZAR.");
+            }
+            if (cmd === "boss-intro" || cmd === "boss-death") {
+              if (!this.playing()) return;
+              const z = ZombieManager.list.filter((q) => q.boss && !q.dead && !q.remote).sort((a, b) => a.group.position.distanceTo(player.pos) - b.group.position.distanceTo(player.pos))[0];
+              if (!z) return this.log("Spawne um chefe primeiro.");
+              this.hide();
+              if (cmd === "boss-intro") return void BossIntro.start(z);
+              z.hp = 1;
+              return void ZombieManager.kill(z);
             }
             if (cmd.startsWith("count:")) {
               this.count = +cmd.slice(6) || 1;
@@ -11770,7 +11865,7 @@ body.netgame #revivetouch{display:flex}
             g.scale.setScalar(size);
             scene.add(g);
             const rig = CreatureRig.create(g, type, boss);
-            if (!boss) VoxelMonsters.dress(rig, selectedMap);
+            if (!boss) VoxelMonsters.dress(rig, DevMode.active && DevMode.zombieMap != null ? DevMode.zombieMap : selectedMap);
             const scaling =
                 mode === "infinite"
                   ? Math.pow(1.085, WaveManager.wave - 1)
@@ -14009,6 +14104,8 @@ body.netgame #revivetouch{display:flex}
               if (beat * Math.sin(tt * 16 - dt * 16) < 0) {
                 shake = Math.max(shake, 0.25);
                 ParticleSystem.emit(a.z.group.position.clone().add(new V(0, 1.9 * S, 0.6)), 0xffffff, 6, 2);
+                MonsterAudio.play("land", { volume: 0.9, rate: 0.7 + Math.random() * 0.1 });
+                AudioManager.tone(78, 0.22, "sine", 0.45, 36, "effects");
               }
             }
             if (tt > 2.2 && tt < 3.4) {
@@ -16536,6 +16633,111 @@ body.netgame #revivetouch{display:flex}
             if (!wallBetween(from, new V(base.x, base.y + h * k, base.z), tolerance)) return true;
           return false;
         }
+        // Developer-only combat overlay (DEV > DEBUG). One dynamic LineSegments; nothing is allocated
+        // or drawn unless a debug flag is on.
+        const DebugDraw = {
+          cap: 6000,
+          n: 0,
+          mesh: null,
+          KEYS: ["hitArc", "aimRay", "flameRays", "iceRays", "targetLines", "wallBlocked", "hitboxes"],
+          ensure() {
+            if (this.mesh) return;
+            const g = new THREE.BufferGeometry();
+            this.pos = new Float32Array(this.cap * 6);
+            this.col = new Float32Array(this.cap * 6);
+            g.setAttribute("position", new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+            g.setAttribute("color", new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+            this.mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true }));
+            this.mesh.frustumCulled = false;
+            this.mesh.renderOrder = 999;
+            scene.add(this.mesh);
+          },
+          seg(a, b, hex) {
+            if (this.n >= this.cap) return;
+            const i = this.n++ * 6, c = this.tmp || (this.tmp = new THREE.Color());
+            c.setHex(hex);
+            this.pos[i] = a.x; this.pos[i + 1] = a.y; this.pos[i + 2] = a.z;
+            this.pos[i + 3] = b.x; this.pos[i + 4] = b.y; this.pos[i + 5] = b.z;
+            this.col[i] = this.col[i + 3] = c.r; this.col[i + 1] = this.col[i + 4] = c.g; this.col[i + 2] = this.col[i + 5] = c.b;
+          },
+          cross(p, s, hex) {
+            const t = this.t1 || (this.t1 = new V()), u = this.t2 || (this.t2 = new V());
+            for (const [x, y, z] of [[1, 0, 0], [0, 1, 0], [0, 0, 1]]) this.seg(t.copy(p).addScaledVector(u.set(x, y, z), -s), u.set(x, y, z).multiplyScalar(s).add(p), hex);
+          },
+          box(z, hex) {
+            const s = z.size || 1, r = 0.42 * s, h = 1.8 * s, p = z.group.position;
+            const c = [[-r, 0, -r], [r, 0, -r], [r, 0, r], [-r, 0, r]];
+            for (let i = 0; i < 4; i++) {
+              const a = c[i], b = c[(i + 1) % 4];
+              this.seg(new V(p.x + a[0], p.y, p.z + a[2]), new V(p.x + b[0], p.y, p.z + b[2]), hex);
+              this.seg(new V(p.x + a[0], p.y + h, p.z + a[2]), new V(p.x + b[0], p.y + h, p.z + b[2]), hex);
+              this.seg(new V(p.x + a[0], p.y, p.z + a[2]), new V(p.x + a[0], p.y + h, p.z + a[2]), hex);
+            }
+          },
+          update() {
+            const f = DevMode.flags, any = DevMode.active && !NetGame.active && this.KEYS.some((k) => f[k]);
+            if (!any || state !== GameState.PLAYING) {
+              if (this.mesh) this.mesh.visible = false;
+              return;
+            }
+            this.ensure();
+            this.mesh.visible = true;
+            this.n = 0;
+            const w = WeaponSystem.current?.(), fw = forward(), eye = player.pos, hand = eye.clone().addScaledVector(fw, 0.4).add(new V(0, -0.25, 0));
+            const zs = ZombieManager.list.filter((z) => !z.dead && !z.remote && z.group.position.distanceTo(eye) < 40).sort((a, b) => a.group.position.distanceTo(eye) - b.group.position.distanceTo(eye)).slice(0, 12);
+            if (f.hitArc && w && (w.melee || w.scythe || w.spear || w.kind === "melee")) {
+              const reach = Math.min(w.range || 2.6, 2.6), fwd = new V(fw.x, 0, fw.z).normalize(), half = Math.acos(0.6);
+              let prev = null;
+              for (let i = -12; i <= 12; i++) {
+                const a = (i / 12) * half, p = eye.clone().add(fwd.clone().applyAxisAngle(new V(0, 1, 0), a).multiplyScalar(reach)).add(new V(0, -0.6, 0));
+                if (prev) this.seg(prev, p, 0xffd24a);
+                if (i === -12 || i === 12) this.seg(eye.clone().add(new V(0, -0.6, 0)), p, 0xffd24a);
+                prev = p;
+              }
+              for (const z of zs) {
+                const pt = z.group.position.clone(); pt.y += Math.min(1.4, z.size || 1);
+                const off = pt.clone().sub(eye), d = off.length();
+                const ok = d <= reach && off.normalize().dot(fw) >= 0.6 && !wallBetween(eye, pt);
+                this.seg(eye.clone().add(new V(0, -0.6, 0)), pt, ok ? 0x43f28a : 0x777777);
+              }
+            }
+            if (f.aimRay) {
+              const far = 80;
+              raycaster.set(eye, fw); raycaster.far = far;
+              const wh = raycaster.intersectObjects(MapManager.walls)[0], end = eye.clone().addScaledVector(fw, wh ? wh.distance : far);
+              this.seg(hand, end, wh ? 0xff6a3a : 0x59b6ff);
+              if (wh) this.cross(end, 0.25, 0xff6a3a);
+              for (const q of projectiles) if (q.pos && q.vel) this.seg(q.pos, q.pos.clone().addScaledVector(q.vel, 0.08), 0xffe14a);
+            }
+            if (f.flameRays || f.iceRays) {
+              const ice = w && (w.kind === "ice" || /ice|frost|cryo/i.test(w.name || "")), flame = w && (w.kind === "fire" || /flame|fire|burn/i.test(w.name || ""));
+              if ((f.flameRays && flame) || (f.iceRays && ice) || (f.flameRays && f.iceRays)) {
+                const range = w?.range || 10, col = ice ? 0x66d9ff : 0xff8a2a;
+                for (const z of zs) {
+                  const h = 1.8 * (z.size || 1), base = z.group.position;
+                  for (const k of [0.6, 0.95, 0.25]) {
+                    const t = new V(base.x, base.y + h * k, base.z);
+                    if (t.distanceTo(eye) > range + 2) continue;
+                    const hit = wallBetween(eye, t);
+                    this.seg(hand, t, hit ? 0xff3030 : col);
+                  }
+                }
+              }
+            }
+            if (f.targetLines || f.wallBlocked) {
+              for (const z of zs) {
+                const t = z.group.position.clone(); t.y += 0.9 * (z.size || 1);
+                const blocked = !canReachZombie(eye, z);
+                if (f.targetLines) this.seg(hand, t, blocked ? 0xff3030 : 0x43f28a);
+                if (f.wallBlocked && blocked) this.cross(t, 0.35, 0xff3030);
+              }
+            }
+            if (f.hitboxes) for (const z of zs) this.box(z, z.boss ? 0xff5a4a : 0x8cff3c);
+            this.mesh.geometry.setDrawRange(0, this.n * 2);
+            this.mesh.geometry.attributes.position.needsUpdate = true;
+            this.mesh.geometry.attributes.color.needsUpdate = true;
+          },
+        };
         const FlameStream = {
           live: [],
           pool: [],
@@ -23753,6 +23955,7 @@ body.netgame #revivetouch{display:flex}
             GameState.DYING,
           ].includes(state);
           const sdt = dt * TimeFX.update(dt);
+          if (DevMode.active) DebugDraw.update();
           WeaponSystem.model.visible =
             inWorld && CameraRig.distance < 0.6 && !!WeaponSystem.current() && !BossIntro.active && !KillCam.active && !BossDeath.active && state !== GameState.DYING;
           if (CameraRig.avatar)
@@ -23946,6 +24149,7 @@ body.netgame #revivetouch{display:flex}
             classValue: (k, f) => classValue(k, f),
             MouseLook,
             DevMode,
+            DebugDraw,
             get selectedClass() { return selectedClass; },
             mouseMode: () => MouseLook.mode(),
             resume: () => resume(),
