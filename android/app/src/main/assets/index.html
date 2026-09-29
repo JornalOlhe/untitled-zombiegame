@@ -5306,7 +5306,7 @@ body.netgame #revivetouch{display:flex}
             },
             scythe: {
               dur: 0.62,
-              trail: 0xff2a1a,
+              trail: 0xc01c10,
               aura: true,
               moves: [
                 [[0.22, -0.42, 0.08, 0.05, 0, 1.25, -1.3], [0.5, 0.42, -0.05, -0.3, 0, -1.0, -1.3], [0.7, 0.46, -0.06, -0.25, 0, -1.1, -1.3]], // left → right
@@ -10457,6 +10457,9 @@ body.netgame #revivetouch{display:flex}
                 }
               }
               this.tip = tip;
+              // The ribbon runs along the blade's cutting edge: for the scythe that is from the point
+              // of the crescent back along the blade to where it meets the snath (not down the shaft).
+              this.edge = w.scythe ? tip.clone().add(new V(0, -0.12, 0.55)) : tip.clone().multiplyScalar(0.55);
               const set = MeleeAnim.SETS[MeleeAnim.type(w)];
               this.trail = new BladeTrail(Viewmodel.camera, w.specter ? 0xa8e6ff : set?.trail || 0xffffff);
               if (w.specter) this.parts.rightHand.visible = this.parts.leftHand.visible = false;
@@ -10691,7 +10694,9 @@ body.netgame #revivetouch{display:flex}
               if (on && this.tip) {
                 this.model.updateMatrixWorld(true);
                 const a = Viewmodel.camera.worldToLocal(this.model.localToWorld(this.tip.clone())),
-                  b = Viewmodel.camera.worldToLocal(this.model.localToWorld(this.tip.clone().multiplyScalar(0.55)));
+                  b = Viewmodel.camera.worldToLocal(this.model.localToWorld((this.edge || this.tip.clone().multiplyScalar(0.55)).clone()));
+                // Heavy scythe blows (overhead, spin) leave a longer ribbon than the quick side cuts.
+                if (w.scythe) this.trail.maxAge = mp.move >= 3 ? 0.34 : 0.17;
                 this.trail.push(a, b, simulationTime);
                 if (mp?.set.aura && Math.random() < 0.5) ParticleSystem.emit(player.pos.clone().add(forward().multiplyScalar(1.2)).add(new V(rand(-0.6, 0.6), rand(-0.5, 0.3), 0)), 0xff2a1a, 1, 1.2);
               }
@@ -20831,6 +20836,7 @@ body.netgame #revivetouch{display:flex}
           dispose(g) {
             if (!g) return;
             g.parent?.remove(g);
+            g.userData.rig?.trail?.dispose();
             g.traverse((o) => {
               if (o.geometry?.type === "ExtrudeGeometry") o.geometry.dispose();
               if (o.isSprite) o.material.dispose();
@@ -21629,6 +21635,20 @@ body.netgame #revivetouch{display:flex}
                 this.ik(r.arms[1], r.elbows[1], gp.clone().add(new V(0.2, -0.02, -0.1 - draw * 0.28)));
               }
             }
+            if (r.weapon?.scythe && mp) {
+              // Demonic red ribbon along the scythe's real cutting edge (tip -> blade root), longer for the
+              // heavy overhead / spin attacks; embers shed from the tip.
+              if (!r.trail) r.trail = new BladeTrail(scene, 0x9a1008, 1, 0.2);
+              g.updateMatrixWorld(true);
+              const a = r.gun.localToWorld(new V(0, 1.42, -0.9)),
+                b = r.gun.localToWorld(new V(0, 1.3, -0.35));
+              r.trail.maxAge = mp.move >= 3 ? 0.34 : 0.17;
+              if (mp.striking) {
+                r.trail.push(a, b, simulationTime);
+                if (Math.random() < 0.35) ParticleSystem.emit(a, 0xff4a1a, 1, 1.3);
+              }
+            }
+            r.trail?.update(simulationTime);
             if (dead)
               g.rotation.z += (1.4 - g.rotation.z) * (1 - Math.exp(-dt * 3));
           },
