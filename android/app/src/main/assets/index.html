@@ -11803,10 +11803,16 @@ body.netgame #revivetouch{display:flex}
             const distance = player.pos.distanceTo(pos);
             if (distance < radius)
               PlayerController.hurt(damage * (1 - (distance / radius) * 0.6));
-          } else
+          } else {
+            const toward = player.pos.clone().sub(pos),
+              blastOrigin = pos.clone().addScaledVector(toward.lengthSq() > 1e-4 ? toward.normalize() : new V(0, 1, 0), 0.12);
+            syncHitMatrices();
             for (const z of [...ZombieManager.list]) {
               const d = z.group.position.distanceTo(pos);
-              if (d < radius) z.blastAt = simulationTime;
+              if (d >= radius) continue;
+              // Walls shield: nudge the origin off the surface a rocket just hit, then require sight.
+              if (!canReachZombie(blastOrigin, z, 0.02)) continue;
+              z.blastAt = simulationTime;
               if (d < radius)
                 ZombieManager.hit(
                   z,
@@ -11817,6 +11823,7 @@ body.netgame #revivetouch{display:flex}
                   true,
                 );
             }
+          }
           if (player.pos.distanceTo(pos) < 15) shake = Math.max(shake, 0.18);
         }
         // ZombieManager: distinct archetypes, armor direction, ranged attacks and multi-phase bosses.
@@ -16689,6 +16696,24 @@ body.netgame #revivetouch{display:flex}
         // Flamethrower / ice-thrower stream: a continuous cone of pooled additive sprites (no
         // projectiles, no tracers). Damage is a cone test from the eye along the crosshair with a
         // wall line-of-sight check; burn / chill are applied by ZombieManager.hit via the weapon.
+        // Damage occlusion: a solid wall between the source and a target means NO damage. Three
+        // probes (feet / torso / head) so a target only counts as reachable when some part of it is
+        // actually visible from the source.
+        function wallBetween(from, to, tolerance = 0.05) {
+          const v = to.clone().sub(from),
+            d = v.length();
+          if (d < 0.001) return false;
+          raycaster.set(from, v.divideScalar(d));
+          raycaster.far = d;
+          return raycaster.intersectObjects(MapManager.walls).some((h) => h.distance < d - tolerance);
+        }
+        function canReachZombie(from, z, tolerance = 0.05) {
+          const h = 1.8 * (z.size || 1),
+            base = z.group.position;
+          for (const k of [0.6, 0.95, 0.25])
+            if (!wallBetween(from, new V(base.x, base.y + h * k, base.z), tolerance)) return true;
+          return false;
+        }
         const FlameStream = {
           live: [],
           pool: [],
@@ -16767,9 +16792,7 @@ body.netgame #revivetouch{display:flex}
                 d = to.length();
               if (d > w.range + (z.size || 1) * 0.5 || d < 0.01) continue;
               if (to.dot(aim) / d < cosCone - (z.size || 1) * 0.12 / Math.max(1, d)) continue;
-              raycaster.set(origin, to.clone().normalize());
-              raycaster.far = d;
-              if (raycaster.intersectObjects(MapManager.walls).some((h) => h.distance < d - 0.5)) continue;
+              if (!canReachZombie(origin, z)) continue; // wall blocks the jet and the damage
               ZombieManager.hit(z, damage * (1 - 0.35 * (d / w.range)), false, c, w);
             }
             WeaponSystem.lastImpact = origin.clone().addScaledVector(aim, w.range * 0.7);
