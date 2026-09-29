@@ -1,14 +1,14 @@
-name: Publish Dead Recoil 0.31.3 (tag v36)
-# v36: boot/crash hotfix + physical spear state + work branch production pass.
+name: Publish Dead Recoil 0.32.0 (tag v37)
+# v37: 0.32.0 — work production pass: grip profiles, secret-class casts, 3D spin stage, Specter VFX, Hospital/Lab, lighting, performance.
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-v36.yml']
+    paths: ['.github/workflows/publish-v37.yml']
 
 concurrency:
-  group: publish-v36
+  group: publish-v37
   cancel-in-progress: true
 
 permissions:
@@ -17,7 +17,7 @@ permissions:
 jobs:
   ui-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,10 +47,13 @@ jobs:
           node tests/spawn-smoke.cjs
           node tests/devmode-smoke.cjs
           node tests/boss-audio-smoke.cjs
+          node tests/ascend-smoke.cjs
+          node tests/wings-tail-smoke.cjs
+          node tests/dof-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: DeadRecoil-v36-UI
+          name: DeadRecoil-v37-UI
           path: test-results/
           retention-days: 15
 
@@ -95,19 +98,19 @@ jobs:
             "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
               --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
               --out dist/DeadRecoil.apk android/app/build/outputs/apk/release/app-release-unsigned.apk
-            cp dist/DeadRecoil.apk dist/DeadRecoil-v36.apk
+            cp dist/DeadRecoil.apk dist/DeadRecoil-v37.apk
             echo "ANDROID_APK=dist/DeadRecoil.apk" >> "$GITHUB_ENV"
             echo "Stable release-signed APK prepared."
           else
-            cp android/app/build/outputs/apk/debug/app-debug.apk dist/DeadRecoil-v36-manual.apk
-            echo "ANDROID_APK=dist/DeadRecoil-v36-manual.apk" >> "$GITHUB_ENV"
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/DeadRecoil-v37-manual.apk
+            echo "ANDROID_APK=dist/DeadRecoil-v37-manual.apk" >> "$GITHUB_ENV"
             echo "::warning::Signing secrets are missing. Publishing manual-install APK only; updater will not auto-install it."
           fi
           "$BT/apksigner" verify --print-certs "$ANDROID_APK" | head -5
           BADGING=$("$BT/aapt" dump badging "$ANDROID_APK")
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
-          echo "$BADGING" | grep -q "versionCode='36'"
-          echo "$BADGING" | grep -q "versionName='0.31.3'"
+          echo "$BADGING" | grep -q "versionCode='37'"
+          echo "$BADGING" | grep -q "versionName='0.32.0'"
           python3 - <<'PY'
           import os, zipfile
           from pathlib import Path
@@ -134,7 +137,7 @@ jobs:
             adb shell am start -W -n com.deadrecoil.game/.MainActivity
             ok=0
             for i in $(seq 1 40); do
-              if adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' | grep -q "DEAD_RECOIL_READY 0.31.3"; then
+              if adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' | grep -q "DEAD_RECOIL_READY 0.32.0"; then
                 ok=1
                 break
               fi
@@ -151,13 +154,13 @@ jobs:
               exit 1
             fi
             adb shell pidof com.deadrecoil.game
-            adb exec-out screencap -p > android-boot-v36.png
+            adb exec-out screencap -p > android-boot-v37.png
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v36-Android
+          name: DeadRecoil-v37-Android
           path: |
             dist/*.apk
-            android-boot-v36.png
+            android-boot-v37.png
           if-no-files-found: error
           retention-days: 30
 
@@ -173,7 +176,7 @@ jobs:
         shell: pwsh
         run: |
           $package = Get-Content desktop/package.json | ConvertFrom-Json
-          if ($package.version -ne "0.31.3") { throw "Expected desktop 0.31.3" }
+          if ($package.version -ne "0.32.0") { throw "Expected desktop 0.32.0" }
       - name: Install dependencies
         working-directory: desktop
         run: npm install --no-audit --no-fund
@@ -186,7 +189,7 @@ jobs:
       - name: Verify installer
         shell: pwsh
         run: |
-          $exe = "desktop/dist/DeadRecoil-Setup-0.31.3.exe"
+          $exe = "desktop/dist/DeadRecoil-Setup-0.32.0.exe"
           if (!(Test-Path $exe)) { throw "Installer was not generated" }
           if ((Get-Item $exe).Length -lt 50000000) { throw "Installer is unexpectedly small" }
           $p = Start-Process $exe -ArgumentList "/S" -PassThru -Wait
@@ -197,8 +200,8 @@ jobs:
           Get-FileHash $exe -Algorithm SHA256
       - uses: actions/upload-artifact@v4
         with:
-          name: DeadRecoil-v36-Windows
-          path: desktop/dist/DeadRecoil-Setup-0.31.3.exe
+          name: DeadRecoil-v37-Windows
+          path: desktop/dist/DeadRecoil-Setup-0.32.0.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -209,11 +212,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v36-Android
+          name: DeadRecoil-v37-Android
           path: android-artifact
       - uses: actions/download-artifact@v4
         with:
-          name: DeadRecoil-v36-Windows
+          name: DeadRecoil-v37-Windows
           path: windows-artifact
       - name: Collect release files
         shell: bash
@@ -223,22 +226,22 @@ jobs:
           find android-artifact -type f -name '*.apk' -exec cp {} dist/ \;
           find windows-artifact -type f -name '*.exe' -exec cp {} dist/ \;
           ls -lh dist
-      - name: Publish GitHub release v36
+      - name: Publish GitHub release v37
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$(find dist -maxdepth 1 -name '*.apk' -print -quit)"
-          test -f dist/DeadRecoil-Setup-0.31.3.exe
-          if gh release view v36 >/dev/null 2>&1; then
-            gh release upload v36 dist/*.apk dist/DeadRecoil-Setup-0.31.3.exe --clobber
-            gh release edit v36 --title "Dead Recoil 0.31.3" --notes-file release/v36-notes.md --latest
+          test -f dist/DeadRecoil-Setup-0.32.0.exe
+          if gh release view v37 >/dev/null 2>&1; then
+            gh release upload v37 dist/*.apk dist/DeadRecoil-Setup-0.32.0.exe --clobber
+            gh release edit v37 --title "Dead Recoil 0.32.0" --notes-file release/v37-notes.md --latest
           else
-            gh release create v36 dist/*.apk dist/DeadRecoil-Setup-0.31.3.exe \
-              --target "$GITHUB_SHA" --title "Dead Recoil 0.31.3" --notes-file release/v36-notes.md --latest
+            gh release create v37 dist/*.apk dist/DeadRecoil-Setup-0.32.0.exe \
+              --target "$GITHUB_SHA" --title "Dead Recoil 0.32.0" --notes-file release/v37-notes.md --latest
           fi
       - name: Verify release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release view v36 --json tagName,name,isDraft,isPrerelease,assets
+        run: gh release view v37 --json tagName,name,isDraft,isPrerelease,assets
