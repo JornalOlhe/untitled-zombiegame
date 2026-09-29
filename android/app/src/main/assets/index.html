@@ -6863,6 +6863,10 @@ body.netgame #revivetouch{display:flex}
           static HOP_GAIN = 1.03;
           static AIR_WISH = 0.9;
           static AIR_ACCEL = 11;
+          // While movement input is held, airborne momentum rotates toward the current camera-
+          // relative wish direction. This is intentionally stronger than pure Quake air control:
+          // Dead Recoil should follow a player's turn while hopping instead of feeling rail-locked.
+          static AIR_TURN_RATE = 6.2;
           constructor() {
             this.reset();
           }
@@ -6915,15 +6919,33 @@ body.netgame #revivetouch{display:flex}
               tz = (-Math.sin(yaw) * x + Math.cos(yaw) * z) * speed;
             const cap = opts.cap || speed * G.BHOP_CAP;
             if (opts.air) {
-              // Airborne: keep momentum, steer a little.
+              // Airborne: preserve momentum, but recompute steering from CURRENT yaw + movement
+              // every frame. Turning the camera while holding W therefore bends the trajectory
+              // instead of leaving velocity stuck in the take-off direction.
               if (n > 0.01) {
                 const wl = Math.hypot(tx, tz) || 1,
                   wx = tx / wl,
                   wz = tz / wl,
-                  wish = G.AIR_WISH * (opts.aiming ? 0.4 : 1) * Math.min(1, n),
+                  current = this.speed();
+                if (current > 0.05) {
+                  const currentAngle = Math.atan2(this.vx, this.vz),
+                    wishAngle = Math.atan2(wx, wz),
+                    delta = Math.atan2(Math.sin(wishAngle - currentAngle), Math.cos(wishAngle - currentAngle)),
+                    maxTurn = G.AIR_TURN_RATE * dt * (opts.aiming ? 0.82 : 1),
+                    turn = clamp(delta, -maxTurn, maxTurn),
+                    cs = Math.cos(turn),
+                    sn = Math.sin(turn),
+                    vx = this.vx * cs + this.vz * sn,
+                    vz = this.vz * cs - this.vx * sn;
+                  this.vx = vx;
+                  this.vz = vz;
+                }
+                // Quake-style acceleration remains on top of the steering, so strafing can shape
+                // momentum without creating free speed or exceeding the existing bhop cap.
+                const wish = G.AIR_WISH * (opts.aiming ? 0.65 : 1) * Math.min(1, n),
                   add = wish - (this.vx * wx + this.vz * wz);
                 if (add > 0) {
-                  const acc = Math.min(add, G.AIR_ACCEL * Math.max(speed, 1) * dt * (opts.aiming ? 0.4 : 1));
+                  const acc = Math.min(add, G.AIR_ACCEL * Math.max(speed, 1) * dt * (opts.aiming ? 0.65 : 1));
                   this.vx += wx * acc;
                   this.vz += wz * acc;
                 }
@@ -17894,13 +17916,14 @@ body.netgame #revivetouch{display:flex}
             // Input as a world-space vector (for ladder intent).
             const moveWX = x * Math.cos(yaw) + z * Math.sin(yaw),
               moveWZ = -x * Math.sin(yaw) + z * Math.cos(yaw);
-            // Jump: presses are buffered for 0.12 s so a jump pressed just before landing fires
-            // on the first grounded frame (that is what makes bunny hops responsive). It is
-            // taken before the horizontal step so that frame already moves with air physics.
+            // Jump: tapping is buffered for 0.12 s, while HOLDING jump is persistent. If Space
+            // (or the mobile jump button) is still held when the player lands, the next grounded
+            // frame immediately takes off again — Minecraft-style hold-to-repeat bunny hopping.
             let jumpedNow = false;
-            if (player.jump === 0 && !player.climb && !flyingNow &&
-                simulationTime - (player.jumpQueuedAt ?? -9) <= 0.12) {
-              player.jumpQueuedAt = -9;
+            const jumpHeld = keys.has("Space"),
+              jumpBuffered = simulationTime - (player.jumpQueuedAt ?? -9) <= 0.12;
+            if (player.jump === 0 && !player.climb && !flyingNow && (jumpHeld || jumpBuffered)) {
+              if (!jumpHeld) player.jumpQueuedAt = -9;
               player.vy = 6 * classValue("jump", 1);
               this.motion.takeoff(simulationTime, speedCap, !mouse.aim && !crouched);
               jumpedNow = true;
@@ -17940,7 +17963,7 @@ body.netgame #revivetouch{display:flex}
               if (l) {
                 const inward = MapManager.ladderInward(l),
                   into = moveWX * inward[0] + moveWZ * inward[1];
-                if (into > 0.35 || (keys.has("Space") && player.jump === 0)) {
+                if (into > 0.35 || (keys.has("Space") && player.jump === 0 && !jumpedNow)) {
                   player.climb = { l, inward, phase: "climb", t: 0 };
                   player.vy = 0;
                 }
@@ -23641,7 +23664,8 @@ body.netgame #revivetouch{display:flex}
           lookPointer = null;
           lastPinchDistance = null;
           mouse.down = false;
-          for (const id of ["firetouch", "sprinttouch", "aimtouch", "crouchtouch"])
+          keys.delete("Space");
+          for (const id of ["firetouch", "sprinttouch", "jumptouch", "aimtouch", "crouchtouch"])
             $(id)?.classList.remove("is-active");
         };
         function placeStick(x, y) {
@@ -23795,7 +23819,14 @@ body.netgame #revivetouch{display:flex}
         bindTapButton("weaponabilitytouch", () => SecretWeaponSkills.use());
         bindTapButton("rtouch", () => PlayerController.reload());
         bindTapButton("grenadetouch", () => PlayerController.grenade());
-        bindTapButton("jumptouch", () => { player.jumpQueuedAt = simulationTime; });
+        bindHoldButton(
+          "jumptouch",
+          () => {
+            keys.add("Space");
+            player.jumpQueuedAt = simulationTime;
+          },
+          () => keys.delete("Space"),
+        );
         bindTapButton("switchtouch", () => {
           for (let i = 1; i <= player.inventory.length; i++) {
             const slot = (player.slot + i) % player.inventory.length;
