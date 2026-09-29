@@ -24,10 +24,14 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,W=T.WeaponSystem,P=T.Play
   const av=S.create(0,cw);T.scene.add(av);
   const z=T.ZombieManager.spawn(0,null,new V(0,0,zz));z.hp=z.maxhp=1e6;z.speed=0;z.group.position.set(0,0,zz);T.scene.updateMatrixWorld(true);
   T.setTime(T.time+5);const t0=T.time;
-  const r={phases:[],maxSpears:0,dupFrames:0,spawnFrame:null,hiddenFrame:null,hp0:z.hp};
+  const r={phases:[],maxSpears:0,dupFrames:0,lockedInputFrames:0,spawnFrame:null,hiddenFrame:null,hp0:z.hp,shots0:pl.shots};
   T.mouse.down=true;let zdir=1;
   for(let f=0;f<420;f++){
-   const t=T.time-t0;if(t>0.5)T.mouse.down=false;
+   const t=T.time-t0;
+   if(t>0.5)T.mouse.down=false;
+   // Deliberately spam attack while the spear is physically away. This must NOT queue a thrust,
+   // charge, replacement spear or additional shot.
+   if(T.projectiles.some(q=>q.kind==='spear') && t>0.75 && t<1.45) T.mouse.down=(f%8)<4;
    if(move){z.group.position.z+=move/60;if(z.group.position.z>8)z.group.position.z=-14;}
    P.update(1/60);T.updateProjectiles(1/60);
    const st=P.spearThrowState();if(st&&(!r.phases.length||r.phases[r.phases.length-1]!==st.phase))r.phases.push(st.phase);
@@ -36,9 +40,16 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,W=T.WeaponSystem,P=T.Play
    const held=av.userData.rig.gun.visible;
    if(spears&&r.spawnFrame==null)r.spawnFrame=f;
    if(spears&&held)r.dupFrames++;  // a spear in the hand AND one in the air
+   if(spears&&(P.spearHeldSince!=null||P.spearThrowPending||P.meleeStrike))r.lockedInputFrames++;
    if(!spears&&!held&&!P.spearThrowState())r.dupFrames+=0;
    T.setTime(T.time+1/60);
   }
+  // As soon as the same spear has returned, a fresh short click must work immediately.
+  T.mouse.down=false;
+  const beforeReturnAttack=pl.shots;
+  T.mouse.down=true;P.update(1/60);T.setTime(T.time+0.06);T.mouse.down=false;P.update(1/60);
+  r.canAttackAfterReturn=pl.shots>beforeReturnAttack;
+  r.extraShotsWhileOut=Math.max(0,beforeReturnAttack-r.shots0-1);
   r.dmg=Math.round(r.hp0-z.hp);r.left=T.projectiles.filter(q=>q.kind==='spear').length;r.back=!!T.projectiles.length;
   T.scene.remove(av);out[name]=r;};
  scenario('near',6);scenario('far',-9);scenario('moving',-14,{move:2.5});scenario('wall',-7,{useWall:true});
@@ -49,6 +60,9 @@ for(const [k,r] of Object.entries(res)){
  if(r.phases.join('>')!=='prep>throw>flight')bad.push(k+': state machine '+r.phases.join('>')+' (expected prep>throw>flight)');
  if(r.maxSpears>1)bad.push(k+': '+r.maxSpears+' spears at once');
  if(r.dupFrames)bad.push(k+': spear visible in hand while another flies ('+r.dupFrames+' frames)');
+ if(r.lockedInputFrames)bad.push(k+': attack state queued while spear was out ('+r.lockedInputFrames+' frames)');
+ if(r.extraShotsWhileOut)bad.push(k+': '+r.extraShotsWhileOut+' extra attacks registered while spear was out');
+ if(!r.canAttackAfterReturn)bad.push(k+': cannot attack immediately after the spear returns');
  if(r.left)bad.push(k+': spear never returned/cleaned');
  if(k==='wall'){if(r.dmg>0)bad.push('wall: hit zombie through wall');}
  else if(r.dmg<=0)bad.push(k+': spear never hit the zombie');
