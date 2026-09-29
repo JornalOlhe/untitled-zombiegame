@@ -12119,9 +12119,10 @@ body.netgame #revivetouch{display:flex}
               ZombiePing.lastKill = simulationTime;
               // 100% coin reward. Normal zombies: 1 base coin, +1 on headshot.
               // Bosses keep their authored special reward.
-              const reward = z.boss
-                ? Math.max(1, Math.round(z.boss.coins * diff[difficulty].coins))
-                : EconomyRewards.kill(head, diff[difficulty].coins);
+              const baseReward = EconomyRewards.kill(head, diff[difficulty].coins),
+                reward = z.boss
+                  ? baseReward + Math.max(1, Math.round(z.boss.coins * diff[difficulty].coins))
+                  : baseReward;
               Progression.reward(reward);
               UIManager.number(`+${reward} ¤`, z.group.position.clone().add(new V(0, z.size * 1.9, 0)), "#f6d867");
               const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
