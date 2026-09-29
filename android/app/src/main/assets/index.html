@@ -5472,6 +5472,14 @@ body.netgame #revivetouch{display:flex}
                   (gltf) => {
                     gltf.scene.traverse((o) => {
                       if (!o.isMesh) return;
+                      // HD melee (tools/blender/melee_hd.py): real PBR maps — linear filtering, mipmaps,
+                      // authored metalness; the voxel models keep the crisp nearest-filtered pixels.
+                      if (/^HD_/.test(o.name) || /^HD_/.test(o.parent?.name || "")) {
+                        for (const key of ["map", "emissiveMap", "normalMap"]) if (o.material[key]) o.material[key].anisotropy = 4;
+                        if (o.material.emissiveMap) o.material.emissiveIntensity = 1.4;
+                        o.userData.hd = true;
+                        return;
+                      }
                       for (const key of ["map", "emissiveMap"]) {
                         const t = o.material[key];
                         if (!t) continue;
