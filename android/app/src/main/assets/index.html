@@ -6356,7 +6356,16 @@ body.netgame #revivetouch{display:flex}
               } else if (w.specter) {
                 parts.rightHand.visible = false;
                 parts.leftHand.visible = false;
+              } else if (w.spear) {
+                // TwoHandSpearProfile: the only ordinary melee that uses both hands — rear hand on
+                // the butt, front hand forward on the shaft.
+                parts.rightHand.position.set(0, -0.16, -0.12);
+                parts.leftHand.position.set(-0.03, -0.1, -0.5);
+                parts.leftHand.rotation.x = -0.2;
+                parts.leftHand.visible = true;
               } else {
+                // OneHand profiles (machete, knife, scythe, ice staff): right hand only; the left
+                // hand never grips the weapon.
                 parts.rightHand.position.set(0, -0.16, -0.22);
                 parts.leftHand.visible = false;
               }
@@ -20954,9 +20963,20 @@ body.netgame #revivetouch{display:flex}
             parts.flash.visible = false;
             gun.rotation.y = Math.PI;
             gun.scale.setScalar(0.73);
-            gun.position.set(0.01, 0.19, 0.37);
+            // Hold profile per weapon family (RightHandWeaponSocket): one-hand melee and bows sit
+            // at the right hand (character's right = -X); rifles/pistols stay centred; the spear
+            // is the only ordinary melee that uses both hands.
+            const oneHand = weapon?.kind === "melee" && !weapon.spear && !weapon.specter && !weapon.trident,
+              hold = oneHand ? [-0.29, 0.3, 0.5] : weapon?.kind === "bow" ? [-0.29, 0.28, 0.4] : weapon?.spear ? [-0.05, 0.3, 0.5] : weapon?.scythe ? [-0.29, 0.26, 0.24] : [0.01, 0.19, 0.37];
+            gun.position.set(...hold);
             chest.add(gun);
             g.userData.rig = {
+              hold,
+              // Where the hand grips relative to the model origin (bow riser / scythe snath / staff).
+              gripOff: new V(0, weapon?.scythe ? 0.02 : 0, weapon?.kind === "bow" || weapon?.scythe ? 0.24 : weapon?.iceStaff ? 0.12 : 0),
+              oneHand,
+              spearHold: !!weapon?.spear,
+              bowHold: weapon?.kind === "bow",
               hips,
               chest,
               head,
@@ -20974,6 +20994,28 @@ body.netgame #revivetouch{display:flex}
               blend: 0,
             };
             return g;
+          },
+          // Two-bone hand IK in chest space: puts the hand on `target` (weapon socket) with the
+          // elbow dropping below the shoulder-hand line, so hands stay on the weapon in every pose.
+          ik(arm, elbow, target) {
+            const L1 = 0.29, L2 = 0.33, down = new V(0, -1, 0),
+              sh = arm.position,
+              v = target.clone().sub(sh),
+              raw = v.length();
+            if (raw < 1e-4) return;
+            const vh = v.clone().divideScalar(raw),
+              d = clamp(raw, 0.12, L1 + L2 - 0.004),
+              cosA = clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1),
+              A = Math.acos(cosA);
+            const pole = down.clone().sub(vh.clone().multiplyScalar(down.dot(vh)));
+            if (pole.lengthSq() < 1e-4) pole.set(0, 0, -1);
+            pole.normalize();
+            const u = vh.clone().multiplyScalar(Math.cos(A)).add(pole.multiplyScalar(Math.sin(A))).normalize(),
+              elbowPos = sh.clone().add(u.clone().multiplyScalar(L1)),
+              hand = sh.clone().add(vh.clone().multiplyScalar(d)),
+              f = hand.sub(elbowPos).normalize();
+            arm.quaternion.setFromUnitVectors(down, u);
+            elbow.quaternion.setFromUnitVectors(down, f.applyQuaternion(arm.quaternion.clone().invert()));
           },
           animate(
             g,
@@ -21019,6 +21061,31 @@ body.netgame #revivetouch{display:flex}
               r.arms[i].rotation.z = i === 0 ? 0.5 : -0.5;
             }
             r.gun.rotation.z = Math.sin(t * 1.7) * 0.006;
+            const swing = Math.sin(phase) * 0.55 * b;
+            if (r.oneHand) {
+              // OneHand profiles: right hand carries the weapon out in front; the left arm is
+              // never on the weapon — it swings freely with the stride (counter-balance).
+              r.arms[0].rotation.set(-1.2, 0, -0.04);
+              r.elbows[0].rotation.x = -0.4;
+              r.arms[1].rotation.set(-swing, 0, -0.1);
+              r.elbows[1].rotation.x = -0.25 - Math.max(0, swing) * 0.5;
+              r.gun.rotation.x = 0.7;
+            } else if (r.spearHold) {
+              // TwoHandSpearProfile: rear hand on the butt, front hand forward on the shaft.
+              r.arms[0].rotation.set(-0.9, 0, 0.12);
+              r.elbows[0].rotation.x = -0.9;
+              r.arms[1].rotation.set(-1.25, 0, -0.08);
+              r.elbows[1].rotation.x = -0.35;
+              r.gun.rotation.x = 1.25;
+              r.gun.rotation.y = 0;
+            } else if (r.bowHold) {
+              // Bow hand (right) holds the riser out front; the string hand comes back when drawing.
+              const draw = PlayerController.chargeHeldSince != null ? clamp((simulationTime - PlayerController.chargeHeldSince) / (r.weapon?.chargeTime || 0.9), 0, 1) : 0;
+              r.arms[0].rotation.set(-1.4, 0, -0.06);
+              r.elbows[0].rotation.x = -0.15;
+              r.arms[1].rotation.set(-1.2 - draw * 0.1, 0, 0.55 * (1 - draw) + 0.1);
+              r.elbows[1].rotation.x = -0.6 - draw * 1.3;
+            }
             if (r.specterWeapon) {
               // Floats off the right hand (never held), upright; strikes sweep across the body
               // alternating sides; hidden while it orbits the player in the world.
@@ -21154,24 +21221,54 @@ body.netgame #revivetouch{display:flex}
             const mp = r.weapon?.kind === "melee" && !r.specterWeapon ? MeleeAnim.sample(r.weapon, attack, WeaponSystem.combo || 0) : null;
             if (mp) {
               // Same move set as first person, mirrored into the avatar's frame.
-              r.gun.position.set(0.01 - mp.p.x * 0.9, 0.19 + mp.p.y * 0.9, 0.37 - mp.p.z * 0.9);
-              r.gun.rotation.set(-mp.r[0] * 0.9, Math.PI + mp.r[1] * 0.9, -mp.r[2] * 0.9);
+              r.gun.position.set(r.hold[0] - mp.p.x * 0.6, r.hold[1] + mp.p.y * 0.6, r.hold[2] - mp.p.z * 0.6);
+              r.gun.rotation.set((r.oneHand ? 0.7 : r.spearHold ? 1.25 : 0) - mp.r[0] * 0.9, (r.spearHold ? 0 : Math.PI) + mp.r[1] * 0.9, -mp.r[2] * 0.9);
+              // Body drives the blow: torso twist + shoulder/elbow, not just the weapon.
               r.chest.rotation.y = -mp.p.x * 0.8;
-              r.arms[0].rotation.x = -0.6 - Math.max(0, mp.p.y) * 2 + mp.p.z * 1.5;
-              if (mp.set.twoHands) r.arms[1].rotation.x = -0.9 + mp.p.z * 1.2;
+              r.hips.rotation.y = mp.p.x * 0.25;
+              if (r.spearHold) {
+                // Thrust: hands slide forward along the shaft, elbows straighten (p.z < 0 = forward).
+                const push = clamp(-mp.p.z, -0.3, 0.7);
+                r.arms[0].rotation.x = -0.9 - push * 0.35;
+                r.arms[0].rotation.z = 0.12;
+                r.elbows[0].rotation.x = -0.9 + push * 1.2;
+                r.arms[1].rotation.x = -1.25 - push * 0.3;
+                r.elbows[1].rotation.x = -0.35 + push * 0.3;
+              } else {
+                r.arms[0].rotation.x = (r.oneHand ? -1.2 : -0.6) - Math.max(0, mp.p.y) * 2 + mp.p.z * 1.5;
+                r.arms[0].rotation.z = (r.oneHand ? -0.04 : 0.5) - mp.p.x * 1.2;
+                if (r.oneHand) r.elbows[0].rotation.x = -0.4 - mp.p.z * 1.4;
+              }
             } else if (attack < 0.3 && r.weapon?.kind !== "melee") {
               const a = Math.sin((attack / 0.3) * Math.PI);
               r.chest.rotation.y = a * 0.25;
-              r.gun.position.z = 0.37 + a * 0.07;
+              r.gun.position.z = r.hold[2] + a * 0.07;
               r.arms[0].rotation.x -= a * 0.45;
             } else {
               r.chest.rotation.y *= Math.exp(-dt * 8);
-              if (!r.specterWeapon) r.gun.position.z = 0.37;
+              if (!r.specterWeapon) r.gun.position.z = r.hold[2];
               if (r.weapon?.kind === "melee" && !r.specterWeapon && !r.tridentWeapon) {
-                r.gun.position.x = 0.01;
-                r.gun.position.y = 0.19;
-                r.gun.rotation.x = 0;
-                r.gun.rotation.y = Math.PI;
+                r.gun.position.set(r.hold[0], r.hold[1], r.hold[2]);
+                r.gun.rotation.x = r.oneHand ? 0.7 : r.spearHold ? 1.25 : 0;
+                r.gun.rotation.y = r.spearHold ? 0 : Math.PI;
+                r.hips.rotation.y *= Math.exp(-dt * 8);
+              } else if (r.bowHold) {
+                r.gun.position.set(r.hold[0], r.hold[1], r.hold[2]);
+              }
+            }
+            // Hands follow the weapon socket (one-hand melee, spear, bow) instead of posing by
+            // guesswork: the right hand is the weapon hand; the left only joins where defined.
+            if (!(r.secretAccessories?.fly > 0.5) && !reloading && !dead) {
+              const gp = r.gun.position.clone().add(r.gripOff);
+              if (r.oneHand) this.ik(r.arms[0], r.elbows[0], gp);
+              else if (r.spearHold) {
+                const axis = new V(0, Math.cos(1.25), Math.sin(1.25));
+                this.ik(r.arms[0], r.elbows[0], gp.clone().addScaledVector(axis, -0.02));
+                this.ik(r.arms[1], r.elbows[1], gp.clone().addScaledVector(axis, 0.42));
+              } else if (r.bowHold) {
+                const draw = PlayerController.chargeHeldSince != null ? clamp((simulationTime - PlayerController.chargeHeldSince) / (r.weapon?.chargeTime || 0.9), 0, 1) : 0;
+                this.ik(r.arms[0], r.elbows[0], gp);
+                this.ik(r.arms[1], r.elbows[1], gp.clone().add(new V(0.2, -0.02, -0.1 - draw * 0.28)));
               }
             }
             if (dead)
@@ -21195,6 +21292,22 @@ body.netgame #revivetouch{display:flex}
             );
             scene.add(this.avatar);
           },
+          // Single source of truth: the avatar always shows the weapon (and class) the gameplay has
+          // equipped right now; if they ever differ the avatar is rebuilt from that weapon.
+          syncEquipped() {
+            const av = this.avatar,
+              w = WeaponSystem.current(),
+              rig = av?.userData.rig;
+            if (!av || !rig || !w) return;
+            if (rig.weapon?.name === w.name && rig.weapon?.id === w.id && rig.classId === selectedClass) return;
+            const pos = av.position.clone(), rot = av.rotation.y, vis = av.visible;
+            Survivor.dispose(av);
+            this.avatar = Survivor.create(selectedClass, w);
+            this.avatar.position.copy(pos);
+            this.avatar.rotation.y = rot;
+            this.avatar.visible = vis;
+            scene.add(this.avatar);
+          },
           scroll(delta) {
             this.target = clamp(this.target + Math.sign(delta) * 1, 0, 4);
           },
@@ -21203,6 +21316,7 @@ body.netgame #revivetouch{display:flex}
             this.target = clamp(this.target - deltaPixels * 0.018, 0, 4);
           },
           update(dt) {
+            this.syncEquipped();
             this.distance +=
               (this.target - this.distance) * (1 - Math.exp(-dt * 9));
             const anchor = camera.position.clone(),
