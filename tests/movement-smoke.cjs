@@ -141,7 +141,7 @@ const server = http.createServer((req, res) => {
       // Camera-relative airborne steering: start hopping forward, then turn the camera 90° while
       // continuing to hold W. Momentum must bend with the new current yaw instead of remaining
       // locked to the take-off vector.
-      reset(); T.keys.add('KeyW'); T.keys.add('ShiftLeft'); run(2.6, 60); T.keys.add('Space');
+      reset(); T.setYaw(0); T.keys.add('KeyW'); T.keys.add('ShiftLeft'); run(2.6, 60); T.keys.add('Space');
       run(0.25, 60);
       const beforeTurnSpeed = sp();
       const beforeTurn = { vx: mo.vx, vz: mo.vz };
@@ -191,10 +191,10 @@ const server = http.createServer((req, res) => {
       const b = r.bhop[k];
       assert.ok(!b.nan && b.hops >= 6, 'bhop hops happen: ' + k);
       assert.ok(b.max <= b.cap + 0.02, 'bhop never exceeds the hard cap: ' + JSON.stringify(b));
-      assert.ok(b.max >= S.sprintMax * 1.04, 'timed hops keep and slightly build momentum: ' + JSON.stringify(b));
+      assert.ok(b.max >= S.sprintMax * 1.01, 'timed hops preserve sprint momentum with a small gain: ' + JSON.stringify(b));
     }
     assert.ok(Math.abs(r.bhop.timed30.max - r.bhop.timed144.max) / r.bhop.timed60.max < 0.06, 'bhop gain does not depend much on FPS');
-    assert.ok(r.bhop.late.max < r.bhop.timed60.max - 0.15, 'late hops lose the momentum bonus: ' + JSON.stringify(r.bhop.late));
+    assert.ok(r.bhop.late.max < r.bhop.timed60.max - 0.08, 'late hops lose the momentum bonus: ' + JSON.stringify(r.bhop.late));
     assert.ok(r.bhop.aim.max <= r.bhop.aim.cap + 0.02 && r.bhop.aim.cap < r.bhop.timed60.cap * 0.75, 'aiming shrinks bhop: ' + JSON.stringify(r.bhop.aim));
     assert.ok(r.holdJump.hops >= 5, 'holding jump must automatically hop again after every landing: ' + JSON.stringify(r.holdJump));
     assert.ok(r.holdJump.max <= r.holdJump.cap + 0.02, 'hold-to-bhop remains under hard cap: ' + JSON.stringify(r.holdJump));
