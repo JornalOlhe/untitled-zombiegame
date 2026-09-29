@@ -9656,12 +9656,15 @@ body.netgame #revivetouch{display:flex}
           dirAngle: 0.6,
           next: 4,
           uniforms: { windStrength: { value: 0.3 }, windDir: { value: new THREE.Vector2(1, 0) } },
+          // per map: breeze range, gust range, gust chance (Snow: stiff wind, strong squalls;
+          // Forest: sheltered; City: street draughts)
+          PROFILES: { 0: [[0.14, 0.3], [0.55, 0.8], 0.3], 2: [[0.12, 0.3], [0.5, 0.8], 0.3], 4: [[0.32, 0.52], [0.8, 1], 0.45] },
           update(dt) {
-            // mostly a light breeze; now and then a moderate gust that builds and fades smoothly
+            // mostly a breeze; now and then a gust that builds and fades smoothly
             this.next -= dt;
             if (this.next <= 0) {
-              const gust = Math.random() < 0.35;
-              this.target = gust ? rand(0.65, 0.95) : rand(0.18, 0.38);
+              const P = this.PROFILES[Nature.index] || [[0.18, 0.38], [0.65, 0.95], 0.35], gust = Math.random() < P[2];
+              this.target = gust ? rand(...P[1]) : rand(...P[0]);
               this.next = gust ? rand(2.5, 4.5) : rand(5, 11);
             }
             this.strength += (this.target - this.strength) * (1 - Math.exp(-dt * 0.6));
@@ -9796,9 +9799,9 @@ body.netgame #revivetouch{display:flex}
           plantMat(stiff) {
             const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
             m.onBeforeCompile = (shader) => {
-              Object.assign(shader.uniforms, { windTime: PropKit.windTime, windStrength: WindManager.uniforms.windStrength, windDir: WindManager.uniforms.windDir });
+              Object.assign(shader.uniforms, { windTime: PropKit.windTime, windStrength: WindManager.uniforms.windStrength, windDir: WindManager.uniforms.windDir, uDraw: (this.drawU ||= { value: 38 }) });
               shader.vertexShader = shader.vertexShader
-                .replace("#include <common>", "#include <common>\nattribute float hgt; uniform float windTime, windStrength; uniform vec2 windDir;")
+                .replace("#include <common>", "#include <common>\nattribute float hgt; uniform float windTime, windStrength, uDraw; uniform vec2 windDir;")
                 .replace("#include <begin_vertex>", `#include <begin_vertex>
                   vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
                   float ph = ip.x * 0.37 + ip.z * 0.29;
@@ -9812,7 +9815,9 @@ body.netgame #revivetouch{display:flex}
                   vec3 c0 = instanceMatrix[0].xyz, c1 = instanceMatrix[1].xyz, c2 = instanceMatrix[2].xyz;
                   vec3 lp = vec3(dot(c0, pw), dot(c1, pw), dot(c2, pw)) / max(dot(c0, c0), 1e-4);
                   transformed.xz += lp.xz;
-                  transformed.y -= length(push) * bend * 0.35;`);
+                  transformed.y -= length(push) * bend * 0.35;
+                  // no popping at the draw distance: plants sink into the ground over the last 12 m
+                  transformed *= 1.0 - smoothstep(uDraw - 12.0, uDraw, distance(ip.xz, cameraPosition.xz));`);
             };
             m.customProgramCacheKey = () => "plant" + stiff;
             return m;
@@ -9881,6 +9886,7 @@ body.netgame #revivetouch{display:flex}
               this.scatter(this.plants, leaf, lit, Math.round(1600 * q), test(0.2), [0.8, 1.6]);
             }
             this.drawDist = { low: 26, medium: 38, high: 55, ultra: 75 }[SettingsManager.data.graphics] || 38;
+            (this.drawU ||= { value: 38 }).value = this.drawDist;
           },
           fireflies(index) {
             if (index !== 2) return;
