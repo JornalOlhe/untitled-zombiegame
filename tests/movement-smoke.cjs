@@ -122,6 +122,47 @@ const server = http.createServer((req, res) => {
         return { max: +maxS.toFixed(3), end: +end.toFixed(3), hops, cap: +PC.speedCap.toFixed(3) };
       };
       out.bhop = { timed60: hopRun(60), timed30: hopRun(30), timed144: hopRun(144), late: hopRun(60, true), aim: hopRun(60, false, true) };
+
+      // Hold-to-bhop: one press, never release Space. Every landing must automatically launch
+      // another jump; no OS key-repeat or fresh keydown events are required.
+      reset(); T.keys.add('KeyW'); T.keys.add('ShiftLeft'); run(2.6, 60);
+      T.keys.add('Space');
+      let heldHops = 0, wasGrounded = true, heldMax = 0;
+      for (let i = 0; i < 360; i++) {
+        T.stepPlayer(1 / 60, 1); keepHome();
+        const grounded = p.jump === 0;
+        if (wasGrounded && !grounded) heldHops++;
+        wasGrounded = grounded;
+        heldMax = Math.max(heldMax, sp());
+      }
+      T.keys.delete('Space');
+      out.holdJump = { hops: heldHops, max: +heldMax.toFixed(3), cap: +PC.speedCap.toFixed(3) };
+
+      // Camera-relative airborne steering: start hopping forward, then turn the camera 90° while
+      // continuing to hold W. Momentum must bend with the new current yaw instead of remaining
+      // locked to the take-off vector.
+      reset(); T.keys.add('KeyW'); T.keys.add('ShiftLeft'); run(2.6, 60); T.keys.add('Space');
+      run(0.25, 60);
+      const beforeTurnSpeed = sp();
+      const beforeTurn = { vx: mo.vx, vz: mo.vz };
+      const turnFrames = 48;
+      for (let i = 0; i < turnFrames; i++) {
+        T.setYaw((Math.PI / 2) * ((i + 1) / turnFrames));
+        T.stepPlayer(1 / 60, 1); keepHome();
+      }
+      const desiredX = -1, desiredZ = 0,
+        afterSpeed = Math.max(1e-6, sp()),
+        alignment = (mo.vx * desiredX + mo.vz * desiredZ) / afterSpeed;
+      out.airTurn = {
+        beforeTurn,
+        after: { vx: +mo.vx.toFixed(3), vz: +mo.vz.toFixed(3) },
+        alignment: +alignment.toFixed(3),
+        speedRatio: +(afterSpeed / Math.max(1e-6, beforeTurnSpeed)).toFixed(3),
+        cap: +PC.speedCap.toFixed(3),
+        speed: +afterSpeed.toFixed(3),
+      };
+      T.keys.clear();
+
       // Air control from a standing jump: strafing in the air only adds a little speed.
       reset(); T.queueJump(); T.stepPlayer(1 / 60, 2); T.keys.add('KeyD'); let airMax = 0; run(0.5, 60, () => { if (p.jump > 0) airMax = Math.max(airMax, sp()); }); T.keys.clear();
       out.air = { airMax: +airMax.toFixed(3), wish: G.AIR_WISH };
@@ -155,6 +196,11 @@ const server = http.createServer((req, res) => {
     assert.ok(Math.abs(r.bhop.timed30.max - r.bhop.timed144.max) / r.bhop.timed60.max < 0.06, 'bhop gain does not depend much on FPS');
     assert.ok(r.bhop.late.max < r.bhop.timed60.max - 0.15, 'late hops lose the momentum bonus: ' + JSON.stringify(r.bhop.late));
     assert.ok(r.bhop.aim.max <= r.bhop.aim.cap + 0.02 && r.bhop.aim.cap < r.bhop.timed60.cap * 0.75, 'aiming shrinks bhop: ' + JSON.stringify(r.bhop.aim));
+    assert.ok(r.holdJump.hops >= 5, 'holding jump must automatically hop again after every landing: ' + JSON.stringify(r.holdJump));
+    assert.ok(r.holdJump.max <= r.holdJump.cap + 0.02, 'hold-to-bhop remains under hard cap: ' + JSON.stringify(r.holdJump));
+    assert.ok(r.airTurn.alignment > 0.82, 'air momentum must turn toward current camera-relative W direction: ' + JSON.stringify(r.airTurn));
+    assert.ok(r.airTurn.speedRatio > 0.72, 'turning in air should preserve most momentum: ' + JSON.stringify(r.airTurn));
+    assert.ok(r.airTurn.speed <= r.airTurn.cap + 0.02, 'air steering cannot exceed bhop cap: ' + JSON.stringify(r.airTurn));
     assert.ok(r.air.airMax <= r.air.wish + 0.08, 'air control is limited: ' + JSON.stringify(r.air));
     assert.ok(!r.nan);
     assert.deepEqual(errors, []);
