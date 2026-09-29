@@ -9,7 +9,7 @@ const server = http.createServer((req, res) => {
   if (!filename.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
   fs.readFile(filename, (error, data) => {
     if (error) { res.writeHead(404).end(); return; }
-    res.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.html') ? 'text/html' : 'application/octet-stream');
+    res.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.html') ? 'text/html' : filename.endsWith('.css') ? 'text/css' : filename.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream');
     res.end(data);
   });
 });
@@ -127,26 +127,28 @@ const server = http.createServer((req, res) => {
       assert.equal(pityMechanics.saved, 0, 'Pity must persist to storage');
       await page.locator('#loadoutbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
+      // Spin HUD (reference-video layout): left loadout column, full-screen character, right rarity
+      // column, bottom-centre spin buttons — no block may overlap another or leave the viewport.
       const armoryLayout = await page.evaluate(() => {
         const box = (selector) => {
           const r = document.querySelector(selector).getBoundingClientRect();
           return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};
         };
         return {
-          inventory: box('.armory-inventory'),
-          stage: box('.survivor-stage'),
-          details: box('.armory-details'),
-          footer: box('.armory-footer'),
-          controls: box('#roll-controls'),
-          width: innerWidth,
-          height: innerHeight,
+          hud: document.querySelector('#classscreen').classList.contains('spin-hud'),
+          list: box('#armory-list'), bars: box('.rarity-bars'), canvas: box('#classpreview'),
+          lucky: box('.spin-btn.lucky'), normal: box('.spin-btn.normal'), tabs: box('.armory-tabs'), back: box('#armory-back'),
+          pity: box('#spin-pity'), buy: box('#spin-buy'), title: box('#armory-identity h2'),
+          width: innerWidth, height: innerHeight,
         };
       });
-      assert.ok(armoryLayout.inventory.width > 100 && armoryLayout.stage.width > 180 && armoryLayout.details.width > 140, 'All three Armory columns must remain usable');
-      assert.ok(armoryLayout.inventory.left < armoryLayout.stage.left && armoryLayout.stage.left < armoryLayout.details.left, 'Armory columns must stay ordered left-to-right');
-      assert.ok(Math.abs(armoryLayout.inventory.top - armoryLayout.stage.top) < 30 && Math.abs(armoryLayout.stage.top - armoryLayout.details.top) < 30, 'Armory columns must remain on the same row');
-      assert.ok(armoryLayout.details.right <= armoryLayout.width + 2 && armoryLayout.inventory.left >= -2, 'Armory columns must stay inside the viewport');
-      assert.ok(armoryLayout.controls.bottom <= armoryLayout.footer.top + 2, 'Spin controls must not be covered by the footer');
+      assert.ok(armoryLayout.hud, 'Armory must use the Spin HUD layout');
+      assert.ok(armoryLayout.canvas.width >= armoryLayout.width - 2 && armoryLayout.canvas.height >= armoryLayout.height - 2, `Character preview must be full-screen like the reference video ${JSON.stringify([armoryLayout.canvas,armoryLayout.width,armoryLayout.height])}`);
+      assert.ok(armoryLayout.list.right < armoryLayout.lucky.left && armoryLayout.lucky.right < armoryLayout.bars.left, 'Left column, spin buttons and rarity column must stay ordered left-to-right');
+      const blocks = ['list','bars','lucky','normal','tabs','back','pity','buy','title'];
+      for (const k of blocks) { const r = armoryLayout[k]; assert.ok(r.left >= -2 && r.top >= -2 && r.right <= armoryLayout.width + 2 && r.bottom <= armoryLayout.height + 2, `${k} must stay inside the viewport`); }
+      for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++) { const a = armoryLayout[blocks[i]], c = armoryLayout[blocks[j]]; assert.ok(!(a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1), `${blocks[i]} and ${blocks[j]} must not overlap`); }
+      assert.ok(armoryLayout.lucky.height >= 18 && armoryLayout.normal.height >= 18, 'Spin buttons must stay tappable');
       const previewRatio = await page.evaluate(() => {
         const preview = document.querySelector('#classpreview').getBoundingClientRect();
         const stage = document.querySelector('.survivor-stage').getBoundingClientRect();
@@ -210,14 +212,14 @@ const server = http.createServer((req, res) => {
           return p.data.weaponId;
         });
         await page.locator('.spin-btn.lucky').click();
-        await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 4, {timeout:3000});
+        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 4, {timeout:3000});
         // v28 spin (reference video): no reel overlay — title flicker, SKIP button, rarity burst.
         const spinMeta = await page.evaluate(() => ({
-          duration: DeadRecoilTest.Armory.roll.duration,
-          skip: !!document.querySelector('#roll-controls [data-skip]'),
+          duration: (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll).duration,
+          skip: !!document.querySelector('#roll-controls [data-skip]') || (DeadRecoilTest.Armory.skipShown || 0) > 0,
           overlayHidden: document.querySelector('#roll-overlay').classList.contains('hidden'),
         }));
-        assert.ok(spinMeta.duration >= 1 && spinMeta.duration <= 3, 'Spin reveal must be short and snappy');
+        assert.ok(spinMeta.duration >= 0.7 && spinMeta.duration <= 0.9, 'Spin flicker must follow the video table (~0.8 s)');
         assert.ok(spinMeta.skip, 'A SKIP button must replace the spin button while spinning');
         assert.ok(spinMeta.overlayHidden, 'The old reel overlay must stay hidden');
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
@@ -232,8 +234,8 @@ const server = http.createServer((req, res) => {
           p.render();
         });
         await page.locator('.spin-btn.lucky').click();
-        await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, null, {timeout:3000});
-        await page.waitForFunction(() => !!document.querySelector('.spin-burst.big'), null, {timeout:8000});
+        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 6, null, {timeout:3000});
+        await page.waitForFunction(() => (DeadRecoilTest.Armory.fxCount || 0) >= 2, null, {timeout:8000});
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Winning Divine must not show a confirmation');
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine result must replace/equip automatically');

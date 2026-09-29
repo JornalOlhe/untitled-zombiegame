@@ -766,3 +766,9 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius
 /* Free-aim (J): no OS cursor over the world; the crosshair follows the mouse. */
 body.mouse-free #world { cursor: none !important; }
 body.mouse-free .crosshair { transition: none; }
+@font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: block; }
+@font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-800-normal.woff2") format("woff2"); font-weight: 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-900-normal.woff2") format("woff2"); font-weight: 900; font-style: normal; font-display: block; }
+@font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-800-italic.woff2") format("woff2"); font-weight: 800; font-style: italic; font-display: block; }
+@font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-900-italic.woff2") format("woff2"); font-weight: 900; font-style: italic; font-display: block; }
+@font-face { font-family: "Permanent Marker"; src: url("../fonts/permanent-marker.woff2") format("woff2"); font-weight: 400; font-display: block; }

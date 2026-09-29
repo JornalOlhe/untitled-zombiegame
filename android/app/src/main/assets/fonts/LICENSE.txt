@@ -1,2 +1,4 @@
-Bebas Neue (Dharma Type), IBM Plex Mono (IBM) and Oswald (Vernon Adams) are licensed under the
-SIL Open Font License 1.1 — https://openfontlicense.org. Files taken from the @fontsource npm packages.
+Bebas Neue (Dharma Type), IBM Plex Mono (IBM), Oswald (Vernon Adams) and Montserrat (The Montserrat
+Project Authors) are licensed under the SIL Open Font License 1.1 — https://openfontlicense.org.
+Permanent Marker (Font Diner) is licensed under the Apache License 2.0 — https://www.apache.org/licenses/LICENSE-2.0.
+Files taken from the @fontsource npm packages.

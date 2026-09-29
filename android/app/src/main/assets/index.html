@@ -2553,6 +2553,7 @@ body.net-downed #hud .crosshair{opacity:0}
 body.netgame #revivetouch{display:flex}
 </style>
     <link rel="stylesheet" href="css/ui.css" />
+    <link rel="stylesheet" href="css/spin-hud.css" />
 
 </head>
   <body>
@@ -2765,6 +2766,7 @@ body.netgame #revivetouch{display:flex}
         </aside>
         <div class="survivor-stage">
           <div id="armory-identity"></div>
+          <div id="spin-fx" aria-hidden="true"></div>
           <canvas id="classpreview" aria-label="Personagem 3D com a classe e arma em visualização"></canvas>
           <div class="stage-caption">
             <span>PREVIEW</span>
@@ -2775,6 +2777,9 @@ body.netgame #revivetouch{display:flex}
         <aside class="armory-details">
           <div id="rarity-board"></div>
           <div id="armory-info"></div>
+          <div id="spin-pity" aria-label="Pity"></div>
+          <button id="spin-buy" type="button">BUY SPINS</button>
+          <button id="spin-vfx" type="button" aria-pressed="true">VFX: ON</button>
           <details class="armory-odds hidden">
             <summary>Como funcionam os spins</summary>
             <p>Armas e classes são obtidas por giro e entram direto no loadout. O aviso aparece somente antes de girar novamente quando o item equipado é Mítico ou Divino.</p>
@@ -2795,6 +2800,7 @@ body.netgame #revivetouch{display:flex}
           <span id="spin-confirm-rarity" class="spin-confirm-rarity">RARIDADE</span>
           <h2 id="spin-confirm-title">Confirmar troca</h2>
           <p id="spin-confirm-copy"></p>
+          <b id="spin-confirm-count">1</b>
           <div class="spin-confirm-compare">
             <div><small>ATUAL</small><strong id="spin-confirm-old">—</strong></div>
             <span class="spin-confirm-arrow">→</span>
@@ -22266,6 +22272,56 @@ body.netgame #revivetouch{display:flex}
               return `<button type="button" class="rarity-line ${expanded ? "active" : ""} ${boosted ? "boosted" : ""}" data-rarity-tier="${e.tier}" aria-expanded="${expanded}" style="--rarity:${rarityColors[e.tier]}"><span>${e.name.toUpperCase()}${boosted ? " ✦" : ""}</span><b>${e.rate}%</b><i>${expanded ? "−" : "+"}</i></button>${list}`;
             }).join("");
         }
+        // Spin SFX (own synthesis, matched to the reference video's audio): a ~3 kHz click per name
+        // change, a soft press, and at the flash a whoosh + low body + bell partials (E6/B6).
+        const SpinSFX = {
+          noiseBuf: null,
+          ctx() {
+            const A = AudioManager;
+            if (!A.ctx) return null;
+            if (!this.noiseBuf) {
+              const n = A.ctx.sampleRate | 0, b = A.ctx.createBuffer(1, n, A.ctx.sampleRate), a = b.getChannelData(0);
+              for (let i = 0; i < n; i++) a[i] = Math.random() * 2 - 1;
+              this.noiseBuf = b;
+            }
+            return A.ctx;
+          },
+          env(g, t, peak, attack, decay) {
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.linearRampToValueAtTime(peak, t + attack);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+          },
+          noise(t, dur, type, f0, f1, q, peak, attack) {
+            const c = this.ctx(); if (!c) return;
+            const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+            src.buffer = this.noiseBuf; f.type = type; f.Q.value = q;
+            f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+            this.env(g, t, peak, attack, dur - attack);
+            src.connect(f); f.connect(g); g.connect(AudioManager.out("ui"));
+            src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+            src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
+          },
+          osc(t, freq, dur, type, peak, attack) {
+            const c = this.ctx(); if (!c) return;
+            const o = c.createOscillator(), g = c.createGain();
+            o.type = type; o.frequency.setValueAtTime(freq, t);
+            this.env(g, t, peak, attack, dur);
+            o.connect(g); g.connect(AudioManager.out("ui"));
+            o.start(t); o.stop(t + attack + dur + 0.02);
+            o.onended = () => { o.disconnect(); g.disconnect(); };
+          },
+          tick() { const c = this.ctx(); if (!c) return; const t = c.currentTime; this.noise(t, 0.028, "bandpass", 3000, 2600, 3.5, 0.55, 0.001); this.osc(t, 2780, 0.02, "sine", 0.05, 0.001); },
+          press() { const c = this.ctx(); if (!c) return; const t = c.currentTime; this.noise(t, 0.04, "bandpass", 1400, 900, 2, 0.25, 0.002); },
+          reveal(tier) {
+            const c = this.ctx(); if (!c) return;
+            const t = c.currentTime, big = tier >= 5;
+            this.noise(t, 0.9, "bandpass", 450, 3800, 0.9, 0.5, 0.03);
+            this.noise(t, 1.2, "highpass", 5000, 9000, 0.7, 0.16, 0.25);
+            this.osc(t, 490, 0.45, "triangle", 0.22, 0.005);
+            for (const [f, a, d, v] of [[1318, 0.05, 1.1, 0.12], [2636, 0.05, 0.9, 0.06], [3954, 0.06, 0.8, 0.035], [1975, 0.14, 1.0, 0.1], [3950, 0.15, 0.8, 0.04]]) this.osc(t + a, f, d * (big ? 1.25 : 1), "sine", v, 0.006);
+            if (big) for (const [f, a] of [[2637, 0.3], [3136, 0.38], [3951, 0.46]]) this.osc(t + a, f, 0.5, "sine", 0.05, 0.004);
+          },
+        };
         const Armory = {
           tab: "weapon", mode: "armory", oddsMode: "normal", roll: null, selection: null, rarityFilter: null, previewSpin: null, awaitingConfirm: null, light: null,
           // Preferred item per category (click a rarity, then an item): +50% weight inside its
@@ -22289,17 +22345,114 @@ body.netgame #revivetouch{display:flex}
           },
           open() { this.mode = "armory"; if (this.tab === "character") this.tab = "weapon"; state = GameState.CLASS_SELECT; AudioManager.init(); UIManager.screen("classscreen"); this.render(); },
           openCustomize() { this.mode = "customize"; this.tab = "character"; state = GameState.CLASS_SELECT; AudioManager.init(); UIManager.screen("classscreen"); this.render(); },
+          // ── Spin HUD (rebuilt on the reference video; tools/spin-hud.src.css holds the layout) ──
+          hudActive: false,
+          vfx: (() => { try { return localStorage.getItem("dr-spin-vfx") !== "off"; } catch { return true; } })(),
+          identityKey: "",
+          hudScale() {
+            const W = innerWidth, H = innerHeight;
+            // Reference canvas = the video (1906x998). Phones keep the same anchors, slightly larger.
+            const u = Math.min(W / 1906, H / 998), m = H < 560 ? 1.32 : 1;
+            this.u = u;
+            $("classscreen").style.setProperty("--u", u + "px");
+            $("classscreen").style.setProperty("--m", m);
+          },
+          crack() {
+            if (this.crackUrl) return this.crackUrl;
+            try {
+              // Dark organic cracks on the blue backdrop (video background), drawn once per session.
+              // Small and unfiltered (cheap on phones): the CSS upscale softens the lines like the video.
+              const c = document.createElement("canvas"), g = c.getContext("2d");
+              c.width = 480; c.height = 252;
+              let seed = 7;
+              const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+              g.lineCap = g.lineJoin = "round";
+              for (let pass = 0; pass < 2; pass++) {
+                g.strokeStyle = pass ? "rgba(70,80,255,.06)" : "rgba(0,0,14,.3)";
+                seed = 7;
+                for (let n = 0; n < 70; n++) {
+                  let x = rnd() * c.width, y = rnd() * c.height, a = rnd() * Math.PI * 2;
+                  g.lineWidth = (pass ? 0.5 : 1.1) + rnd() * 1.1;
+                  g.beginPath(); g.moveTo(x + pass * 0.8, y + pass * 0.8);
+                  const steps = 18 + rnd() * 40;
+                  for (let st = 0; st < steps; st++) {
+                    a += (rnd() - 0.5) * 1.1; x += Math.cos(a) * 4.5; y += Math.sin(a) * 4.5;
+                    g.lineTo(x + pass * 0.8, y + pass * 0.8);
+                  }
+                  g.stroke();
+                }
+              }
+              this.crackUrl = `url(${c.toDataURL("image/png")})`;
+            } catch { this.crackUrl = "none"; }
+            return this.crackUrl;
+          },
+          titleColors(tier) {
+            const c = rarityColors[tier];
+            return [`color-mix(in srgb, ${c} 34%, #fff)`, c];
+          },
+          // Flash colours measured on the video's reveal frames (Epic/Mythic → magenta, Legendary →
+          // yellow); other tiers use their rarity colour pushed to full saturation.
+          fxTier: { 3: "rgb(214, 20, 234)", 4: "rgb(250, 246, 64)", 5: "rgb(236, 0, 214)" },
+          fxColor(hex, tier) {
+            if (this.fxTier[tier]) return this.fxTier[tier];
+            const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+            if (d < 0.08) return hex;
+            let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            h = Math.round(h * 60 + 360) % 360;
+            return `hsl(${h} 100% ${Math.round(clamp(l * 100, 48, 62))}%)`;
+          },
+          itemDesc(kind, item) {
+            if (kind === "class") return item.desc || "";
+            return item.ability || (item.kind === "melee" ? "Arma corpo a corpo." : `${["Curto", "Médio", "Longo"][item.cat] || "Médio"} alcance.`);
+          },
+          identity(kind, id) {
+            const item = Progression.economy.catalogs[kind][id], el = $("armory-identity");
+            const key = `${kind}|${id}`;
+            if (this.identityKey === key && el.firstChild) return;
+            this.identityKey = key;
+            const [t1, t2] = this.titleColors(item.tier);
+            el.style.setProperty("--rarity", rarityColors[item.tier]);
+            el.style.setProperty("--t1", t1);
+            el.style.setProperty("--t2", t2);
+            el.innerHTML = `<h2 data-text="${item.name}">${item.name}</h2><p>${this.itemDesc(kind, item)}</p>`;
+          },
+          arrowIcon: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M35.5 12.5A17 17 0 1 0 41 25" fill="none" stroke="#141414" stroke-width="10" stroke-linecap="round"/><path d="M35.5 12.5A17 17 0 1 0 41 25" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/><path d="M28 4.5 44 8.5 37.5 23Z" fill="#fff" stroke="#141414" stroke-width="2.6" stroke-linejoin="round"/></svg>`,
+          lockIcon(open) {
+            const c = open ? "#ff1f2e" : "#2dff3a", s = open ? "#7a0010" : "#0b6a12";
+            return `<svg viewBox="0 0 44 44" aria-hidden="true"><path d="${open ? "M12 20V12a9 9 0 0 1 18 0" : "M13 20v-7a9 9 0 0 1 18 0v7"}" fill="none" stroke="${s}" stroke-width="8"/><path d="${open ? "M12 20V12a9 9 0 0 1 18 0" : "M13 20v-7a9 9 0 0 1 18 0v7"}" fill="none" stroke="${c}" stroke-width="4.5"/><rect x="6" y="19" width="32" height="23" rx="3" fill="${c}" stroke="${s}" stroke-width="2.5"/><rect x="19.5" y="25" width="5" height="10" rx="2" fill="${s}"/></svg>`;
+          },
+          hudNumbers() {
+            const d = Progression.data, kind = this.tab === "weapon" ? "weapon" : "class", mode = this.oddsMode, dev = DevMode.active;
+            const pts = mode === "lucky" ? 2 : 1, myp = d[kind + "MythicPity"] || 0, dvp = d[kind + "DivinePity"] || 0, scp = d[kind + "SecretPity"] || 0;
+            const line = (label, v, max) => { const hit = v + pts >= max; return `<div class="${hit ? "hit" : ""}">${label}: ${v}/${max}${hit ? " · GARANTIDO" : ""}</div>`; };
+            $("spin-pity").innerHTML = line(rarityNames[5], myp, 75) + line(rarityNames[6] + " Pity", dvp, 150) + line(rarityNames[7] + " Pity", scp, 300);
+            const coins = dev ? "◈ ∞" : `◈ ${d.coins.toLocaleString("pt-BR")}`;
+            $("bank").innerHTML = `<span data-text="${coins}">${coins}</span>`;
+            const count = $("roll-controls").querySelector(".spin-count");
+            if (count) {
+              const tickets = mode === "lucky" ? d.lucky : d.normal, cost = Progression.economy.cost(mode === "lucky");
+              count.classList.toggle("coins", !dev && tickets < 1);
+              count.textContent = dev ? "∞ Spins" : tickets > 0 ? `${tickets} Spin${tickets === 1 ? "" : "s"}` : `◈ ${cost} / Spin`;
+            }
+          },
           render() {
             const d = Progression.data; normalizeLoadoutState(d);
             const customizing = this.mode === "customize" || this.tab === "character";
             const screen = $("classscreen"), title = document.querySelector(".armory-header h1"), subtitle = document.querySelector(".armory-header p"), tabs = document.querySelector(".armory-tabs");
+            this.hudActive = !customizing;
+            screen.classList.toggle("spin-hud", !customizing);
+            screen.classList.toggle("hud-busy", !!Progression.busy);
+            if (!customizing) { this.hudScale(); screen.style.setProperty("--crack", this.crack()); }
             screen.classList.toggle("customize-mode", customizing);
             $("classcontinue").classList.toggle("hidden", customizing);
             $("armory-list").classList.toggle("hidden", customizing);
             $("cosmetic-fields").classList.toggle("hidden", !customizing);
             $("rarity-board").classList.toggle("hidden", customizing);
+            ["spin-pity", "spin-buy", "spin-vfx"].forEach((id) => $(id).classList.toggle("hidden", customizing));
             tabs.classList.toggle("customize-hidden", customizing);
             if (customizing) {
+              this.identityKey = "";
               title.textContent = "CUSTOMIZE"; subtitle.textContent = "Monte a aparência do sobrevivente.";
               $("bank").textContent = `${d.coins.toLocaleString("pt-BR")} moedas`;
               $("armory-identity").style.setProperty("--rarity", "#d7dcef");
@@ -22308,34 +22461,70 @@ body.netgame #revivetouch{display:flex}
               this.customization(); updatePreview(); Account.badge(); return;
             }
             title.textContent = "ARMORY"; subtitle.textContent = "Spins, slots e loadout.";
-            const kind = this.tab === "weapon" ? "weapon" : "class", currentId = DevMode.current(kind, d[kind + "Id"]), item = Progression.economy.catalogs[kind][currentId], mode = this.oddsMode;
+            const kind = this.tab === "weapon" ? "weapon" : "class", catalog = Progression.economy.catalogs[kind], currentId = DevMode.current(kind, d[kind + "Id"]), mode = this.oddsMode;
+            const r = this.roll && this.roll.kind === kind ? this.roll : null;
             const spinPreview = this.previewSpin?.kind === kind ? this.previewSpin.id : null;
-            const displayId = spinPreview != null ? spinPreview : (Number.isInteger(this.selection) && Progression.economy.catalogs[kind][this.selection] ? this.selection : currentId);
-            const displayItem = Progression.economy.catalogs[kind][displayId];
-            if (this.rarityFilter == null || Progression.economy.rates[mode][this.rarityFilter] <= 0) this.rarityFilter = displayItem.tier;
-            $("bank").textContent = DevMode.active ? "◈ ∞  ·  ∞ NORMAL  ·  ∞ LUCKY  ·  DEV" : `◈ ${d.coins.toLocaleString("pt-BR")}  ·  ${d.normal} NORMAL  ·  ${d.lucky} LUCKY`;
-            $("armory-identity").style.setProperty("--rarity", rarityColors[displayItem.tier]);
-            const identityState = spinPreview != null ? "NOVO SPIN" : displayId === currentId ? "EQUIPADO" : "PRÉVIA";
-            $("armory-identity").innerHTML = `<span class="item-index">#${String(displayId + 1).padStart(3, "0")} · ${identityState}</span><h2>${displayItem.name}</h2><b>${rarityNames[displayItem.tier].toUpperCase()}</b><p>${kind === "class" ? displayItem.desc : (displayItem.kind === "melee" ? "Arma corpo a corpo. Ataques rápidos e silenciosos." : `${["Curto", "Médio", "Longo"][displayItem.cat] || "Médio"} alcance · ${Math.round(displayItem.damage * rarityMult[displayItem.tier])} de dano base.`)}</p>`;
-            $("armory-info").innerHTML = kind === "class" ? `<h3>${displayItem.ability}</h3><p>${displayItem.active}</p><span class="armory-note">Q · recarga ${displayItem.cd}s</span>` : `<h3>${displayItem.kind === "melee" ? "CORPO A CORPO" : "ARMA PRINCIPAL"}</h3><dl class="weapon-stats"><div><dt>Dano</dt><dd>${Math.round(displayItem.damage * rarityMult[displayItem.tier])}</dd></div><div><dt>Cadência</dt><dd>${displayItem.kind === "melee" ? "—" : Math.round(60 / displayItem.rate) + "/min"}</dd></div><div><dt>Pente</dt><dd>${displayItem.mag === Infinity ? "—" : displayItem.mag}</dd></div><div><dt>Recarga</dt><dd>${displayItem.reload ? displayItem.reload + "s" : "—"}</dd></div></dl>`;
-            const pts = mode === "lucky" ? 2 : 1, myp = d[kind + "MythicPity"] || 0, dvp = d[kind + "DivinePity"] || 0, scp = d[kind + "SecretPity"] || 0, prefId = this.preference(kind);
-            const prefChip = prefId != null ? `<button type="button" class="pref-chip" data-pref-clear="1" style="--rarity:${rarityColors[Progression.economy.catalogs[kind][prefId].tier]}">✦ ${Progression.economy.catalogs[kind][prefId].name} <em>x1.5</em><small>remover</small></button>` : `<div class="pref-hint">Abra uma raridade e toque num item para aumentar levemente a chance dele (x1.5).</div>`;
-            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${+this.itemChance(kind, displayId, mode === "lucky").toFixed(3)}%</b></div>${prefChip}${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity"><div class="pity-title">${kind === "weapon" ? "WEAPON" : "CLASS"} PITY <span>NORMAL +1 · LUCKY +2</span></div><div class="pity-row"><span>MÍTICO</span><i><em style="width:${Math.min(100, myp / 0.75)}%;background:${rarityColors[5]}"></em></i><b>${myp}/75</b></div><div class="pity-row"><span>DIVINO</span><i><em style="width:${Math.min(100, dvp / 1.5)}%;background:${rarityColors[6]}"></em></i><b>${dvp}/150</b></div><div class="pity-row"><span>SECRETO</span><i><em style="width:${Math.min(100, scp / 3)}%;background:${rarityColors[7]}"></em></i><b>${scp}/300</b></div>${scp + pts >= 300 ? '<strong class="pity-guarantee">SECRETO GARANTIDO NESTE SPIN</strong>' : dvp + pts >= 150 ? '<strong class="pity-guarantee">DIVINO GARANTIDO NESTE SPIN</strong>' : myp + pts >= 75 ? '<strong class="pity-guarantee">MÍTICO GARANTIDO NESTE SPIN</strong>' : ""}</div>`;
+            const displayId = r && !r.revealed && r.flickId >= 0 ? r.flickId : spinPreview != null ? spinPreview : (Number.isInteger(this.selection) && catalog[this.selection] ? this.selection : currentId);
+            const displayItem = catalog[displayId];
+            if (this.rarityFilter == null || Progression.economy.rates[mode][this.rarityFilter] <= 0) this.rarityFilter = catalog[currentId]?.tier ?? displayItem.tier;
+            if (Progression.economy.rates[mode][this.rarityFilter] <= 0) this.rarityFilter = Progression.economy.rates[mode].findIndex((x) => x > 0);
+            this.identity(kind, displayId);
+            // RIGHT column — tabs, one bar per tier that can drop, the items of the selected tier.
+            const rates = Progression.economy.rates[mode], prefId = this.preference(kind);
+            const tiers = rarityNames.map((name, tier) => ({ name, tier, rate: rates[tier] })).filter((e) => e.rate > 0);
+            const dense = tiers.length > 6, listTop = 73 + (dense ? 56 : 77) * tiers.length - (dense ? 10 : 15) + 22;
+            const bars = tiers.map((e) => `<button type="button" class="rarity-line tier-${e.tier} ${e.tier === this.rarityFilter ? "active" : ""}" data-rarity-tier="${e.tier}" aria-pressed="${e.tier === this.rarityFilter}"><span>${e.name.toUpperCase()}</span><b>${e.rate}%</b></button>`).join("");
+            const inTier = catalog.map((item, id) => ({ item, id })).filter((e) => e.item.tier === this.rarityFilter && e.id !== prefId);
+            const items = inTier.map(({ item, id }) => `<button type="button" class="rarity-item ${id === currentId ? "equipped" : ""}" data-preview-id="${id}" style="--rarity:${rarityColors[item.tier]}" title="${+this.itemChance(kind, id, mode === "lucky").toFixed(3)}%">${item.name}</button>`).join("")
+              + (prefId != null ? `<button type="button" class="rarity-item preferred" data-preview-id="${prefId}" style="--rarity:${rarityColors[catalog[prefId].tier]}" title="Preferido: chance x1.5 dentro da raridade (toque para remover)">${catalog[prefId].name}<em>x1.5</em></button>` : "");
+            $("rarity-board").innerHTML = `<div class="spin-mode"><button type="button" data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}"><span class="t">NORMAL</span></button><button type="button" data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}"><span class="t">LUCKY</span></button></div><div class="rarity-bars ${dense ? "dense" : ""}">${bars}</div><div class="rarity-items" style="--lt:${listTop}">${items}</div>`;
+            $("armory-info").innerHTML = "";
+            // BOTTOM centre — counter + LUCKY/NORMAL (icon + bar) + plus.
+            const devFree = DevMode.active, busy = !!Progression.busy;
             const costNormal = Progression.economy.cost(false), costLucky = Progression.economy.cost(true);
-            const devFree = DevMode.active;
+            const cantL = !devFree && d.lucky < 1 && d.coins < costLucky, cantN = !devFree && d.normal < 1 && d.coins < costNormal;
             const normalLabel = devFree ? "GRÁTIS · DEV" : d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
             const luckyLabel = devFree ? "GRÁTIS · DEV" : d.lucky > 0 ? `1 ticket · ${d.lucky} restante${d.lucky === 1 ? "" : "s"}` : `◈ ${costLucky}`;
-            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky" data-reroll="true" data-pay="auto" ${Progression.busy || (!devFree && d.lucky < 1 && d.coins < costLucky) ? "disabled" : ""}><span class="ico">✦</span><span class="label">LUCKY SPIN</span><span class="cost">${luckyLabel}</span></button><button class="spin-btn normal" data-reroll="false" data-pay="auto" ${Progression.busy || (!devFree && d.normal < 1 && d.coins < costNormal) ? "disabled" : ""}><span class="ico">↻</span><span class="label">NORMAL SPIN</span><span class="cost">${normalLabel}</span></button></div><p class="slot-limit-note">Resultado direto · aviso antes de girar novamente só com Mítico ou Divino equipado.</p>`;
+            const row = (lucky, cant, costLabel) => { const k = lucky ? "lucky" : "normal", dis = busy || cant ? "disabled" : ""; return `<div class="spin-row ${k}"><button type="button" class="spin-ico" data-reroll="${lucky}" data-pay="auto" aria-label="${lucky ? "Lucky" : "Normal"} spin" ${dis}>${this.arrowIcon}</button><button type="button" class="spin-btn ${k} ${cant ? "cant" : ""}" data-reroll="${lucky}" data-pay="auto" title="${costLabel}" ${dis}><span class="label">${lucky ? "LUCKY SPIN" : "NORMAL SPIN"}</span><span class="cost">${costLabel}</span></button></div>`; };
+            $("roll-controls").innerHTML = `<div class="spin-count"></div>${row(true, cantL, luckyLabel)}${row(false, cantN, normalLabel)}<button type="button" class="spin-plus" data-buy-spins aria-label="Comprar spins">+</button>`;
+            this.hudNumbers();
+            $("spin-vfx").innerHTML = `<span class="t">VFX: ${this.vfx ? "ON" : "OFF"}</span>`;
+            $("spin-buy").innerHTML = `<span class="t">BUY SPINS</span>`;
+            $("spin-vfx").classList.toggle("off", !this.vfx);
+            $("spin-vfx").setAttribute("aria-pressed", String(this.vfx));
+            $("armory-back").innerHTML = `<span class="t">BACK</span>`;
+            document.querySelectorAll("[data-armory-tab]").forEach((b) => { if (!b.querySelector(".t")) b.innerHTML = `<span class="t">${b.textContent.trim()}</span>`; });
+            // LEFT column — loadout slots (lock = which slot the next spin replaces) + slot purchase.
             $("armory-list").innerHTML = this.slotCards(kind);
-            $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => Progression.slotEquip(kind, +b.dataset.slotEquip));
+            $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => { if (!Progression.busy && !b.classList.contains("selected")) Progression.slotEquip(kind, +b.dataset.slotEquip); });
             $("armory-list").querySelectorAll("[data-buy-slot]").forEach((b) => b.onclick = () => (kind === "weapon" ? Progression.buyWeaponSlot() : Progression.buyClassSlot()));
-            $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => Progression.roll(kind, b.dataset.reroll === "true", b.dataset.pay));
-            $("rarity-board").querySelectorAll("[data-odds-mode]").forEach((b) => b.onclick = () => { this.oddsMode = b.dataset.oddsMode; this.rarityFilter = null; this.selection = null; this.render(); });
-            $("rarity-board").querySelectorAll("[data-rarity-tier]").forEach((b) => b.onclick = () => { const tier = +b.dataset.rarityTier; this.rarityFilter = this.rarityFilter === tier ? null : tier; if (this.rarityFilter != null) { const first = Progression.economy.catalogs[kind].findIndex((item) => item.tier === tier); if (first >= 0) this.selection = first; } this.render(); });
-            $("rarity-board").querySelectorAll("[data-preview-id]").forEach((b) => b.onclick = (event) => { event.stopPropagation(); const id = +b.dataset.previewId; if (DevMode.take(kind, id)) { this.selection = id; this.rarityFilter = Progression.economy.catalogs[kind][id].tier; this.render(); return; } this.selection = id; this.pref[kind] = this.pref[kind] === id ? null : id; const item = Progression.economy.catalogs[kind][id]; this.rarityFilter = item.tier; AudioManager.tone(this.pref[kind] === id ? 880 : 440, 0.08, "triangle", 0.08, 1200, "ui"); this.render(); });
-            $("rarity-board").querySelectorAll("[data-pref-clear]").forEach((b) => b.onclick = () => { this.pref[kind] = null; this.render(); });
+            $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => this.pressSpin(kind, b.dataset.reroll === "true", b.dataset.pay));
+            $("roll-controls").querySelectorAll("[data-buy-spins]").forEach((b) => b.onclick = () => this.buySpinsInfo());
+            $("rarity-board").querySelectorAll("[data-odds-mode]").forEach((b) => b.onclick = () => { if (Progression.busy) return; this.oddsMode = b.dataset.oddsMode; this.rarityFilter = null; this.selection = null; this.render(); });
+            $("rarity-board").querySelectorAll("[data-rarity-tier]").forEach((b) => b.onclick = () => { if (Progression.busy) return; this.rarityFilter = +b.dataset.rarityTier; this.render(); });
+            $("rarity-board").querySelectorAll("[data-preview-id]").forEach((b) => b.onclick = (event) => { event.stopPropagation(); if (Progression.busy) return; const id = +b.dataset.previewId; if (DevMode.take(kind, id)) { this.selection = id; this.rarityFilter = catalog[id].tier; this.render(); return; } this.selection = id; this.pref[kind] = this.pref[kind] === id ? null : id; this.rarityFilter = catalog[id].tier; AudioManager.tone(this.pref[kind] === id ? 880 : 440, 0.08, "triangle", 0.08, 1200, "ui"); this.render(); });
             document.querySelectorAll("[data-armory-tab]").forEach((b) => { b.classList.toggle("selected", b.dataset.armoryTab === this.tab); b.setAttribute("aria-selected", b.dataset.armoryTab === this.tab); b.disabled = Progression.busy; });
-            $("classcontinue").disabled = Progression.busy; $("armory-back").disabled = Progression.busy; updatePreview(); Account.badge();
+            $("classcontinue").disabled = Progression.busy; $("armory-back").disabled = Progression.busy;
+            if (r && !r.revealed) this.skipButton(r);
+            updatePreview(); Account.badge();
+          },
+          buySpinsInfo() {
+            const n = Progression.economy.cost(false), l = Progression.economy.cost(true);
+            SpinSFX.press();
+            UIManager.toast(`Sem ticket, cada giro usa moedas: NORMAL ◈${n} · LUCKY ◈${l}. Tickets de spin vêm das recompensas.`);
+          },
+          pressSpin(kind, lucky, payment) {
+            if (Progression.busy || this.roll) return;
+            // Video: the pressed row + counter shrink for 2 frames (~67 ms), then the spin starts.
+            if (this.oddsMode !== (lucky ? "lucky" : "normal")) { this.oddsMode = lucky ? "lucky" : "normal"; this.rarityFilter = null; this.render(); }
+            const rowEl = $("roll-controls").querySelector(`.spin-row.${lucky ? "lucky" : "normal"}`), countEl = $("roll-controls").querySelector(".spin-count");
+            rowEl?.classList.add("press"); countEl?.classList.add("press");
+            SpinSFX.press();
+            clearTimeout(this.pressTimer);
+            this.pressTimer = setTimeout(() => {
+              rowEl?.classList.remove("press"); countEl?.classList.remove("press");
+              Progression.roll(kind, lucky, payment);
+            }, 67);
           },
           slotCards(kind) {
             const d = Progression.data, realCurrent = d[kind + "Id"], current = DevMode.current(kind, realCurrent);
@@ -22345,127 +22534,138 @@ body.netgame #revivetouch{display:flex}
             const slots = d[loadoutSlotKey(kind)].slice(0, owned);
             const devId = DevMode.active ? DevMode.sandbox[kind === "weapon" ? "weaponId" : "classId"] : null;
             if (devId != null) {
-              // Dev sandbox: the equipped slot shows the item taken in dev mode.
               const at = kind === "weapon" ? clamp(d.weaponSlot || 0, 0, owned - 1) : Math.max(0, slots.indexOf(realCurrent));
               slots[at] = devId;
             }
             const short = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v));
+            // The slot the next spin writes into gets the green frame + open red lock (video).
+            const target = kind === "weapon" ? clamp(d.weaponSlot || 0, 0, owned - 1) : slots.indexOf(null) >= 0 ? slots.indexOf(null) : slots.indexOf(current);
             const cards = slots.map((id, slot) => {
-              if (id === null) return `<article class="slot-card empty"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span>RESERVA</span></div><h3 class="slot-name">VAZIO</h3><div class="slot-meta">O próximo spin pode ocupar este espaço.</div></article>`;
+              if (id === null) return `<article class="slot-card owned empty" data-slot="${slot}"><i class="slot-lock">${this.lockIcon(slot === target)}</i><h3 class="slot-name">VAZIO</h3></article>`;
               const item = Progression.economy.catalogs[kind][id],
                 selected = kind === "weapon" ? d.weaponSlot === slot : current === id;
-              return `<article class="slot-card ${selected ? "selected" : ""}" style="--rarity:${rarityColors[item.tier]}"><div class="slot-head"><span class="slot-badge">${slot + 1}</span><span style="color:${rarityColors[item.tier]}">${rarityNames[item.tier].toUpperCase()}</span></div><h3 class="slot-name">${item.name}</h3><div class="slot-meta">${selected ? "EQUIPADO AGORA" : "RESERVA DO LOADOUT"}</div><div class="slot-actions"><button data-slot-equip="${slot}" ${selected ? "disabled" : ""}>${selected ? "EM USO" : "EQUIPAR"}</button></div></article>`;
+              return `<article class="slot-card owned ${selected ? "selected" : ""}" data-slot-equip="${slot}" style="--rarity:${rarityColors[item.tier]}" title="${rarityNames[item.tier]}"><i class="slot-lock">${this.lockIcon(slot === target)}</i><h3 class="slot-name ${item.name.length > 8 ? "long" : ""}" ${item.name.length > 8 && !item.name.includes(" ") ? `style="font-size:calc(var(--u)*${Math.max(12, Math.min(19, Math.floor(160 / item.name.length)))})!important"` : ""}>${item.name}</h3><span class="slot-eq">Equipped</span></article>`;
             }).join("");
             let locked = "";
             for (let n = owned + 1; n <= max; n++) {
               const price = prices[n], next = n === owned + 1;
-              locked += `<article class="slot-card locked ${next ? "next" : ""}"><div class="slot-head"><span class="slot-badge">${n}</span><span>🔒 BLOQUEADO</span></div><h3 class="slot-name slot-price">◈ ${short(price)}</h3><div class="slot-meta">${kind === "weapon" ? `Leve mais uma arma e troque com 1-${WEAPON_SLOT_MAX} na partida.` : "Guarde mais uma classe no loadout."}</div>${next ? `<div class="slot-actions"><button data-buy-slot="1" ${Progression.busy || d.coins < price ? "disabled" : ""}>COMPRAR · ◈ ${price.toLocaleString("pt-BR")}</button></div>` : ""}</article>`;
+              locked += `<article class="slot-card locked" title="Slot ${n} · ◈ ${price.toLocaleString("pt-BR")}"><h3 class="slot-price" style="--pf:calc(var(--u)*${[54, 54, 54, 46, 38, 32][short(price).length] || 30})">${short(price)}</h3></article><button type="button" class="slot-buy" ${next ? 'data-buy-slot="1"' : ""} ${!next || Progression.busy || d.coins < price ? "disabled" : ""}><span class="t">BUY</span></button>`;
             }
             return cards + locked;
           },
-          chance(kind, id, lucky) { const list = Progression.economy.catalogs[kind], tier = list[id].tier; return +(Progression.economy.rates[lucky ? "lucky" : "normal"][tier] / list.filter((i) => i.tier === tier).length).toFixed(3); },
-          customization() {
-            const opts = {
-              face: ["Rosto", [["angular", "Angular"], ["round", "Arredondado"], ["scar", "Cicatriz"]]], hair: ["Cabelo", [["short", "Curto"], ["shaved", "Raspado"], ["long", "Comprido"]]], skin: ["Pele", [["#c39b7d", "Clara"], ["#986e50", "Média"], ["#664936", "Escura"]]], hairColor: ["Cor do cabelo", [["#292622", "Preto"], ["#59402c", "Castanho"], ["#99918a", "Grisalho"]]], shirt: ["Camiseta", [["#4c5547", "Oliva"], ["#333b43", "Grafite"], ["#655044", "Terra"]]], pants: ["Calça", [["#303632", "Floresta"], ["#3b3d46", "Cinza"], ["#514b40", "Areia"]]], boots: ["Botas", [["#252522", "Pretas"], ["#3a3027", "Marrons"]]], accessory: ["Acessório", [["none", "Nenhum"], ["glasses", "Óculos"], ["mask", "Máscara"], ["pack", "Mochila"]]],
-            };
-            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""}" style="--rarity:${rarityColors[item.tier]}"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]}</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
-            $("cosmetic-fields").querySelectorAll("select").forEach((el) => el.onchange = () => { CharacterStyle.data[el.dataset.cosmetic] = el.value; Account.savePreferences(); updatePreview(); });
-            $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach((b) => b.onclick = () => Cosmetics.select(b.dataset.cosmeticItem));
-            $("cosmetic-fields").querySelectorAll("[data-cosmetic-clear]").forEach((b) => b.onclick = () => Cosmetics.unequip(b.dataset.cosmeticClear));
+          skipButton(r) {
+            const btn = $("roll-controls").querySelector(`.spin-btn.${r.lucky ? "lucky" : "normal"}`);
+            if (!btn) return;
+            const label = btn.querySelector(".label");
+            if (!btn.dataset.skip) { this.skipShown = (this.skipShown || 0) + 1; label.textContent = "SKIP"; label.classList.remove("swap"); void label.offsetWidth; label.classList.add("swap"); }
+            btn.dataset.skip = "1";
+            btn.classList.add("skip");
+            btn.disabled = false;
+            btn.onclick = () => { if (this.roll === r && !r.revealed) { r.flashAt = Math.min(r.flashAt, performance.now()); this.revealNow(r); } };
           },
-          // Spin reveal (reference video): no reel overlay — the item title above the survivor
-          // flicks through candidates, slowing down, while the 3D preview swaps with it; then a
-          // rarity-coloured burst lands on the result. SKIP jumps straight to the reveal.
-          identity(kind, id, label) {
-            const item = Progression.economy.catalogs[kind][id];
-            const el = $("armory-identity");
-            el.style.setProperty("--rarity", rarityColors[item.tier]);
-            el.innerHTML = `<span class="item-index">#${String(id + 1).padStart(3, "0")} · ${label}</span><h2>${item.name}</h2><b>${rarityNames[item.tier].toUpperCase()}</b><p>${kind === "class" ? item.desc : item.ability || ""}</p>`;
+          preload(kind, id) {
+            // The result is known before the animation: build (and compile) its model now so the
+            // swap at the flash is instant — no pop-in, no shader compile hitch.
+            try {
+              const classId = kind === "class" ? id : DevMode.current("class", Progression.data.classId);
+              const weaponId = kind === "weapon" ? id : DevMode.current("weapon", Progression.data.weaponId);
+              const styleKey = CharacterStyle?.data ? JSON.stringify(CharacterStyle.data) : "";
+              const key = `${classId}|${weaponId}|${styleKey}`;
+              if (this.preloaded?.key === key || previewModelKey === key) return;
+              if (this.preloaded) Survivor.dispose(this.preloaded.model);
+              const model = Survivor.create(classId, WeaponSystem.weapons[weaponId]);
+              model.visible = false;
+              previewScene.add(model);
+              model.visible = true;
+              if (previewModel) previewModel.visible = false;
+              previewRenderer.compile(previewScene, previewCamera);
+              if (previewModel) previewModel.visible = true;
+              previewScene.remove(model);
+              this.preloaded = { key, model };
+            } catch (e) { console.warn("[spin] preload", e); }
           },
           reveal(kind, result, lucky) {
             const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-            const catalog = Progression.economy.catalogs[kind];
-            const rates = Progression.economy.rates[lucky ? "lucky" : "normal"];
-            const pool = catalog.map((item, id) => ({ item, id })).filter((e) => (rates[e.item.tier] || 0) > 0);
-            const pickVisual = (avoid) => {
-              const total = pool.reduce((a, e) => a + Math.sqrt(rates[e.item.tier]), 0);
-              let r = Math.random() * total;
-              for (const e of pool) if ((r -= Math.sqrt(rates[e.item.tier])) < 0 && e.id !== avoid) return e;
-              return pool[Math.floor(Math.random() * pool.length)];
-            };
-            this.previewSpin = null; // video: the 3D model only swaps at the burst, names flicker above it
+            this.preload(kind, result.id);
+            // Name-change intervals (ms) measured frame-by-frame on the reference video's two
+            // complete spins (flash @24.50 s and @30.73 s): one name per captured frame, then the
+            // last fake holds ~0.2 s before the flash. Not eased, not invented.
+            const tables = [[66, 66, 33, 33, 66, 33, 33, 33, 33, 33, 66, 33, 66, 199], [33, 33, 66, 66, 66, 33, 33, 66, 66, 33, 33, 33, 33, 233]];
+            const gaps = reduced ? [150] : tables[Math.random() < 0.5 ? 0 : 1];
+            const t0 = performance.now(), times = [];
+            let acc = 0;
+            for (const g of gaps) { times.push(t0 + acc); acc += g; }
             this.selection = null;
-            this.rarityFilter = result.item.tier;
-            // Interval table measured from the reference video @30 fps (seconds between name changes):
-            // 1-frame gaps early, growing to ~0.3 s; last name (a near miss) held ~0.28 s.
-            const gaps = reduced ? [0.05] : [0.033, 0.033, 0.033, 0.033, 0.033, 0.05, 0.05, 0.066, 0.066, 0.1, 0.133, 0.2, 0.28];
-            const duration = reduced ? 0.3 : 0.22 + gaps.reduce((a, b) => a + b, 0);
-            this.roll = { kind, result, lucky, gaps, startWall: performance.now(), duration, next: performance.now() + (reduced ? 0 : 220), swaps: 0, pickVisual, flickId: -1, revealed: false, hold: result.item.tier >= 6 ? 1.9 : result.item.tier >= 4 ? 1.1 : 0.75 };
+            this.roll = { kind, result, lucky, startWall: t0, times, flashAt: t0 + acc, duration: acc / 1000, shown: 0, flickId: -1, revealed: false, log: [] };
             const rollRef = this.roll;
+            this.lastRoll = rollRef;
             clearTimeout(this.rollFallback);
-            this.rollFallback = setTimeout(() => {
-              if (this.roll === rollRef) this.finishSpin(rollRef);
-            }, Math.ceil((duration + 3.5) * 1000));
+            this.rollFallback = setTimeout(() => { if (this.roll === rollRef && !rollRef.revealed) this.revealNow(rollRef); }, acc + 1500);
             $("classscreen").classList.add("spinning");
-            $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky skip" data-skip="1"><span class="ico">»</span><span class="label">SKIP</span><span class="cost">${lucky ? "LUCKY SPIN" : "NORMAL SPIN"}</span></button><button class="spin-btn normal" disabled><span class="ico">↻</span><span class="label">GIRANDO…</span><span class="cost">aguarde</span></button></div>`;
-            $("roll-controls").querySelector("[data-skip]").onclick = () => { if (this.roll === rollRef && !rollRef.revealed) rollRef.startWall = performance.now() - duration * 1000; };
+            this.render();
+            this.update();
+          },
+          flickPick(r, last) {
+            // Candidates follow the real odds of the spin type (video: mostly Epic/Legendary in Lucky).
+            const catalog = Progression.economy.catalogs[r.kind];
+            const pool = catalog.map((item, id) => ({ id, w: this.itemChance(r.kind, id, r.lucky) })).filter((e) => e.w > 0 && e.id !== r.flickId && !(last && e.id === r.result.id));
+            const total = pool.reduce((a, e) => a + e.w, 0);
+            let x = Math.random() * total;
+            for (const e of pool) if ((x -= e.w) < 0) return e.id;
+            return pool.length ? pool[pool.length - 1].id : r.result.id;
+          },
+          update() {
+            const r = this.roll;
+            if (!r || r.revealed) return;
+            const now = performance.now();
+            let idx = -1;
+            while (r.shown < r.times.length && now >= r.times[r.shown]) idx = r.shown++;
+            if (idx >= 0 && now < r.flashAt) {
+              r.flickId = this.flickPick(r, idx === r.times.length - 1);
+              this.identity(r.kind, r.flickId);
+              r.log.push({ i: idx, expected: +(r.times[idx] - r.startWall).toFixed(1), actual: +(now - r.startWall).toFixed(1) });
+              SpinSFX.tick();
+            }
+            if (now >= r.flashAt) this.revealNow(r);
+          },
+          fx(color, tier) {
+            const host = $("spin-fx");
+            if (!host) return;
+            this.fxCount = (this.fxCount || 0) + 1;
+            host.style.setProperty("--fx", this.fxColor(color, tier));
+            // Star field of the video's reveal (~10 four-point stars around the character, 0.07–0.4 s).
+            const stars = Array.from({ length: 10 }, (_, i) => {
+              const a = (i / 10) * Math.PI * 2 + rand(-0.25, 0.25), rad = rand(260, 560), s = i < 3 ? rand(150, 200) : i < 7 ? rand(90, 130) : rand(40, 60);
+              return `<b class="fx-star" style="--x:calc(var(--u)*${Math.round(Math.cos(a) * rad * 1.35)});--y:calc(var(--u)*${Math.round(Math.sin(a) * rad * 0.8)});--s:${Math.round(s)};--d:${Math.round(rand(40, 170))}ms;--t:${rand(0.3, 0.42).toFixed(2)}s"></b>`;
+            }).join("");
+            const bolt = () => { let x = 953, y = 520; const a = rand(0, Math.PI * 2); let p = `M${x} ${y}`; for (let k = 0; k < 9; k++) { x += Math.cos(a) * 42 + rand(-24, 24); y += Math.sin(a) * 30 + rand(-20, 20); p += ` L${x.toFixed(0)} ${y.toFixed(0)}`; } return p; };
+            host.innerHTML = `<i class="fx-fill"></i><i class="fx-tint"></i><i class="fx-rays"></i><i class="fx-ring"></i><i class="fx-swirl"></i><i class="fx-streak"></i><svg class="fx-bolts" viewBox="0 0 1906 998" preserveAspectRatio="xMidYMid slice"><path d="${bolt()} ${bolt()} ${bolt()} ${bolt()}" fill="none" stroke="color-mix(in srgb, var(--fx) 45%, #fff)" stroke-width="3" stroke-linejoin="bevel"/></svg>${stars}`;
+            const screen = $("classscreen");
+            screen.classList.remove("fx-zoom"); void screen.offsetWidth; screen.classList.add("fx-zoom");
+            clearTimeout(this.fxTimer);
+            this.fxTimer = setTimeout(() => { host.innerHTML = ""; screen.classList.remove("fx-zoom"); }, 650);
+          },
+          revealNow(r) {
+            if (r.revealed) return;
+            r.revealed = true;
+            const now = performance.now();
+            r.log.push({ flash: true, expected: +(r.flashAt - r.startWall).toFixed(1), actual: +(now - r.startWall).toFixed(1) });
+            this.lastSpinLog = r.log;
+            const tier = r.result.item.tier, color = rarityColors[tier];
+            // Same frame: result name, model swap (preloaded), flash, reveal sound, button back.
+            this.previewSpin = { kind: r.kind, id: r.result.id };
+            this.identity(r.kind, r.result.id);
+            const idEl = $("armory-identity");
+            idEl.classList.remove("pop"); void idEl.offsetWidth; idEl.classList.add("pop");
+            clearTimeout(this.popTimer); this.popTimer = setTimeout(() => idEl.classList.remove("pop"), 160);
             updatePreview();
-          },
-          burst(color, big) {
-            document.querySelectorAll(".spin-burst").forEach((n) => n.remove());
-            const fx = document.createElement("div");
-            fx.className = "spin-burst" + (big ? " big" : "");
-            fx.style.setProperty("--c", color);
-            fx.innerHTML = `<i class="flash"></i><i class="rays"></i>` + Array.from({ length: big ? 26 : 14 }, () => `<b style="--x:${Math.round(rand(-46, 46))}%;--y:${Math.round(rand(-40, 40))}%;--s:${rand(0.5, 1.4).toFixed(2)};--d:${Math.round(rand(0, 380))}ms"></b>`).join("");
-            document.body.appendChild(fx);
-            setTimeout(() => fx.remove(), big ? 2000 : 1200);
-          },
-          update(dt) {
-            if (!this.roll) return;
-            const pool2 = (r) => Progression.economy.catalogs[r.kind].map((item, id) => ({ item, id })).filter((e) => (Progression.economy.rates[r.lucky ? "lucky" : "normal"][e.item.tier] || 0) > 0);
-            const r = this.roll,
-              t = clamp((performance.now() - r.startWall) / (r.duration * 1000), 0, 1);
-            if (!r.revealed && t < 1 && performance.now() >= r.next && r.swaps < r.gaps.length) {
-              // Decelerating flicker from the video's interval table; the last name is a near miss.
-              const last = r.swaps === r.gaps.length - 1;
-              r.next = performance.now() + r.gaps[r.swaps] * 1000;
-              r.swaps++;
-              let e = r.pickVisual(r.flickId);
-              if (last) { // near miss: a neighbouring (often rarer) item, never the result
-                const better = pool2(r).filter((x) => x.id !== r.result.id && x.item.tier >= r.result.item.tier);
-                if (better.length) e = better[Math.floor(Math.random() * better.length)];
-              }
-              r.flickId = e.id;
-              this.identity(r.kind, e.id, r.lucky ? "LUCKY SPIN" : "NORMAL SPIN");
-              AudioManager.tone(260 + t * 420, 0.03, "triangle", 0.05, 120, "ui");
-            }
-            if (t >= 1 && !r.revealed) {
-              r.revealed = true;
-              r.revealAtWall = performance.now();
-              const tier = r.result.item.tier,
-                color = rarityColors[tier];
-              this.previewSpin = { kind: r.kind, id: r.result.id };
-              this.identity(r.kind, r.result.id, tier >= 7 ? "SECRETO!" : tier === 6 ? "DIVINO!" : "NOVO ITEM");
-              updatePreview();
-              this.burst(color, tier >= 4);
-              if (tier >= 6) {
-                AudioManager.tone(523, 0.75, "sine", 0.13, 80, "ui");
-                AudioManager.tone(659, 0.82, "triangle", 0.11, 70, "ui");
-                AudioManager.tone(784, 0.95, "sine", 0.1, 65, "ui");
-              } else AudioManager.tone(tier >= 4 ? 160 : 300, 0.48, "triangle", 0.18, 60, "ui");
-              $("reveal-message").textContent = `${r.result.item.name} · ${rarityNames[tier]} · equipado automaticamente`;
-              $("reveal-message").style.color = color;
-              $("classscreen").style.setProperty("--reveal", color);
-              $("classscreen").classList.remove("rarity-reveal");
-              void $("classscreen").offsetWidth;
-              $("classscreen").classList.add("rarity-reveal");
-              if (this.light) {
-                this.light.color.set(color);
-                this.light.intensity = tier >= 6 ? 7.2 : 2.6 + tier * 0.55;
-              }
-              return;
-            }
-            if (r.revealed && performance.now() - r.revealAtWall >= r.hold * 1000) this.finishSpin(r);
+            if (this.vfx) this.fx(color, tier);
+            SpinSFX.reveal(tier);
+            if (this.light && this.vfx) { this.light.color.set(this.fxColor(color, tier).replace(/^hsl\((\d+) (\d+)% (\d+)%\)$/, "hsl($1, $2%, $3%)")); this.light.intensity = 7; }
+            const btn = $("roll-controls").querySelector(".spin-btn.skip");
+            if (btn) { btn.classList.remove("skip"); delete btn.dataset.skip; btn.querySelector(".label").textContent = r.lucky ? "LUCKY SPIN" : "NORMAL SPIN"; btn.onclick = null; }
+            $("reveal-message").textContent = `${r.result.item.name} · ${rarityNames[tier]} · equipado automaticamente`;
+            this.finishSpin(r);
           },
           async finishSpin(r) {
             $("classscreen").classList.remove("spinning");
@@ -22480,6 +22680,16 @@ body.netgame #revivetouch{display:flex}
             try { await Progression.applySpin(r.kind, r.result.id); }
             finally { this.previewSpin = null; Progression.busy = false; this.render(); }
           },
+          chance(kind, id, lucky) { const list = Progression.economy.catalogs[kind], tier = list[id].tier; return +(Progression.economy.rates[lucky ? "lucky" : "normal"][tier] / list.filter((i) => i.tier === tier).length).toFixed(3); },
+          customization() {
+            const opts = {
+              face: ["Rosto", [["angular", "Angular"], ["round", "Arredondado"], ["scar", "Cicatriz"]]], hair: ["Cabelo", [["short", "Curto"], ["shaved", "Raspado"], ["long", "Comprido"]]], skin: ["Pele", [["#c39b7d", "Clara"], ["#986e50", "Média"], ["#664936", "Escura"]]], hairColor: ["Cor do cabelo", [["#292622", "Preto"], ["#59402c", "Castanho"], ["#99918a", "Grisalho"]]], shirt: ["Camiseta", [["#4c5547", "Oliva"], ["#333b43", "Grafite"], ["#655044", "Terra"]]], pants: ["Calça", [["#303632", "Floresta"], ["#3b3d46", "Cinza"], ["#514b40", "Areia"]]], boots: ["Botas", [["#252522", "Pretas"], ["#3a3027", "Marrons"]]], accessory: ["Acessório", [["none", "Nenhum"], ["glasses", "Óculos"], ["mask", "Máscara"], ["pack", "Mochila"]]],
+            };
+            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""}" style="--rarity:${rarityColors[item.tier]}"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]}</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
+            $("cosmetic-fields").querySelectorAll("select").forEach((el) => el.onchange = () => { CharacterStyle.data[el.dataset.cosmetic] = el.value; Account.savePreferences(); updatePreview(); });
+            $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach((b) => b.onclick = () => Cosmetics.select(b.dataset.cosmeticItem));
+            $("cosmetic-fields").querySelectorAll("[data-cosmetic-clear]").forEach((b) => b.onclick = () => Cosmetics.unequip(b.dataset.cosmeticClear));
+          },
           confirmReroll(kind, lucky, payment) {
             const current = Progression.economy.catalogs[kind][Progression.data[kind + "Id"]];
             if (!current || !requiresRerollConfirm(current.tier)) return false;
@@ -22488,13 +22698,18 @@ body.netgame #revivetouch{display:flex}
             $("spin-confirm").style.setProperty("--confirm-rarity", color);
             $("spin-confirm-rarity").textContent = rarityNames[current.tier].toUpperCase();
             $("spin-confirm-title").textContent = "Você deseja prosseguir?";
-            $("spin-confirm-copy").textContent = `Você está com ${current.name} ${rarityNames[current.tier]} equipado. Se girar novamente, o próximo resultado pode substituir esse item.`;
+            $("spin-confirm-copy").textContent = ` Sua ${kind === "weapon" ? "arma" : "classe"} ${current.name} (${rarityNames[current.tier]}) será substituída e esta ação não pode ser desfeita.`;
             $("spin-confirm-old").textContent = current.name;
             $("spin-confirm-new").textContent = "PRÓXIMO GIRO";
             const compare = document.querySelector(".spin-confirm-compare");
             if (compare) compare.style.display = "none";
-            $("spin-confirm-cancel").textContent = "CANCELAR";
-            $("spin-confirm-accept").textContent = "PROSSEGUIR";
+            $("spin-confirm-cancel").innerHTML = this.hudActive ? `<span class="t">CANCEL</span>` : "CANCELAR";
+            $("spin-confirm-accept").innerHTML = this.hudActive ? `<span class="t">SURE</span>` : "PROSSEGUIR";
+            // Video: the card first shows a "1" countdown (~1 s), then SURE / CANCEL.
+            $("spin-confirm-count").textContent = "1";
+            $("spin-confirm").classList.toggle("counting", this.hudActive);
+            clearTimeout(this.confirmTimer);
+            if (this.hudActive) this.confirmTimer = setTimeout(() => $("spin-confirm").classList.remove("counting"), 1000);
             $("spin-confirm").classList.remove("hidden");
             requestAnimationFrame(() => $("spin-confirm-accept").focus());
             return true;
@@ -22622,8 +22837,10 @@ body.netgame #revivetouch{display:flex}
             this.economy.save();
           }
           selectedClass = this.data.classId;
-          AudioManager.coin();
-          UIManager.toast(`${item.name} equipado no loadout.`);
+          if (!Armory.hudActive) {
+            AudioManager.coin();
+            UIManager.toast(`${item.name} equipado no loadout.`);
+          }
         };
         Progression.cancelSpin = async function (kind) {
           if (Account.user && this.data.pendingLoadout?.[kind] != null) {
@@ -23093,23 +23310,33 @@ body.netgame #revivetouch{display:flex}
           const spinWeapon = Armory?.previewSpin?.kind === "weapon" ? Armory.previewSpin.id : null;
           const selectedClassPreview = Armory?.mode === "armory" && activeKind === "class" && Number.isInteger(Armory.selection) ? Armory.selection : null;
           const selectedWeaponPreview = Armory?.mode === "armory" && activeKind === "weapon" && Number.isInteger(Armory.selection) ? Armory.selection : null;
-          const previewClassId = spinClass != null ? spinClass : selectedClassPreview != null ? selectedClassPreview : Progression.data.classId;
-          const previewWeaponId = spinWeapon != null ? spinWeapon : selectedWeaponPreview != null ? selectedWeaponPreview : Progression.data.weaponId;
+          const previewClassId = spinClass != null ? spinClass : selectedClassPreview != null ? selectedClassPreview : DevMode.current("class", Progression.data.classId);
+          const previewWeaponId = spinWeapon != null ? spinWeapon : selectedWeaponPreview != null ? selectedWeaponPreview : DevMode.current("weapon", Progression.data.weaponId);
           const styleKey = CharacterStyle?.data ? JSON.stringify(CharacterStyle.data) : "";
           const nextKey = `${previewClassId}|${previewWeaponId}|${styleKey}`;
           if (previewModelKey !== nextKey || !previewModel) {
             Survivor.dispose(previewModel);
-            previewModel = Survivor.create(previewClassId, WeaponSystem.weapons[previewWeaponId]);
+            if (Armory.preloaded?.key === nextKey) { previewModel = Armory.preloaded.model; Armory.preloaded = null; }
+            else previewModel = Survivor.create(previewClassId, WeaponSystem.weapons[previewWeaponId]);
             previewScene.add(previewModel);
             previewModelKey = nextKey;
           }
+          const hud = !!Armory.hudActive;
           const compactPreview = touchMode && innerHeight <= 500;
-          previewCamera.position.set(0, compactPreview ? 1.18 : 1.25, compactPreview ? 3.15 : 3.9);
-          previewCamera.lookAt(0, compactPreview ? 0.96 : 1, 0);
+          if (hud) {
+            // Video framing: full-screen, character centred, head at ~20% of the height, feet at ~80%.
+            previewCamera.position.set(0, Armory.cam?.y ?? 1.09, Armory.cam?.z ?? 4.3);
+            previewCamera.lookAt(0, Armory.cam?.ly ?? 1.03, 0);
+          } else {
+            previewCamera.position.set(0, compactPreview ? 1.18 : 1.25, compactPreview ? 3.15 : 3.9);
+            previewCamera.lookAt(0, compactPreview ? 0.96 : 1, 0);
+          }
           previewRenderer.outputEncoding = THREE.sRGBEncoding;
           previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
           previewRenderer.toneMappingExposure = 0.98;
           if (!Armory.light) {
+            Armory.stageProps = [];
+            const before = new Set(previewScene.children);
             Armory.light = new THREE.PointLight(0x9fbbc5, 2, 8);
             Armory.light.position.set(-1, 2, -1);
             previewScene.add(Armory.light);
@@ -23159,7 +23386,18 @@ body.netgame #revivetouch{display:flex}
               );
               crate.rotation.y = i * 0.04;
             }
+            for (const o of previewScene.children) if (!before.has(o) && o !== Armory.light && o !== previewModel && !o.isLight) Armory.stageProps.push(o);
+            Armory.hudLights = [new THREE.HemisphereLight(0x5058ff, 0x100840, 3.0), new THREE.DirectionalLight(0x8e9cff, 2.0), new THREE.PointLight(0x2a3dff, 5.5, 9)];
+            Armory.hudLights[1].position.set(1.5, 3, 4);
+            Armory.hudLights[2].position.set(-1.6, 1.6, 1.2);
+            Armory.hudLights.forEach((l) => previewScene.add(l));
+            Armory.baseLights = previewScene.children.filter((o) => o.isLight && !Armory.hudLights.includes(o) && o !== Armory.light);
           }
+          // Video backdrop: no floor/crates/ring — the character stands in front of the blue wall,
+          // lit blue. The customize screen keeps the old stage.
+          for (const o of Armory.stageProps) o.visible = !hud;
+          for (const l of Armory.hudLights) l.visible = hud;
+          for (const l of Armory.baseLights) l.visible = !hud;
         }
         function unlock() {
           if (document.pointerLockElement) document.exitPointerLock();
@@ -23319,6 +23557,14 @@ body.netgame #revivetouch{display:flex}
           DR.LobbyUI.openPlay();
         };
         DevMode.attachLogo();
+        $("spin-buy").onclick = () => Armory.buySpinsInfo();
+        $("spin-vfx").onclick = () => {
+          Armory.vfx = !Armory.vfx;
+          try { localStorage.setItem("dr-spin-vfx", Armory.vfx ? "on" : "off"); } catch {}
+          SpinSFX.press();
+          Armory.render();
+        };
+        addEventListener("resize", () => { if (Armory.hudActive && !$("classscreen").classList.contains("hidden")) Armory.hudScale(); });
         $("loadoutbtn").onclick = () => {
           Armory.tab = "weapon";
           Armory.open();
@@ -24170,11 +24416,15 @@ body.netgame #revivetouch{display:flex}
                   previewRenderer.setSize(rect.width, rect.height, false);
                 previewCamera.aspect = rect.width / rect.height;
                 previewCamera.updateProjectionMatrix();
-                const rolling=!!Armory.roll;previewModel.rotation.y=rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12;Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);Armory.update(dt);
+                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12;Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);Armory.update(dt);
                 if (Armory.light && menuTime > (Armory.revealUntil || 0)) {
-                  Armory.light.intensity +=
-                    (2 - Armory.light.intensity) * dt * 3;
-                  Armory.light.color.lerp(new THREE.Color(0x9fbbc5), dt * 2);
+                  // HUD: a frontal blue fill that the reveal briefly recolours (video: the character
+                  // is lit in the rarity colour for ~0.3 s). Customize keeps the old back light.
+                  const hudL = Armory.hudActive;
+                  if (hudL) Armory.light.position.set(0.4, 1.7, 2.4); else Armory.light.position.set(-1, 2, -1);
+                  Armory.light.intensity += ((hudL ? 1.2 : 2) - Armory.light.intensity) * Math.min(1, dt * (hudL ? 7 : 3));
+                  Armory.light.color.lerp(Armory.baseLightColor || (Armory.baseLightColor = new THREE.Color()), Math.min(1, dt * (hudL ? 6 : 2)));
+                  Armory.baseLightColor.set(hudL ? 0x4a58ff : 0x9fbbc5);
                 }
                 previewRenderer.render(previewScene, previewCamera);
               }
@@ -24227,6 +24477,8 @@ body.netgame #revivetouch{display:flex}
           AudioManager.update();
           ZombiePing.update();
           if (background) return;
+          // The Spin HUD is opaque and full-screen: don't pay for the world render hidden behind it.
+          if (state === GameState.CLASS_SELECT && Armory.hudActive && !$("classscreen").classList.contains("hidden")) return;
           renderer.autoClear = true;
           renderer.render(scene, camera);
           if (inWorld && WeaponSystem.model.visible) {

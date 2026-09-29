@@ -12,7 +12,7 @@ const server = http.createServer((req, res) => {
   if (!filename.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
   fs.readFile(filename, (error, data) => {
     if (error) { res.writeHead(404).end(); return; }
-    res.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.css') ? 'text/css' : filename.endsWith('.html') ? 'text/html' : 'application/octet-stream');
+    res.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.css') ? 'text/css' : filename.endsWith('.html') ? 'text/html' : filename.endsWith('.css') ? 'text/css' : filename.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream');
     res.end(data);
   });
 });
