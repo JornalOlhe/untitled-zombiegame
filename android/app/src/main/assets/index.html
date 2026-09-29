@@ -22942,7 +22942,8 @@ body.netgame #revivetouch{display:flex}
               r.spearThrowVis = r.spearThrowVis || { w: 0 };
               const st = r.spearThrowVis;
               st.w += ((ts ? (ts.phase === "flight" ? 1 - ease((ts.k - 0.35) / 0.4) : 1) : 0) - st.w) * (1 - Math.exp(-dt * (ts ? 14 : 6)));
-              r.gun.visible = WeaponSystem.spearHeld && !(ts && (ts.phase === "flight" || (ts.phase === "throw" && ts.k >= 1)));
+              // The physical Dawn Spear leaves the avatar's hand for the entire projectile lifetime.
+              r.gun.visible = !!WeaponSystem.spearHeld && !SpearThrow.active;
               if (ts && st.w > 0.02) {
                 let wind = 0, whip = 0, follow = 0;
                 if (ts.phase === "prep") wind = ease(ts.k * 0.7 + 0.3);
@@ -25230,6 +25231,7 @@ body.netgame #revivetouch{display:flex}
         if (bootState === "signed-in" || guestChosen || (bootQuery.has("test") && !bootQuery.has("login")) || bootQuery.get("net") === "local") UIManager.menu();
         else DR.LoginUI.open("login");
         $("home-version").textContent = `DEAD RECOIL ${GAME_VERSION} · ${(window.DeadRecoilRuntime?.platform || "web").toUpperCase()}`;
+        try { window.DeadRecoilNative?.reportReady?.(GAME_VERSION); } catch {}
         DR.GoogleAuth.collectPending();
         let lastFrame = performance.now(),
           fpsFrames = 0,
@@ -25605,7 +25607,14 @@ body.netgame #revivetouch{display:flex}
               }
             },
           };
-      })();
+      })().catch((err) => {
+        try { window.DeadRecoilNative?.reportError?.(String(err?.stack || err)); } catch {}
+        console.error(err);
+        const loading = document.getElementById("loading");
+        const text = document.getElementById("loadtext");
+        if (loading) loading.classList.remove("hidden");
+        if (text) text.textContent = "Falha ao iniciar o jogo. Reinicie o app; se continuar, instale a versão mais recente.";
+      });
     </script>
   </body>
 </html>
