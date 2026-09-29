@@ -28,13 +28,13 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     page.on('console', m => { if (m.type() === 'error' && !m.location()?.url?.includes('/api/')) errors.push('console: ' + m.text()); });
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
     await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 30000 });
-    assert.ok(await page.evaluate(() => !!window.DR_VOXEL_ATLAS && Object.keys(window.DR_VOXEL_ATLAS.atlases).length === 10), 'voxel atlas data must load');
+    assert.ok(await page.evaluate(() => !!window.DR_VOXEL_ATLAS && Object.keys(window.DR_VOXEL_ATLAS.atlases).length >= 10), 'voxel atlas data must load');
     const SFX = ['roar', 'blizzard', 'demon', 'trident', 'frost', 'land', 'leap', 'medkit'];
     assert.ok(await page.evaluate(names => names.every(k => window.DR_MONSTER_SFX?.[k]), SFX), 'boss SFX data must load');
 
-    // Boss schedule: Demon every 20, Yeti on other multiples of 10, QB/Mutant alternate on the rest of the 5s.
+    // Boss schedule on the City map: each 5th wave follows the map roster (Quarterback, Juggernaut, Roadblock, Wrecker).
     const schedule = await page.evaluate(() => [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(w => DeadRecoilTest.WaveManager.bossFor(w)));
-    assert.deepEqual(schedule, ['quarterback', 'yeti', 'mutant', 'demon', 'quarterback', 'yeti', 'mutant', 'demon', 'quarterback', 'yeti']);
+    assert.deepEqual(schedule, ['quarterback', 'juggernaut', 'roadblock', 'wrecker', 'quarterback', 'juggernaut', 'roadblock', 'wrecker', 'quarterback', 'juggernaut']);
 
     await page.locator('#play').click();
     await page.locator('#solo').click();

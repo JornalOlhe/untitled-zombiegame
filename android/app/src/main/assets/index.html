@@ -3078,7 +3078,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.30.1";
+        const GAME_VERSION = "0.31.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -11148,7 +11148,7 @@ body.netgame #revivetouch{display:flex}
                   .join("");
             }
             $("roll-rates").innerHTML =
-              `<table class="chance-table"><thead><tr><th>Raridade</th><th>Normal</th><th>Lucky</th></tr></thead><tbody>${rarityNames.map((name, i) => `<tr><td style="color:${rarityColors[i]}">${name}</td><td>${this.economy.rates.normal[i]}%</td><td>${this.economy.rates.lucky[i]}%</td></tr>`).join("")}</tbody></table><p class="hint">Pity independente para classes e armas: Normal soma +1 e Lucky soma +2. Ao atingir 100, o giro garante Divino; ao atingir 300, garante Secreto. Divino reseta o pity Divino; Secreto reseta ambos.</p>`;
+              `<table class="chance-table"><thead><tr><th>Raridade</th><th>Normal</th><th>Lucky</th></tr></thead><tbody>${rarityNames.map((name, i) => `<tr><td style="color:${rarityColors[i]}">${name}</td><td>${this.economy.rates.normal[i]}%</td><td>${this.economy.rates.lucky[i]}%</td></tr>`).join("")}</tbody></table><p class="hint">Pity independente para classes e armas: Normal soma +1 e Lucky soma +2. Ao atingir 75, o giro garante Mítico; ao atingir 150, garante Divino; ao atingir 300, garante Secreto. Mítico reseta o pity Mítico; Divino reseta Divino e Mítico; Secreto reseta todos.</p>`;
             $("classcontinue").disabled = this.busy;
             $("classscreen")
               .querySelectorAll("[data-roll]")
