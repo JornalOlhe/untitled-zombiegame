@@ -3250,7 +3250,7 @@ body.netgame #revivetouch{display:flex}
           { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
             ability:"Infernal Flight", cd:30, requiredKills:100, secretFlight:"demon",
             desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Chifres e cauda demoníaca exclusivos.",
-            active:"A cada 100 eliminações, libera 30 s de voo no Q. A cauda gira como hélice; kills zeram, sem cargas acumuladas, e há 30 s de cooldown.",
+            active:"A cada 100 eliminações, libera 30 s de voo no Q. A cauda se enrola e estala como chicote na decolagem e ondula durante o voo; kills zeram, sem cargas acumuladas, e há 30 s de cooldown.",
             effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
             burst:{ duration:30, flight:"demon" } },
         ];
@@ -5323,6 +5323,52 @@ body.netgame #revivetouch{display:flex}
           },
           get(w) {
             return this.P[this.of(w)];
+          },
+        };
+        // Heavenly / Infernal Flight cast: one shared timeline for body, camera, wings, tail and FX.
+        // ANTICIPATION (gather: crouch, wings rise / tail coils) → LAUNCH (explosive rise, burst,
+        // wing downstroke / tail whip) → FOLLOW-THROUGH → RECOVERY into the flight loop.
+        const ClassAscend = {
+          ANT: 0.34, RISE: 0.5, END: 1.35,
+          since() { return player.abilityAt == null ? 99 : simulationTime - player.abilityAt; },
+          cast(kind) { player.abilityAt = simulationTime; player.abilityKind = kind; player.abilityFx = false; player.vy = 0; },
+          // 0..1 envelopes of the cast at time k after activation
+          env(k) {
+            const A = this, ant = k < 0 || k >= A.END ? 0 : k < A.ANT ? Math.sin((k / A.ANT) * Math.PI * 0.5) : Math.max(0, 1 - (k - A.ANT) / 0.12);
+            const u = (k - A.ANT) / A.RISE, launch = u > 0 && u < 1 ? Math.sin(u * Math.PI) * (1 - u * 0.35) : 0;
+            const v = (k - A.ANT - A.RISE) / (A.END - A.ANT - A.RISE), rec = v > 0 && v < 1 ? Math.sin(v * Math.PI) * (1 - v) : 0;
+            return { ant, launch, rec, u: clamp(u, 0, 1) };
+          },
+          // flight floor above the ground: held during anticipation, then an explosive ease-out rise
+          lift(k) { const u = clamp((k - this.ANT) / this.RISE, 0, 1); return 1 - (1 - u) ** 3; },
+          camDip(k) { const e = this.env(k); return 0.16 * e.ant - 0.05 * e.launch; },
+          fovKick(k) { return 7 * this.env(k).launch; },
+          update() {
+            if (!player.abilityKind || player.abilityFx || this.since() < this.ANT) return;
+            player.abilityFx = true;
+            const angel = player.abilityKind === "angel", col = angel ? 0xfff0c2 : 0xff3a14;
+            const base = new V(player.pos.x, (player.ground || 0) + 0.08, player.pos.z);
+            for (const [r, life] of [[4.8, 0.75], [2.6, 0.5]]) MonsterFX.ring(base, r, col, life).mesh.position.y = base.y;
+            MonsterFX.circle(base, 1.6, angel ? 0xffe7a8 : 0xff5a1e, 0.6, 0.55).mesh.position.y = base.y;
+            for (let i = 0; i < 3; i++) ParticleSystem.emit(base.clone().setY(base.y + 0.4 + i * 0.5), i ? col : angel ? 0xffffff : 0x3a0808, 14, 4.5);
+            shake = Math.max(shake, 0.32);
+            AudioManager.tone(angel ? 880 : 110, 0.5, angel ? "sine" : "sawtooth", 0.22, angel ? 1760 : 55);
+          },
+          // third-person body pose layered over the rig (own class only)
+          pose(r, k) {
+            const e = this.env(k);
+            if (!e.ant && !e.launch && !e.rec) { r.ascDip = 0; return; }
+            r.ascDip = -0.24 * e.ant + 0.08 * e.launch;
+            r.chest.rotation.x += 0.42 * e.ant - 0.34 * e.launch + 0.12 * e.rec;
+            r.head.rotation.x += 0.14 * e.ant - 0.28 * e.launch;
+            for (let i = 0; i < 2; i++) {
+              r.legs[i].rotation.x += -0.6 * e.ant + (0.3 + i * 0.08) * e.launch;
+              r.knees[i].rotation.x += 1.15 * e.ant - 0.2 * e.launch * (r.knees[i].rotation.x > 0.2 ? 1 : 0);
+            }
+            // weapon hand gathers in on the crouch and is carried up with the launch (IK follows)
+            r.gun.position.y += -0.09 * e.ant + 0.06 * e.launch;
+            r.gun.position.z += -0.05 * e.ant;
+            if (r.oneHand) { r.arms[1].rotation.x += 0.35 * e.ant + 0.3 * e.launch; r.arms[1].rotation.z += -0.25 * e.ant - 0.85 * e.launch; }
           },
         };
         const MeleeAnim = {
@@ -18272,10 +18318,7 @@ body.netgame #revivetouch{display:flex}
             UIManager.toast(c.ability);
             if (burst.duration)
               player.activeUntil = simulationTime + burst.duration;
-            if (burst.flight) {
-              player.jump = Math.max(player.jump || 0, 2.4);
-              player.vy = 0;
-            }
+            if (burst.flight) ClassAscend.cast(burst.flight);
             if (burst.maxHpTotal) {
               const ratio = player.maxhp > 0 ? player.hp / player.maxhp : 1;
               player.maxhp = Math.round(player.baseMaxHp * burst.maxHpTotal);
@@ -18802,9 +18845,11 @@ body.netgame #revivetouch{display:flex}
               const up =
                 (keys.has("Space") ? 1 : 0) -
                 (keys.has("ControlLeft") || keys.has("ControlRight") ? 1 : 0);
-              player.vy = up * (devFly ? 7 : 4.2);
+              const ak = devFly ? 99 : ClassAscend.since();
+              // cast choreography: hold on the spot while gathering, then launch to cruising height
+              player.vy = ak < ClassAscend.ANT ? 0 : up * (devFly ? 7 : 4.2);
               feet += player.vy * dt;
-              feet = devFly ? clamp(feet, ground, ground + 40) : clamp(feet, ground + 1.8, ground + 10);
+              feet = devFly ? clamp(feet, ground, ground + 40) : clamp(feet, ground + 1.8 * ClassAscend.lift(ak), ground + 10);
               player.flightDescentUntil = simulationTime + (devFly ? 0.8 : 2.5);
             } else {
               const gravity = player.flightDescentUntil > simulationTime ? 3.2 : 16;
@@ -18840,7 +18885,7 @@ body.netgame #revivetouch{display:flex}
               "(prefers-reduced-motion: reduce)",
             ).matches;
             if (!reducedMotion) {
-              camera.position.y -= this.motion.landing;
+              camera.position.y -= this.motion.landing + ClassAscend.camDip(ClassAscend.since());
               if (!mouse.aim && traveled > 0.0001 && player.jump === 0)
                 camera.position.y +=
                   Math.sin(this.motion.phase) * (crouched ? 0.006 : 0.012);
@@ -18870,7 +18915,8 @@ body.netgame #revivetouch{display:flex}
               // Subtle speed cue: up to +3° at full sprint, +1.5° more at bunny-hop speed.
               (mouse.aim ? 0 : 3 * (1 - (1 - this.motion.sprint) ** 2) +
                 1.5 * clamp((this.motion.speed() - (this.speedCap || 99) / GroundMotion.BHOP_CAP) / ((this.speedCap || 99) * (1 - 1 / GroundMotion.BHOP_CAP)), 0, 1));
-            camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 12);
+            camera.fov += (targetFov + ClassAscend.fovKick(ClassAscend.since()) - camera.fov) * Math.min(1, dt * 12);
+            ClassAscend.update();
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
             CameraRig.update(dt);
@@ -22601,7 +22647,7 @@ body.netgame #revivetouch{display:flex}
                     ? t * 2.2
                     : PlayerController.motion.phase;
             r.hips.position.y +=
-              ((crouch ? 0.61 : 0.86) + jump - r.hips.position.y) *
+              ((crouch ? 0.61 : 0.86) + jump + (r.ascDip || 0) - r.hips.position.y) *
               (1 - Math.exp(-dt * 16));
             r.chest.position.y = 0.1 + Math.sin(t * 1.7) * 0.009;
             r.chest.rotation.x = crouch ? 0.18 : b * 0.05;
@@ -22716,7 +22762,8 @@ body.netgame #revivetouch{display:flex}
                 if (air && !secret.wasAir) secret.jumpAt = t;
                 secret.wasAir = air;
                 secret.fly = (secret.fly || 0) + ((fl ? 1 : 0) - (secret.fly || 0)) * (1 - Math.exp(-dt * 3.5));
-                const f = secret.fly, sinceTO = t - (secret.takeoff ?? -9), sinceLand = t - (secret.landAt ?? -9), sinceJump = t - (secret.jumpAt ?? -9);
+                const own = forced == null && r.classId === selectedClass && player.abilityKind === "angel";
+                const f = secret.fly, sinceTO = own ? ClassAscend.since() : t - (secret.takeoff ?? -9), sinceLand = t - (secret.landAt ?? -9), sinceJump = t - (secret.jumpAt ?? -9);
                 // state blend → wing shape parameters
                 let fold, amp, freq, lift = 0, sweep = 0, spreadTips = 0;
                 if (fl) {
@@ -22729,12 +22776,14 @@ body.netgame #revivetouch{display:flex}
                   const glide = fwd > 0.5 ? clamp(Math.sin(t * 0.55 + 1.3) * 3 - 2, 0, 1) : 0;
                   amp *= 1 - 0.8 * glide;
                   amp *= 0.85 + 0.15 * Math.sin(t * 0.9) + 0.08 * Math.sin(t * 2.3); // organic variation
-                  if (sinceTO < 1.0) {
-                    // take-off: anticipation (wings raise and open), then one heavy downstroke
-                    const k = sinceTO;
-                    fold = 0;
-                    if (k < 0.28) { lift = 0.9 * Math.sin((k / 0.28) * Math.PI * 0.5); amp = 0.05; }
-                    else { amp = 1.0 - 0.45 * (k - 0.28) / 0.72; freq = 1.9; lift = 0.9 * Math.max(0, 1 - (k - 0.28) / 0.25); }
+                  if (sinceTO < 1.1) {
+                    // take-off: anticipation (wings rise high and open wide while the body gathers),
+                    // one heavy downstroke on the launch, then a quick settle into the flight loop
+                    const k = sinceTO, A = ClassAscend.ANT;
+                    fold = k < A ? 0.3 * (1 - k / A) : 0;
+                    if (k < A) { lift = 1.05 * Math.sin((k / A) * Math.PI * 0.5); amp = 0.04; spreadTips = 0.35 * k / A; }
+                    else { amp = 1.05 - 0.5 * Math.min(1, (k - A) / 0.76); freq = 1.9; lift = 1.05 * Math.max(0, 1 - (k - A) / 0.22); }
+                    if (k < A) secret.beat = -Math.PI * 0.5; // start the first stroke exactly at the launch
                   }
                   spreadTips = 0.25;
                 } else if (sinceLand < 0.9) {
@@ -22789,9 +22838,11 @@ body.netgame #revivetouch{display:flex}
                   secret.right.rotation.set(0, -0.22 + f * 0.55, 0.08 + stroke * amp);
                 }
                 // halo: slow breathing float and a small tilt with the body's turns
-                secret.halo.position.y = Math.sin(t * 1.4) * 0.018 + f * 0.01;
+                const he = own ? ClassAscend.env(sinceTO) : { ant: 0, launch: 0 };
+                secret.halo.position.y = Math.sin(t * 1.4) * 0.018 + f * 0.01 + 0.04 * he.launch - 0.02 * he.ant;
+                secret.halo.scale.setScalar(1 + 0.12 * he.ant + 0.45 * he.launch);
                 secret.halo.rotation.z = -secret.turn * 0.05;
-                secret.halo.rotation.y += dt * 0.4;
+                secret.halo.rotation.y += dt * (0.4 + 7 * he.launch);
                 if (g.visible && Math.random() < dt * (1.5 + f * 12)) {
                   const wing = Math.random() < 0.5 ? secret.left : secret.right;
                   wing.updateMatrixWorld(true);
@@ -22799,9 +22850,10 @@ body.netgame #revivetouch{display:flex}
                   ParticleSystem.emit(tip, Math.random() < 0.6 ? 0xffffff : 0xffe7a8, 1, 0.4 + f * 0.4);
                 }
               } else if (secret.type === "demon") {
-                // Idle: slow sway travelling down the vertebrae. Flight: the whole tail winds into a
-                // corkscrew — every bone circles with a phase lag so the tail itself spins — and the
-                // rotor tip whirls, shedding embers.
+                // Idle: slow sway travelling down the vertebrae. Cast: the tail coils up over the
+                // back (anticipation), then cracks like a whip — a pulse runs base → tip — and
+                // settles into the flight loop: a swimming S-wave that grows toward the tip, all
+                // driven through the per-vertebra springs (never a rigid rotation of the whole tail).
                 secret.fly = (secret.fly || 0) + ((flying ? 1 : 0) - (secret.fly || 0)) * (1 - Math.exp(-dt * 4));
                 const f = secret.fly;
                 // World motion of the body drives secondary motion: the tail lags behind turns,
@@ -22817,10 +22869,12 @@ body.netgame #revivetouch{display:flex}
                 secret.lagY = (secret.lagY || 0) + (clamp(-yawRate * 0.12, -0.6, 0.6) - (secret.lagY || 0)) * (1 - Math.exp(-dt * 6));
                 secret.lagX = (secret.lagX || 0) + (clamp(vel * 0.03, 0, 0.3) - (secret.lagX || 0)) * (1 - Math.exp(-dt * 5));
                 const moving = Math.min(1, vel / 5), act = Math.max(moving, f);
-                secret.spin = (secret.spin || 0) + dt * (2.2 + f * 11);
-                secret.tail.rotation.x = -0.35 * f - secret.lagX * (1 - f) * 0.5;
-                // Flight: the tail rolls around its own axis so the whole curve visibly spins.
-                secret.tail.rotation.z = f * secret.spin;
+                const ownD = r.classId === selectedClass && player.abilityKind === "demon" && state === GameState.PLAYING;
+                const ak = ownD ? ClassAscend.since() : 99, de = ClassAscend.env(ak),
+                  whipFront = (ak - ClassAscend.ANT) / 0.38; // travelling pulse position along the chain (0 base → 1 tip)
+                secret.whip = de.launch;
+                secret.tail.rotation.x = -0.35 * f - secret.lagX * (1 - f) * 0.5 + 0.6 * de.ant - 0.22 * de.launch;
+                secret.tail.rotation.z = 0;
                 // Bone chain with inertia: every vertebra chases its target through its own spring,
                 // stiff at the base (it leads) and looser toward the tip (it arrives last and
                 // overshoots) — so the tail swings on after the body stops, then settles.
@@ -22832,11 +22886,17 @@ body.netgame #revivetouch{display:flex}
                     ph = t * 10 - i * 0.55,
                     sway = t * (2.4 + moving * 3) - i * 0.5,
                     walk = 0.09 + moving * 0.16;
+                  const swim = t * 5.2 - i * 0.62, pulse = whipFront >= 0 && whipFront < 1.4 ? Math.exp(-(((k - whipFront) * 4.5) ** 2)) : 0;
                   const tx =
                     seg.userData.base * (1 - f * 0.55) - secret.lagX * (1 - f) * 0.35 + secret.kick * (0.3 + k) * (1 - f) +
-                    (Math.sin(sway * 0.9) * walk * 0.6 * (1 - f) + Math.sin(ph) * 0.22 * f);
+                    Math.sin(sway * 0.9) * walk * 0.6 * (1 - f) +
+                    f * Math.sin(swim * 0.5 + 1.1) * (0.03 + 0.06 * k) - // flight: slow vertical undulation
+                    de.ant * (0.04 + 0.3 * k) + // cast: coil up over the back (scorpion)
+                    pulse * 0.5 * (0.4 + 0.6 * k); // whip crack running down the chain
                   const ty =
-                    Math.sin(sway) * walk * (1 - f) + secret.lagY * (0.4 + k) * (1 - f * 0.6) + Math.cos(ph) * 0.22 * f;
+                    Math.sin(sway) * walk * (1 - f) + secret.lagY * (0.4 + k) * (1 - f * 0.6) +
+                    f * Math.sin(swim) * (0.05 + 0.17 * k) + // flight: swimming S-wave, widest at the tip
+                    de.ant * Math.sin(i * 0.5) * 0.06;
                   const S = (seg.userData.spr ||= { x: tx, y: ty, vx: 0, vy: 0 }), K = 320 - k * 230, C = 2 * (0.75 - k * 0.3) * Math.sqrt(K);
                   const n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
                   for (let q = 0; q < n; q++) {
@@ -22846,7 +22906,8 @@ body.netgame #revivetouch{display:flex}
                   seg.rotation.x = S.x;
                   seg.rotation.y = S.y;
                 });
-                secret.rotor.rotation.z += dt * (flying ? 30 : 2.5);
+                // tip blade: lazy idle turn, a short flourish on the whip, steady cruise in flight
+                secret.rotor.rotation.z += dt * (2.5 + 5.5 * f + 26 * de.launch);
                 if (!secret.trail) {
                   secret.trail = new BladeTrail(scene, 0xff2a14, 1, 0.4);
                   g.userData.tailTrail = secret.trail;
@@ -22855,7 +22916,7 @@ body.netgame #revivetouch{display:flex}
                   secret.rotor.updateMatrixWorld(true);
                   const tip = secret.rotor.getWorldPosition(new V()),
                     side = new V(0, 0.05 + 0.02 * f, 0).applyQuaternion(secret.rotor.getWorldQuaternion(new THREE.Quaternion()));
-                  secret.trail.color.setHex(flying ? 0xc42410 : 0x6a0c0c);
+                  secret.trail.color.setHex(secret.whip > 0.2 ? 0xff6a24 : flying ? 0xc42410 : 0x6a0c0c);
                   secret.trail.maxAge = 0.18 + 0.32 * act;
                   secret.trail.push(tip.clone().add(side), tip.clone().sub(side), simulationTime);
                 }
@@ -22885,6 +22946,8 @@ body.netgame #revivetouch{display:flex}
                 r.knees[i].rotation.x = r.knees[i].rotation.x * (1 - f) + (0.35 + i * 0.12) * f;
               }
             }
+            if (r.secretAccessories && r.classId === selectedClass && state === GameState.PLAYING && player.abilityKind) ClassAscend.pose(r, ClassAscend.since());
+            else r.ascDip = 0;
             if (reloading) {
               r.elbows[0].rotation.x = -1.1 + Math.sin(t * 6) * 0.4;
               r.gun.rotation.z = 0.18;
@@ -25479,6 +25542,8 @@ body.netgame #revivetouch{display:flex}
             Viewmodel,
             MeleeAnim,
             Survivor,
+            ClassAscend,
+            GripProfiles,
             Account,
             SecretWeaponSkills,
             SpecterSwarm,
