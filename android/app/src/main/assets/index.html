@@ -93,13 +93,13 @@
       }
 
       /* v28 armory: video-style reveal burst, preferred item, locked slot prices, pity. */
-      .spin-burst{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden}
-      .spin-burst .flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 52%,color-mix(in srgb,var(--c) 85%,#fff) 0,color-mix(in srgb,var(--c) 45%,transparent) 22%,transparent 58%);animation:burst-flash .9s ease-out forwards}
-      .spin-burst.big .flash{animation-duration:1.6s}
+      .spin-burst{position:fixed;inset:0;z-index:60;pointer-events:none;overflow:hidden}
+      .spin-burst .flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 52%,color-mix(in srgb,var(--c) 85%,#fff) 0,color-mix(in srgb,var(--c) 70%,transparent) 45%,color-mix(in srgb,var(--c) 45%,transparent) 100%);animation:burst-flash .5s ease-out forwards}
+      .spin-burst.big .flash{animation-duration:.9s}
       .spin-burst .rays{position:absolute;left:50%;top:52%;width:180%;aspect-ratio:1;transform:translate(-50%,-50%);background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--c) 55%,transparent) 0 6deg,transparent 6deg 18deg);mask:radial-gradient(circle,#000 0,#000 18%,transparent 62%);-webkit-mask:radial-gradient(circle,#000 0,#000 18%,transparent 62%);animation:burst-rays 1.4s ease-out forwards}
       .spin-burst.big .rays{animation-duration:2.4s}
       .spin-burst b{position:absolute;left:calc(50% + var(--x));top:calc(52% + var(--y));width:26px;height:26px;transform:translate(-50%,-50%) scale(0);background:radial-gradient(circle,#fff 0,var(--c) 30%,transparent 70%);clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);animation:burst-star 1s var(--d) ease-out forwards}
-      @keyframes burst-flash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+      @keyframes burst-flash{0%{opacity:1}100%{opacity:0}}
       @keyframes burst-rays{0%{opacity:0;transform:translate(-50%,-50%) rotate(0) scale(.4)}15%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) rotate(40deg) scale(1.1)}}
       @keyframes burst-star{0%{transform:translate(-50%,-50%) scale(0) rotate(0)}40%{transform:translate(-50%,-50%) scale(calc(var(--s) * 1.4)) rotate(40deg)}100%{transform:translate(-50%,-50%) scale(0) rotate(90deg)}}
       #classscreen.spinning #armory-identity h2{animation:spin-title .09s linear infinite alternate}
@@ -22300,11 +22300,14 @@ body.netgame #revivetouch{display:flex}
               for (const e of pool) if ((r -= Math.sqrt(rates[e.item.tier])) < 0 && e.id !== avoid) return e;
               return pool[Math.floor(Math.random() * pool.length)];
             };
-            this.previewSpin = { kind, id: pickVisual(-1).id };
+            this.previewSpin = null; // video: the 3D model only swaps at the burst, names flicker above it
             this.selection = null;
             this.rarityFilter = result.item.tier;
-            const duration = reduced ? 0.3 : lucky ? 1.8 : 1.3; // reference video: ~1.1 s of flicker then the burst
-            this.roll = { kind, result, lucky, startWall: performance.now(), duration, next: 0, swaps: 0, pickVisual, revealed: false, hold: result.item.tier >= 6 ? 1.9 : result.item.tier >= 4 ? 1.1 : 0.75 };
+            // Interval table measured from the reference video @30 fps (seconds between name changes):
+            // 1-frame gaps early, growing to ~0.3 s; last name (a near miss) held ~0.28 s.
+            const gaps = reduced ? [0.05] : [0.033, 0.033, 0.033, 0.033, 0.033, 0.05, 0.05, 0.066, 0.066, 0.1, 0.133, 0.2, 0.28];
+            const duration = reduced ? 0.3 : 0.22 + gaps.reduce((a, b) => a + b, 0);
+            this.roll = { kind, result, lucky, gaps, startWall: performance.now(), duration, next: performance.now() + (reduced ? 0 : 220), swaps: 0, pickVisual, flickId: -1, revealed: false, hold: result.item.tier >= 6 ? 1.9 : result.item.tier >= 4 ? 1.1 : 0.75 };
             const rollRef = this.roll;
             clearTimeout(this.rollFallback);
             this.rollFallback = setTimeout(() => {
@@ -22313,32 +22316,35 @@ body.netgame #revivetouch{display:flex}
             $("classscreen").classList.add("spinning");
             $("roll-controls").innerHTML = `<div class="spin-buttons"><button class="spin-btn lucky skip" data-skip="1"><span class="ico">»</span><span class="label">SKIP</span><span class="cost">${lucky ? "LUCKY SPIN" : "NORMAL SPIN"}</span></button><button class="spin-btn normal" disabled><span class="ico">↻</span><span class="label">GIRANDO…</span><span class="cost">aguarde</span></button></div>`;
             $("roll-controls").querySelector("[data-skip]").onclick = () => { if (this.roll === rollRef && !rollRef.revealed) rollRef.startWall = performance.now() - duration * 1000; };
-            this.identity(kind, this.previewSpin.id, lucky ? "LUCKY SPIN" : "NORMAL SPIN");
             updatePreview();
           },
           burst(color, big) {
-            const stage = document.querySelector(".survivor-stage");
-            stage.querySelector(".spin-burst")?.remove();
+            document.querySelectorAll(".spin-burst").forEach((n) => n.remove());
             const fx = document.createElement("div");
             fx.className = "spin-burst" + (big ? " big" : "");
             fx.style.setProperty("--c", color);
             fx.innerHTML = `<i class="flash"></i><i class="rays"></i>` + Array.from({ length: big ? 26 : 14 }, () => `<b style="--x:${Math.round(rand(-46, 46))}%;--y:${Math.round(rand(-40, 40))}%;--s:${rand(0.5, 1.4).toFixed(2)};--d:${Math.round(rand(0, 380))}ms"></b>`).join("");
-            stage.appendChild(fx);
-            setTimeout(() => fx.remove(), big ? 2600 : 1500);
+            document.body.appendChild(fx);
+            setTimeout(() => fx.remove(), big ? 2000 : 1200);
           },
           update(dt) {
             if (!this.roll) return;
+            const pool2 = (r) => Progression.economy.catalogs[r.kind].map((item, id) => ({ item, id })).filter((e) => (Progression.economy.rates[r.lucky ? "lucky" : "normal"][e.item.tier] || 0) > 0);
             const r = this.roll,
               t = clamp((performance.now() - r.startWall) / (r.duration * 1000), 0, 1);
-            if (!r.revealed && t < 1 && performance.now() >= r.next) {
-              // Decelerating flicker through candidates.
-              r.next = performance.now() + (85 + 300 * Math.pow(t, 2.2)); // video: ~0.1 s per name, last one held ~0.35 s
+            if (!r.revealed && t < 1 && performance.now() >= r.next && r.swaps < r.gaps.length) {
+              // Decelerating flicker from the video's interval table; the last name is a near miss.
+              const last = r.swaps === r.gaps.length - 1;
+              r.next = performance.now() + r.gaps[r.swaps] * 1000;
               r.swaps++;
-              const e = r.pickVisual(this.previewSpin.id);
-              this.previewSpin = { kind: r.kind, id: e.id };
+              let e = r.pickVisual(r.flickId);
+              if (last) { // near miss: a neighbouring (often rarer) item, never the result
+                const better = pool2(r).filter((x) => x.id !== r.result.id && x.item.tier >= r.result.item.tier);
+                if (better.length) e = better[Math.floor(Math.random() * better.length)];
+              }
+              r.flickId = e.id;
               this.identity(r.kind, e.id, r.lucky ? "LUCKY SPIN" : "NORMAL SPIN");
-              updatePreview();
-              AudioManager.tone(260 + t * 420, 0.035, "triangle", 0.05, 120, "ui");
+              AudioManager.tone(260 + t * 420, 0.03, "triangle", 0.05, 120, "ui");
             }
             if (t >= 1 && !r.revealed) {
               r.revealed = true;

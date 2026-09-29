@@ -233,7 +233,7 @@ const server = http.createServer((req, res) => {
         });
         await page.locator('.spin-btn.lucky').click();
         await page.waitForFunction(() => DeadRecoilTest.Armory.roll?.result?.item?.tier === 6, null, {timeout:3000});
-        await page.waitForFunction(() => !!document.querySelector('.survivor-stage .spin-burst.big'), null, {timeout:8000});
+        await page.waitForFunction(() => !!document.querySelector('.spin-burst.big'), null, {timeout:8000});
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Winning Divine must not show a confirmation');
         assert.notEqual(await page.evaluate(() => DeadRecoilTest.Progression.data.weaponId), legendaryWeapon, 'Divine result must replace/equip automatically');
