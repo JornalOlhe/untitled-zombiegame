@@ -22794,6 +22794,42 @@ body.netgame #revivetouch{display:flex}
             };
             return g;
           },
+          clearBody(g, r, dry = false, slideAxis = null) {
+            // spear: slide the shaft forward through the hands (they keep their grip points)
+            if (slideAxis && !dry) {
+              let n = 0;
+              while (n < 10 && this.clearBody(g, r, true) > 0.005) { r.gun.position.addScaledVector(slideAxis, 0.05); r.gun.updateMatrixWorld(true); n++; }
+              return n * 0.05;
+            }
+            if (!r.gunSpan || r.gunSpanFor !== r.weapon?.name) {
+              const b = new THREE.Box3();
+              r.gun.updateMatrixWorld(true);
+              const inv = r.gun.matrixWorld.clone().invert();
+              r.gun.traverse((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); b.union(o.geometry.boundingBox.clone().applyMatrix4(inv.clone().multiply(o.matrixWorld))); } });
+              if (b.isEmpty()) return 0;
+              const sz = b.getSize(new V()), ax = sz.x > sz.y && sz.x > sz.z ? "x" : sz.y > sz.z ? "y" : "z";
+              r.gunSpan = { ax, lo: b.min[ax], hi: b.max[ax], c: b.getCenter(new V()) };
+              r.gunSpanFor = r.weapon?.name;
+            }
+            g.updateMatrixWorld(true);
+            const inv = g.matrixWorld.clone().invert(), ch = r.chest.getWorldPosition(new V()).applyMatrix4(inv), hp = r.hips.getWorldPosition(new V()).applyMatrix4(inv), S = r.gunSpan;
+            let need = 0, side = 0;
+            for (let i = 0; i <= 8; i++) {
+              const q = S.c.clone();
+              q[S.ax] = S.lo + ((S.hi - S.lo) * i) / 8;
+              q.applyMatrix4(r.gun.matrixWorld).applyMatrix4(inv);
+              if (q.y > hp.y - 0.2 && q.y < ch.y + 0.3 && Math.abs(q.z - ch.z) < 0.18) {
+                const pen = 0.27 - Math.abs(q.x - ch.x);
+                if (pen > need) { need = pen; side = Math.sign(q.x - ch.x) || -1; }
+              }
+            }
+            if (need > 0 && !dry) {
+              const w0 = new V().setFromMatrixPosition(g.matrixWorld), w1 = new V(side * need, 0, 0).applyMatrix4(g.matrixWorld);
+              const pinv = r.gun.parent.matrixWorld.clone().invert(), d = w1.applyMatrix4(pinv).sub(w0.applyMatrix4(pinv));
+              r.gun.position.add(d);
+            }
+            return need;
+          },
           // Two-bone hand IK in chest space: puts the hand on `target` (weapon socket) with the
           // elbow dropping below the shoulder-hand line, so hands stay on the weapon in every pose.
           ik(arm, elbow, target) {
@@ -23235,12 +23271,23 @@ body.netgame #revivetouch{display:flex}
               // pulled back along the hand→shoulder line so the grip never floats off the hands.
               const axis = r.spearHold ? new V(0, 1, 0).applyEuler(r.gun.rotation) : null;
               const holds = r.spearHold ? (r.throwArm ? [[0, -0.02]] : [[0, -0.02], [1, 0.42]]) : [];
-              let worst = 0, pull = null;
-              for (const [h, off] of holds) {
-                const tgt = axis ? gp.clone().addScaledVector(axis, off) : gp, v = r.arms[h].position.clone().sub(tgt), ex = v.length() - 0.6;
-                if (ex > worst) { worst = ex; pull = v.normalize().multiplyScalar(ex); }
+              const reach = () => {
+                let worst = 0, pull = null;
+                for (const [h, off] of holds) {
+                  const tgt = axis ? gp.clone().addScaledVector(axis, off) : gp, v = r.arms[h].position.clone().sub(tgt), ex = v.length() - 0.6;
+                  if (ex > worst) { worst = ex; pull = v.normalize().multiplyScalar(ex); }
+                }
+                if (pull) { gp.add(pull); r.gun.position.add(pull); }
+              };
+              // Long melee weapons never pass through the torso: sample the weapon's long axis and
+              // slide it sideways out of the chest/hip volume; the hands follow through the IK.
+              // Two passes so the reach limit and the body clearance settle together.
+              const clear = r.weapon?.kind === "melee" && !r.specterWeapon;
+              for (let pass = 0; pass < (clear ? 2 : 1); pass++) {
+                reach();
+                if (clear && r.spearHold) r.bodyPen = this.clearBody(g, r, false, axis);
+                else if (clear) { const before = r.gun.position.clone(); r.bodyPen = this.clearBody(g, r); gp.add(r.gun.position.clone().sub(before)); }
               }
-              if (pull) { gp.add(pull); r.gun.position.add(pull); }
               if (r.oneHand) this.ik(r.arms[0], r.elbows[0], gp);
               else if (r.spearHold) {
                 this.ik(r.arms[0], r.elbows[0], gp.clone().addScaledVector(axis, -0.02));
