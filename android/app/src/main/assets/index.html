@@ -5583,6 +5583,18 @@ body.netgame #revivetouch{display:flex}
             },
           },
           ease: (k) => k * k * (3 - 2 * k),
+          // Animation events for the move that the NEXT click will play (combo advances on the
+          // click): `swing` = blade leaves the wind-up (swing sound), `hit` = blade crosses the
+          // target (damage frame), both in seconds after the click.
+          events(w, comboNow) {
+            const set = this.SETS[this.type(w)];
+            if (!set) return { swing: 0.05, hit: 0.11 };
+            const i = Math.abs((comboNow || 0) + 1) % set.moves.length,
+              dur = set.dur * (set.slow?.[i] || 1),
+              k0 = set.moves[i][0][0],
+              k1 = set.moves[i][1][0];
+            return { swing: k0 * dur * 0.85, hit: ((k0 + k1) / 2 + 0.03) * dur };
+          },
           // Pose for a strike `since` seconds old; null when idle.
           sample(w, since, combo) {
             const type = this.type(w),
@@ -17503,13 +17515,14 @@ body.netgame #revivetouch{display:flex}
               this.throwSpear(w);
             } else {
               muzzleLight.intensity = 0;
+              const ev = MeleeAnim.events(w, WeaponSystem.combo || 0);
               this.meleeStrike = {
-                at: simulationTime + Math.min(0.11, w.rate * 0.4),
+                at: simulationTime + Math.min(ev.hit, w.rate * 0.9),
+                swingAt: simulationTime + ev.swing,
                 weapon: w,
                 damage: weaponDamage(w),
                 reach: Math.min(w.range, 4.5),
               };
-              AudioManager.meleeSwing();
             }
           },
           throwSpear(w) {
@@ -17568,12 +17581,13 @@ body.netgame #revivetouch{display:flex}
             player.shots++;
             if (w.kind === "melee") {
               muzzleLight.intensity = 0;
+              const ev = MeleeAnim.events(w, WeaponSystem.combo || 0);
               this.meleeStrike = {
-                at: simulationTime + Math.min(0.11, w.rate * 0.4),
+                at: simulationTime + Math.min(ev.hit, w.rate * 0.9),
+                swingAt: simulationTime + ev.swing,
                 weapon: w,
                 damage: weaponDamage(w),
               };
-              AudioManager.meleeSwing();
               return;
             }
             if (!classBurst().infiniteAmmo && !DevMode.on("infiniteAmmo") && w.ammo !== Infinity)
@@ -17697,7 +17711,12 @@ body.netgame #revivetouch{display:flex}
             if (w && w.spear) this.updateSpear(w, dt);
             else if (w && w.charge) this.updateChargeShot(w, dt);
             else if (mouse.down && !GrenadeThrow.active) this.shoot();
+            if (this.meleeStrike && !this.meleeStrike.swung && simulationTime >= this.meleeStrike.swingAt) {
+              this.meleeStrike.swung = true; // swing sound on the wind-up release frame
+              AudioManager.meleeSwing();
+            }
             if (this.meleeStrike && simulationTime >= this.meleeStrike.at) {
+              if (!this.meleeStrike.swung) AudioManager.meleeSwing();
               const strike = this.meleeStrike;
               this.meleeStrike = null;
               this.strike(strike.weapon, strike.damage, strike.reach);
