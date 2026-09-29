@@ -96,14 +96,16 @@ jobs:
               --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
               --out dist/DeadRecoil.apk android/app/build/outputs/apk/release/app-release-unsigned.apk
             cp dist/DeadRecoil.apk dist/DeadRecoil-v36.apk
-            echo "ANDROID_APK=dist/DeadRecoil.apk" >> "$GITHUB_ENV"
+            APK="dist/DeadRecoil.apk"
             echo "Stable release-signed APK prepared."
           else
             cp android/app/build/outputs/apk/debug/app-debug.apk dist/DeadRecoil-v36-manual.apk
-            echo "ANDROID_APK=dist/DeadRecoil-v36-manual.apk" >> "$GITHUB_ENV"
+            APK="dist/DeadRecoil-v36-manual.apk"
             echo "::warning::Signing secrets are missing. Publishing manual-install APK only; updater will not auto-install it."
           fi
-          "$BT/apksigner" verify --print-certs "$ANDROID_APK" | head -5
+          export ANDROID_APK="$APK"
+          echo "ANDROID_APK=$APK" >> "$GITHUB_ENV"
+          "$BT/apksigner" verify --print-certs "$APK" | head -5
           BADGING=$("$BT/aapt" dump badging "$ANDROID_APK")
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
           echo "$BADGING" | grep -q "versionCode='36'"
