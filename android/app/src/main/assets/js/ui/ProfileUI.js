@@ -40,15 +40,16 @@
     },
     render() {
       const p = this.game.profile();
-      const signed = this.game.signedIn();
-      $("profilescreen").classList.toggle("guest", !signed);
-      const name = signed ? p?.displayName || p?.username || "Sobrevivente" : "Visitante";
-      const level = p?.level || this.game.localLevel?.() || 1,
+      const signed = this.game.signedIn(),
+        dev = !!p?.devSandbox;
+      $("profilescreen").classList.toggle("guest", !signed && !dev);
+      const name = dev ? "DEV SANDBOX" : signed ? p?.displayName || p?.username || "Sobrevivente" : "Visitante";
+      const level = dev ? 1 : p?.level || this.game.localLevel?.() || 1,
         xp = p?.xp || 0,
         need = p?.xpNeeded || 310;
       $("profile-avatar").textContent = (name || "?").slice(0, 2).toUpperCase();
       $("profile-name").textContent = name;
-      $("profile-handle").textContent = signed ? [`@${p?.username || ""}`, DR.AuthService.user()?.email].filter(Boolean).join(" · ") : "Progresso salvo apenas neste aparelho";
+      $("profile-handle").textContent = dev ? "Perfil isolado · nada é salvo na sua conta real" : signed ? [`@${p?.username || ""}`, DR.AuthService.user()?.email].filter(Boolean).join(" · ") : "Progresso salvo apenas neste aparelho";
       $("profile-level").textContent = `LVL ${level}`;
       $("profile-xp").textContent = `${n(xp)} / ${n(need)} XP para o nível ${level + 1}`;
       $("profile-xpbar").style.width = `${Math.min(100, (100 * xp) / Math.max(1, need))}%`;
@@ -79,8 +80,8 @@
       $("profile-progress").innerHTML = signed ? this.progress() : "";
       $("profile-highlights").innerHTML = signed ? this.highlights(s) : "";
       $("profile-since").textContent = signed && p?.createdAt ? `Sobrevivente desde ${new Date(p.createdAt).toLocaleDateString("pt-BR")}` : "";
-      $("profile-sync").textContent = signed ? (DR.Backend.isOnline() ? "● Sincronizado na nuvem" : "● OFFLINE · sincroniza ao reconectar") : "● Perfil local";
-      $("profile-sync").dataset.state = signed ? (DR.Backend.isOnline() ? "online" : "offline") : "local";
+      $("profile-sync").textContent = dev ? "● DEV SANDBOX · SEM SINCRONIZAÇÃO" : signed ? (DR.Backend.isOnline() ? "● Sincronizado na nuvem" : "● OFFLINE · sincroniza ao reconectar") : "● Perfil local";
+      $("profile-sync").dataset.state = dev ? "local" : signed ? (DR.Backend.isOnline() ? "online" : "offline") : "local";
       $("rename-input").value = p?.username || "";
       this.chip();
     },
@@ -122,15 +123,16 @@
     chip() {
       const p = this.game.profile(),
         signed = this.game.signedIn(),
+        dev = !!p?.devSandbox,
         eco = this.game.economy();
-      const name = signed ? p?.displayName || p?.username : "Visitante";
-      const level = p?.level || 1,
+      const name = dev ? "DEV SANDBOX" : signed ? p?.displayName || p?.username : "Visitante";
+      const level = dev ? 1 : p?.level || 1,
         pct = Math.min(100, (100 * (p?.xp || 0)) / Math.max(1, p?.xpNeeded || 310));
       $("profilechip").innerHTML = `<span class="chip-avatar">${esc((name || "?").slice(0, 2).toUpperCase())}</span>
-        <span class="chip-body"><b>${esc(name)}</b><small>${signed ? `LVL ${level}` : "Toque para entrar"}</small><i class="chip-xp"><em style="width:${signed ? pct : 0}%"></em></i></span>
+        <span class="chip-body"><b>${esc(name)}</b><small>${dev ? "LVL 1 · ISOLADO" : signed ? `LVL ${level}` : "Toque para entrar"}</small><i class="chip-xp"><em style="width:${signed && !dev ? pct : 0}%"></em></i></span>
         <span class="chip-wallet"><b>◈ ${n(eco.coins)}</b><small>↻ ${n(eco.normal)} · ✦ ${n(eco.lucky)}</small></span>`;
       const accountBtn = $("accountbtn");
-      if (accountBtn) accountBtn.querySelector("small").textContent = signed ? `@${p?.username || ""} · LVL ${level}` : "Entrar ou criar conta";
+      if (accountBtn) accountBtn.querySelector("small").textContent = dev ? "DEV · CONTA REAL ISOLADA" : signed ? `@${p?.username || ""} · LVL ${level}` : "Entrar ou criar conta";
     },
     async rename() {
       const value = $("rename-input").value.trim();
