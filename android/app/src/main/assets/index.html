@@ -10585,7 +10585,7 @@ body.netgame #revivetouch{display:flex}
               dur = 0.5,
               k = since / dur,
               dir = (this.combo || 0) % 2 ? -1 : 1; // 1 = right → left
-            this.model.visible = !spinning && !(w.spear && SpearThrow.active);
+            this.model.visible = !spinning && !(w.spear && SpearThrow.active) && !SpecterSwarm.active;
             const anchor = new V(0.44 + Math.sin(t * 1.3) * 0.012, -0.06 + Math.sin(t * 2.1) * 0.022, -0.82);
             let pos = anchor,
               tilt = 0.18 + Math.sin(t * 1.15) * 0.04,
@@ -17071,6 +17071,320 @@ body.netgame #revivetouch{display:flex}
 
         // Secret weapon abilities. F on keyboard / ARMA on touch.
         // The 5 s hellfire lifetime is a v25 prototype value; final infernal duration is intentionally tuneable.
+        // ── Angelic Specter: a SET of independent blades (blade dancer) ─────────────────────────
+        // Every blade is its own object with its own transform, spring, idle rhythm, state,
+        // Catmull-Rom path, trail and hit list. The formation is shared; the motion is not.
+        // All motion is time-based (simulationTime/dt), so it holds from 30 to 120+ fps.
+        const SpecterSwarm = {
+          COUNT: 5,
+          RANGE: 6.5, // clearly beyond a sword (~3–4 m); the path and the hitbox use the same number
+          blades: [],
+          active: false,
+          combo: 0,
+          lastAttack: -9,
+          attacks: [],
+          gesture: { r: 0, l: 0, sweep: 0, open: 0, dir: new V() },
+          // player-local slots (x right, y up from the eye, z back); FP = shoulder-front arcs
+          SLOTS: [[0.78, -0.12, 0.38], [-0.78, -0.12, 0.38], [1.12, -0.52, 0.6], [-1.12, -0.52, 0.6], [0, 0.32, 0.72]],
+          SLOTS_FP: [[0.95, -0.38, -0.85], [-0.95, -0.38, -0.85], [1.3, -0.62, -0.45], [-1.3, -0.62, -0.45], [0.35, 0.62, -0.35]],
+          firstPerson() {
+            return !(CameraRig.avatar?.visible);
+          },
+          ensure(w) {
+            if (this.active) return;
+            const src = WeaponModels.scenes.get("Angelic Specter");
+            if (!src) return;
+            this.active = true;
+            this.yawF = yaw;
+            this.prevPlayer = player.pos.clone();
+            this.vel = new V();
+            for (let i = 0; i < this.COUNT; i++) {
+              const g = new THREE.Group(), m = src.clone(true);
+              g.add(m);
+              g.scale.setScalar(1.2);
+              g.name = "Specter_0" + (i + 1);
+              scene.add(g);
+              const b = {
+                i, g,
+                pos: new V(), vel: new V(), q: new THREE.Quaternion(),
+                k: 46 + ((i * 37) % 5) * 4.5, zeta: 0.6 + ((i * 13) % 5) * 0.035,
+                ph: [i * 1.7, i * 2.3 + 0.4, i * 0.9 + 1.1], amp: 0.05 + (i % 3) * 0.018, spd: 0.9 + i * 0.11,
+                state: "idle", act: null, trail: new BladeTrail(scene, 0x6fb8f0, 1, 0.16), prev: new V(),
+              };
+              b.pos.copy(this.slotWorld(b, 0));
+              b.prev.copy(b.pos);
+              b.g.position.copy(b.pos);
+              this.blades.push(b);
+            }
+          },
+          dispose() {
+            for (const b of this.blades) { scene.remove(b.g); b.trail.dispose(); }
+            this.blades.length = 0;
+            this.attacks.length = 0;
+            this.active = false;
+            this.gesture.r = this.gesture.l = this.gesture.open = 0;
+          },
+          frame(yw = this.yawF) {
+            const f = new V(-Math.sin(yw), 0, -Math.cos(yw)), r = new V(Math.cos(yw), 0, -Math.sin(yw));
+            return { f, r, u: new V(0, 1, 0) };
+          },
+          // formation slot + this blade's own idle drift (phase/amplitude/height/speed differ per blade)
+          slotWorld(b, run) {
+            const t = simulationTime, fp = this.firstPerson(), s = (fp ? this.SLOTS_FP : this.SLOTS)[b.i];
+            let x = s[0], y = s[1], z = s[2];
+            x *= 1 - 0.2 * run; z += (fp ? 0.15 : 0.4) * run; y -= 0.12 * run;
+            y += Math.sin(t * b.spd * 1.3 + b.ph[0]) * b.amp;
+            x += Math.sin(t * 0.37 + b.ph[1]) * 0.07 + Math.sin(t * 0.13 + b.ph[2]) * 0.05; // slow repositioning
+            z += Math.sin(t * 0.29 + b.ph[2]) * 0.08;
+            const F = this.frame();
+            return player.pos.clone().addScaledVector(F.r, x).addScaledVector(F.u, y).addScaledVector(F.f, -z);
+          },
+          target(w) {
+            const hit = SecretWeaponSkills.rayTarget(this.RANGE);
+            let z = hit.zombie && !hit.zombie.dead ? hit.zombie : null;
+            if (!z) {
+              const fwd = CameraRig.aim().normalize();
+              let best = 0;
+              for (const c of ZombieManager.list) {
+                if (c.dead) continue;
+                const d = c.group.position.clone().setY(player.pos.y).sub(player.pos), dist = d.length();
+                if (dist > this.RANGE + (c.size || 1) * 0.4 || dist < 0.2) continue;
+                const score = d.normalize().dot(new V(fwd.x, 0, fwd.z).normalize()) - dist * 0.03;
+                if (score > 0.62 && score > best) { best = score; z = c; }
+              }
+            }
+            if (z) return { zombie: z, point: z.group.position.clone().add(new V(0, Math.min(1.15, (z.size || 1) * 1.05), 0)) };
+            const p = hit.point.clone(), d = p.distanceTo(player.pos);
+            if (d > 5.2) p.copy(player.pos).addScaledVector(hit.dir, 5.2);
+            return { zombie: null, point: p };
+          },
+          // Choreography. Waypoints are in the attack frame around the target T: [right, up, fwd].
+          // Each entry = one blade's own path; `d` = its start delay (ms). No two paths mirror.
+          MOVES: [
+            { arm: "r", sweep: 1, dmg: 1.0, parts: [{ b: 0, d: 0, dur: 0.34, wp: [[1.25, 0.38, -0.55], [0.45, 0.12, -0.08], [-0.5, -0.04, 0.18], [-1.35, 0.12, 0.62]], back: [-1.3, 0.25, -0.2] }] },
+            { arm: "l", sweep: -1, dmg: 1.0, parts: [{ b: 1, d: 0, dur: 0.36, wp: [[-1.05, 0.75, -0.3], [-0.25, 0.32, 0.02], [0.55, -0.12, 0.22], [1.2, -0.42, -0.18]], back: [1.4, 0.55, 0.3] }] },
+            { arm: "rl", sweep: 1, dmg: 0.72, parts: [
+              { b: 2, d: 0, dur: 0.34, wp: [[1.05, 1.05, -0.4], [0.12, 0.18, 0.0], [-0.95, -0.62, 0.42]], back: [-1.2, -0.3, -0.5] },
+              { b: 3, d: 60, dur: 0.34, wp: [[-1.05, -0.62, -0.42], [-0.1, -0.02, 0.06], [0.95, 0.85, 0.46]], back: [1.2, 0.8, -0.4] }] },
+            { arm: "r", sweep: 0.4, dmg: 0.62, parts: [
+              { b: 4, d: 0, dur: 0.3, straight: true, wp: [[0, 0.05, -0.02], [0, 0.0, 0.85]], back: [0.35, 0.9, 0.3] },
+              { b: 0, d: 50, dur: 0.33, wp: [[1.65, 0.05, 0.0], [0.2, 0.02, 0.02], [-1.25, 0.1, 0.12]], back: [-0.9, 0.4, -0.7] },
+              { b: 1, d: 95, dur: 0.4, wp: [[-1.9, 0.45, -1.0], [-1.35, 0.3, 0.55], [-0.12, 0.08, 0.22], [0.9, -0.1, 0.1]], back: [1.2, 0.2, -0.6] }] },
+          ],
+          HEAVY: { order: [0, 3, 1, 4, 2], gaps: [0, 40, 45, 35, 40], open: 0.3, dur: 0.34, dmg: 0.62 },
+          attack(w) {
+            this.ensure(w);
+            if (!this.active) return;
+            if (simulationTime - this.lastAttack > 1.4) this.combo = 0;
+            this.lastAttack = simulationTime;
+            const tgt = this.target(w), heavy = this.combo % 5 === 4, id = this.combo++;
+            const O = player.pos.clone().add(new V(0, -0.3, 0));
+            const dirv = tgt.point.clone().sub(O);
+            dirv.y *= 0.4;
+            const f = dirv.lengthSq() > 1e-4 ? dirv.normalize() : this.frame(yaw).f, r = new V().crossVectors(f, new V(0, 1, 0)).normalize(), u = new V().crossVectors(r, f);
+            const atk = { id, t0: simulationTime, heavy, T: tgt.point.clone(), zombie: tgt.zombie, F: { f, r, u }, O, dmg: weaponDamage(w), w, move: null };
+            const toW = (p, base = atk.T) => base.clone().addScaledVector(r, p[0]).addScaledVector(u, p[1]).addScaledVector(f, p[2]);
+            const free = (want) => {
+              const b = this.blades[want];
+              if (b && b.state !== "strike") return b;
+              return this.blades.filter((x) => x.state !== "strike").sort((a, c) => a.pos.distanceTo(atk.T) - c.pos.distanceTo(atk.T))[0];
+            };
+            if (heavy) {
+              atk.move = { arm: "rl", sweep: 0, dmg: this.HEAVY.dmg };
+              let acc = 0;
+              this.HEAVY.order.forEach((bi, n) => {
+                acc += this.HEAVY.gaps[n];
+                const b = this.blades[bi], side = n % 2 ? -1 : 1;
+                b.state = "open";
+                b.act = { atk, openUntil: simulationTime + this.HEAVY.open, start: simulationTime + this.HEAVY.open + acc / 1000, dur: this.HEAVY.dur, ang: (n / 5) * Math.PI * 2,
+                  wp: [[side * 0.55, 0.65, -0.35], [side * 0.08, 0.05, 0], [-side * 0.7, -0.35, 0.75]], back: [-side * 1.3, 0.5, -0.4], hits: new Set(), mult: this.HEAVY.dmg * 1.25 };
+              });
+              AudioManager.tone(520, 0.3, "sine", 0.12, 1040, "weapons");
+            } else {
+              const mv = this.MOVES[id % 4 === 3 ? 3 : id % 4];
+              atk.move = mv;
+              for (const p of mv.parts) {
+                const b = free(p.b);
+                if (!b) continue;
+                const pts = p.straight ? [atk.O.clone().lerp(atk.T, 0.45), ...p.wp.map((q) => toW(q))] : p.wp.map((q) => toW(q));
+                b.state = "strike";
+                b.act = { atk, start: simulationTime + p.d / 1000, dur: p.dur, pts, backP: p.back, hits: new Set(), mult: mv.dmg, from: null };
+              }
+            }
+            this.attacks.push(atk);
+            this.gesture.dir.copy(f);
+          },
+          cr(p0, p1, p2, p3, t) {
+            const t2 = t * t, t3 = t2 * t;
+            return new V(
+              0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+              0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+              0.5 * (2 * p1.z + (-p0.z + p2.z) * t + (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * t2 + (-p0.z + 3 * p1.z - 3 * p2.z + p3.z) * t3));
+          },
+          rawPath(pts, x) {
+            const n = pts.length - 1, i = Math.min(n - 1, Math.floor(x));
+            return this.cr(pts[Math.max(0, i - 1)], pts[i], pts[i + 1], pts[Math.min(n, i + 2)], x - i);
+          },
+          // arc-length parameterised: the time warp alone decides the blade's speed along the path
+          path(pts, s) {
+            const n = pts.length - 1, N = 48, acc = [0];
+            let prev = pts[0];
+            for (let j = 1; j <= N; j++) { const q = this.rawPath(pts, (j / N) * n); acc.push(acc[j - 1] + q.distanceTo(prev)); prev = q; }
+            const want = clamp(s, 0, 1) * acc[N];
+            let j = 1;
+            while (j < N && acc[j] < want) j++;
+            const f = (want - acc[j - 1]) / Math.max(1e-6, acc[j] - acc[j - 1]);
+            return this.rawPath(pts, ((j - 1 + f) / N) * n);
+          },
+          // time warp: gentle launch, fastest through contact, eases out past the target
+          warp(k) {
+            k = clamp(k, 0, 1);
+            return k < 0.5 ? 0.5 * Math.pow(2 * k, 1.6) : 1 - 0.5 * Math.pow(2 - 2 * k, 1.35);
+          },
+          update(dt) {
+            const w = WeaponSystem.current();
+            if (!w?.specter || state === GameState.GAMEOVER) { if (this.active) this.dispose(); return; }
+            this.ensure(w);
+            if (!this.active || dt <= 0) return;
+            const t = simulationTime;
+            if (this.prevPlayer.distanceTo(player.pos) > 12) for (const b of this.blades) { b.pos.copy(this.slotWorld(b, 0)); b.vel.set(0, 0, 0); b.prev.copy(b.pos); }
+            const pv = player.pos.clone().sub(this.prevPlayer).divideScalar(dt);
+            this.prevPlayer.copy(player.pos);
+            this.vel.lerp(pv, 1 - Math.exp(-dt * 8));
+            const run = clamp((Math.hypot(this.vel.x, this.vel.z) - 4) / 4, 0, 1);
+            // the formation turns with a lag, so a fast spin sends the blades along curved arcs
+            let dy = yaw - this.yawF;
+            dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+            this.yawF += dy * (1 - Math.exp(-dt * 5.5));
+            const orbit = SecretWeaponSkills.spinUntil > t, fp = this.firstPerson();
+            const cam = camera.position;
+            let gr = 0, gl = 0, sweep = 0, open = 0;
+            for (const b of this.blades) {
+              const a = b.act;
+              let goal = null, flying = false, trailOn = false, active = false, hitNow = false;
+              if (orbit) {
+                const ang = t * 6.2 + (b.i / this.COUNT) * Math.PI * 2;
+                goal = player.pos.clone().add(new V(Math.cos(ang) * (1.75 + (b.i % 2) * 0.35), -0.45 + Math.sin(t * 3 + b.i) * 0.2, Math.sin(ang) * (1.75 + (b.i % 2) * 0.35)));
+                trailOn = true;
+                if (b.state !== "idle") { b.state = "idle"; b.act = null; }
+              } else if (b.state === "open") {
+                // heavy: the formation opens into a ring and circles before the dives
+                const ang = a.ang + (t - a.atk.t0) * 5;
+                goal = player.pos.clone().add(new V(Math.cos(ang) * 1.6, 0.35 + Math.sin(ang * 2) * 0.12, Math.sin(ang) * 1.6));
+                open = 1;
+                trailOn = false;
+                if (t >= a.start) {
+                  const F = a.atk.F, toW = (p) => a.atk.T.clone().addScaledVector(F.r, p[0]).addScaledVector(F.u, p[1]).addScaledVector(F.f, p[2]);
+                  a.pts = a.wp.map(toW);
+                  a.backP = a.back;
+                  b.state = "strike";
+                }
+              }
+              if (!orbit && b.state === "strike" && a) {
+                if (t < a.start) { goal = null; }
+                else {
+                  if (!a.from) {
+                    // leave the formation on a curve: swing out to the side of the first waypoint
+                    // and lift, instead of flying a straight line at the target
+                    a.from = b.pos.clone();
+                    const F = a.atk.F, first = a.pts[0], side = Math.sign(first.clone().sub(player.pos).dot(F.r)) || 1;
+                    const launch = a.from.clone().lerp(first, 0.4).addScaledVector(F.r, side * 0.7).addScaledVector(F.u, 0.35);
+                    a.pts = [a.from, launch, ...a.pts];
+                  }
+                  const k = (t - a.start) / a.dur;
+                  const s = this.warp(k);
+                  const p = this.path(a.pts, s);
+                  b.prev.copy(b.pos);
+                  b.pos.copy(p);
+                  b.vel.copy(p.clone().sub(b.prev).divideScalar(Math.max(dt, 1e-3)));
+                  flying = trailOn = true;
+                  active = s > 0.18 && s < 0.9;
+                  hitNow = active;
+                  const g = a.atk.move.arm;
+                  const wgt = Math.sin(clamp(k, 0, 1) * Math.PI);
+                  if (g.includes("r")) gr = Math.max(gr, wgt);
+                  if (g.includes("l")) gl = Math.max(gl, wgt);
+                  sweep = (a.atk.move.sweep || 0) * (k * 2 - 1);
+                  if (k >= 1) {
+                    // return: curve behind the player to the (moving) slot
+                    const F = this.frame(), bp = a.backP;
+                    const behind = player.pos.clone().addScaledVector(F.r, bp[0]).addScaledVector(F.u, bp[1]).addScaledVector(F.f, bp[2]);
+                    b.state = "return";
+                    b.act = { rStart: t, rDur: 0.42 + b.i * 0.035, pts: [b.pos.clone(), behind] };
+                  }
+                }
+              } else if (!orbit && b.state === "return" && a) {
+                const k = (t - a.rStart) / a.rDur, s = k * k * (3 - 2 * k);
+                const pts = [...a.pts, this.slotWorld(b, run)];
+                const p = this.path(pts, s);
+                b.prev.copy(b.pos);
+                b.vel.copy(p.clone().sub(b.pos).divideScalar(Math.max(dt, 1e-3)));
+                b.pos.copy(p);
+                flying = true;
+                trailOn = k < 0.6;
+                if (Math.random() < dt * 14) ParticleSystem.emit(b.pos.clone(), Math.random() < 0.5 ? 0xffffff : 0x9fdcff, 1, 0.5);
+                if (k >= 1) { b.state = "idle"; b.act = null; }
+              }
+              if (!flying) {
+                if (!goal) goal = this.slotWorld(b, run);
+                // critically-under-damped spring per blade: lag while walking, overshoot on stop
+                const c = 2 * b.zeta * Math.sqrt(b.k);
+                const steps = Math.max(1, Math.ceil(dt / 0.008)), h = dt / steps;
+                b.prev.copy(b.pos);
+                for (let n = 0; n < steps; n++) {
+                  b.vel.addScaledVector(goal.clone().sub(b.pos).multiplyScalar(b.k).addScaledVector(b.vel, -c), h);
+                  b.pos.addScaledVector(b.vel, h);
+                }
+              }
+              // orientation: flying = tip along velocity; idle = tip up, leaning with its drift
+              const q = new THREE.Quaternion();
+              const sp = b.vel.length();
+              if ((flying || orbit || b.state === "open") && sp > 0.5) {
+                q.setFromUnitVectors(new V(0, 1, 0), b.vel.clone().normalize());
+                q.multiply(new THREE.Quaternion().setFromAxisAngle(new V(0, 1, 0), b.i * 0.9 + t * (orbit ? 0 : 2)));
+              } else {
+                const F = this.frame(), side = b.i === 4 ? 0 : b.i % 2 ? -1 : 1;
+                const up = new V(0, 1, 0).addScaledVector(F.r, side * 0.35 + b.vel.dot(F.r) * 0.06).addScaledVector(F.f, -0.25 * run + b.vel.dot(F.f) * 0.05 - 0.15).normalize();
+                q.setFromUnitVectors(new V(0, 1, 0), up);
+                q.multiply(new THREE.Quaternion().setFromAxisAngle(new V(0, 1, 0), this.yawF + side * 0.6 + Math.sin(t * 0.8 + b.ph[0]) * 0.25));
+              }
+              b.q.slerp(q, 1 - Math.exp(-dt * (flying ? 22 : 8)));
+              b.g.position.copy(b.pos);
+              b.g.quaternion.copy(b.q);
+              // first person: never inside or right in front of the camera
+              const dc = b.pos.distanceTo(cam);
+              b.g.visible = !fp || dc > 0.75;
+              // own trail (idle: none; swing: strong; return: short)
+              b.g.updateMatrixWorld(true);
+              const tip = b.g.localToWorld(new V(0, 0.34, 0)), mid = b.g.localToWorld(new V(0, 0.2, 0));
+              b.trail.maxAge = b.state === "strike" ? 0.16 : orbit ? 0.22 : 0.08;
+              if (trailOn && (!fp || dc > 1.1)) b.trail.push(tip, mid, t);
+              b.trail.update(t);
+              // swept hit test along this blade's own motion (previous → current), once per target
+              if (hitNow && a?.atk) this.sweep(b, a, w);
+            }
+            const g = this.gesture, e = 1 - Math.exp(-dt * 12);
+            g.r += (gr - g.r) * e; g.l += (gl - g.l) * e; g.sweep += (sweep - g.sweep) * e; g.open += (open - g.open) * e;
+            this.attacks = this.attacks.filter((x) => t - x.t0 < 2);
+          },
+          sweep(b, a, w) {
+            const seg = new THREE.Line3(b.prev.clone(), b.pos.clone()), cp = new V();
+            for (const z of [...ZombieManager.list]) {
+              if (z.dead || a.hits.has(z)) continue;
+              const c = z.group.position.clone().add(new V(0, Math.min(1.1, (z.size || 1) * 1.0), 0));
+              seg.closestPointToPoint(c, true, cp);
+              const rad = 0.42 + (z.size || 1) * 0.36;
+              if (cp.distanceTo(c) <= rad && Math.abs(cp.y - c.y) < (z.size || 1) * 1.1) {
+                a.hits.add(z);
+                ZombieManager.hit(z, a.atk.dmg * a.mult, false, cp.clone(), w);
+                ParticleSystem.emit(cp.clone(), 0xffffff, 5, 2.4);
+                ParticleSystem.emit(cp.clone(), 0x8fd8ff, 4, 1.6);
+                ParticleSystem.emit(cp.clone(), 0xffd57a, 2, 1.2);
+                AudioManager.tone(1320, 0.07, "sine", 0.07, 2100, "weapons");
+              }
+            }
+          },
+        };
         const SecretWeaponSkills = {
           cooldown: 0,
           tridentReady: 0,
@@ -17273,7 +17587,7 @@ body.netgame #revivetouch{display:flex}
             // real orbit (angle += speed·dt, position = player + R·(cos, sin)), blade leading along
             // the path, with a light trail; it glides back to the hand when the ability ends.
             const orbiting = this.spinUntil > simulationTime && w?.specter;
-            if (orbiting && !this.orbit) {
+            if (orbiting && !this.orbit && !SpecterSwarm.active) {
               const src = WeaponModels.scenes.get(w.name);
               const g = src ? src.clone(true) : new THREE.Group();
               g.scale.setScalar(0.72);
@@ -17757,6 +18071,14 @@ body.netgame #revivetouch{display:flex}
             WeaponSystem.sinceLastShot = simulationTime - lastShot;
             lastShot = simulationTime;
             player.shots++;
+            if (w.kind === "melee" && w.specter) {
+              // Blade dance: each Specter flies its own path and hits along it (SpecterSwarm).
+              muzzleLight.intensity = 0;
+              this.meleeLockUntil = simulationTime + w.rate * 0.95;
+              AudioManager.meleeSwing();
+              SpecterSwarm.attack(w);
+              return;
+            }
             if (w.kind === "melee") {
               muzzleLight.intensity = 0;
               const ev = MeleeAnim.events(w, WeaponSystem.combo || 0);
@@ -18134,6 +18456,7 @@ body.netgame #revivetouch{display:flex}
             ReaperAllies.update(dt);
             if (DevMode.on("infiniteAbility")) { SecretWeaponSkills.cooldown = 0; player.cooldown = 0; }
             SecretWeaponSkills.update(dt);
+            SpecterSwarm.update(dt);
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
           },
@@ -21818,7 +22141,21 @@ body.netgame #revivetouch{display:flex}
               r.arms[1].rotation.set(-1.2 - draw * 0.1, 0, 0.55 * (1 - draw) + 0.1);
               r.elbows[1].rotation.x = -0.6 - draw * 1.3;
             }
-            if (r.specterWeapon) {
+            if (r.specterWeapon && SpecterSwarm.active && g === CameraRig.avatar) {
+              // Conductor: the hands direct the blades (never hold them). Idle = right hand raised a
+              // little, palm out; a strike = the arm cuts through the air along the blade's path,
+              // torso and shoulders follow; heavy = both arms open the ring, then drive forward.
+              r.gun.visible = false;
+              const G = SpecterSwarm.gesture, br = Math.sin(t * 1.6) * 0.04;
+              r.arms[0].rotation.x = -0.35 - 1.05 * G.r - 0.5 * G.open + br;
+              r.arms[0].rotation.z = 0.28 + 0.75 * G.open + G.sweep * 0.7 * G.r;
+              r.elbows[0].rotation.x = -0.55 + 0.45 * G.r;
+              r.arms[1].rotation.x = -0.12 - 1.0 * G.l - 0.5 * G.open - br * 0.5;
+              r.arms[1].rotation.z = -0.18 - 0.75 * G.open + G.sweep * 0.7 * G.l;
+              r.elbows[1].rotation.x = -0.35 + 0.3 * G.l;
+              r.chest.rotation.y += -G.sweep * 0.32 * Math.max(G.r, G.l);
+              r.chest.rotation.x += -0.08 * G.open + 0.06 * Math.max(G.r, G.l);
+            } else if (r.specterWeapon) {
               // Floats off the right hand (never held), upright; strikes sweep across the body
               // alternating sides; hidden while it orbits the player in the world.
               const k = attack / 0.5,
@@ -22075,6 +22412,7 @@ body.netgame #revivetouch{display:flex}
             this.target = 0;
             this.distance = 0;
             this.actual = 0;
+            SpecterSwarm.dispose();
             Survivor.dispose(this.avatar);
             this.avatar = Survivor.create(
               selectedClass,
@@ -24538,6 +24876,7 @@ body.netgame #revivetouch{display:flex}
             Survivor,
             Account,
             SecretWeaponSkills,
+            SpecterSwarm,
             CameraRig,
             classBurst: () => classBurst(),
             CyborgRockets,

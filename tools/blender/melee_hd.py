@@ -704,7 +704,49 @@ def frostbite():
     return export("frostbite", objs)
 
 
-BUILDS = {"demonic_fury": demonic_fury, "machete": machete, "bloodfang": bloodfang, "dawn_spear": dawn_spear, "frostbite": frostbite}
+# ================================================================ 23 ANGELIC SPECTER — one blade of the set
+# (new "ANGELIC SPECTER · BLADE SET" template). The game spawns several independent copies; this
+# GLB is ONE blade: long axis +y (tip up), blade face in the XY plane, thickness along z,
+# origin on the blue crystal core.
+def angelic_specter():
+    reset()
+    PG = "angelic_specter_blades.jpg"
+    img = page(PG)
+    x0, y0, x1, y1 = 662, 22, 752, 332
+    rgb = img[y0:y1, x0:x1].copy()
+    lum, sat = rgb.mean(2), rgb.max(2) - rgb.min(2)
+    fg = (lum > 0.22) | (sat > 0.28)
+    fg = nd.binary_opening(fg, iterations=1)
+    lab, n = nd.label(fg)
+    sizes = nd.sum(fg, lab, range(1, n + 1))
+    mask = nd.binary_fill_holes(nd.binary_closing(lab == int(np.argmax(sizes)) + 1, iterations=2))
+    ys, xs = np.nonzero(mask)
+    rgb, mask = rgb[ys.min():ys.max() + 1, xs.min():xs.max() + 1], mask[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    # the dark gaps between the frame ribs are background showing through: fill them with ivory
+    dark = (rgb.mean(2) < 0.2) & mask
+    rgb[dark] = np.array((0.78, 0.8, 0.86))
+    H, W = mask.shape
+    L = 0.78
+    mpp = L / H
+    alb = shrink(rgb, 512)
+    blue = glow_mask(rgb, "blue")
+    emit = blue[..., None] * np.array((0.35, 0.7, 1.0)) + (rgb.mean(2) > 0.9)[..., None] * 0.25
+    mat = material("AS_blade", albedo=alb, rough=0.3, metal=0.55, normal=normal_from(alb, 2.0), nstr=0.8,
+                   emit=shrink(np.clip(emit, 0, 1), 512), emit_strength=1.6)
+    ob = solid("blade", rgb, mask, mpp, tmax=0.04, tmin=0.1, falloff=0.5, mat=mat, cells=70, ratio=0.55)
+    # centre on the crystal: brightest blue centroid
+    cy, cx = nd.center_of_mass(blue > 0.5) if (blue > 0.5).any() else (H / 2, W / 2)
+    ob.data.transform(Matrix.Translation((-cx * mpp, cy * mpp, 0)))
+    objs = [ob]
+    core = material("AS_core", color=(0.35, 0.65, 1.0), rough=0.05, emit_color=(0.45, 0.8, 1.0), emit_strength=3.0)
+    for sd in (-1, 1):
+        g = gem("crystal", 0.026, 0.05, 0.012, core, sides=4)
+        g.location = (0, 0, sd * 0.017)
+        objs.append(g)
+    return export("angelic_specter", objs)
+
+
+BUILDS = {"demonic_fury": demonic_fury, "machete": machete, "bloodfang": bloodfang, "dawn_spear": dawn_spear, "frostbite": frostbite, "angelic_specter": angelic_specter}
 for slug, fn in BUILDS.items():
     if not ONLY or slug in ONLY:
         fn()
