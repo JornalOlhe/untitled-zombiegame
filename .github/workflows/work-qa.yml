@@ -1,0 +1,36 @@
+name: Work branch gameplay QA
+
+on:
+  push:
+    branches: [work]
+    paths:
+      - 'android/app/src/main/assets/index.html'
+      - 'tests/**'
+      - '.github/workflows/work-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gameplay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: node tests/js-syntax.cjs
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Movement and collision
+        run: |
+          node tests/movement-smoke.cjs
+          node tests/economy-collision-smoke.cjs
+      - name: Combat animations and spear
+        run: |
+          node tests/melee-smoke.cjs
+          node tests/spear-smoke.cjs
+          node tests/tp-smoke.cjs
