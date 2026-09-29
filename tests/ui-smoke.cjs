@@ -94,38 +94,21 @@ const server = http.createServer((req, res) => {
         const result = {};
         try {
           e.data.coins = 100000;
-          // v28 pity: Mythic pity removed; Divine at 100, Secret at 300 (Normal +1, Lucky +2).
-          e.data.classDivinePity = 44;
-          e.data.classSecretPity = 33;
-          e.data.weaponDivinePity = 99;
-          e.data.weaponSecretPity = 20;
-          e.random = () => 0;
-          let roll = e.roll("weapon", false, "coins");
-          result.normalDivine = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity,classDivine:e.data.classDivinePity,classSecret:e.data.classSecretPity};
-
-          e.data.weaponDivinePity = 10;
-          e.data.weaponSecretPity = 299;
-          e.random = () => 0;
-          roll = e.roll("weapon", false, "coins");
-          result.normalSecret = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
-
-          e.data.weaponDivinePity = 98;
-          e.data.weaponSecretPity = 40;
-          e.random = () => 0;
-          roll = e.roll("weapon", true, "coins");
-          result.luckyDivine = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
-
-          e.data.weaponDivinePity = 12;
-          e.data.weaponSecretPity = 52;
-          e.random = () => 0.975;
-          roll = e.roll("weapon", true, "coins");
-          result.naturalMythic = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
-
-          e.data.weaponDivinePity = 25;
-          e.data.weaponSecretPity = 70;
-          e.random = () => 0.99975;
-          roll = e.roll("weapon", false, "coins");
-          result.naturalDivine = {tier:roll?.item?.tier,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity};
+          // v32 pity: Normal +1, Lucky +2. Mythic 75, Divine 150, Secret 300.
+          const set = (m, d, s) => { e.data.weaponMythicPity = m; e.data.weaponDivinePity = d; e.data.weaponSecretPity = s; };
+          const snap = () => ({tier:roll?.item?.tier,mythic:e.data.weaponMythicPity,divine:e.data.weaponDivinePity,secret:e.data.weaponSecretPity});
+          let roll;
+          e.data.classMythicPity = 5; e.data.classDivinePity = 44; e.data.classSecretPity = 33;
+          set(74, 10, 20); e.random = () => 0; roll = e.roll("weapon", false, "coins");
+          result.normalMythic = {...snap(), classMythic:e.data.classMythicPity, classDivine:e.data.classDivinePity, classSecret:e.data.classSecretPity};
+          set(73, 10, 20); e.random = () => 0; roll = e.roll("weapon", true, "coins"); result.luckyMythic = snap();
+          set(72, 10, 20); e.random = () => 0; roll = e.roll("weapon", true, "coins"); result.luckyNotYet = snap();
+          set(10, 149, 20); e.random = () => 0; roll = e.roll("weapon", false, "coins"); result.normalDivine = snap();
+          set(10, 148, 20); e.random = () => 0; roll = e.roll("weapon", true, "coins"); result.luckyDivine = snap();
+          set(10, 100, 299); e.random = () => 0; roll = e.roll("weapon", false, "coins"); result.normalSecret = snap();
+          set(12, 12, 52); e.random = () => 0.975; roll = e.roll("weapon", true, "coins"); result.naturalMythic = snap();
+          set(25, 25, 70); e.random = () => 0.99975; roll = e.roll("weapon", false, "coins"); result.naturalDivine = snap();
+          result.saved = JSON.parse(e.storage.getItem(e.key) || "{}").weaponMythicPity;
         } finally {
           e.data = original;
           e.random = originalRandom;
@@ -133,11 +116,15 @@ const server = http.createServer((req, res) => {
         }
         return result;
       });
-      assert.deepEqual(pityMechanics.normalDivine, {tier:6,divine:0,secret:21,classDivine:44,classSecret:33}, '99/100 + Normal must guarantee Divine, keep Secret counting and leave Class pity untouched');
-      assert.deepEqual(pityMechanics.normalSecret, {tier:7,divine:0,secret:0}, '299/300 + Normal must guarantee Secret and reset both weapon pities');
-      assert.deepEqual(pityMechanics.luckyDivine, {tier:6,divine:0,secret:42}, '98/100 + Lucky must add 2 pity and guarantee Divine');
-      assert.deepEqual(pityMechanics.naturalMythic, {tier:5,divine:14,secret:54}, 'Mythic no longer resets anything');
-      assert.deepEqual(pityMechanics.naturalDivine, {tier:6,divine:0,secret:71}, 'Natural Divine resets only Divine pity');
+      assert.deepEqual(pityMechanics.normalMythic, {tier:5,mythic:0,divine:11,secret:21,classMythic:5,classDivine:44,classSecret:33}, '74/75 + Normal(+1) must guarantee Mythic, reset only Mythic, and leave Class pity untouched');
+      assert.deepEqual(pityMechanics.luckyMythic, {tier:5,mythic:0,divine:12,secret:22}, '73/75 + Lucky(+2) must reach 75 and guarantee Mythic');
+      assert.deepEqual(pityMechanics.luckyNotYet, {tier:3,mythic:74,divine:12,secret:22}, '72/75 + Lucky(+2) = 74 must NOT guarantee Mythic');
+      assert.deepEqual(pityMechanics.normalDivine, {tier:6,mythic:0,divine:0,secret:21}, '149/150 + Normal must guarantee Divine and reset Divine + Mythic');
+      assert.deepEqual(pityMechanics.luckyDivine, {tier:6,mythic:0,divine:0,secret:22}, '148/150 + Lucky must reach 150 and guarantee Divine');
+      assert.deepEqual(pityMechanics.normalSecret, {tier:7,mythic:0,divine:0,secret:0}, '299/300 + Normal must guarantee Secret and reset every weapon pity');
+      assert.deepEqual(pityMechanics.naturalMythic, {tier:5,mythic:0,divine:14,secret:54}, 'Natural Mythic resets only Mythic pity');
+      assert.deepEqual(pityMechanics.naturalDivine, {tier:6,mythic:0,divine:0,secret:71}, 'Natural Divine resets Divine + Mythic pity');
+      assert.equal(pityMechanics.saved, 0, 'Pity must persist to storage');
       await page.locator('#loadoutbtn').click();
       await page.locator('#classscreen:not(.hidden)').waitFor({state:'visible'});
       const armoryLayout = await page.evaluate(() => {

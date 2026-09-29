@@ -10864,8 +10864,8 @@ body.netgame #revivetouch{display:flex}
               lucky: [0, 0, 0, 58.9, 37, 3, 1, 0.1],
             };
             this.spinCosts = { normal: 50, lucky: 250 };
-            // v28 pity: Mythic pity removed. Divine at 100, Secret at 300 (Normal +1, Lucky +2).
-            this.pityCaps = { divine: 100, secret: 300 };
+            // v32 pity (Normal spin +1, Lucky spin +2): guaranteed Mythic at 75, Divine at 150, Secret at 300.
+            this.pityCaps = { mythic: 75, divine: 150, secret: 300 };
             this.prices = [100, 350, 1200, 3500, 9000, 30000, 100000, 250000];
             // Price to own N weapon inventory slots, indexed by N (index 0 unused, slot 1 is free).
             this.weaponSlotPrices = [null, 0, 15000, 45000, 120000, 300000];
@@ -10880,6 +10880,8 @@ body.netgame #revivetouch{display:flex}
               classRosterVersion: 2,
               weaponId: 1,
               weaponSlot: 0,
+              classMythicPity: 0,
+              weaponMythicPity: 0,
               classDivinePity: 0,
               classSecretPity: 0,
               weaponDivinePity: 0,
@@ -10902,7 +10904,7 @@ body.netgame #revivetouch{display:flex}
                   const legacy = Number.isSafeInteger(saved[kind + "Pity"]) && saved[kind + "Pity"] >= 0
                     ? Math.min(saved[kind + "Pity"], 20)
                     : 0;
-                  for (const [suffix, cap] of [["DivinePity", this.pityCaps.divine], ["SecretPity", this.pityCaps.secret]]) {
+                  for (const [suffix, cap] of [["MythicPity", this.pityCaps.mythic], ["DivinePity", this.pityCaps.divine], ["SecretPity", this.pityCaps.secret]]) {
                     const key = kind + suffix;
                     this.data[key] = Number.isSafeInteger(saved[key]) && saved[key] >= 0
                       ? Math.min(saved[key], cap)
@@ -10954,24 +10956,29 @@ body.netgame #revivetouch{display:flex}
             return Math.max(minimumTier, tier);
           }
           pityState(kind, lucky) {
+            const mythicKey = kind + "MythicPity";
             const divineKey = kind + "DivinePity";
             const secretKey = kind + "SecretPity";
             const points = lucky ? 2 : 1;
             const clampPity = (v, cap) => Math.min(cap, Math.max(0, Number.isSafeInteger(v) ? v : 0) + points);
+            const mythic = clampPity(this.data[mythicKey], this.pityCaps.mythic);
             const divine = clampPity(this.data[divineKey], this.pityCaps.divine);
             const secret = clampPity(this.data[secretKey], this.pityCaps.secret);
             return {
+              mythicKey,
               divineKey,
               secretKey,
+              mythic,
               divine,
               secret,
-              minimumTier: secret >= this.pityCaps.secret ? 7 : divine >= this.pityCaps.divine ? 6 : 0,
+              minimumTier: secret >= this.pityCaps.secret ? 7 : divine >= this.pityCaps.divine ? 6 : mythic >= this.pityCaps.mythic ? 5 : 0,
             };
           }
           commitPity(pity, tier) {
-            // Secret resets both counters, Divine resets only the Divine counter.
+            // Secret resets every counter, Divine resets Divine + Mythic, Mythic resets only Mythic.
             this.data[pity.secretKey] = tier >= 7 ? 0 : pity.secret;
             this.data[pity.divineKey] = tier >= 6 ? 0 : pity.divine;
+            this.data[pity.mythicKey] = tier >= 5 ? 0 : pity.mythic;
           }
           // Preferred item inside the drawn rarity weighs 1.5x (same rule as the server).
           pick(eligible, pref) {
@@ -11127,7 +11134,7 @@ body.netgame #revivetouch{display:flex}
                 })
                 .join("");
               $(kind + "-result").textContent =
-                this.messages[kind] + ` Divine Pity: ${d[kind + "DivinePity"]}/100 · Secret Pity: ${d[kind + "SecretPity"]}/300.`;
+                this.messages[kind] + ` Mythic Pity: ${d[kind + "MythicPity"] || 0}/75 · Divine Pity: ${d[kind + "DivinePity"]}/150 · Secret Pity: ${d[kind + "SecretPity"]}/300.`;
               const catalog = this.economy.catalogs[kind];
               $(kind === "class" ? "classcards" : "weaponcards").innerHTML =
                 catalog
@@ -22103,13 +22110,12 @@ body.netgame #revivetouch{display:flex}
             const legacyPity = Number.isSafeInteger(data[kind + "Pity"]) && data[kind + "Pity"] >= 0
               ? Math.min(data[kind + "Pity"], 20)
               : 0;
-            for (const [suffix, cap] of [["DivinePity", 100], ["SecretPity", 300]]) {
+            for (const [suffix, cap] of [["MythicPity", 75], ["DivinePity", 150], ["SecretPity", 300]]) {
               const key = kind + suffix;
               data[key] = Number.isSafeInteger(data[key]) && data[key] >= 0
                 ? Math.min(data[key], cap)
                 : Math.min(legacyPity, cap);
             }
-            delete data[kind + "MythicPity"];
             const catalog = Progression?.economy?.catalogs?.[kind] || (kind === "class" ? classes : WeaponSystem.weapons);
             const slotKey = loadoutSlotKey(kind), ownedKey = loadoutOwnedKey(kind);
             const maxSlots = kind === "weapon" ? WEAPON_SLOT_MAX : CLASS_SLOT_MAX;
@@ -22219,9 +22225,9 @@ body.netgame #revivetouch{display:flex}
             const identityState = spinPreview != null ? "NOVO SPIN" : displayId === currentId ? "EQUIPADO" : "PRÉVIA";
             $("armory-identity").innerHTML = `<span class="item-index">#${String(displayId + 1).padStart(3, "0")} · ${identityState}</span><h2>${displayItem.name}</h2><b>${rarityNames[displayItem.tier].toUpperCase()}</b><p>${kind === "class" ? displayItem.desc : (displayItem.kind === "melee" ? "Arma corpo a corpo. Ataques rápidos e silenciosos." : `${["Curto", "Médio", "Longo"][displayItem.cat] || "Médio"} alcance · ${Math.round(displayItem.damage * rarityMult[displayItem.tier])} de dano base.`)}</p>`;
             $("armory-info").innerHTML = kind === "class" ? `<h3>${displayItem.ability}</h3><p>${displayItem.active}</p><span class="armory-note">Q · recarga ${displayItem.cd}s</span>` : `<h3>${displayItem.kind === "melee" ? "CORPO A CORPO" : "ARMA PRINCIPAL"}</h3><dl class="weapon-stats"><div><dt>Dano</dt><dd>${Math.round(displayItem.damage * rarityMult[displayItem.tier])}</dd></div><div><dt>Cadência</dt><dd>${displayItem.kind === "melee" ? "—" : Math.round(60 / displayItem.rate) + "/min"}</dd></div><div><dt>Pente</dt><dd>${displayItem.mag === Infinity ? "—" : displayItem.mag}</dd></div><div><dt>Recarga</dt><dd>${displayItem.reload ? displayItem.reload + "s" : "—"}</dd></div></dl>`;
-            const pts = mode === "lucky" ? 2 : 1, dvp = d[kind + "DivinePity"] || 0, scp = d[kind + "SecretPity"] || 0, prefId = this.preference(kind);
+            const pts = mode === "lucky" ? 2 : 1, myp = d[kind + "MythicPity"] || 0, dvp = d[kind + "DivinePity"] || 0, scp = d[kind + "SecretPity"] || 0, prefId = this.preference(kind);
             const prefChip = prefId != null ? `<button type="button" class="pref-chip" data-pref-clear="1" style="--rarity:${rarityColors[Progression.economy.catalogs[kind][prefId].tier]}">✦ ${Progression.economy.catalogs[kind][prefId].name} <em>x1.5</em><small>remover</small></button>` : `<div class="pref-hint">Abra uma raridade e toque num item para aumentar levemente a chance dele (x1.5).</div>`;
-            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${+this.itemChance(kind, displayId, mode === "lucky").toFixed(3)}%</b></div>${prefChip}${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity"><div class="pity-title">${kind === "weapon" ? "WEAPON" : "CLASS"} PITY <span>NORMAL +1 · LUCKY +2</span></div><div class="pity-row"><span>DIVINO</span><i><em style="width:${Math.min(100, dvp)}%;background:${rarityColors[6]}"></em></i><b>${dvp}/100</b></div><div class="pity-row"><span>SECRETO</span><i><em style="width:${Math.min(100, scp / 3)}%;background:${rarityColors[7]}"></em></i><b>${scp}/300</b></div>${scp + pts >= 300 ? '<strong class="pity-guarantee">SECRETO GARANTIDO NESTE SPIN</strong>' : dvp + pts >= 100 ? '<strong class="pity-guarantee">DIVINO GARANTIDO NESTE SPIN</strong>' : ""}</div>`;
+            $("rarity-board").innerHTML = `<div class="spin-mode"><button data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}">NORMAL</button><button data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}">LUCKY</button></div><div class="odds-title"><span>CHANCES DE DROP</span><small>Clique em uma raridade para ver os itens</small></div><div class="item-chance"><span>CHANCE DE ${displayItem.name.toUpperCase()}</span><b>${+this.itemChance(kind, displayId, mode === "lucky").toFixed(3)}%</b></div>${prefChip}${rarityRateLines(mode, kind, this.rarityFilter)}<div class="rarity-pity"><div class="pity-title">${kind === "weapon" ? "WEAPON" : "CLASS"} PITY <span>NORMAL +1 · LUCKY +2</span></div><div class="pity-row"><span>MÍTICO</span><i><em style="width:${Math.min(100, myp / 0.75)}%;background:${rarityColors[5]}"></em></i><b>${myp}/75</b></div><div class="pity-row"><span>DIVINO</span><i><em style="width:${Math.min(100, dvp / 1.5)}%;background:${rarityColors[6]}"></em></i><b>${dvp}/150</b></div><div class="pity-row"><span>SECRETO</span><i><em style="width:${Math.min(100, scp / 3)}%;background:${rarityColors[7]}"></em></i><b>${scp}/300</b></div>${scp + pts >= 300 ? '<strong class="pity-guarantee">SECRETO GARANTIDO NESTE SPIN</strong>' : dvp + pts >= 150 ? '<strong class="pity-guarantee">DIVINO GARANTIDO NESTE SPIN</strong>' : myp + pts >= 75 ? '<strong class="pity-guarantee">MÍTICO GARANTIDO NESTE SPIN</strong>' : ""}</div>`;
             const costNormal = Progression.economy.cost(false), costLucky = Progression.economy.cost(true);
             const devFree = DevMode.active;
             const normalLabel = devFree ? "GRÁTIS · DEV" : d.normal > 0 ? `1 ticket · ${d.normal} restante${d.normal === 1 ? "" : "s"}` : `◈ ${costNormal}`;
