@@ -55,7 +55,9 @@ jobs:
           retention-days: 15
 
   android:
-    runs-on: ubuntu-latest
+    # macOS provides hardware-accelerated Android virtualization; the Linux hosted runner
+    # repeatedly lost adb before the app could launch, producing a false crash signal.
+    runs-on: macos-14
     timeout-minutes: 45
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
