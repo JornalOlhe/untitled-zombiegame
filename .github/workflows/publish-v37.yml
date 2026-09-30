@@ -58,9 +58,7 @@ jobs:
           retention-days: 15
 
   android:
-    # macOS provides hardware-accelerated Android virtualization; the Linux hosted runner
-    # repeatedly lost adb before the app could launch, producing a false crash signal.
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
@@ -126,39 +124,25 @@ jobs:
               raise SystemExit("Packaged game assets do not match current main.")
           print("Android package contents verified.")
           PY
+      # Linux runner with KVM (hardware acceleration) — macOS arm64 runners cannot boot the
+      # x86_64 emulator (v37 run 1: "Timeout waiting for emulator to boot").
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Android real boot smoke
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
+          target: google_apis
           arch: x86_64
           profile: pixel_6
+          ram-size: 3072M
           disable-animations: true
-          script: |
-            set -euo pipefail
-            adb logcat -c
-            adb install -r "$ANDROID_APK"
-            adb shell am force-stop com.deadrecoil.game
-            adb shell am start -W -n com.deadrecoil.game/.MainActivity
-            ok=0
-            for i in $(seq 1 40); do
-              if adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' | grep -q "DEAD_RECOIL_READY 0.32.0"; then
-                ok=1
-                break
-              fi
-              if adb logcat -d | grep -qE "FATAL EXCEPTION.*com.deadrecoil.game|Process: com.deadrecoil.game.*FATAL"; then
-                adb logcat -d | tail -300
-                exit 1
-              fi
-              sleep 2
-            done
-            if [ "$ok" != 1 ]; then
-              echo "Game never emitted DEAD_RECOIL_READY."
-              adb shell pidof com.deadrecoil.game || true
-              adb logcat -d | tail -400
-              exit 1
-            fi
-            adb shell pidof com.deadrecoil.game
-            adb exec-out screencap -p > android-boot-v37.png
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.32.0 android-boot-v37.png
       - uses: actions/upload-artifact@v4
         with:
           name: DeadRecoil-v37-Android
