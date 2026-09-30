@@ -17,8 +17,11 @@ adb shell am force-stop com.deadrecoil.game
 adb shell am start -W -n com.deadrecoil.game/.MainActivity
 ok=0
 for i in $(seq 1 90); do
-  if adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' | grep -q "DEAD_RECOIL_READY $VERSION"; then ok=1; break; fi
-  if adb logcat -d | grep -qE "FATAL EXCEPTION.*com.deadrecoil.game|Process: com.deadrecoil.game.*FATAL"; then
+  # capture first: with pipefail, `grep -q` closing the pipe early makes adb die of SIGPIPE and
+  # the whole test read as false even when READY is in the log
+  dr=$(adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' || true); all=$(adb logcat -d || true)
+  if grep -q "DEAD_RECOIL_READY $VERSION" <<<"$dr"; then ok=1; break; fi
+  if grep -qE "FATAL EXCEPTION.*com.deadrecoil.game|Process: com.deadrecoil.game.*FATAL" <<<"$all"; then
     adb logcat -d | tail -300
     note "crash: $(adb logcat -d | grep -A25 'FATAL EXCEPTION' | head -40)"
     exit 1
