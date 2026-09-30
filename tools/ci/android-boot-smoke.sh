@@ -21,7 +21,9 @@ ok=0
 for i in $(seq 1 90); do
   # capture first: with pipefail, `grep -q` closing the pipe early makes adb die of SIGPIPE and
   # the whole test read as false even when READY is in the log
-  dr=$(timeout 20 adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' || true); all=$(timeout 20 adb logcat -d -s AndroidRuntime:E '*:S' || true)
+  dr=$(timeout 20 adb logcat -d -s DeadRecoil:V '*:S' || true); all=$(timeout 20 adb logcat -d -s AndroidRuntime:E '*:S' || true)
+  # (a tag listed twice — DeadRecoil:I DeadRecoil:E — keeps only the last level, which hid the
+  # INFO READY line; :V shows every level)
   if grep -q "DEAD_RECOIL_READY $VERSION" <<<"$dr"; then ok=1; note_progress "READY after ${i} polls"; break; fi
   if grep -q "Process: com.deadrecoil.game" <<<"$all"; then
     adb logcat -d | tail -300

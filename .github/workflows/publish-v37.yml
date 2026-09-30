@@ -124,7 +124,7 @@ jobs:
               raise SystemExit("Packaged game assets do not match current main.")
           print("Android package contents verified.")
           PY
-      # Boot gate failures are written as ::error annotations by the script (READY check fixed for pipefail; every adb call bounded by a timeout).
+      # Boot gate failures are written as ::error annotations by the script (READY check fixed for pipefail; every adb call bounded by a timeout; READY read at :V).
       # Linux runner with KVM (hardware acceleration) — macOS arm64 runners cannot boot the
       # x86_64 emulator (v37 run 1: "Timeout waiting for emulator to boot").
       - name: Enable KVM
