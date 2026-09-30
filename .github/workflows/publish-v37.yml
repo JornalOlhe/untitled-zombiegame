@@ -59,7 +59,7 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
       KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
@@ -124,7 +124,7 @@ jobs:
               raise SystemExit("Packaged game assets do not match current main.")
           print("Android package contents verified.")
           PY
-      # Boot gate failures are written as ::error annotations by the script (READY check fixed for pipefail).
+      # Boot gate failures are written as ::error annotations by the script (READY check fixed for pipefail; every adb call bounded by a timeout).
       # Linux runner with KVM (hardware acceleration) — macOS arm64 runners cannot boot the
       # x86_64 emulator (v37 run 1: "Timeout waiting for emulator to boot").
       - name: Enable KVM
@@ -141,7 +141,7 @@ jobs:
           profile: pixel_6
           ram-size: 3072M
           disable-animations: true
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.32.0 android-boot-v37.png
       - uses: actions/upload-artifact@v4

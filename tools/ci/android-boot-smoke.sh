@@ -9,19 +9,21 @@ APK="$1"; VERSION="$2"; SHOT="$3"
 note() { printf '%s' "$1" | tr '\n' '|' | cut -c1-3500 | sed 's/^/::error title=Android boot gate::/'; echo; }
 trap 'rc=$?; [ $rc -ne 0 ] && note "failed at line $LINENO (exit $rc): $BASH_COMMAND"' EXIT
 adb wait-for-device
-for i in $(seq 1 90); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break; sleep 2; done
-adb shell input keyevent 82 || true
+for i in $(seq 1 90); do [ "$(timeout 10 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break; sleep 2; done
+note_progress() { echo "::notice title=Android boot gate::$1"; }
+note_progress "emulator booted"
+timeout 20 adb shell input keyevent 82 || true
 adb logcat -c
-out=$(adb install -r "$APK" 2>&1) || { note "adb install failed: $out"; exit 1; }
+out=$(timeout 240 adb install -r "$APK" 2>&1) || { note "adb install failed: $out"; exit 1; }
 adb shell am force-stop com.deadrecoil.game
-adb shell am start -W -n com.deadrecoil.game/.MainActivity
+timeout 60 adb shell am start -W -n com.deadrecoil.game/.MainActivity || note "am start -W did not return in 60 s (continuing)"
 ok=0
 for i in $(seq 1 90); do
   # capture first: with pipefail, `grep -q` closing the pipe early makes adb die of SIGPIPE and
   # the whole test read as false even when READY is in the log
-  dr=$(adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' || true); all=$(adb logcat -d || true)
-  if grep -q "DEAD_RECOIL_READY $VERSION" <<<"$dr"; then ok=1; break; fi
-  if grep -qE "FATAL EXCEPTION.*com.deadrecoil.game|Process: com.deadrecoil.game.*FATAL" <<<"$all"; then
+  dr=$(timeout 20 adb logcat -d -s DeadRecoil:I DeadRecoil:E '*:S' || true); all=$(timeout 20 adb logcat -d -s AndroidRuntime:E '*:S' || true)
+  if grep -q "DEAD_RECOIL_READY $VERSION" <<<"$dr"; then ok=1; note_progress "READY after ${i} polls"; break; fi
+  if grep -q "Process: com.deadrecoil.game" <<<"$all"; then
     adb logcat -d | tail -300
     note "crash: $(adb logcat -d | grep -A25 'FATAL EXCEPTION' | head -40)"
     exit 1
