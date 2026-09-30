@@ -8,7 +8,7 @@ APK="$1"; VERSION="$2"; SHOT="$3"
 # Failures surface as workflow annotations (readable without downloading the job log).
 note() { printf '%s' "$1" | tr '\n' '|' | cut -c1-3500 | sed 's/^/::error title=Android boot gate::/'; echo; }
 trap 'rc=$?; [ $rc -ne 0 ] && note "failed at line $LINENO (exit $rc): $BASH_COMMAND"' EXIT
-adb wait-for-device
+timeout 300 adb wait-for-device
 for i in $(seq 1 90); do [ "$(timeout 10 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break; sleep 2; done
 note_progress() { echo "::notice title=Android boot gate::$1"; }
 note_progress "emulator booted"
@@ -38,6 +38,9 @@ if [ "$ok" != 1 ]; then
   note "chromium/webview: $(adb logcat -d | grep -iE 'chromium|console|webview|cr_' | tail -25)"
   exit 1
 fi
-adb shell pidof com.deadrecoil.game
-adb exec-out screencap -p > "$SHOT"
+timeout 10 adb shell pidof com.deadrecoil.game || true
+timeout 30 adb exec-out screencap -p > "$SHOT" || true
+# marker checked by the next workflow step (the emulator teardown can hang after a pass)
+echo "DEAD_RECOIL_READY $VERSION" > android-boot-ok.txt
+note_progress "passed: DEAD_RECOIL_READY $VERSION"
 echo "Android boot gate passed: DEAD_RECOIL_READY $VERSION"

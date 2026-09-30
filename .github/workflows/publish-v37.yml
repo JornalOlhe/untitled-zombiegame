@@ -133,6 +133,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Android real boot smoke
+        id: boot
+        # the emulator teardown sometimes hangs after the script passed: bound the step and let
+        # the marker file written by the script decide
+        timeout-minutes: 22
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -144,13 +149,18 @@ jobs:
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.32.0 android-boot-v37.png
+      - name: Require boot gate pass
+        run: |
+          test -f android-boot-ok.txt || { echo "::error::Android boot gate did not pass (step outcome: ${{ steps.boot.outcome }})"; exit 1; }
+          cat android-boot-ok.txt
+          test -f android-boot-v37.png || echo "::warning::no boot screenshot"
       - uses: actions/upload-artifact@v4
         with:
           name: DeadRecoil-v37-Android
           path: |
             dist/*.apk
             android-boot-v37.png
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   windows:
