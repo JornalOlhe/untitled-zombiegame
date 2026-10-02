@@ -244,7 +244,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await page.evaluate(() => {
       const T = DeadRecoilTest;
       T.WaveManager.wave = 15;
-      T.WaveManager.boss();
+      T.WaveManager.boss("mutant");
       const z = T.ZombieManager.list.find(z => z.boss);
       z.group.position.set(-6, 0, -6);
     });
@@ -255,7 +255,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
 
     // Yeti: intro cinematic, then frost pulse slows the player.
     await setup();
-    await page.evaluate(() => { DeadRecoilTest.MonsterFX.clear(); DeadRecoilTest.WaveManager.wave = 10; DeadRecoilTest.WaveManager.boss(); });
+    await page.evaluate(() => { DeadRecoilTest.MonsterFX.clear(); DeadRecoilTest.WaveManager.wave = 10; DeadRecoilTest.WaveManager.boss("yeti"); });
     assert.ok(await page.evaluate(() => DeadRecoilTest.BossIntro.active?.kind === 'yeti'), 'yeti intro must start');
     assert.ok(await page.evaluate(() => DeadRecoilTest.ZombieManager.list.find(z => z.boss).group.position.distanceTo(DeadRecoilTest.player.pos) > 1000), 'intro must play far outside the map');
     for (const [t, name] of [[0.6, 'den'], [1.8, 'emerge'], [2.9, 'roar'], [4.3, 'leap']]) {
@@ -283,7 +283,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
 
     // Demon: throne intro, life drain and telegraphed trident throw.
     await setup();
-    await page.evaluate(() => { DeadRecoilTest.MonsterFX.clear(); DeadRecoilTest.WaveManager.wave = 20; DeadRecoilTest.WaveManager.boss(); });
+    await page.evaluate(() => { DeadRecoilTest.MonsterFX.clear(); DeadRecoilTest.WaveManager.wave = 20; DeadRecoilTest.WaveManager.boss("demon"); });
     assert.ok(await page.evaluate(() => DeadRecoilTest.BossIntro.active?.kind === 'demon'), 'demon intro must start');
     for (const [t, name] of [[0.5, 'throne'], [1.4, 'rise'], [2.5, 'grab'], [3.3, 'roar'], [4.5, 'leap']]) {
       await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time ?? 99) >= v, t, { timeout: 120000 });
