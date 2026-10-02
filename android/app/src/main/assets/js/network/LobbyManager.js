@@ -134,8 +134,12 @@
         p.lastSeen = Date.now();
         for (const x of [...l.players]) if (Date.now() - x.lastSeen > 45000) this.removeFrom(l, x.userId);
         const host = l.players.find((x) => x.userId === l.hostId);
-        if (!host || Date.now() - host.lastSeen > 15000) {
-          const fresh = [...l.players].filter((x) => Date.now() - x.lastSeen < 15000).sort((a, b) => a.joinedAt - b.joinedAt)[0];
+        // Host migration must use the same grace window as stale-player eviction. A short 15 s
+        // threshold promotes a guest while the real host is still loading a heavy map / throttled
+        // by the browser, producing two competing hosts and reconnect loops mid-match.
+        const hostGrace = 45000;
+        if (!host || Date.now() - host.lastSeen > hostGrace) {
+          const fresh = [...l.players].filter((x) => Date.now() - x.lastSeen < hostGrace).sort((a, b) => a.joinedAt - b.joinedAt)[0];
           if (fresh) l.hostId = fresh.userId;
         }
         return this.json(l);
