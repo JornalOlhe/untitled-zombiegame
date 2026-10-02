@@ -12736,7 +12736,8 @@ body.netgame #revivetouch{display:flex}
           remove(z) {
             const i = this.list.indexOf(z);
             if (i >= 0) this.list.splice(i, 1);
-            this.hitMeshes = this.hitMeshes.filter((m) => m.userData.zombie !== z);
+            for (let j = this.hitMeshes.length - 1; j >= 0; j--)
+              if (this.hitMeshes[j].userData.zombie === z) this.hitMeshes.splice(j, 1);
             if (z.flashMat) z.flashMat.dispose();
             if (z.contact) z.contact.material.dispose();
             scene.remove(z.group);
@@ -12882,10 +12883,10 @@ body.netgame #revivetouch{display:flex}
               PhysicsProps.fling(z.rig.head, new V(away.x * 4 + rand(-1, 1), rand(5, 7.5), away.z * 4 + rand(-1, 1)), rand(8, 14));
               BloodFX.emit(z.rig.neck.getWorldPosition(new V()), 26);
             }
-            this.list.splice(this.list.indexOf(z), 1);
-            this.hitMeshes = this.hitMeshes.filter(
-              (m) => m.userData.zombie !== z,
-            );
+            const listIndex = this.list.indexOf(z);
+            if (listIndex >= 0) this.list.splice(listIndex, 1);
+            for (let i = this.hitMeshes.length - 1; i >= 0; i--)
+              if (this.hitMeshes[i].userData.zombie === z) this.hitMeshes.splice(i, 1);
             if (z.rig.voxel && z.type === 2 && !z.boss) {
               // The Constructor's dynamite blows him apart into flying blocks.
               VoxelMonsters.gib(z, z.group.position.clone().add(new V(0, 0.6, 0)), 7);
@@ -12914,14 +12915,11 @@ body.netgame #revivetouch{display:flex}
               const enemy = !z.boss && ENEMY_KEYS[z.type];
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               ZombiePing.lastKill = simulationTime;
-              // 100% coin reward. Normal zombies: 1 base coin, +1 on headshot.
-              // Bosses keep their authored special reward.
-              const baseReward = EconomyRewards.kill(head, diff[difficulty].coins),
-                reward = z.boss
-                  ? baseReward + Math.max(1, Math.round(z.boss.coins * diff[difficulty].coins))
-                  : baseReward;
-              Progression.reward(reward);
-              UIManager.number(`+${reward} ¤`, z.group.position.clone().add(new V(0, z.size * 1.9, 0)), "#f6d867");
+              if (!z.boss) {
+                const reward = EconomyRewards.enemy(z.type);
+                Progression.reward(reward);
+                UIManager.number(`+${reward} ¤`, z.group.position.clone().add(new V(0, z.size * 1.9, 0)), "#f6d867");
+              }
               const classFx = classEffects(), burstFx = classBurst(), cls = classOf();
               const heal =
                 (overkill ? classFx.overkillHeal || 0 : 0) +
@@ -12954,7 +12952,12 @@ body.netgame #revivetouch{display:flex}
                 UIManager.toast(`${classFx.ticketEvery} eliminações: +1 reroll normal.`);
               }
             }
-            if (z.boss?.kind) RunStats.bosses[z.boss.kind] = (RunStats.bosses[z.boss.kind] || 0) + 1;
+            if (z.boss?.kind) {
+              RunStats.bosses[z.boss.kind] = (RunStats.bosses[z.boss.kind] || 0) + 1;
+              const bossCoins = EconomyRewards.bossKill(z.boss);
+              Progression.reward(bossCoins);
+              UIManager.number(`+${bossCoins} ¤`, z.group.position.clone().add(new V(0, z.size * 2.15, 0)), "#ffd45a");
+            }
             NetGame.broadcastKill(z, head, overkill, w, NetGame.attacker);
             if (z.type === 9 && !z.remote && this.list.length < 80)
               for (let i = 0; i < 3; i++)
@@ -17291,17 +17294,25 @@ body.netgame #revivetouch{display:flex}
           },
         };
 
-        // Every credited zombie pays (100% chance), but values stay intentionally low so
-        // progression still requires playing several waves before buying/spinning.
+        // Match economy is intentionally deterministic: difficulty/headshots do not change coins.
+        // Special enemies pay more, bosses pay a fixed tier reward, and every boss appearance
+        // grants a small team-wide spawn bonus.
         const EconomyRewards = {
-          kill(head = false, multiplier = 1) {
-            return Math.max(1, Math.round((head ? 2 : 1) * multiplier));
+          enemy(type = 0) {
+            return ({ 0: 10, 2: 50, 3: 50, 5: 10, 8: 50 }[type] ?? 10);
           },
-          waveBase(wave) {
-            return 3 + Math.min(12, Math.max(1, wave | 0));
+          // Backward-compatible helper used by older tests/callers: a normal zombie is 10.
+          kill(_head = false, _multiplier = 1, type = 0) {
+            return this.enemy(type);
           },
-          wave(wave, multiplier = 1) {
-            return Math.max(1, Math.round(this.waveBase(wave) * multiplier));
+          bossSpawn() {
+            return 10;
+          },
+          bossKill(boss) {
+            return boss?.major || (boss?.rank || 0) >= 3 ? 1000 : 500;
+          },
+          wave() {
+            return 50;
           },
         };
 
@@ -17311,6 +17322,7 @@ body.netgame #revivetouch{display:flex}
           remaining: 0,
           total: 0,
           spawnClock: 0,
+          spawnPool: [],
           shopEnd: 0,
           timeLeft: 300,
           start() {
@@ -17323,6 +17335,11 @@ body.netgame #revivetouch{display:flex}
             );
             this.total = this.remaining;
             this.spawnClock = 0.3;
+            this.spawnPool = zombieTypes.flatMap((t, i) => {
+              if (t.wave > this.wave) return [];
+              const base = i === 0 ? 6 : i === 1 || i === 5 ? 3 : 1;
+              return Array(base * MutationManager.weight(i)).fill(i);
+            });
             const classFx = classEffects();
             if (classFx.waveHp) {
               player.bonus = Math.min(classFx.waveHpCap || 50, player.bonus + classFx.waveHp);
@@ -17349,30 +17366,30 @@ body.netgame #revivetouch{display:flex}
           // HP, coins and the BossArmor caps grow with the rank; abilities come from BossKit.
           bossRoster: {
             // City
-            quarterback: { name: "Quarterback", title: "MINI-BOSS I · CIDADE", voxel: "04", kind: "quarterback", rank: 1, hp: 3000, size: 1.35, speed: 3.3, color: 0x9b2a2a, coins: 40, normal: 1, abilities: ["blitz"], fx: 0xd9b37a },
-            roadblock: { name: "Roadblock", title: "MINI-BOSS II · CIDADE", voxel: "19", kind: "roadblock", rank: 2, hp: 4200, size: 1.45, speed: 2.3, color: 0xff7a1a, coins: 60, normal: 1, abilities: ["blitz", "slam"], fx: 0xff8a1e, voice: "brute" },
-            juggernaut: { name: "Juggernaut", title: "BOSS I · CIDADE", voxel: "11", kind: "juggernaut", rank: 3, hp: 9500, size: 1.85, speed: 1.55, color: 0x6c6258, coins: 120, normal: 2, lucky: 1, abilities: ["slam", "leap"], intro: true, theme: "city", fx: 0xffb040, voice: "brute" },
-            wrecker: { name: "The Wrecker", title: "BOSS II · CIDADE", voxel: "24", kind: "wrecker", rank: 4, hp: 15000, size: 2.1, speed: 1.4, color: 0x7a6a48, coins: 200, lucky: 2, drop: 3, abilities: ["slam", "leap", "throw", "summon"], projectile: "debris", intro: true, theme: "city", fx: 0xffc02a, voice: "brute" },
+            quarterback: { name: "Quarterback", title: "MINI-BOSS I · CIDADE", voxel: "04", kind: "quarterback", rank: 1, hp: 3000, size: 1.35, speed: 3.3, color: 0x9b2a2a, coins: 500, normal: 1, abilities: ["blitz"], fx: 0xd9b37a },
+            roadblock: { name: "Roadblock", title: "MINI-BOSS II · CIDADE", voxel: "19", kind: "roadblock", rank: 2, hp: 4200, size: 1.45, speed: 2.3, color: 0xff7a1a, coins: 500, normal: 1, abilities: ["blitz", "slam"], fx: 0xff8a1e, voice: "brute" },
+            juggernaut: { name: "Juggernaut", title: "BOSS I · CIDADE", voxel: "11", kind: "juggernaut", rank: 3, hp: 9500, size: 1.85, speed: 1.55, color: 0x6c6258, coins: 1000, normal: 2, lucky: 1, abilities: ["slam", "leap"], intro: true, theme: "city", fx: 0xffb040, voice: "brute" },
+            wrecker: { name: "The Wrecker", title: "BOSS II · CIDADE", voxel: "24", kind: "wrecker", rank: 4, hp: 15000, size: 2.1, speed: 1.4, color: 0x7a6a48, coins: 1000, lucky: 2, drop: 3, abilities: ["slam", "leap", "throw", "summon"], projectile: "debris", intro: true, theme: "city", fx: 0xffc02a, voice: "brute" },
             // Hospital
-            surgeon: { name: "The Surgeon", title: "MINI-BOSS I · HOSPITAL", voxel: "16", kind: "surgeon", rank: 1, hp: 3000, size: 1.25, speed: 2.7, color: 0x3a9a90, coins: 40, normal: 1, abilities: ["blitz", "trail"], trail: "blood", fx: 0xc01818, voice: "whisper" },
-            patient_zero: { name: "Patient Zero", title: "MINI-BOSS II · HOSPITAL", voxel: "22", kind: "patient_zero", rank: 2, hp: 4200, size: 1.3, speed: 2.2, color: 0xc9a38c, coins: 60, normal: 1, abilities: ["summon", "trail"], trail: "acid", fx: 0x8cff3c, voice: "scream" },
-            butcher: { name: "The Butcher", title: "BOSS I · HOSPITAL", voxel: "15", kind: "butcher", rank: 3, hp: 9500, size: 1.8, speed: 1.6, color: 0xb07a6a, coins: 120, normal: 2, lucky: 1, abilities: ["throw", "slam"], projectile: "cleaver", intro: true, theme: "hospital", fx: 0xc01818, voice: "brute" },
-            plague_host: { name: "Plague Host", title: "BOSS II · HOSPITAL", voxel: "23", kind: "plague_host", rank: 4, hp: 15000, size: 1.95, speed: 1.4, color: 0x7a8a4a, coins: 200, lucky: 2, drop: 3, abilities: ["trail", "toxic", "summon"], trail: "acid", intro: true, theme: "hospital", fx: 0x8cff3c, voice: "scream" },
+            surgeon: { name: "The Surgeon", title: "MINI-BOSS I · HOSPITAL", voxel: "16", kind: "surgeon", rank: 1, hp: 3000, size: 1.25, speed: 2.7, color: 0x3a9a90, coins: 500, normal: 1, abilities: ["blitz", "trail"], trail: "blood", fx: 0xc01818, voice: "whisper" },
+            patient_zero: { name: "Patient Zero", title: "MINI-BOSS II · HOSPITAL", voxel: "22", kind: "patient_zero", rank: 2, hp: 4200, size: 1.3, speed: 2.2, color: 0xc9a38c, coins: 500, normal: 1, abilities: ["summon", "trail"], trail: "acid", fx: 0x8cff3c, voice: "scream" },
+            butcher: { name: "The Butcher", title: "BOSS I · HOSPITAL", voxel: "15", kind: "butcher", rank: 3, hp: 9500, size: 1.8, speed: 1.6, color: 0xb07a6a, coins: 1000, normal: 2, lucky: 1, abilities: ["throw", "slam"], projectile: "cleaver", intro: true, theme: "hospital", fx: 0xc01818, voice: "brute" },
+            plague_host: { name: "Plague Host", title: "BOSS II · HOSPITAL", voxel: "23", kind: "plague_host", rank: 4, hp: 15000, size: 1.95, speed: 1.4, color: 0x7a8a4a, coins: 1000, lucky: 2, drop: 3, abilities: ["trail", "toxic", "summon"], trail: "acid", intro: true, theme: "hospital", fx: 0x8cff3c, voice: "scream" },
             // Dark forest
-            forest_stalker: { name: "Stalker", title: "MINI-BOSS I · FLORESTA", voxel: "18", kind: "forest_stalker", rank: 1, hp: 3000, size: 1.3, speed: 3.1, color: 0x4a5a2a, coins: 40, normal: 1, abilities: ["leap", "blitz"], fx: 0x8a9a4a, voice: "whisper" },
-            gravekeeper: { name: "Gravekeeper", title: "MINI-BOSS II · FLORESTA", voxel: "17", kind: "gravekeeper", rank: 2, hp: 4200, size: 1.4, speed: 1.9, color: 0x3a4658, coins: 60, normal: 1, abilities: ["summon", "grave"], fx: 0xffb050, voice: "whisper" },
-            wendigo: { name: "Wendigo", title: "BOSS I · FLORESTA", voxel: "14", kind: "wendigo", rank: 3, hp: 9500, size: 1.9, speed: 2.25, color: 0x5a3a2a, coins: 120, normal: 2, lucky: 1, abilities: ["leap", "blitz"], intro: true, theme: "forest", fx: 0xd8c8a8, voice: "scream" },
-            demon: { name: "Demônio", title: "BOSS II · FLORESTA", voxel: "10", kind: "demon", rank: 4, hp: 15000, size: 2, speed: 1.45, color: 0x9b2a20, coins: 200, lucky: 2, drop: 3, abilities: ["drain", "throw"], projectile: "trident", intro: true, fx: 0xff3a14 },
+            forest_stalker: { name: "Stalker", title: "MINI-BOSS I · FLORESTA", voxel: "18", kind: "forest_stalker", rank: 1, hp: 3000, size: 1.3, speed: 3.1, color: 0x4a5a2a, coins: 500, normal: 1, abilities: ["leap", "blitz"], fx: 0x8a9a4a, voice: "whisper" },
+            gravekeeper: { name: "Gravekeeper", title: "MINI-BOSS II · FLORESTA", voxel: "17", kind: "gravekeeper", rank: 2, hp: 4200, size: 1.4, speed: 1.9, color: 0x3a4658, coins: 500, normal: 1, abilities: ["summon", "grave"], fx: 0xffb050, voice: "whisper" },
+            wendigo: { name: "Wendigo", title: "BOSS I · FLORESTA", voxel: "14", kind: "wendigo", rank: 3, hp: 9500, size: 1.9, speed: 2.25, color: 0x5a3a2a, coins: 1000, normal: 2, lucky: 1, abilities: ["leap", "blitz"], intro: true, theme: "forest", fx: 0xd8c8a8, voice: "scream" },
+            demon: { name: "Demônio", title: "BOSS II · FLORESTA", voxel: "10", kind: "demon", rank: 4, hp: 15000, size: 2, speed: 1.45, color: 0x9b2a20, coins: 1000, lucky: 2, drop: 3, abilities: ["drain", "throw"], projectile: "trident", intro: true, fx: 0xff3a14 },
             // Underground lab
-            mutant: { name: "Mutante", title: "MINI-BOSS I · LABORATÓRIO", voxel: "06", kind: "mutant", rank: 1, hp: 3000, size: 1.4, speed: 1.6, color: 0x6f9a4a, coins: 40, normal: 1, abilities: ["trail"], trail: "acid", fx: 0x8cff3c },
-            prototype_x: { name: "Prototype X", title: "MINI-BOSS II · LABORATÓRIO", voxel: "26", kind: "prototype_x", rank: 2, hp: 4200, size: 1.35, speed: 2.5, color: 0x9a8a8a, coins: 60, normal: 1, abilities: ["rockets", "blitz"], fx: 0xb040ff, voice: "robot" },
-            abomination: { name: "Abomination", title: "BOSS I · LABORATÓRIO", voxel: "13", kind: "abomination", rank: 3, hp: 9500, size: 1.85, speed: 1.5, color: 0xa87a6a, coins: 120, normal: 2, lucky: 1, abilities: ["slam", "trail", "summon"], trail: "acid", intro: true, theme: "lab", fx: 0x9dff45, voice: "brute" },
-            omega: { name: "Experiment Omega", title: "BOSS II · LABORATÓRIO", voxel: "20", kind: "omega", rank: 4, hp: 15000, size: 2.1, speed: 1.35, color: 0x8a8a8a, coins: 200, lucky: 2, drop: 3, abilities: ["rockets", "toxic", "slam"], intro: true, theme: "lab", fx: 0x6dff3a, voice: "robot" },
+            mutant: { name: "Mutante", title: "MINI-BOSS I · LABORATÓRIO", voxel: "06", kind: "mutant", rank: 1, hp: 3000, size: 1.4, speed: 1.6, color: 0x6f9a4a, coins: 500, normal: 1, abilities: ["trail"], trail: "acid", fx: 0x8cff3c },
+            prototype_x: { name: "Prototype X", title: "MINI-BOSS II · LABORATÓRIO", voxel: "26", kind: "prototype_x", rank: 2, hp: 4200, size: 1.35, speed: 2.5, color: 0x9a8a8a, coins: 500, normal: 1, abilities: ["rockets", "blitz"], fx: 0xb040ff, voice: "robot" },
+            abomination: { name: "Abomination", title: "BOSS I · LABORATÓRIO", voxel: "13", kind: "abomination", rank: 3, hp: 9500, size: 1.85, speed: 1.5, color: 0xa87a6a, coins: 1000, normal: 2, lucky: 1, abilities: ["slam", "trail", "summon"], trail: "acid", intro: true, theme: "lab", fx: 0x9dff45, voice: "brute" },
+            omega: { name: "Experiment Omega", title: "BOSS II · LABORATÓRIO", voxel: "20", kind: "omega", rank: 4, hp: 15000, size: 2.1, speed: 1.35, color: 0x8a8a8a, coins: 1000, lucky: 2, drop: 3, abilities: ["rockets", "toxic", "slam"], intro: true, theme: "lab", fx: 0x6dff3a, voice: "robot" },
             // Snow
-            frost_brute: { name: "Frost Brute", title: "MINI-BOSS I · NEVE", voxel: "21", kind: "frost_brute", rank: 1, hp: 3000, size: 1.45, speed: 2, color: 0xaab8c8, coins: 40, normal: 1, abilities: ["slam", "frost"], fx: 0x9fe4ff, voice: "brute" },
-            cryo_hunter: { name: "Cryo Hunter", title: "MINI-BOSS II · NEVE", voxel: "25", kind: "cryo_hunter", rank: 2, hp: 4200, size: 1.3, speed: 2.8, color: 0xcfd8e0, coins: 60, normal: 1, abilities: ["throw", "leap"], projectile: "icespear", fx: 0x9fe4ff, voice: "whisper" },
-            yeti: { name: "Yeti", title: "BOSS I · NEVE", voxel: "09", kind: "yeti", rank: 3, hp: 9500, size: 2.1, speed: 1.35, color: 0xdfe9f2, coins: 120, normal: 2, lucky: 1, abilities: ["frost", "slam"], intro: true, fx: 0x9fe4ff },
-            avalanche_titan: { name: "Avalanche Titan", title: "BOSS II · NEVE", voxel: "12", kind: "avalanche_titan", rank: 4, hp: 15000, size: 2.2, speed: 1.3, color: 0x8aa8c8, coins: 200, lucky: 2, drop: 3, abilities: ["frost", "slam", "throw", "leap"], projectile: "boulder", intro: true, theme: "snow", fx: 0x9fe4ff, voice: "brute" },
+            frost_brute: { name: "Frost Brute", title: "MINI-BOSS I · NEVE", voxel: "21", kind: "frost_brute", rank: 1, hp: 3000, size: 1.45, speed: 2, color: 0xaab8c8, coins: 500, normal: 1, abilities: ["slam", "frost"], fx: 0x9fe4ff, voice: "brute" },
+            cryo_hunter: { name: "Cryo Hunter", title: "MINI-BOSS II · NEVE", voxel: "25", kind: "cryo_hunter", rank: 2, hp: 4200, size: 1.3, speed: 2.8, color: 0xcfd8e0, coins: 500, normal: 1, abilities: ["throw", "leap"], projectile: "icespear", fx: 0x9fe4ff, voice: "whisper" },
+            yeti: { name: "Yeti", title: "BOSS I · NEVE", voxel: "09", kind: "yeti", rank: 3, hp: 9500, size: 2.1, speed: 1.35, color: 0xdfe9f2, coins: 1000, normal: 2, lucky: 1, abilities: ["frost", "slam"], intro: true, fx: 0x9fe4ff },
+            avalanche_titan: { name: "Avalanche Titan", title: "BOSS II · NEVE", voxel: "12", kind: "avalanche_titan", rank: 4, hp: 15000, size: 2.2, speed: 1.3, color: 0x8aa8c8, coins: 1000, lucky: 2, drop: 3, abilities: ["frost", "slam", "throw", "leap"], projectile: "boulder", intro: true, theme: "snow", fx: 0x9fe4ff, voice: "brute" },
           },
           mapRosters: [
             ["quarterback", "roadblock", "juggernaut", "wrecker"],
@@ -17389,6 +17406,17 @@ body.netgame #revivetouch{display:flex}
           bossFor(wave, map = selectedMap) {
             return (this.mapRosters[map] || this.mapRosters[0])[this.rankFor(wave) - 1];
           },
+          rewardBossSpawn(data, z = null) {
+            const coins = EconomyRewards.bossSpawn();
+            RunStats.bossSpawns++;
+            Progression.reward(coins);
+            UIManager.number(`+${coins} ¤`, (z?.group?.position || player.pos).clone().add(new V(0, z ? z.size * 2.35 : 1.8, 0)), "#ffe08a");
+            UIManager.toast(`+${coins} moedas · ${data.major ? "Boss" : "Mini-boss"} detectado`);
+            if (NetGame.active && NetGame.host) {
+              for (const id of Object.keys(NetGame.tallies)) NetGame.tallies[id].bossSpawns = (NetGame.tallies[id].bossSpawns || 0) + 1;
+              NetGame.hostEvent("boss-spawn-reward", { c: coins, major: data.major ? 1 : 0 });
+            }
+          },
           boss(forceId = null) {
             const id = forceId || this.bossFor(this.wave),
               base = this.bossRoster[id],
@@ -17398,9 +17426,14 @@ body.netgame #revivetouch{display:flex}
             const data = { ...base, id, hp: Math.round(base.hp * (1 + since * (major ? 0.05 : 0.04))), major };
             if (id === "mutant" && selectedMap === 3 && MutantBreakout.tank && !MutantBreakout.tank.broken) {
               const z = MutantBreakout.start(data);
-              if (z) return z;
+              if (z) {
+                this.rewardBossSpawn(data, z);
+                return z;
+              }
             }
             const z = ZombieManager.spawn(6, data);
+            if (!z) return null;
+            this.rewardBossSpawn(data, z);
             if (data.intro && VoxelMonsters.ready()) {
               BossIntro.start(z);
               NetGame.fx("intro", { id: z.netId });
@@ -17427,12 +17460,7 @@ body.netgame #revivetouch{display:flex}
               this.spawnClock <= 0 &&
               ZombieManager.list.length < 85
             ) {
-              const pool = zombieTypes.flatMap((t, i) => {
-                if (t.wave > this.wave) return [];
-                const base = i === 0 ? 6 : i === 1 || i === 5 ? 3 : 1;
-                return Array(base * MutationManager.weight(i)).fill(i);
-              });
-              ZombieManager.spawn(pick(pool));
+              ZombieManager.spawn(pick(this.spawnPool));
               this.remaining--;
               this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier());
             }
@@ -17449,9 +17477,7 @@ body.netgame #revivetouch{display:flex}
               if (!this.clearedAt) {
                 this.clearedAt = simulationTime;
                 MutationManager.finishWave();
-                RunStats.waveCleared();
-                const waveCoins = EconomyRewards.wave(this.wave, diff[difficulty].coins);
-                Progression.reward(waveCoins);
+                const waveCoins = RunStats.waveCleared(this.wave, true);
                 UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · Onda ${this.wave + 1} chegando…`, 2.4);
                 AudioManager.coin();
                 AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
@@ -21427,28 +21453,39 @@ body.netgame #revivetouch{display:flex}
         const RunStats = {
           damage: 0,
           bosses: {},
+          bossSpawns: 0,
           families: {},
           types: {},
           noDamageWaves: 0,
           revives: 0,
           wavesCleared: 0,
           waveStartedAt: 0,
+          rewardedWave: 0,
           reset() {
             this.damage = 0;
             this.bosses = {};
+            this.bossSpawns = 0;
             this.families = {};
             this.types = {};
             this.noDamageWaves = 0;
             this.revives = 0;
             this.wavesCleared = 0;
             this.waveStartedAt = 0;
+            this.rewardedWave = 0;
           },
           waveStarted() {
             this.waveStartedAt = simulationTime;
           },
-          waveCleared() {
+          waveCleared(wave = WaveManager.wave, pay = false) {
             this.wavesCleared++;
             if (player.lastDamage < this.waveStartedAt) this.noDamageWaves++;
+            if (pay && wave > this.rewardedWave) {
+              this.rewardedWave = wave;
+              const coins = EconomyRewards.wave(wave);
+              Progression.reward(coins);
+              return coins;
+            }
+            return 0;
           },
           report() {
             return {
@@ -21459,6 +21496,7 @@ body.netgame #revivetouch{display:flex}
               wavesCleared: this.wavesCleared,
               damage: Math.round(this.damage),
               bosses: { ...this.bosses },
+              bossSpawns: this.bossSpawns,
               families: { ...this.families },
               types: { ...this.types },
               noDamageWaves: this.noDamageWaves,
@@ -21524,7 +21562,7 @@ body.netgame #revivetouch{display:flex}
               : { state: c.stateHz || 10, snap: c.snapshotHz || 8 };
           },
           blank() {
-            return { kills: 0, headshots: 0, damage: 0, bosses: {}, revives: 0 };
+            return { kills: 0, headshots: 0, damage: 0, bosses: {}, bossSpawns: 0, types: {}, revives: 0 };
           },
           tally(id) {
             return (this.tallies[id] ||= this.blank());
@@ -22017,6 +22055,10 @@ body.netgame #revivetouch{display:flex}
             const t = this.tally(by || this.me);
             t.kills++;
             if (head) t.headshots++;
+            if (!z.boss) {
+              const enemy = ENEMY_KEYS[z.type];
+              if (enemy) t.types[enemy] = (t.types[enemy] || 0) + 1;
+            }
             if (z.boss?.kind) for (const id of Object.keys(this.tallies)) this.tallies[id].bosses[z.boss.kind] = (this.tallies[id].bosses[z.boss.kind] || 0) + 1;
             this.queue("k", { id: z.netId, h: head ? 1 : 0, o: overkill ? 1 : 0, by: by || this.me, w: w?.id ?? null });
             this.zmap.delete(z.netId);
@@ -22161,7 +22203,12 @@ body.netgame #revivetouch{display:flex}
             }
             if (this.host) return;
             if (m.k === "wave") this.remoteWave(m.n, m.mut);
-            else if (m.k === "sync" && m.to === this.me) {
+            else if (m.k === "boss-spawn-reward") {
+              const coins = Number(m.c) || EconomyRewards.bossSpawn();
+              RunStats.bossSpawns++;
+              Progression.reward(coins);
+              UIManager.toast(`+${coins} moedas · ${m.major ? "Boss" : "Mini-boss"} detectado`);
+            } else if (m.k === "sync" && m.to === this.me) {
               if (m.wave && WaveManager.wave !== m.wave) this.remoteWave(m.wave, m.mut, true);
               this.tallies = m.tallies || this.tallies;
             } else if (m.k === "shop") {
@@ -22199,7 +22246,10 @@ body.netgame #revivetouch{display:flex}
               }
               return this.current;
             };
-            if (!silent && WaveManager.wave > 0) RunStats.waveCleared();
+            if (!silent && WaveManager.wave > 0) {
+              const coins = RunStats.waveCleared(WaveManager.wave, true);
+              if (coins) UIManager.toast(`ONDA ${WaveManager.wave} LIMPA · +${coins} moedas`);
+            }
             try {
               WaveManager.wave = n - 1;
               WaveManager.start();
