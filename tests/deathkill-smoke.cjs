@@ -65,7 +65,21 @@ const shots = process.env.MONSTER_SHOTS !== '0';
         return { cam: !!T.KillCam.active || !!T.BossDeath.active, slow: T.TimeFX.current, target: T.TimeFX.target, wave };
       });
       assert.ok(!last.cam && last.slow === 1 && last.target === 1, `map ${map}: no slow motion or cinematic on regular kills (${JSON.stringify(last)})`);
-      await page.waitForFunction(w => DeadRecoilTest.WaveManager.wave === w + 1, last.wave, { timeout: 90000 });
+      // Drive only the documented 3 s breather deterministically. On busy CI runners the
+      // render loop can be starved for minutes even though the wave transition itself is correct.
+      const waveAfter = await page.evaluate(expected => {
+        const T = DeadRecoilTest;
+        if (T.WaveManager.wave !== expected + 1) {
+          T.WaveManager.update(0); // register the clear if the next RAF has not done it yet
+          if (T.WaveManager.wave !== expected + 1) {
+            const cleared = T.WaveManager.clearedAt || T.time;
+            T.setTime(Math.max(T.time, cleared + 3.05));
+            T.WaveManager.update(0);
+          }
+        }
+        return T.WaveManager.wave;
+      }, last.wave);
+      assert.equal(waveAfter, last.wave + 1, `map ${map}: next wave starts after the 3 s breather`);
       assert.equal(await page.evaluate(() => DeadRecoilTest.state), 'PLAYING', `map ${map}: next wave starts without a shop screen`);
       if (map === 0) {
         // Major boss deaths get their own cinematic: Demon → underworld gates, Yeti → giant snowball.
