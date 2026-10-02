@@ -71,7 +71,9 @@ const shots = process.env.MONSTER_SHOTS !== '0';
             T.ZombieManager.spawn(0, null, new V(-30, 0, -30)).speed = 0;
             const z = T.ZombieManager.spawn(6, { ...T.WaveManager.bossRoster[k], hp: 50 }, new V(T.player.pos.x + 1, 0, T.player.pos.z - 9));
             z.speed = 0;
-            T.ZombieManager.hit(z, 99999, false, z.group.position.clone(), T.WeaponSystem.current());
+            // This case validates the death cinematic, not boss armour. BossArmor intentionally
+            // caps single-hit damage, so calling hit(99999) cannot deterministically kill a major.
+            T.ZombieManager.kill(z, false, false, T.WeaponSystem.current());
           }, kind);
           assert.equal(await page.evaluate(() => DeadRecoilTest.BossDeath.active?.kind), kind, `${kind} death cinematic starts`);
           for (const [t, name] of kind === 'demon' ? [[1.5, 'hands'], [2.45, 'fight'], [3.8, 'drag']] : [[1.0, 'flee'], [2.4, 'fall'], [3.2, 'crushed']]) {
