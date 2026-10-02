@@ -46,7 +46,19 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
  });
  return out;});
 for(const r of res)console.log(JSON.stringify(r));
+const fallbackSpecter=await p.evaluate(()=>{
+ const T=DeadRecoilTest,S=T.Survivor,W=T.WeaponSystem,src=T.WeaponModels.scenes.get('Angelic Specter');
+ T.WeaponModels.scenes.delete('Angelic Specter');
+ try{
+  const def=W.weapons.find(x=>x.name==='Angelic Specter'),g=S.create(0,def);let n=0,visible=0;
+  g.traverse(o=>{if(o.name&&/^LoadoutSpecter_0/.test(o.name)){n++;if(o.visible)visible++;}});
+  S.dispose(g);
+  return {n,visible};
+ }finally{if(src)T.WeaponModels.scenes.set('Angelic Specter',src);}
+});
+console.log('specter fallback',JSON.stringify(fallbackSpecter));
 const bad=[...errs];
+if(fallbackSpecter.n!==5||fallbackSpecter.visible!==5)bad.push('Angelic Specter procedural fallback must show five visible blades');
 for(const r of res){
  if(r.nan)bad.push(r.name+': NaN in hand/weapon transforms');
  const oneHandMelee=r.kind==='melee'&&r.oneHand;
