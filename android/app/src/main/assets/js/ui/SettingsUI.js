@@ -108,6 +108,7 @@
         ${this.select("graphics", "Predefinição", [["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Ajusta sombras, partículas e distância juntos")}
         ${this.select("shadows", "Sombras", [["off", "Desligadas"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"]])}
         ${this.select("vfx", "Partículas e efeitos", [["off", "Desligados"], ["low", "Baixo"], ["high", "Alto"]])}
+        ${this.select("reflections", "Reflexos", [["off", "Desligados"], ["low", "Baixo"], ["high", "Alto"]], "Baixo captura uma vez; Alto atualiza durante a partida e usa mais GPU")}
       </div><div class="set-group"><h3>Tela</h3>
         ${this.range("resolution", "Escala de resolução", 0.5, 1.5, 0.05, pct, "Abaixo de 100% ganha desempenho")}
         ${this.range("drawDistance", "Distância de visão", 0.6, 1.4, 0.05, pct)}
@@ -164,9 +165,10 @@
       if (k === "graphics") {
         s.shadows = { low: "off", medium: "low", high: "medium", ultra: "high" }[s.graphics];
         s.vfx = s.graphics === "low" ? "low" : "high";
+        s.reflections = { low: "off", medium: "off", high: "low", ultra: "high" }[s.graphics];
       }
       DR.Settings.save();
-      if (["graphics", "shadows", "vfx", "resolution", "drawDistance"].includes(k)) {
+      if (["graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance"].includes(k)) {
         this.hooks.apply();
         if (k === "graphics") this.render();
       } else {
@@ -179,7 +181,7 @@
       const d = DR.Settings.defaults,
         s = this.s;
       const keysOf = {
-        graphics: ["graphics", "shadows", "vfx", "resolution", "drawDistance", "fps", "numbers"],
+        graphics: ["graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "fps", "numbers"],
         audio: ["master", "music", "ambient", "weapons", "sfx", "ui"],
         camera: ["sensitivity", "adsSensitivity", "fov", "invert"],
       };
