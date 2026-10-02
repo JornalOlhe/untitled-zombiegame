@@ -8,9 +8,9 @@ returns bigint
 language sql
 immutable
 set search_path = ''
-as $
+as $$
   select 50::bigint
-$;
+$$;
 
 revoke execute on function public._wave_coin_reward(int, numeric) from public, anon, authenticated;
 
@@ -19,14 +19,14 @@ returns bigint
 language sql
 immutable
 set search_path = ''
-as $
+as $$
   select case coalesce(p_key, 'zombie')
     when 'constructor' then 50
     when 'swat' then 50
     when 'cyborg' then 50
     else 10
   end::bigint
-$;
+$$;
 
 revoke execute on function public._enemy_coin_reward(text) from public, anon, authenticated;
 
