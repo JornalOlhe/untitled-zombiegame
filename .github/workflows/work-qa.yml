@@ -1,8 +1,8 @@
-name: Work branch gameplay QA
+name: Gameplay QA
 
 on:
   push:
-    branches: [work]
+    branches: [work, main]
     paths:
       - 'android/app/src/main/assets/index.html'
       - 'tests/**'
