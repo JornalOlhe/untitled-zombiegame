@@ -20,6 +20,7 @@ Esta release fecha a rodada de correções de multiplayer, economia, clima, dese
 - Corrigido o loop em que o host podia ficar entrando em Reconectando durante a partida.
 - Canais antigos do Supabase Realtime não conseguem mais disparar nova reconexão depois de terem sido substituídos.
 - Heartbeats do lobby não sobrepõem chamadas anteriores.
+- Migração de host usa a mesma janela de 45 s da remoção de jogador inativo, evitando promoção prematura durante loading/travadas temporárias.
 - Estado de recompensas/tally é reaplicado após reconexão.
 
 ## Armas, loadout e terceira pessoa
