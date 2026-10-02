@@ -160,6 +160,7 @@
     listeners: new Set(),
     hbTimer: null,
     pingTimer: null,
+    hbBusy: false,
     busy: false,
     local: false,
     me: null, // { id, name }
@@ -298,6 +299,7 @@
       clearInterval(this.hbTimer);
       clearInterval(this.pingTimer);
       this.hbTimer = this.pingTimer = null;
+      this.hbBusy = false;
       if (this.transport) this.transport.close();
       this.transport = null;
       this.presence = new Map();
@@ -323,16 +325,23 @@
       }
     },
     async heartbeat() {
-      if (!this.lobby) return;
+      if (!this.lobby || this.hbBusy) return;
+      const lobbyId = this.lobby.id;
+      this.hbBusy = true;
       try {
-        this.apply(await this.api.heartbeat(this.lobby.id));
+        const next = await this.api.heartbeat(lobbyId);
+        if (!this.lobby || this.lobby.id !== lobbyId) return;
+        this.apply(next);
         this.emit("heartbeat-ok");
       } catch (e) {
+        if (!this.lobby || this.lobby.id !== lobbyId) return;
         if (e.code === "not_in_lobby") {
-          const l = this.lobby;
+          const current = this.lobby;
           this.detach();
-          this.emit("kicked", l);
+          this.emit("kicked", current);
         } else this.emit("heartbeat-fail", e);
+      } finally {
+        this.hbBusy = false;
       }
     },
     apply(next) {
