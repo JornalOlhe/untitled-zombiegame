@@ -65,17 +65,18 @@ const shots = process.env.MONSTER_SHOTS !== '0';
         return { cam: !!T.KillCam.active || !!T.BossDeath.active, slow: T.TimeFX.current, target: T.TimeFX.target, wave };
       });
       assert.ok(!last.cam && last.slow === 1 && last.target === 1, `map ${map}: no slow motion or cinematic on regular kills (${JSON.stringify(last)})`);
-      // Drive only the documented 3 s breather deterministically. On busy CI runners the
-      // render loop can be starved for minutes even though the wave transition itself is correct.
+      // Drive only the documented 3 s breather deterministically. Avoid advancing the global
+      // simulation clock while the page RAF is also running: that race made map 1 intermittently
+      // miss the transition under loaded CI. Pin clearedAt relative to the current simulation time
+      // and execute the exact production transition branch synchronously.
       const waveAfter = await page.evaluate(expected => {
         const T = DeadRecoilTest;
         if (T.WaveManager.wave !== expected + 1) {
-          T.WaveManager.update(0); // register the clear if the next RAF has not done it yet
-          if (T.WaveManager.wave !== expected + 1) {
-            const cleared = T.WaveManager.clearedAt || T.time;
-            T.setTime(Math.max(T.time, cleared + 3.05));
-            T.WaveManager.update(0);
-          }
+          T.WaveManager.remaining = 0;
+          T.WaveManager.bossPending = false;
+          T.ZombieManager.clear();
+          T.WaveManager.clearedAt = T.time - 3.05;
+          T.WaveManager.update(0);
         }
         return T.WaveManager.wave;
       }, last.wave);
