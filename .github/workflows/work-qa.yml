@@ -15,7 +15,7 @@ permissions:
 jobs:
   gameplay:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,12 +25,36 @@ jobs:
         run: node tests/js-syntax.cjs
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
-      - name: Movement and collision
+      - name: Movement, collision and spawning
         run: |
           node tests/movement-smoke.cjs
           node tests/economy-collision-smoke.cjs
-      - name: Combat animations and spear
+          node tests/wall-smoke.cjs
+          node tests/ceiling-smoke.cjs
+          node tests/spawn-smoke.cjs
+          node tests/pursuit-smoke.cjs
+      - name: Combat, weapons and projectiles
         run: |
           node tests/melee-smoke.cjs
           node tests/spear-smoke.cjs
           node tests/tp-smoke.cjs
+          node tests/weapons-smoke.cjs
+          node tests/projectiles-smoke.cjs
+          node tests/stream-hitbox-smoke.cjs
+          node tests/cyborg-smoke.cjs
+      - name: Bosses, secrets and visual systems
+        run: |
+          node tests/monsters-smoke.cjs
+          node tests/boss-audio-smoke.cjs
+          node tests/intro-smoke.cjs
+          node tests/deathkill-smoke.cjs
+          node tests/ascend-smoke.cjs
+          node tests/secret-smoke.cjs
+          node tests/specter-smoke.cjs
+          node tests/wings-tail-smoke.cjs
+          node tests/dof-smoke.cjs
+      - name: Multiplayer and developer safety
+        run: |
+          node tests/multiplayer-local.cjs
+          node tests/devmode-smoke.cjs
+          node tests/dev-sandbox-smoke.cjs
