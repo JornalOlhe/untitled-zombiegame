@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.33.0 (tag v38)
-# v38: 0.33.0 — work production pass: grip profiles, secret-class casts, 3D spin stage, Specter VFX, Hospital/Lab, lighting, performance.
+# v38: 0.33.0 — economy/reconnect/weather/performance + weapon/loadout/third-person fixes. GAME_VERSION gate synced.
 
 on:
   workflow_dispatch:
