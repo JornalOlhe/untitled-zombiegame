@@ -58,29 +58,56 @@
       this.retry = 0;
       this.closed = false;
       this.timer = null;
+      this.attempt = 0;
     }
     async connect() {
       this.closed = false;
-      const session = (await this.client.auth.getSession()).data.session;
+      const attempt = ++this.attempt;
+      clearTimeout(this.timer);
+      this.timer = null;
+
+      let session;
+      try {
+        session = (await this.client.auth.getSession()).data.session;
+      } catch {
+        if (!this.closed && attempt === this.attempt) {
+          this.setStatus("reconnecting");
+          this.scheduleReconnect();
+        }
+        return false;
+      }
+      if (this.closed || attempt !== this.attempt) return false;
       if (session) this.client.realtime.setAuth(session.access_token);
-      if (this.channel) await this.client.removeChannel(this.channel).catch(() => {});
+
+      // Detach first: removeChannel() emits CLOSED. A stale CLOSED callback must never schedule
+      // another reconnect after a replacement channel has already become healthy.
+      if (this.channel) {
+        const old = this.channel;
+        this.channel = null;
+        await this.client.removeChannel(old).catch(() => {});
+      }
+      if (this.closed || attempt !== this.attempt) return false;
+
       const ch = this.client.channel(this.topic, {
         config: { private: true, broadcast: { self: false, ack: false }, presence: { key: this.selfId } },
       });
       this.channel = ch;
       ch.on("broadcast", { event: "m" }, ({ payload }) => {
-        if (!payload) return;
+        if (!payload || this.closed || this.channel !== ch || attempt !== this.attempt) return;
         this.dispatch(payload.t, payload);
       });
       ch.on("presence", { event: "sync" }, () => {
+        if (this.closed || this.channel !== ch || attempt !== this.attempt) return;
         const state = ch.presenceState();
         this.emitPresence(Object.entries(state).map(([key, metas]) => ({ id: key, ...(metas[0] || {}) })));
       });
       return new Promise((resolve) => {
         let settled = false;
         ch.subscribe(async (status) => {
-          if (this.closed) return;
+          if (this.closed || this.channel !== ch || attempt !== this.attempt) return;
           if (status === "SUBSCRIBED") {
+            clearTimeout(this.timer);
+            this.timer = null;
             this.retry = 0;
             this.setStatus("online");
             await ch.track({ ...this.meta, at: Date.now() }).catch(() => {});
@@ -98,30 +125,39 @@
       const delay = Math.min(8000, 600 * 2 ** this.retry++);
       this.timer = setTimeout(() => {
         this.timer = null;
-        if (!this.closed) this.connect();
+        if (!this.closed) this.connect().catch(() => this.scheduleReconnect());
       }, delay);
     }
     async track(meta) {
       this.meta = { ...this.meta, ...meta };
-      if (this.channel && this.status === "online") await this.channel.track({ ...this.meta, at: Date.now() }).catch(() => {});
+      const ch = this.channel;
+      if (ch && this.status === "online") await ch.track({ ...this.meta, at: Date.now() }).catch(() => {});
     }
     send(type, payload = {}) {
-      if (!this.channel || this.status !== "online") return false;
+      const ch = this.channel;
+      if (!ch || this.status !== "online") return false;
       const msg = { ...payload, t: type, from: this.selfId };
       this.sentMessages++;
       this.sentBytes += 64;
-      this.channel.send({ type: "broadcast", event: "m", payload: msg }).catch(() => {});
+      Promise.resolve(ch.send({ type: "broadcast", event: "m", payload: msg })).catch(() => {
+        if (!this.closed && this.channel === ch) {
+          this.setStatus("reconnecting");
+          this.scheduleReconnect();
+        }
+      });
       return true;
     }
     async close() {
       this.closed = true;
+      this.attempt++;
       clearTimeout(this.timer);
       this.timer = null;
-      if (this.channel) {
-        await this.channel.untrack().catch(() => {});
-        await this.client.removeChannel(this.channel).catch(() => {});
-      }
+      const ch = this.channel;
       this.channel = null;
+      if (ch) {
+        await ch.untrack().catch(() => {});
+        await this.client.removeChannel(ch).catch(() => {});
+      }
       this.setStatus("closed");
     }
   }
