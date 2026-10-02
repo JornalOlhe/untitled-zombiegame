@@ -1,4 +1,11 @@
 // Kill feedback + player death cinematic on every map: kill marker/streaks, the final-kill
+async function diagnosticScreenshot(page, options) {
+  try {
+    await page.screenshot({ ...options, timeout: 8000 });
+  } catch (e) {
+    console.warn('diagnostic screenshot skipped:', e?.message || e);
+  }
+}
 // camera, and the slow-motion collapse that hands over to the game-over screen.
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
@@ -78,7 +85,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
           assert.equal(await page.evaluate(() => DeadRecoilTest.BossDeath.active?.kind), kind, `${kind} death cinematic starts`);
           for (const [t, name] of kind === 'demon' ? [[1.5, 'hands'], [2.45, 'fight'], [3.8, 'drag']] : [[1.0, 'flee'], [2.4, 'fall'], [3.2, 'crushed']]) {
             await page.waitForFunction(v => (DeadRecoilTest.BossDeath.active?.time ?? 99) >= v, t, { timeout: 120000 });
-            if (shots) await page.screenshot({ path: `test-results/bossdeath-${kind}-${name}.png` });
+            if (shots) await diagnosticScreenshot(page, { path: `test-results/bossdeath-${kind}-${name}.png` });
           }
           await page.waitForFunction(() => !DeadRecoilTest.BossDeath.active, null, { timeout: 120000 });
           assert.equal(await page.evaluate(() => DeadRecoilTest.state), 'PLAYING', `${kind}: control returns after the cinematic`);
@@ -103,11 +110,11 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       await page.waitForFunction(() => DeadRecoilTest.DeathFX.active?.time > 0.6, null, { timeout: 60000 });
       const low = await page.evaluate(() => ({ y: DeadRecoilTest.camera.position.y, roll: DeadRecoilTest.camera.rotation.z }));
       assert.ok(low.y < 1.2 && Math.abs(low.roll) > 0.3, `map ${map}: camera drops and rolls (${JSON.stringify(low)})`);
-      if (shots && map % 2 === 0) await page.screenshot({ path: `test-results/death-fall-map${map}.png` });
+      if (shots && map % 2 === 0) await diagnosticScreenshot(page, { path: `test-results/death-fall-map${map}.png` });
       await page.waitForFunction(() => DeadRecoilTest.DeathFX.active?.time > 2.6, null, { timeout: 60000 });
       const high = await page.evaluate(() => ({ y: DeadRecoilTest.camera.position.y, body: DeadRecoilTest.DeathFX.active.body.y }));
       assert.ok(high.y > high.body + 3, `map ${map}: camera lifts out of the body`);
-      if (shots && map % 2 === 0) await page.screenshot({ path: `test-results/death-orbit-map${map}.png` });
+      if (shots && map % 2 === 0) await diagnosticScreenshot(page, { path: `test-results/death-orbit-map${map}.png` });
       await page.mouse.click(640, 360);
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.GAMEOVER, null, { timeout: 60000 });
       assert.ok(await page.locator('#gameoverscreen').isVisible(), `map ${map}: game over screen after the cinematic`);

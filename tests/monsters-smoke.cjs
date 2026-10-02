@@ -1,4 +1,11 @@
 // Voxel monster roster smoke test: every skin spawns and animates, the boss schedule is right,
+async function diagnosticScreenshot(page, options) {
+  try {
+    await page.screenshot({ ...options, timeout: 8000 });
+  } catch (e) {
+    console.warn('diagnostic screenshot skipped:', e?.message || e);
+  }
+}
 // both boss intros play and hand control back, and every boss ability fires without JS errors.
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
@@ -86,7 +93,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     if (shots) {
       await page.evaluate(() => { const T = DeadRecoilTest; T.WaveManager.remaining = 0; T.ZombieManager.clear(); T.ZombieManager.spawn(0, null, new THREE.Vector3(-30, 0, -30)).speed = 0; });
       await page.waitForTimeout(400);
-      await page.screenshot({ path: 'test-results/world-props.png' });
+      await diagnosticScreenshot(page, { path: 'test-results/world-props.png' });
     }
 
     // Climbing: walk onto a low block, then jump onto a taller one.
@@ -201,7 +208,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.ok(moved, 'voxel rigs must animate legs/arms');
     if (shots) {
       try {
-        await page.screenshot({ path: 'test-results/monsters-roster.png' });
+        await diagnosticScreenshot(page, { path: 'test-results/monsters-roster.png' });
       } catch (e) {
         // Screenshot is diagnostic only. A slow software-rendered CI frame must not invalidate
         // gameplay assertions that already passed.
@@ -228,9 +235,9 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await waitSim(0.8);
     const crawlerCorpse = await page.evaluate(() => { const c = DeadRecoilTest.ZombieManager.corpses.find(c => c.rig.style === 'crawler'); return c && { roll: c.rig.root.rotation.z, pitch: c.group.rotation.x, stretch: c.stretch, arm: c.rig.arms[0].rotation.x, low: c.rig.body.position.y < c.baseY }; });
     assert.ok(crawlerCorpse && Math.abs(crawlerCorpse.roll) < 0.01 && Math.abs(crawlerCorpse.pitch) < 0.01 && crawlerCorpse.stretch > 0.9 && crawlerCorpse.arm < -2.5 && crawlerCorpse.low, 'crawler must stretch out flat on the ground');
-    if (shots) await page.screenshot({ path: 'test-results/monsters-deaths.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-deaths.png' });
     await waitSim(0.3);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-headpop.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-headpop.png' });
 
     // Minibosses and their abilities.
     await setup();
@@ -246,7 +253,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.deepEqual(qb, { name: 'Quarterback', key: '04', intro: false });
     await waitSim(0.5);
     assert.ok(await page.evaluate(() => DeadRecoilTest.ZombieManager.list.find(z => z.boss).blitzUntil > 0), 'quarterback must blitz');
-    if (shots) await page.screenshot({ path: 'test-results/monsters-quarterback.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-quarterback.png' });
 
     await setup();
     await page.evaluate(() => {
@@ -259,7 +266,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await waitSim(2.5);
     const puddles = await page.evaluate(() => DeadRecoilTest.MonsterFX.puddles.length);
     assert.ok(puddles >= 2, `mutant must leave an acid trail (got ${puddles})`);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-mutant.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-mutant.png' });
 
     // Yeti: intro cinematic, then frost pulse slows the player.
     await setup();
@@ -268,18 +275,18 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.ok(await page.evaluate(() => DeadRecoilTest.ZombieManager.list.find(z => z.boss).group.position.distanceTo(DeadRecoilTest.player.pos) > 1000), 'intro must play far outside the map');
     for (const [t, name] of [[0.6, 'den'], [1.8, 'emerge'], [2.9, 'roar'], [4.3, 'leap']]) {
       await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time ?? 99) >= v, t, { timeout: 120000 });
-      if (shots) await page.screenshot({ path: `test-results/monsters-yeti-intro-${name}.png` });
+      if (shots) await diagnosticScreenshot(page, { path: `test-results/monsters-yeti-intro-${name}.png` });
     }
     await page.waitForFunction(() => !DeadRecoilTest.BossIntro.active, null, { timeout: 120000 });
     assert.ok(await page.evaluate(() => !document.body.classList.contains('cinematic')), 'HUD must come back after the intro');
     assert.ok(await page.evaluate(() => !!DeadRecoilTest.ZombieManager.list.find(z => z.boss).dropping), 'yeti must drop from the sky');
     await waitSim(0.8);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-yeti-drop.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-yeti-drop.png' });
     await page.waitForFunction(() => !DeadRecoilTest.ZombieManager.list.find(z => z.boss).dropping, null, { timeout: 120000 });
     const yLand = await page.evaluate(() => { const p = DeadRecoilTest.ZombieManager.list.find(z => z.boss).group.position; return [p.x, p.y, p.z]; });
     assert.ok(Math.hypot(yLand[0], yLand[2]) < 12 && yLand[1] < 0.6, `yeti must land near the map centre (${yLand})`);
     await waitSim(0.2);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-yeti-land.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-yeti-land.png' });
     await page.evaluate(() => {
       const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.boss);
       z.group.position.set(T.player.pos.x, 0, T.player.pos.z - 5);
@@ -287,7 +294,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     });
     await waitSim(0.3);
     assert.ok(await page.evaluate(() => DeadRecoilTest.player.slowUntil > DeadRecoilTest.time), 'yeti frost pulse must slow the player');
-    if (shots) await page.screenshot({ path: 'test-results/monsters-yeti-frost.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-yeti-frost.png' });
 
     // Demon: throne intro, life drain and telegraphed trident throw.
     await setup();
@@ -295,7 +302,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.ok(await page.evaluate(() => DeadRecoilTest.BossIntro.active?.kind === 'demon'), 'demon intro must start');
     for (const [t, name] of [[0.5, 'throne'], [1.4, 'rise'], [2.5, 'grab'], [3.3, 'roar'], [4.5, 'leap']]) {
       await page.waitForFunction(v => (DeadRecoilTest.BossIntro.active?.time ?? 99) >= v, t, { timeout: 120000 });
-      if (shots) await page.screenshot({ path: `test-results/monsters-demon-intro-${name}.png` });
+      if (shots) await diagnosticScreenshot(page, { path: `test-results/monsters-demon-intro-${name}.png` });
       if (name !== 'leap') {
         // Nothing in the arena may stand between the intro camera and the demon.
         const blocked = await page.evaluate(() => {
@@ -314,10 +321,10 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     }
     await page.waitForFunction(() => !DeadRecoilTest.BossIntro.active, null, { timeout: 120000 });
     await waitSim(0.9);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-drop.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-demon-drop.png' });
     await page.waitForFunction(() => !DeadRecoilTest.ZombieManager.list.find(z => z.boss).dropping, null, { timeout: 120000 });
     await waitSim(0.15);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-land.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-demon-land.png' });
     const demon = await page.evaluate(() => {
       const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.boss);
       z.group.position.set(T.player.pos.x + 3, 0, T.player.pos.z - 14);
@@ -327,10 +334,10 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.deepEqual(demon, { name: 'Demônio', key: '10', trident: true });
     await page.waitForFunction(() => DeadRecoilTest.MonsterFX.items.length > 1 && DeadRecoilTest.ZombieManager.list.find(z => z.boss)?.throwWind, null, { timeout: 90000 });
     await waitSim(0.4);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-telegraph.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-demon-telegraph.png' });
     await page.waitForFunction(() => DeadRecoilTest.MonsterFX.throws.length > 0, null, { timeout: 90000 });
     await waitSim(0.2);
-    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-throw.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-demon-throw.png' });
     await page.waitForFunction(() => !DeadRecoilTest.ZombieManager.list.find(z => z.boss)?.throwWind, null, { timeout: 120000 });
     const hpBefore = await page.evaluate(() => {
       const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.boss);
@@ -343,7 +350,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await waitSim(1.2);
     const hpAfter = await page.evaluate(() => ({ boss: DeadRecoilTest.ZombieManager.list.find(z => z.boss).hp, player: DeadRecoilTest.player.hp }));
     assert.ok(hpAfter.player < hpBefore.player && hpAfter.boss > hpBefore.boss, 'demon must drain life from nearby players');
-    if (shots) await page.screenshot({ path: 'test-results/monsters-demon-drain.png' });
+    if (shots) await diagnosticScreenshot(page, { path: 'test-results/monsters-demon-drain.png' });
 
     assert.deepEqual(errors, []);
     console.log('PASS monsters: roster skins + walk cycles, boss schedule, QB blitz, mutant trail, yeti intro + frost, demon intro + throw + drain, no JS errors');

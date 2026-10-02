@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.33.0 (tag v38)
-# v38: 0.33.0 — economy/reconnect/weather/performance + weapon/loadout/third-person fixes. Final QA includes the five-blade fallback, deterministic boss-death coverage, and non-blocking diagnostic screenshots.
+# v38: 0.33.0 — final release rerun; gameplay assertions remain blocking, diagnostic screenshots are best-effort only.
 
 on:
   workflow_dispatch:

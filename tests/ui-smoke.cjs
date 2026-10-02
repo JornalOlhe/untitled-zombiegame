@@ -1,4 +1,11 @@
 const { chromium } = require('playwright');
+async function diagnosticScreenshot(page, options) {
+  try {
+    await page.screenshot({ ...options, timeout: 8000 });
+  } catch (e) {
+    console.warn('diagnostic screenshot skipped:', e?.message || e);
+  }
+}
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -201,7 +208,7 @@ const server = http.createServer((req, res) => {
       assert.equal(duplicateLoadout.spinTarget, 2, 'Rolling a duplicate weapon must replace the equipped slot, not jump to the old copy');
       assert.equal(duplicateLoadout.equippedAfterClick, 0, 'Equipping a duplicate must preserve exact slot identity');
       assert.equal(duplicateLoadout.weaponAfterClick, 4, 'Equipping a duplicate keeps the weapon id while changing slot identity');
-      await page.screenshot({path:`test-results/armory-${width}.png`});
+      await diagnosticScreenshot(page, {path:`test-results/armory-${width}.png`});
       if (width === 1280) {
         const previousWeapon = await page.evaluate(() => {
           const p = DeadRecoilTest.Progression;
@@ -251,11 +258,11 @@ const server = http.createServer((req, res) => {
         assert.equal(await page.locator('#spin-confirm-title').textContent(),'Você deseja prosseguir?');
         assert.equal(await page.locator('#spin-confirm-rarity').textContent(),'DIVINO');
         assert.equal(await page.evaluate(() => DeadRecoilTest.Armory.roll), null, 'Protected Divine reroll must not start before confirmation');
-        await page.screenshot({path:'test-results/armory-confirm-1280.png'});
+        await diagnosticScreenshot(page, {path:'test-results/armory-confirm-1280.png'});
         await page.locator('#spin-confirm-cancel').click();
         await page.locator('#spin-confirm').waitFor({state:'hidden',timeout:3000});
         await page.evaluate(() => { DeadRecoilTest.Progression.economy.random = Math.random; });
-        await page.screenshot({path:'test-results/armory-equipped-1280.png'});
+        await diagnosticScreenshot(page, {path:'test-results/armory-equipped-1280.png'});
       }
       await page.locator('#armory-back').click();
       await page.locator('#menu:not(.hidden)').waitFor({state:'visible'});
@@ -265,7 +272,7 @@ const server = http.createServer((req, res) => {
       assert.equal(cards.length,5);
       assert.ok(cards.every(c => Math.abs(c.top-cards[0].top)<2 && c.width>=140), 'Maps must remain in one horizontal row');
       await page.locator('[data-map="4"]').click();
-      await page.screenshot({path:`test-results/maps-${width}.png`});
+      await diagnosticScreenshot(page, {path:`test-results/maps-${width}.png`});
       await page.locator('#nextmode').click();
       await page.locator('[data-choice="mode"][data-value="timed"]').click();
       await page.locator('[data-choice="difficulty"][data-value="easy"]').click();
@@ -278,7 +285,7 @@ const server = http.createServer((req, res) => {
       await page.waitForTimeout(220);
       assert.equal(await page.locator('#chosenmap').textContent(),'Zona selecionada: Arctic Base');
       assert.ok(await page.locator('#rulescreen .rules-grid').isVisible(), 'Rules UI must be visible after its entrance animation');
-      await page.screenshot({path:`test-results/rules-${width}.png`});
+      await diagnosticScreenshot(page, {path:`test-results/rules-${width}.png`});
       await page.locator('#deploy').click();
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PLAYING);
       assert.equal(await page.evaluate(() => DeadRecoilTest.player.maxhp),150);
@@ -288,7 +295,7 @@ const server = http.createServer((req, res) => {
       const moved = await page.waitForFunction(z => DeadRecoilTest.player.pos.z !== z, before, { timeout: 8000 }).then(() => true, () => false);
       await page.keyboard.up('KeyW');
       assert.ok(moved, 'Player must move');
-      await page.screenshot({path:`test-results/game-${width}.png`});
+      await diagnosticScreenshot(page, {path:`test-results/game-${width}.png`});
       await page.evaluate(() => document.dispatchEvent(new Event('deadrecoil-native-pause')));
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PAUSED);
       // Settings sliders: the visual fill is (value - min) / (max - min) — MIN empty, MAX full.
