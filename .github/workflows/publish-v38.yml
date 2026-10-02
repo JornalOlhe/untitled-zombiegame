@@ -28,6 +28,8 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
       - name: Core gameplay regressions
+        env:
+          MONSTER_SHOTS: "0"
         run: |
           node tests/ui-smoke.cjs
           node tests/pursuit-smoke.cjs
