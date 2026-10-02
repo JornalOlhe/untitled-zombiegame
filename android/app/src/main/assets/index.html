@@ -5314,14 +5314,14 @@ body.netgame #revivetouch{display:flex}
           // tp.hold: weapon socket in chest space; tp.grip: where the palm sits on the model;
           // tp.mode: which IK chain drives the arms.
           P: {
-            sword: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.29, 0.3, 0.5], grip: [0, 0, 0], mode: "oneHand" } },
-            knife: { fp: { r: [0, -0.15, -0.2, 0.05], l: null }, tp: { hold: [-0.28, 0.3, 0.46], grip: [0, 0, 0], mode: "oneHand" } },
-            staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.29, 0.3, 0.5], grip: [0, 0, 0.12], mode: "oneHand" } },
-            scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.29, 0.26, 0.24], grip: [0, 0.02, 0.24], mode: "oneHand" } },
-            spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], mode: "spear" } },
-            specter: { fp: { r: null, l: null }, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], mode: "conduct" } },
-            bow: { fp: null, tp: { hold: [-0.29, 0.28, 0.4], grip: [0, 0, 0.24], mode: "bow" } },
-            firearm: { fp: null, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], mode: "rifle" } },
+            sword: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.25, 0.31], grip: [0, -0.12, -0.23], rot: [0.2, Math.PI, -0.04], mode: "oneHand" } },
+            knife: { fp: { r: [0, -0.15, -0.2, 0.05], l: null }, tp: { hold: [-0.27, 0.26, 0.3], grip: [0, -0.1, -0.23], rot: [0.14, Math.PI, -0.04], mode: "oneHand" } },
+            staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.23, 0.2], grip: [0, -0.1, -0.23], rot: [0.08, Math.PI, -0.02], mode: "oneHand" } },
+            scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.22, 0.16], grip: [0, -0.12, -0.23], rot: [0.08, Math.PI, -0.06], mode: "oneHand" } },
+            spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], rot: [1.25, 0, 0], mode: "spear" } },
+            specter: { fp: { r: null, l: null }, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], rot: [0, Math.PI, 0], mode: "conduct" } },
+            bow: { fp: null, tp: { hold: [-0.22, 0.3, 0.15], grip: [0, 0, -0.5], rot: [0, Math.PI, 0], mode: "bow" } },
+            firearm: { fp: null, tp: { hold: [-0.05, 0.23, 0.34], grip: [0, -0.08, 0], leftGrip: [0, 0.015, -0.46], rot: [0, Math.PI, 0], mode: "rifle" } },
           },
           get(w) {
             return this.P[this.of(w)];
@@ -5637,13 +5637,7 @@ body.netgame #revivetouch{display:flex}
             for (const pivot of [parts.magazine, parts.pump]) if (pivot) for (const c of pivot.children) c.visible = false;
             const model = scene.clone(true);
             gun.add(model);
-            let minZ = Infinity;
-            for (const node of model.children) {
-              if (!node.isMesh) continue;
-              node.geometry.computeBoundingBox();
-              node.updateMatrix();
-              minZ = Math.min(minZ, node.geometry.boundingBox.clone().applyMatrix4(node.matrix).min.z);
-            }
+            parts.model = model;
             for (const node of [...model.children]) {
               const role = /^mag/.test(node.name) ? "magazine" : /^pump/.test(node.name) ? "pump" : null;
               const pivot = role && parts[role];
@@ -5690,11 +5684,30 @@ body.netgame #revivetouch{display:flex}
                 if (parts.arrow) parts.arrow.position.z = tipZ;
               }
             }
-            if (w.kind !== "melee" && w.kind !== "bow" && isFinite(minZ)) {
-              // Muzzle flash at the real end of the barrel.
-              parts.flash.position.z = minZ - 0.02;
+            // Derive anchors from the complete GLTF hierarchy, not only root children. This keeps
+            // third-person bullets/tracers attached to the actual barrel even for nested models.
+            gun.updateMatrixWorld(true);
+            const invGun = gun.matrixWorld.clone().invert(), bounds = new THREE.Box3(), bm = new THREE.Matrix4();
+            model.traverse((node) => {
+              if (!node.isMesh || !node.geometry) return;
+              node.geometry.computeBoundingBox();
+              if (!node.geometry.boundingBox) return;
+              bm.multiplyMatrices(invGun, node.matrixWorld);
+              bounds.union(node.geometry.boundingBox.clone().applyMatrix4(bm));
+            });
+            if (w.kind === "bow") {
+              const tip = parts.string?.userData?.tip,
+                tipZ = tip ? tip[1] : -0.44;
+              // Arrow leaves from its visible point, not from the player/camera centre.
+              parts.flash.position.set(0.022, 0.035, tipZ - 0.62);
+              parts.muzzle = parts.flash.position.z;
+            } else if (w.kind !== "melee" && !bounds.isEmpty()) {
+              const cx = (bounds.min.x + bounds.max.x) * 0.5,
+                cy = clamp(0.025, bounds.min.y, bounds.max.y);
+              parts.flash.position.set(cx, cy, bounds.min.z - 0.025);
               parts.muzzle = parts.flash.position.z;
             }
+            parts.projectileOrigin = parts.flash;
             return true;
           },
         };
@@ -11300,12 +11313,13 @@ body.netgame #revivetouch{display:flex}
           muzzleWorld(fallback = player?.pos) {
             if (CameraRig.distance > 0.6) {
               // Third person: the barrel end of the gun in the avatar's hands.
-              const f3 = CameraRig.avatar?.userData.rig?.parts?.flash;
+              const p3 = CameraRig.avatar?.userData.rig?.parts,
+                f3 = p3?.projectileOrigin || p3?.flash;
               if (!f3) return fallback.clone();
               CameraRig.avatar.updateMatrixWorld(true);
               return f3.getWorldPosition(new V());
             }
-            const f = this.parts?.flash;
+            const f = this.parts?.projectileOrigin || this.parts?.flash;
             if (!f || !this.model.parent) return fallback.clone();
             Viewmodel.camera.updateMatrixWorld(true);
             this.model.updateMatrixWorld(true);
@@ -11438,11 +11452,10 @@ body.netgame #revivetouch{display:flex}
               : new V(0.255, -0.24, -0.42);
             if (w.scythe && !aiming) target.x += 0.14; // keep the blade clear of the crosshair
             if (w.kind === "bow" && !aiming) {
-              // A bow is held upright on the right side (bow hand), with its belly turned
-              // a little toward the camera so the curved limbs and the string read clearly.
-              target.x += 0.03;
-              target.y += 0.08;
-              target.z -= 0.26;
+              // Keep the bow on the right but facing forward; sideways carry blocked too much view.
+              target.x += 0.1;
+              target.y += 0.06;
+              target.z -= 0.16;
             }
             // Combo counter: every new strike advances to the next move of the weapon's set.
             if (lastShot !== this.comboShot) {
@@ -11477,15 +11490,16 @@ body.netgame #revivetouch{display:flex}
               this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
             );
             if (w.kind === "bow") {
-              this.model.rotation.y += aiming ? 0.18 : 0.95;
-              this.model.rotation.z += aiming ? 0.12 : 0.16;
+              // Vertical bow, limbs ahead of the player; only a tiny cant keeps the string readable.
+              this.model.rotation.y += aiming ? 0.02 : 0.08;
+              this.model.rotation.z += aiming ? 0.02 : 0.04;
             }
             if (w.scythe && !aiming) {
-              // Scythe carried on the shoulder: head leans away and the blade turns its flat
-              // side toward the camera instead of cutting the view edge-on.
-              this.model.rotation.x -= 0.42;
-              this.model.rotation.y += 0.75;
-              this.model.rotation.z -= 0.18;
+              // The scythe model is authored with its blade toward -Z. Keep that edge forward;
+              // do not yaw it sideways/reverse it in the hand.
+              this.model.rotation.x -= 0.18;
+              this.model.rotation.y += 0.08;
+              this.model.rotation.z -= 0.08;
             }
             if (w.specter) this.floatSpecter(w, dt);
             if (w.spear && !aiming) {
@@ -11600,10 +11614,10 @@ body.netgame #revivetouch{display:flex}
             if (mp) {
               const env = Math.sin(Math.min(1, mp.k * 1.4) * Math.PI) > 0 || mp.k < 0.9 ? 1 : 0;
               if (w.scythe && !aiming) {
-                // Leave the shoulder carry while striking.
-                this.model.rotation.x += 0.42 * env;
-                this.model.rotation.y -= 0.75 * env;
-                this.model.rotation.z += 0.18 * env;
+                // Remove only the small forward carry offset before applying the authored strike.
+                this.model.rotation.x += 0.18 * env;
+                this.model.rotation.y -= 0.08 * env;
+                this.model.rotation.z += 0.08 * env;
               }
               this.model.position.add(mp.p);
               this.model.rotation.x += mp.r[0];
@@ -18129,16 +18143,22 @@ body.netgame #revivetouch{display:flex}
                   b.vel.addScaledVector(goal.clone().sub(b.pos).multiplyScalar(b.k).addScaledVector(b.vel, -c), h);
                   b.pos.addScaledVector(b.vel, h);
                 }
+                if (b.state === "idle" && b.pos.distanceToSquared(goal) < 0.0004 && b.vel.lengthSq() < 0.0225) {
+                  b.pos.lerp(goal, Math.min(1, dt * 14));
+                  b.vel.multiplyScalar(Math.exp(-dt * 20));
+                  if (b.vel.lengthSq() < 0.0009) b.vel.set(0, 0, 0);
+                }
               }
-              // orientation: flying = tip along velocity; idle = tip up, leaning with its drift
+              // orientation: flying = tip along velocity; idle = tip up, with a dead-zone so tiny
+              // spring corrections cannot make one blade visibly tremble.
               const q = new THREE.Quaternion();
-              const sp = b.vel.length();
+              const sp = b.vel.length(), orientVel = b.state === "idle" && sp < 0.15 ? new V() : b.vel;
               if ((flying || orbit || b.state === "open") && sp > 0.5) {
                 q.setFromUnitVectors(new V(0, 1, 0), b.vel.clone().normalize());
                 q.multiply(new THREE.Quaternion().setFromAxisAngle(new V(0, 1, 0), b.i * 0.9 + t * (orbit ? 0 : 2)));
               } else {
                 const F = this.frame(), side = b.i === 4 ? 0 : b.i % 2 ? -1 : 1;
-                const up = new V(0, 1, 0).addScaledVector(F.r, side * 0.35 + b.vel.dot(F.r) * 0.06).addScaledVector(F.f, -0.25 * run + b.vel.dot(F.f) * 0.05 - 0.15).normalize();
+                const up = new V(0, 1, 0).addScaledVector(F.r, side * 0.35 + orientVel.dot(F.r) * 0.06).addScaledVector(F.f, -0.25 * run + orientVel.dot(F.f) * 0.05 - 0.15).normalize();
                 q.setFromUnitVectors(new V(0, 1, 0), up);
                 q.multiply(new THREE.Quaternion().setFromAxisAngle(new V(0, 1, 0), this.yawF + side * 0.6 + Math.sin(t * 0.8 + b.ph[0]) * 0.25));
               }
@@ -18927,7 +18947,8 @@ body.netgame #revivetouch{display:flex}
             if (w.stream) {
               // Flamethrower / ice thrower: continuous cone, no bullets or tracers.
               FlameStream.fire(w, weaponDamage(w));
-              NetGame.shot(player.pos.clone(), CameraRig.aim(), w.kind === "cryo" ? 2 : 1);
+              const streamRay = WeaponSystem.shotRay(w, player.pos.clone(), CameraRig.aim());
+              NetGame.shot(streamRay.from, streamRay.dir, w.kind === "cryo" ? 2 : 1);
               return;
             }
             AudioManager.shot(w);
@@ -18949,7 +18970,6 @@ body.netgame #revivetouch{display:flex}
               dir = CameraRig.aim(),
               origin = player.pos.clone();
             if (["grenade", "missile", "orbital", "quantum"].includes(w.kind)) {
-              NetGame.shot(origin, dir);
               // Projectiles leave from the real barrel end and fly toward the crosshair point.
               const muzzle = WeaponSystem.muzzleWorld(origin);
               // First or third person: leave the barrel, fly to the crosshair point.
@@ -18957,6 +18977,7 @@ body.netgame #revivetouch{display:flex}
                 dir.copy(aimTarget().sub(muzzle).normalize());
                 origin.copy(muzzle);
               }
+              NetGame.shot(origin, dir);
               if (w.kind === "quantum") {
                 const targets = [...ZombieManager.list]
                   .filter((z) => z.group.position.distanceTo(origin) < w.range)
@@ -19012,7 +19033,7 @@ body.netgame #revivetouch{display:flex}
                 shot.applyAxisAngle(new V(0, 1, 0), (i - 1) * 0.06);
               fireHitscanShot(w, from, shot, damage, i === 0);
             }
-            NetGame.shot(origin, dir);
+            NetGame.shot(from, baseDir);
             WeaponSystem.applyRecoil(w);
             WeaponSystem.addBloom(w);
           },
@@ -19630,7 +19651,9 @@ body.netgame #revivetouch{display:flex}
         const UIManager = {
           kills: [],
           hudClock: 0,
+          screenEpoch: 0,
           screen(id) {
+            const epoch = ++this.screenEpoch;
             if (id === "pausescreen") this.pauseMenu();
             for (const el of document.querySelectorAll(".screen"))
               el.classList.toggle("hidden", el.id !== id);
@@ -19639,11 +19662,13 @@ body.netgame #revivetouch{display:flex}
               !touchMode || state !== GameState.PLAYING,
             );
             if (id) {
-              requestAnimationFrame(() =>
-                $(id)
-                  .querySelector("button,select,input")
-                  ?.focus({ preventScroll: true }),
-              );
+              requestAnimationFrame(() => {
+                if (epoch !== this.screenEpoch) return;
+                const target = $(id);
+                if (!target || target.classList.contains("hidden")) return;
+                target.scrollTop = 0;
+                target.querySelector("button,select,input")?.focus({ preventScroll: true });
+              });
             }
           },
           menu() {
@@ -22983,25 +23008,47 @@ body.netgame #revivetouch{display:flex}
             parts.rightHand.visible = false;
             parts.leftHand.visible = false;
             parts.flash.visible = false;
-            gun.rotation.y = Math.PI;
             gun.scale.setScalar(0.73);
-            // Hold profile per weapon family (RightHandWeaponSocket): one-hand melee and bows sit
-            // at the right hand (character's right = -X); rifles/pistols stay centred; the spear
-            // is the only ordinary melee that uses both hands.
+            // One profile owns position, orientation and actual model-space hand sockets.
             const gp = GripProfiles.get(weapon).tp,
               oneHand = gp.mode === "oneHand",
-              hold = gp.hold.slice();
+              hold = gp.hold.slice(),
+              holdRot = (gp.rot || [0, Math.PI, 0]).slice();
             gun.position.set(...hold);
+            gun.rotation.set(...holdRot);
+            const specterPreview = [];
+            if (weapon?.specter) {
+              const src = WeaponModels.scenes.get(weapon.name) || parts.model;
+              if (parts.model) parts.model.visible = false;
+              if (src) {
+                const slots = [
+                  [-0.72, 0.22, 0.02, -0.16], [0.72, 0.22, 0.02, 0.16],
+                  [-0.48, -0.42, 0.12, -0.3], [0.48, -0.42, 0.12, 0.3],
+                  [0, 0.68, 0.08, 0],
+                ];
+                slots.forEach((q, i) => {
+                  const blade = src.clone(true);
+                  blade.name = "LoadoutSpecter_0" + (i + 1);
+                  blade.position.set(q[0], q[1], q[2]);
+                  blade.rotation.set(Math.PI / 2, 0, q[3]);
+                  gun.add(blade);
+                  specterPreview.push({ blade, base: new V(q[0], q[1], q[2]), phase: i * 1.37 });
+                });
+              }
+            }
             chest.add(gun);
             g.userData.rig = {
               hold,
-              // Where the hand grips relative to the model origin (bow riser / scythe snath / staff).
+              holdRot,
+              // Model-space sockets are transformed by the weapon's live rotation/scale below.
               gripOff: new V(...gp.grip),
+              leftGripOff: gp.leftGrip ? new V(...gp.leftGrip) : null,
               grip: GripProfiles.of(weapon),
               equipAt: simulationTime,
               oneHand,
               spearHold: gp.mode === "spear",
               bowHold: gp.mode === "bow",
+              rifleHold: gp.mode === "rifle",
               hips,
               chest,
               head,
@@ -23014,13 +23061,14 @@ body.netgame #revivetouch{display:flex}
               classId: cls,
               secretAccessories,
               specterWeapon: !!weapon?.specter,
+              specterPreview,
               tridentWeapon: !!weapon?.trident,
               weapon,
               blend: 0,
             };
             return g;
           },
-          clearBody(g, r, dry = false, slideAxis = null) {
+          clearBody(g, r, dry = false, slideAxis = null, forwardOnly = false) {
             // spear: slide the shaft forward through the hands (they keep their grip points)
             if (slideAxis && !dry) {
               let n = 0;
@@ -23050,9 +23098,15 @@ body.netgame #revivetouch{display:flex}
               }
             }
             if (need > 0 && !dry) {
-              const w0 = new V().setFromMatrixPosition(g.matrixWorld), w1 = new V(side * need, 0, 0).applyMatrix4(g.matrixWorld);
-              const pinv = r.gun.parent.matrixWorld.clone().invert(), d = w1.applyMatrix4(pinv).sub(w0.applyMatrix4(pinv));
-              r.gun.position.add(d);
+              if (forwardOnly) {
+                // Firearms/bows stay shouldered: resolve torso penetration by moving the weapon
+                // forward, not sideways through an arm.
+                r.gun.position.z += need + 0.035;
+              } else {
+                const w0 = new V().setFromMatrixPosition(g.matrixWorld), w1 = new V(side * need, 0, 0).applyMatrix4(g.matrixWorld);
+                const pinv = r.gun.parent.matrixWorld.clone().invert(), d = w1.applyMatrix4(pinv).sub(w0.applyMatrix4(pinv));
+                r.gun.position.add(d);
+              }
             }
             return need;
           },
@@ -23121,7 +23175,8 @@ body.netgame #revivetouch{display:flex}
               r.elbows[i].rotation.x = i === 0 ? -0.75 : -0.95;
               r.arms[i].rotation.z = i === 0 ? 0.5 : -0.5;
             }
-            r.gun.rotation.z = Math.sin(t * 1.7) * 0.006;
+            const baseRot = r.holdRot || [0, Math.PI, 0];
+            r.gun.rotation.set(baseRot[0], baseRot[1], baseRot[2] + Math.sin(t * 1.7) * 0.006);
             const swing = Math.sin(phase) * 0.55 * b;
             if (r.oneHand) {
               // OneHand profiles: right hand carries the weapon out in front; the left arm is
@@ -23130,7 +23185,7 @@ body.netgame #revivetouch{display:flex}
               r.elbows[0].rotation.x = -0.4;
               r.arms[1].rotation.set(-swing, 0, -0.1);
               r.elbows[1].rotation.x = -0.25 - Math.max(0, swing) * 0.5;
-              r.gun.rotation.x = 0.7;
+              r.gun.rotation.x = baseRot[0];
             } else if (r.spearHold) {
               // TwoHandSpearProfile: rear hand on the butt, front hand forward on the shaft.
               r.arms[0].rotation.set(-0.9, 0, 0.12);
@@ -23171,9 +23226,15 @@ body.netgame #revivetouch{display:flex}
               r.gun.visible = !(SecretWeaponSkills.spinUntil > simulationTime);
               const x = k >= 0 && k < 1 ? (back ? -dir * 0.6 * (1 - back) + 0.46 * back : dir * 0.6 - dir * 1.2 * sweep) : 0.46;
               r.gun.position.set(-x + Math.sin(t * 1.3) * 0.02, 0.3 + Math.sin(t * 2.1) * 0.04, 0.34 + (k >= 0 && k < 1 ? Math.sin(sweep * Math.PI) * 0.25 : 0));
-              r.gun.rotation.set(Math.PI / 2 - 0.2, Math.PI, (k >= 0 && k < 1 ? dir * 1.1 * (1 - back) : 0) + Math.sin(t * 1.15) * 0.05);
-              r.gun.scale.setScalar(0.45);
-              // The right (guiding) hand only gestures beside the artifact; the left arm stays relaxed.
+              r.gun.rotation.set(Math.PI / 2 - 0.2, Math.PI, (k >= 0 && k < 1 ? dir * 0.55 * (1 - back) : 0));
+              r.gun.scale.setScalar(0.5);
+              for (const p of r.specterPreview || []) {
+                p.blade.position.copy(p.base);
+                p.blade.position.y += Math.sin(t * 1.45 + p.phase) * 0.035;
+                p.blade.position.z += Math.cos(t * 0.8 + p.phase) * 0.018;
+                p.blade.rotation.z = Math.sin(t * 0.72 + p.phase) * 0.08;
+              }
+              // The right (guiding) hand only gestures beside the artifacts; the left arm stays relaxed.
               r.arms[0].rotation.x = -0.9 + (k >= 0 && k < 1 ? -0.5 * (1 - back) : Math.sin(t * 2.4) * 0.1);
               r.arms[0].rotation.z = 0.5 + (k >= 0 && k < 1 ? dir * 0.4 : 0);
               r.elbows[0].rotation.x = -0.3;
@@ -23406,13 +23467,13 @@ body.netgame #revivetouch{display:flex}
             else r.ascDip = 0;
             if (reloading) {
               r.elbows[0].rotation.x = -1.1 + Math.sin(t * 6) * 0.4;
-              r.gun.rotation.z = 0.18;
+              r.gun.rotation.z = baseRot[2] + 0.18;
             }
             const mp = r.weapon?.kind === "melee" && !r.specterWeapon ? MeleeAnim.sample(r.weapon, attack, WeaponSystem.combo || 0) : null;
             if (mp) {
               // Same move set as first person, mirrored into the avatar's frame.
               r.gun.position.set(r.hold[0] - mp.p.x * 0.6, r.hold[1] + mp.p.y * 0.6, r.hold[2] - mp.p.z * 0.6);
-              r.gun.rotation.set((r.oneHand ? 0.7 : r.spearHold ? 1.25 : 0) - mp.r[0] * 0.9, (r.spearHold ? 0 : Math.PI) + mp.r[1] * 0.9, -mp.r[2] * 0.9);
+              r.gun.rotation.set(baseRot[0] - mp.r[0] * 0.9, baseRot[1] + mp.r[1] * 0.9, baseRot[2] - mp.r[2] * 0.9);
               // Body drives the blow: torso twist + shoulder/elbow, not just the weapon.
               // Whole body carries the blow: torso twist leads, hips follow at a third, the chest leans
               // into forward/downward strikes and the knees soak a heavy impact.
@@ -23444,8 +23505,7 @@ body.netgame #revivetouch{display:flex}
               if (!r.specterWeapon) r.gun.position.z = r.hold[2];
               if (r.weapon?.kind === "melee" && !r.specterWeapon && !r.tridentWeapon) {
                 r.gun.position.set(r.hold[0], r.hold[1], r.hold[2]);
-                r.gun.rotation.x = r.oneHand ? 0.7 : r.spearHold ? 1.25 : 0;
-                r.gun.rotation.y = r.spearHold ? 0 : Math.PI;
+                r.gun.rotation.set(baseRot[0], baseRot[1], baseRot[2]);
                 r.hips.rotation.y *= Math.exp(-dt * 8);
               } else if (r.bowHold) {
                 r.gun.position.set(r.hold[0], r.hold[1], r.hold[2]);
@@ -23492,7 +23552,8 @@ body.netgame #revivetouch{display:flex}
             // Hands follow the weapon socket (one-hand melee, spear, bow) instead of posing by
             // guesswork: the right hand is the weapon hand; the left only joins where defined.
             if (!(r.secretAccessories?.fly > 0.5) && !reloading && !dead) {
-              const gp = r.gun.position.clone().add(r.gripOff);
+              const socket = (off) => off.clone().multiply(r.gun.scale).applyEuler(r.gun.rotation).add(r.gun.position);
+              const gp = socket(r.gripOff);
               // Reach limit: a strike may push the socket past arm's length — then the weapon is
               // pulled back along the hand→shoulder line so the grip never floats off the hands.
               const axis = r.spearHold ? new V(0, 1, 0).applyEuler(r.gun.rotation) : null;
@@ -23508,11 +23569,15 @@ body.netgame #revivetouch{display:flex}
               // Long melee weapons never pass through the torso: sample the weapon's long axis and
               // slide it sideways out of the chest/hip volume; the hands follow through the IK.
               // Two passes so the reach limit and the body clearance settle together.
-              const clear = r.weapon?.kind === "melee" && !r.specterWeapon;
-              for (let pass = 0; pass < (clear ? 2 : 1); pass++) {
+              const clear = !r.specterWeapon;
+              for (let pass = 0; pass < (r.weapon?.kind === "melee" && clear ? 2 : 1); pass++) {
                 reach();
                 if (clear && r.spearHold) r.bodyPen = this.clearBody(g, r, false, axis);
-                else if (clear) { const before = r.gun.position.clone(); r.bodyPen = this.clearBody(g, r); gp.add(r.gun.position.clone().sub(before)); }
+                else if (clear) {
+                  const before = r.gun.position.clone();
+                  r.bodyPen = this.clearBody(g, r, false, null, r.rifleHold || r.bowHold);
+                  gp.add(r.gun.position.clone().sub(before));
+                }
               }
               if (r.oneHand) this.ik(r.arms[0], r.elbows[0], gp);
               else if (r.spearHold) {
@@ -23522,7 +23587,12 @@ body.netgame #revivetouch{display:flex}
               } else if (r.bowHold) {
                 const draw = PlayerController.chargeHeldSince != null ? clamp((simulationTime - PlayerController.chargeHeldSince) / (r.weapon?.chargeTime || 0.9), 0, 1) : 0;
                 this.ik(r.arms[0], r.elbows[0], gp);
-                this.ik(r.arms[1], r.elbows[1], gp.clone().add(new V(0.2, -0.02, -0.1 - draw * 0.28)));
+                // Draw hand moves back toward the face in chest space; the bow itself stays forward.
+                this.ik(r.arms[1], r.elbows[1], gp.clone().add(new V(0.18, 0.08, -0.08 - draw * 0.32)));
+              } else if (r.rifleHold) {
+                this.ik(r.arms[0], r.elbows[0], gp);
+                const left = r.leftGripOff ? socket(r.leftGripOff) : gp.clone().add(new V(0, 0.04, 0.32));
+                this.ik(r.arms[1], r.elbows[1], left);
               }
             }
             if (r.weapon?.scythe && mp) {
@@ -25798,6 +25868,9 @@ body.netgame #revivetouch{display:flex}
           renderer.setSize(innerWidth, innerHeight);
           camera.aspect = innerWidth / innerHeight;
           camera.updateProjectionMatrix();
+          Viewmodel.camera.aspect = camera.aspect;
+          Viewmodel.camera.updateProjectionMatrix();
+          document.documentElement.style.setProperty("--app-vh", innerHeight * 0.01 + "px");
         });
         window.addEventListener("pagehide", () => {
           if (NetGame.active) NetGame.send("bye", {});
