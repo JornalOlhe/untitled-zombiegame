@@ -199,7 +199,15 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await waitSim(0.9);
     const moved = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.filter(z => z.speed > 0).every(z => Math.abs(z.rig.legs[0].rotation.x) + Math.abs(z.rig.arms[0].rotation.x) > 0.05));
     assert.ok(moved, 'voxel rigs must animate legs/arms');
-    if (shots) await page.screenshot({ path: 'test-results/monsters-roster.png' });
+    if (shots) {
+      try {
+        await page.screenshot({ path: 'test-results/monsters-roster.png' });
+      } catch (e) {
+        // Screenshot is diagnostic only. A slow software-rendered CI frame must not invalidate
+        // gameplay assertions that already passed.
+        console.warn('diagnostic screenshot skipped:', e?.message || e);
+      }
+    }
     const roster2 = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.filter(z => z.speed > 0).map(z => z.group.position.z));
     assert.ok(roster2.every(z => z > 1.05), 'regular monsters must walk toward the player');
     const popped = await page.evaluate(() => {
