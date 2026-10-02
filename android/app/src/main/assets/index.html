@@ -21461,6 +21461,7 @@ body.netgame #revivetouch{display:flex}
           wavesCleared: 0,
           waveStartedAt: 0,
           rewardedWave: 0,
+          lastClearedWave: 0,
           reset() {
             this.damage = 0;
             this.bosses = {};
@@ -21472,13 +21473,17 @@ body.netgame #revivetouch{display:flex}
             this.wavesCleared = 0;
             this.waveStartedAt = 0;
             this.rewardedWave = 0;
+            this.lastClearedWave = 0;
           },
           waveStarted() {
             this.waveStartedAt = simulationTime;
           },
           waveCleared(wave = WaveManager.wave, pay = false) {
-            this.wavesCleared++;
-            if (player.lastDamage < this.waveStartedAt) this.noDamageWaves++;
+            if (wave > this.lastClearedWave) {
+              this.lastClearedWave = wave;
+              this.wavesCleared++;
+              if (player.lastDamage < this.waveStartedAt) this.noDamageWaves++;
+            }
             if (pay && wave > this.rewardedWave) {
               this.rewardedWave = wave;
               const coins = EconomyRewards.wave(wave);
