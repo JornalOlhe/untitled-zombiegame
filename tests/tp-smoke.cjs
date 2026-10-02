@@ -14,8 +14,9 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
  const out=[];
  W.weapons.forEach((def,idx)=>{
   const g=S.create(0,def);T.scene.add(g);const r=g.userData.rig;
+  let specterPreview=0;g.traverse(o=>{if(o.name&&/^LoadoutSpecter_0/.test(o.name))specterPreview++;});
   const rec={name:def.name,kind:def.kind,minLeft:1e9,maxLeftSpear:0,maxRight:0,maxPen:0,nan:false,oneHand:r.oneHand,spear:r.spearHold,
-    specterPreview:g.children.reduce((n,o)=>n+(o.name&&/^LoadoutSpecter_0/.test(o.name)?1:0),0),idleForward:null,muzzleAhead:null};
+    specterPreview,idleForward:null,muzzleAhead:null};
   for(const mode of ['idle','walk','attack','reload']){
    for(let i=0;i<40;i++){
     const t=i/30;const atk=mode==='attack'?(i%20)/30:99;
