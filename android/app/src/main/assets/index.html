@@ -6816,11 +6816,9 @@ body.netgame #revivetouch{display:flex}
             scene.environment = this.reflectionTarget.texture;
           },
           buildWeather() {
-            if (this.weather) {
-              scene.remove(this.weather);
-              this.weather.geometry.dispose();
-              this.weather.material.dispose();
-            }
+            // Weather is scene-global and map-independent. Reuse its buffers across map rebuilds
+            // instead of reallocating geometry/materials every time the player changes arena.
+            if (this.weather) return;
             const count = 450;
             this.weatherPositions = new Float32Array(count * 6);
             this.weatherSeed = Array.from({ length: count }, () => [
