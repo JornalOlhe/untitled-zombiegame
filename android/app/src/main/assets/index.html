@@ -7106,7 +7106,6 @@ body.netgame #revivetouch{display:flex}
                 ];
             }
             if (!this.weather) return;
-            this.updateReflections(dt);
             const map = [GameState.MENU, GameState.CLASS_SELECT].includes(state)
                 ? 0
                 : selectedMap,
@@ -7114,6 +7113,7 @@ body.netgame #revivetouch{display:flex}
               rainMap = map === 0 || map === 2;
             this.weather.visible = weatherOn && rainMap;
             if (this.snow) this.snow.visible = weatherOn && map === 4;
+            this.updateReflections(dt);
             if (!weatherOn) return;
             if (map === 4) {
               // Snowfall: round flakes drifting in a box around the camera, cheap (one draw call).
