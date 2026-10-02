@@ -23018,8 +23018,12 @@ body.netgame #revivetouch{display:flex}
             gun.rotation.set(...holdRot);
             const specterPreview = [];
             if (weapon?.specter) {
-              const src = WeaponModels.scenes.get(weapon.name) || parts.model;
+              // The loadout must always show the complete five-blade set, even on the first frame
+              // before the async GLB finishes loading. Fall back to the already-built procedural
+              // blade instead of leaving a single blade in the character's hand.
+              const src = WeaponModels.scenes.get(weapon.name) || parts.model || parts.gun;
               if (parts.model) parts.model.visible = false;
+              if (src === parts.gun) parts.gun.visible = false;
               if (src) {
                 const slots = [
                   [-0.72, 0.22, 0.02, -0.16], [0.72, 0.22, 0.02, 0.16],
@@ -23028,6 +23032,13 @@ body.netgame #revivetouch{display:flex}
                 ];
                 slots.forEach((q, i) => {
                   const blade = src.clone(true);
+                  blade.visible = true;
+                  blade.traverse((o) => {
+                    // The procedural fallback contains the hidden muzzle sprite; keep it hidden
+                    // while making every actual mesh visible.
+                    if (o.isMesh) o.visible = true;
+                    if (o.isSprite) o.visible = false;
+                  });
                   blade.name = "LoadoutSpecter_0" + (i + 1);
                   blade.position.set(q[0], q[1], q[2]);
                   blade.rotation.set(Math.PI / 2, 0, q[3]);
