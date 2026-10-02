@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.33.0 (tag v38)
-# v38: 0.33.0 — final rerun includes 45 s host-migration grace; gameplay assertions remain blocking.
+# v38: 0.33.0 — final rerun includes host-migration stability, deterministic wave breather QA and all gameplay assertions blocking.
 
 on:
   workflow_dispatch:
