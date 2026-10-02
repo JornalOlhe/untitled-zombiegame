@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.33.0 (tag v38)
-# v38: 0.33.0 — economy/reconnect/weather/performance + weapon/loadout/third-person fixes. Final QA rerun includes deterministic boss-death coverage.
+# v38: 0.33.0 — economy/reconnect/weather/performance + weapon/loadout/third-person fixes. Final QA rerun includes deterministic boss-death coverage; diagnostic screenshots are non-blocking.
 
 on:
   workflow_dispatch:
