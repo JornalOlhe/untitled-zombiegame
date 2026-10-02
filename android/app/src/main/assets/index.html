@@ -3318,6 +3318,7 @@ body.netgame #revivetouch{display:flex}
             graphics: window.DeadRecoilRuntime?.platform === "android" ? "medium" : "high",
             shadows: window.DeadRecoilRuntime?.platform === "android" ? "off" : "medium",
             vfx: window.DeadRecoilRuntime?.platform === "android" ? "low" : "high",
+            reflections: window.DeadRecoilRuntime?.platform === "android" ? "off" : "low",
             master: 100,
             sfx: 65,
             weapons: 65,
@@ -3383,6 +3384,7 @@ body.netgame #revivetouch{display:flex}
               ["graphics", ["low", "medium", "high", "ultra"]],
               ["shadows", ["off", "low", "medium", "high"]],
               ["vfx", ["off", "low", "high"]],
+              ["reflections", ["off", "low", "high"]],
             ])
               if (!opts.includes(this.data[k])) this.data[k] = this.defaults[k];
           },
@@ -6460,6 +6462,13 @@ body.netgame #revivetouch{display:flex}
           weather: null,
           weatherPositions: null,
           weatherSeed: [],
+          weatherPuddles: null,
+          weatherPuddleMaterial: null,
+          reflectionMode: "off",
+          reflectionTarget: null,
+          reflectionCamera: null,
+          reflectionDirty: true,
+          reflectionClock: 0,
           decor: [],
           fogSheets: [],
           build(map) {
@@ -6503,27 +6512,6 @@ body.netgame #revivetouch{display:flex}
                     "concrete",
                   );
                 }
-              for (let i = 0; i < 22; i++) {
-                const x = rand(-5.8, 5.8),
-                  z = rand(-32, 32),
-                  puddle = new THREE.Mesh(
-                    A.geometries.plane,
-                    new THREE.MeshStandardMaterial({
-                      color: 0x304654,
-                      map: VisualArt.texture("stain"),
-                      roughness: 0.14,
-                      metalness: 0.65,
-                      transparent: true,
-                      opacity: 0.35,
-                      depthWrite: false,
-                    }),
-                  );
-                puddle.userData.disposableMaterial = true;
-                puddle.rotation.x = -Math.PI / 2;
-                puddle.position.set(x, 0.052, z);
-                puddle.scale.set(rand(0.4, 1.8), rand(0.5, 2.4), 1);
-                g.add(puddle);
-              }
               for (let i = 0; i < 36; i++) {
                 const x = rand(-11, 11),
                   z = rand(-32, 32);
@@ -6734,7 +6722,98 @@ body.netgame #revivetouch{display:flex}
                 phase: rand(0, 6),
               });
             }
+            this.buildWeatherPuddles(g, map);
+            this.reflectionDirty = true;
+            this.reflectionClock = 0;
             this.buildWeather();
+          },
+          buildWeatherPuddles(g, map) {
+            if (this.weatherPuddles?.parent) this.weatherPuddles.parent.remove(this.weatherPuddles);
+            this.weatherPuddles = null;
+            if (map !== 0 && map !== 2) return;
+            if (!this.weatherPuddleMaterial) {
+              this.weatherPuddleMaterial = new THREE.MeshStandardMaterial({
+                color: 0x435762,
+                map: VisualArt.texture("stain"),
+                roughness: 0.09,
+                metalness: 0.58,
+                transparent: true,
+                opacity: 0.34,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                envMapIntensity: 1.35,
+              });
+            }
+            const count = map === 0 ? 24 : 18,
+              mesh = new THREE.InstancedMesh(VisualArt.geometries.plane, this.weatherPuddleMaterial, count),
+              o = new THREE.Object3D();
+            mesh.name = "WeatherPuddles";
+            mesh.frustumCulled = false;
+            mesh.renderOrder = 1;
+            for (let i = 0; i < count; i++) {
+              let x, z;
+              if (map === 0) {
+                x = rand(-17, 17);
+                z = rand(-MapManager.half + 5, MapManager.half - 5);
+              } else {
+                x = rand(-MapManager.half + 6, MapManager.half - 6);
+                z = rand(-MapManager.half + 6, MapManager.half - 6);
+              }
+              const y = (MapManager.groundAt?.(x, z, 0.18, 0) ?? 0) + 0.028;
+              o.position.set(x, y, z);
+              o.rotation.set(-Math.PI / 2, 0, rand(0, Math.PI * 2));
+              const k = map === 0 ? rand(0.65, 1.8) : rand(0.45, 1.35);
+              o.scale.set(k * rand(0.8, 1.45), k * rand(0.65, 1.2), 1);
+              o.updateMatrix();
+              mesh.setMatrixAt(i, o.matrix);
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+            g.add(mesh);
+            this.weatherPuddles = mesh;
+          },
+          disposeReflections() {
+            if (scene.environment === this.reflectionTarget?.texture) scene.environment = null;
+            this.reflectionTarget?.dispose();
+            this.reflectionTarget = null;
+            this.reflectionCamera = null;
+          },
+          setReflectionQuality(value) {
+            let mode = String(value || "off").toLowerCase();
+            if (!["off", "low", "high"].includes(mode)) mode = "off";
+            if (nativeAndroid && mode === "high") mode = "low";
+            if (mode === this.reflectionMode && (mode === "off" || this.reflectionTarget)) return;
+            this.disposeReflections();
+            this.reflectionMode = mode;
+            this.reflectionDirty = mode !== "off";
+            this.reflectionClock = 0;
+            if (mode === "off") return;
+            const size = nativeAndroid ? 64 : mode === "high" ? 192 : 96;
+            this.reflectionTarget = new THREE.WebGLCubeRenderTarget(size, {
+              generateMipmaps: true,
+              minFilter: THREE.LinearMipmapLinearFilter,
+              encoding: THREE.sRGBEncoding,
+            });
+            this.reflectionCamera = new THREE.CubeCamera(0.2, Math.min(120, camera.far), this.reflectionTarget);
+          },
+          updateReflections(dt) {
+            const requested = SettingsManager.data.reflections || "off",
+              effective = nativeAndroid && requested === "high" ? "low" : requested;
+            if (effective !== this.reflectionMode || (effective !== "off" && !this.reflectionTarget))
+              this.setReflectionQuality(effective);
+            if (this.reflectionMode === "off" || !this.reflectionCamera || !this.reflectionTarget) return;
+            this.reflectionClock -= dt;
+            const dynamic = this.reflectionMode === "high";
+            if (!this.reflectionDirty && (!dynamic || this.reflectionClock > 0)) return;
+            this.reflectionDirty = false;
+            this.reflectionClock = dynamic ? 1.75 : Infinity;
+            const puddlesVisible = this.weatherPuddles?.visible;
+            scene.environment = null;
+            if (this.weatherPuddles) this.weatherPuddles.visible = false;
+            this.reflectionCamera.position.copy(camera.position);
+            this.reflectionCamera.update(renderer, scene);
+            if (this.weatherPuddles) this.weatherPuddles.visible = puddlesVisible;
+            scene.environment = this.reflectionTarget.texture;
           },
           buildWeather() {
             if (this.weather) {
@@ -7027,11 +7106,13 @@ body.netgame #revivetouch{display:flex}
                 ];
             }
             if (!this.weather) return;
+            this.updateReflections(dt);
             const map = [GameState.MENU, GameState.CLASS_SELECT].includes(state)
                 ? 0
                 : selectedMap,
-              weatherOn = SettingsManager.data.vfx !== "off";
-            this.weather.visible = weatherOn && map !== 4;
+              weatherOn = SettingsManager.data.vfx !== "off",
+              rainMap = map === 0 || map === 2;
+            this.weather.visible = weatherOn && rainMap;
             if (this.snow) this.snow.visible = weatherOn && map === 4;
             if (!weatherOn) return;
             if (map === 4) {
@@ -7064,6 +7145,7 @@ body.netgame #revivetouch{display:flex}
               this.snow.geometry.attributes.position.needsUpdate = true;
               return;
             }
+            if (!rainMap) return;
             const count =
                 SettingsManager.data.vfx === "low"
                   ? 100
@@ -7071,14 +7153,11 @@ body.netgame #revivetouch{display:flex}
                       SettingsManager.data.graphics
                     ],
               origin = camera.position;
-            this.weather.material.opacity =
-              map === 0 ? 0.15 : map === 4 ? 0.5 : 0.18;
-            this.weather.material.color.set(
-              map === 4 ? 0xddebf2 : map === 2 ? 0x96a16b : 0x97b8c3,
-            );
+            this.weather.material.opacity = map === 0 ? 0.15 : 0.18;
+            this.weather.material.color.set(map === 2 ? 0x96a16b : 0x97b8c3);
             for (let i = 0; i < count; i++) {
               const s = this.weatherSeed[i];
-              s[1] -= dt * (map === 0 ? 11 : map === 4 ? 1.8 : 0.25) * s[3];
+              s[1] -= dt * (map === 0 ? 11 : 8.5) * s[3];
               if (s[1] < 0) s[1] = 14;
               const x = origin.x + s[0] + Math.sin(menuTime * 0.3 + i) * 0.1,
                 y = s[1],
