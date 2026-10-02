@@ -21572,6 +21572,20 @@ body.netgame #revivetouch{display:flex}
           tally(id) {
             return (this.tallies[id] ||= this.blank());
           },
+          adoptAuthoritativeTally() {
+            if (this.host || !this.me) return;
+            const own = this.tallies[this.me];
+            if (!own) return;
+            player.kills = Math.max(player.kills || 0, Number(own.kills) || 0);
+            player.headshots = Math.max(player.headshots || 0, Number(own.headshots) || 0);
+            RunStats.damage = Math.max(RunStats.damage || 0, Number(own.damage) || 0);
+            RunStats.revives = Math.max(RunStats.revives || 0, Number(own.revives) || 0);
+            RunStats.bossSpawns = Math.max(RunStats.bossSpawns || 0, Number(own.bossSpawns) || 0);
+            for (const [key, value] of Object.entries(own.types || {}))
+              RunStats.types[key] = Math.max(RunStats.types[key] || 0, Number(value) || 0);
+            for (const [key, value] of Object.entries(own.bosses || {}))
+              RunStats.bosses[key] = Math.max(RunStats.bosses[key] || 0, Number(value) || 0);
+          },
           send(type, payload) {
             if (!this.t) return false;
             this.stats.sent++;
@@ -22203,7 +22217,10 @@ body.netgame #revivetouch{display:flex}
           onEvent(m) {
             if (m.from === this.lobby?.hostId) this.lastHostMsg = performance.now();
             if (m.k === "tally") {
-              if (!this.host) this.tallies = m.tallies || this.tallies;
+              if (!this.host) {
+                this.tallies = m.tallies || this.tallies;
+                this.adoptAuthoritativeTally();
+              }
               return;
             }
             if (this.host) return;
@@ -22216,6 +22233,7 @@ body.netgame #revivetouch{display:flex}
             } else if (m.k === "sync" && m.to === this.me) {
               if (m.wave && WaveManager.wave !== m.wave) this.remoteWave(m.wave, m.mut, true);
               this.tallies = m.tallies || this.tallies;
+              this.adoptAuthoritativeTally();
             } else if (m.k === "shop") {
               RunStats.waveCleared();
               state = GameState.SHOP;
