@@ -1,5 +1,5 @@
-// Regression: elevated props must not create floor-to-roof invisible walls; every local zombie
-// kill pays and a cleared wave gives a small deterministic bonus.
+// Regression: elevated props must not create floor-to-roof invisible walls; the local
+// economy must use the exact deterministic kill/boss/wave rewards.
 const { chromium }=require('playwright');
 const assert=require('node:assert/strict');
 const http=require('http'),fs=require('fs'),path=require('path');
@@ -25,23 +25,39 @@ try{
 
    T.Progression.data.coins=0;p.coins=0;
    const w=T.WeaponSystem.current();
-   const mk=(head)=>{const z=Z.spawn(0,null,new V(4,0,4));z.hp=z.maxhp=1;z.speed=0;Z.kill(z,head,false,w);return T.Progression.data.coins;};
-   const afterBody=mk(false),afterHead=mk(true);
+   const mk=(type,head=false)=>{const z=Z.spawn(type,null,new V(4,0,4));z.hp=z.maxhp=1;z.speed=0;Z.kill(z,head,false,w);return T.Progression.data.coins;};
+   const afterZombie=mk(0),afterCrawler=mk(5,true),afterSwat=mk(3),afterDynamite=mk(2),afterRobot=mk(8);
    Z.clear();
    T.WaveManager.wave=1;T.WaveManager.remaining=0;T.WaveManager.bossPending=false;T.WaveManager.clearedAt=0;
    T.WaveManager.update(0);
    const afterWave=T.Progression.data.coins;
-   return {elevatedGround,elevatedOverlap,groundBlocks,lowStepBlocks,afterBody,afterHead,afterWave,
-     expected:{body:T.EconomyRewards.kill(false,1),head:T.EconomyRewards.kill(true,1),wave:T.EconomyRewards.wave(1,1)}};
+   return {elevatedGround,elevatedOverlap,groundBlocks,lowStepBlocks,afterZombie,afterCrawler,afterSwat,afterDynamite,afterRobot,afterWave,
+     expected:{
+       zombie:T.EconomyRewards.enemy(0),crawler:T.EconomyRewards.enemy(5),swat:T.EconomyRewards.enemy(3),
+       dynamite:T.EconomyRewards.enemy(2),robot:T.EconomyRewards.enemy(8),wave:T.EconomyRewards.wave(1),
+       bossSpawn:T.EconomyRewards.bossSpawn(),miniboss:T.EconomyRewards.bossKill({rank:1,major:false}),boss:T.EconomyRewards.bossKill({rank:3,major:true})
+     }};
  });
  console.log(JSON.stringify(r));
  assert.equal(r.elevatedGround,false,'elevated rooftop collider must be passable underneath');
  assert.equal(r.elevatedOverlap,true,'elevated collider blocks only when player body overlaps its height');
  assert.equal(r.groundBlocks,true,'real ground-level object still blocks');
  assert.equal(r.lowStepBlocks,false,'small step is not an invisible wall');
- assert.equal(r.afterBody,r.expected.body,'body kill always pays');
- assert.equal(r.afterHead,r.expected.body+r.expected.head,'headshot kill always pays');
- assert.equal(r.afterWave,r.expected.body+r.expected.head+r.expected.wave,'wave clear pays exactly once');
+ assert.equal(r.expected.zombie,10,'normal zombie pays 10');
+ assert.equal(r.expected.crawler,10,'crawler pays 10');
+ assert.equal(r.expected.swat,50,'SWAT pays 50');
+ assert.equal(r.expected.dynamite,50,'dynamite/constructor pays 50');
+ assert.equal(r.expected.robot,50,'robot/cyborg pays 50');
+ assert.equal(r.expected.bossSpawn,10,'boss/miniboss appearance pays 10');
+ assert.equal(r.expected.miniboss,500,'miniboss kill pays 500');
+ assert.equal(r.expected.boss,1000,'boss kill pays 1000');
+ assert.equal(r.expected.wave,50,'wave clear pays 50');
+ assert.equal(r.afterZombie,10,'normal zombie reward is credited');
+ assert.equal(r.afterCrawler,20,'crawler reward is credited and headshots do not change coin value');
+ assert.equal(r.afterSwat,70,'SWAT reward is credited');
+ assert.equal(r.afterDynamite,120,'dynamite/constructor reward is credited');
+ assert.equal(r.afterRobot,170,'robot/cyborg reward is credited');
+ assert.equal(r.afterWave,220,'wave clear pays exactly 50 once');
  assert.deepEqual(errs,[]);
- console.log('PASS collision volumes + guaranteed low coin rewards');
+ console.log('PASS collision volumes + deterministic economy rewards');
 }finally{await b.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exit(1);});
