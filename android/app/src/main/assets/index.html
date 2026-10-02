@@ -6894,6 +6894,7 @@ body.netgame #revivetouch{display:flex}
             mesh.position.y = -0.02;
             mesh.receiveShadow = true;
             mesh.userData.disposableMaterial = true;
+            mesh.userData.disposableGeometry = true;
             g.add(mesh);
           },
           // Floor-to-ceiling containment capsule with the (decorative) mutant specimen.
@@ -6925,6 +6926,7 @@ body.netgame #revivetouch{display:flex}
             }
             const mk = (n) => {
               const m = new THREE.InstancedMesh(VisualArt.geometries.plane, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }), Math.max(1, n));
+              m.userData.disposableMaterial = true;
               m.frustumCulled = false; m.renderOrder = 1; m.count = n; g.add(m); return m;
             };
             const o = new THREE.Object3D(), gy = (x, z) => MapManager.groundAt?.(x, z, 0.3, 1) ?? 0;
@@ -6935,6 +6937,7 @@ body.netgame #revivetouch{display:flex}
             // flickering panels own their emissive quad
             for (const p of list.filter((q) => q.state === "flicker")) {
               const quad = new THREE.Mesh(VisualArt.geometries.plane, new THREE.MeshBasicMaterial({ color: p.color ?? 0xfff2d8 }));
+              quad.userData.disposableMaterial = true;
               quad.rotation.x = Math.PI / 2; quad.position.set(p.x, y0 - (p.drop ?? 0.07), p.z); quad.scale.set(p.w, p.d, 1);
               g.add(quad);
               this.decor.push({ type: "panelFlicker", quad, base: new THREE.Color(p.color ?? 0xfff2d8), inst: p.inst.map(([k, i]) => [k === "pool" ? P : Wm, i, (k === "pool" ? pools : washes)[i].c.clone()]), next: Math.random() * 3, on: true, burst: 0, hum: Math.random() * 6 });
@@ -6953,8 +6956,11 @@ body.netgame #revivetouch{display:flex}
               m.rotation.set(-Math.PI / 2, 0, seed);
               m.position.set(x, 0.014, z);
               m.renderOrder = 1;
+              m.userData.disposableMaterial = true;
+              m.userData.disposableGeometry = true;
               g.add(m);
               const halo = new THREE.Mesh(VisualArt.geometries.plane, new THREE.MeshBasicMaterial({ map: VisualArt.texture("glow"), color: c.clone().multiplyScalar(0.3), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+              halo.userData.disposableMaterial = true;
               halo.rotation.x = -Math.PI / 2; halo.position.set(x, 0.02, z); halo.scale.setScalar(s * 2.4); halo.renderOrder = 1;
               g.add(halo);
             }
@@ -6970,12 +6976,14 @@ body.netgame #revivetouch{display:flex}
             glass.position.y = 0.9 + H / 2;
             for (const m of [liquid, glass]) {
               m.userData.disposableMaterial = true;
+              m.userData.disposableGeometry = true;
               m.renderOrder = 5;
               g.add(m);
             }
             const top = new THREE.Mesh(new THREE.CylinderGeometry(cap.r - 0.15, cap.r - 0.15, 0.05, 28), new THREE.MeshBasicMaterial({ color: 0x5dff7a, transparent: true, opacity: 0.35 }));
             top.position.y = liquid.position.y + (H - 0.6) / 2;
             top.userData.disposableMaterial = true;
+            top.userData.disposableGeometry = true;
             g.add(top);
             for (const y of [1.0, 3.3, 5.5].filter((y) => y < 0.9 + H)) {
               const ring = new THREE.Mesh(VisualArt.geometries.ring, VisualArt.mat(0x5c6670, "steel"));
@@ -10191,8 +10199,12 @@ body.netgame #revivetouch{display:flex}
           blocked: null,
           build(index) {
             this.group.traverse((o) => {
-              if (o.userData.disposableMaterial && o.material)
-                o.material.dispose();
+              if (o.userData.disposableMaterial && o.material) {
+                for (const material of Array.isArray(o.material) ? o.material : [o.material])
+                  material?.dispose?.();
+              }
+              if (o.userData.disposableGeometry && o.geometry)
+                o.geometry.dispose();
             });
             scene.remove(this.group);
             this.group = new THREE.Group();
