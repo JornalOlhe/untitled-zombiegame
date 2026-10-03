@@ -5337,7 +5337,7 @@ body.netgame #revivetouch{display:flex}
             sword: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.25, 0.31], grip: [0, -0.12, -0.23], rot: [0.2, Math.PI, -0.04], mode: "oneHand" } },
             knife: { fp: { r: [0, -0.15, -0.2, 0.05], l: null }, tp: { hold: [-0.27, 0.26, 0.3], grip: [0, -0.1, -0.23], rot: [0.14, Math.PI, -0.04], mode: "oneHand" } },
             staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.23, 0.2], grip: [0, -0.1, -0.23], rot: [0.08, Math.PI, -0.02], mode: "oneHand" } },
-            scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.22, 0.16], grip: [0, -0.12, -0.23], rot: [0.08, Math.PI, -0.06], mode: "oneHand" } },
+            scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.39, 0.24, 0.24], grip: [0, -0.12, -0.23], rot: [0.08, Math.PI, -0.035], mode: "oneHand" } },
             spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], rot: [1.25, 0, 0], mode: "spear" } },
             specter: { fp: { r: null, l: null }, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], rot: [0, Math.PI, 0], mode: "conduct" } },
             bow: { fp: null, tp: { hold: [-0.22, 0.3, 0.15], grip: [0, 0, -0.5], rot: [0, Math.PI, 0], mode: "bow" } },
@@ -23185,7 +23185,10 @@ body.netgame #revivetouch{display:flex}
                 // forward, not sideways through an arm.
                 r.gun.position.z += need + 0.035;
               } else {
-                const w0 = new V().setFromMatrixPosition(g.matrixWorld), w1 = new V(side * need, 0, 0).applyMatrix4(g.matrixWorld);
+                // Add a small safety margin instead of resolving exactly to the skin boundary;
+                // otherwise fast scythe keyframes can cross back into the torso on the next frame.
+                const clearance = need + (r.weapon?.scythe ? 0.075 : 0.04);
+                const w0 = new V().setFromMatrixPosition(g.matrixWorld), w1 = new V(side * clearance, 0, 0).applyMatrix4(g.matrixWorld);
                 const pinv = r.gun.parent.matrixWorld.clone().invert(), d = w1.applyMatrix4(pinv).sub(w0.applyMatrix4(pinv));
                 r.gun.position.add(d);
               }
@@ -23265,8 +23268,14 @@ body.netgame #revivetouch{display:flex}
               // never on the weapon — it swings freely with the stride (counter-balance).
               r.arms[0].rotation.set(-1.2, 0, -0.04);
               r.elbows[0].rotation.x = -0.4;
-              r.arms[1].rotation.set(-swing, 0, -0.1);
-              r.elbows[1].rotation.x = -0.25 - Math.max(0, swing) * 0.5;
+              if (r.weapon?.scythe) {
+                // Keep the free arm clear of the long snath/blade through the full combo.
+                r.arms[1].rotation.set(-0.08 - swing * 0.18, 0, -0.52);
+                r.elbows[1].rotation.x = -0.32;
+              } else {
+                r.arms[1].rotation.set(-swing, 0, -0.1);
+                r.elbows[1].rotation.x = -0.25 - Math.max(0, swing) * 0.5;
+              }
               r.gun.rotation.x = baseRot[0];
             } else if (r.spearHold) {
               // TwoHandSpearProfile: rear hand on the butt, front hand forward on the shaft.
@@ -23657,7 +23666,7 @@ body.netgame #revivetouch{display:flex}
               // slide it sideways out of the chest/hip volume; the hands follow through the IK.
               // Two passes so the reach limit and the body clearance settle together.
               const clear = !r.specterWeapon;
-              for (let pass = 0; pass < (r.weapon?.kind === "melee" && clear ? 2 : 1); pass++) {
+              for (let pass = 0; pass < (r.weapon?.kind === "melee" && clear ? (r.weapon?.scythe ? 4 : 3) : 1); pass++) {
                 reach();
                 if (clear && r.spearHold) r.bodyPen = this.clearBody(g, r, false, axis);
                 else if (clear) {
