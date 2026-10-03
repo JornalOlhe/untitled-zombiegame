@@ -266,6 +266,15 @@ const server = http.createServer((req, res) => {
       }
       await page.locator('#armory-back').click();
       await page.locator('#menu:not(.hidden)').waitFor({state:'visible'});
+      const screenState = await page.evaluate(() => {
+        const screens = [...document.querySelectorAll('.screen')];
+        return {
+          visible: screens.filter(el => !el.classList.contains('hidden')).map(el => el.id),
+          hiddenInteractive: screens.filter(el => el.classList.contains('hidden') && (!el.inert || el.getAttribute('aria-hidden') !== 'true')).map(el => el.id),
+        };
+      });
+      assert.deepEqual(screenState.visible, ['menu'], 'screen transitions must leave exactly one menu visible');
+      assert.deepEqual(screenState.hiddenInteractive, [], 'hidden menus must be inert and aria-hidden');
       await page.locator('#play').click();
       await page.locator('#solo').click();
       const cards = await page.locator('#mapcards > button').evaluateAll(items => items.map(el => ({top:el.getBoundingClientRect().top,width:el.getBoundingClientRect().width})));
