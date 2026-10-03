@@ -19673,14 +19673,20 @@ body.netgame #revivetouch{display:flex}
               turrets.splice(i, 1);
               continue;
             }
-            const target = ZombieManager.list
-              .filter((z) => z.group.position.distanceTo(t.group.position) < 23)
-              .sort(
-                (a, b) =>
-                  a.group.position.distanceToSquared(t.group.position) -
-                  b.group.position.distanceToSquared(t.group.position),
-              )[0];
-            if (target && simulationTime >= t.next) {
+            // Turrets fire at most every 160 ms. Do not scan/sort the whole horde on
+            // frames where the turret cannot shoot, and avoid temporary filter/sort arrays.
+            if (simulationTime >= t.next) {
+              let target = null,
+                bestD2 = 23 * 23;
+              for (const z of ZombieManager.list) {
+                if (z.dead) continue;
+                const d2 = z.group.position.distanceToSquared(t.group.position);
+                if (d2 < bestD2) {
+                  bestD2 = d2;
+                  target = z;
+                }
+              }
+              if (!target) continue;
               t.next = simulationTime + 0.16;
               const from = t.group.position.clone().add(new V(0, 1, 0)),
                 to = target.group.position
