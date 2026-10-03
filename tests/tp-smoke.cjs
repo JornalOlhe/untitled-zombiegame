@@ -14,14 +14,21 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
  const out=[];
  W.weapons.forEach((def,idx)=>{
   const g=S.create(0,def);T.scene.add(g);const r=g.userData.rig;
-  let specterPreview=0;g.traverse(o=>{if(o.name&&/^LoadoutSpecter_0/.test(o.name))specterPreview++;});
+  let specterPreview=0,specterMeshes=0,specterCulled=0;
+  g.traverse(o=>{if(o.name&&/^LoadoutSpecter_0/.test(o.name))specterPreview++;if(r.specterWeapon&&o.isMesh){specterMeshes++;if(o.frustumCulled)specterCulled++;}});
   const rec={name:def.name,kind:def.kind,minLeft:1e9,maxLeftSpear:0,maxRight:0,maxPen:0,nan:false,oneHand:r.oneHand,spear:r.spearHold,
-    specterPreview,idleForward:null,muzzleAhead:null};
+    specterPreview,specterMeshes,specterCulled,specterMaxStep:0,idleForward:null,muzzleAhead:null};
+  let previousSpecter=null;
   for(const mode of ['idle','walk','attack','reload']){
    for(let i=0;i<40;i++){
     const t=i/30;const atk=mode==='attack'?(i%20)/30:99;
     S.animate(g,1/30,t,mode==='walk'?5:0,false,0,atk,mode==='reload',false,t*3);
     g.updateMatrixWorld(true);
+    if(mode==='idle'&&r.specterWeapon){
+      const now=(r.specterPreview||[]).map(x=>x.blade.position.clone());
+      if(previousSpecter)for(let q=0;q<now.length;q++)rec.specterMaxStep=Math.max(rec.specterMaxStep,now[q].distanceTo(previousSpecter[q]));
+      previousSpecter=now;
+    }
     if(mode==='attack'&&def.kind==='melee'&&!def.specter)rec.maxPen=Math.max(rec.maxPen,S.clearBody(g,r,true));
     if(mode==='idle'&&i===39){
       const q=r.gun.getWorldQuaternion(new THREE.Quaternion()), fwd=new V(0,0,-1).applyQuaternion(q);
@@ -63,12 +70,14 @@ for(const r of res){
  if(r.nan)bad.push(r.name+': NaN in hand/weapon transforms');
  const oneHandMelee=r.kind==='melee'&&r.oneHand;
  if(r.name==='Angelic Specter'&&r.specterPreview!==5)bad.push(r.name+': loadout must show five blades ('+r.specterPreview+')');
+ if(r.name==='Angelic Specter'&&(r.specterMeshes<5||r.specterCulled!==0))bad.push(r.name+': all blade meshes must stay renderable ('+r.specterMeshes+' meshes, '+r.specterCulled+' culled)');
+ if(r.name==='Angelic Specter'&&r.specterMaxStep>0.0015)bad.push(r.name+': loadout blade idle motion is jittery ('+r.specterMaxStep.toFixed(4)+'/frame)');
  if(r.name==='Angelic Specter'&&r.minLeft<0.25)bad.push(r.name+': left hand near the floating specter ('+r.minLeft+')');
  if((r.name==='Bow'||r.name==='Stormpiercer'||r.name==='Wraithpiercer'||r.name==='Demonic Fury')&&r.idleForward<0.35)bad.push(r.name+': model is not facing forward ('+r.idleForward+')');
  if(r.kind!=='melee'&&r.muzzleAhead<0.15)bad.push(r.name+': projectile origin is not ahead of the held weapon ('+r.muzzleAhead+')');
  if(oneHandMelee&&r.minLeft<0.2)bad.push(r.name+': left hand touches a one-hand melee weapon ('+r.minLeft+')');
  if(r.spear&&r.maxLeftSpear>0.14)bad.push(r.name+': left hand leaves the spear shaft during idle/walk/attack ('+r.maxLeftSpear.toFixed(2)+')');
- if(r.maxPen>0.05)bad.push(r.name+': weapon passes through the torso during strikes ('+r.maxPen.toFixed(2)+')');
+ if(r.maxPen>0.035)bad.push(r.name+': weapon passes through the torso during strikes ('+r.maxPen.toFixed(3)+')');
  if(r.maxRight>1.2)bad.push(r.name+': right hand far from weapon ('+r.maxRight+')');
 }
 await b.close();server.close();
