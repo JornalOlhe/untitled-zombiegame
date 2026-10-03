@@ -2847,10 +2847,10 @@ body.netgame #revivetouch{display:flex}
           </fieldset>
           <fieldset class="rule-group"><legend>Dificuldade</legend>
             <div class="rule-options" id="difficulty-options">
-              <button type="button" data-choice="difficulty" data-value="easy"><strong>Fácil</strong><small>150 HP · moedas ×1</small></button>
-              <button type="button" data-choice="difficulty" data-value="medium"><strong>Médio</strong><small>100 HP · moedas ×1,5</small></button>
-              <button type="button" data-choice="difficulty" data-value="hard"><strong>Difícil</strong><small>75 HP · moedas ×2</small></button>
-              <button type="button" data-choice="difficulty" data-value="nightmare"><strong>Pesadelo</strong><small>60 HP · moedas ×3</small></button>
+              <button type="button" data-choice="difficulty" data-value="easy"><strong>Fácil</strong><small>150 HP · horda -20% · dano -20%</small></button>
+              <button type="button" data-choice="difficulty" data-value="medium"><strong>Médio</strong><small>100 HP · ritmo padrão</small></button>
+              <button type="button" data-choice="difficulty" data-value="hard"><strong>Difícil</strong><small>75 HP · horda +20% · dano +30%</small></button>
+              <button type="button" data-choice="difficulty" data-value="nightmare"><strong>Pesadelo</strong><small>60 HP · horda +40% · dano +60%</small></button>
             </div>
             <select id="difficulty" class="sr-only" aria-label="Dificuldade"><option value="easy">Fácil</option><option value="medium" selected>Médio</option><option value="hard">Difícil</option><option value="nightmare">Pesadelo</option></select>
           </fieldset>
@@ -13371,9 +13371,13 @@ body.netgame #revivetouch{display:flex}
             this.restoreEnvironment();
             this.current = null;
             if (wave < 4 || wave % 5 === 0) return null;
-            const gap = wave - this.lastWave;
-            if (gap < 8) return null;
-            const chance = Math.min(0.18, 0.055 + Math.max(0, gap - 8) * 0.018);
+            const gap = this.lastWave ? wave - this.lastWave : wave;
+            // Mutations should create memorable tactical problems often enough to matter,
+            // without stacking back-to-back or colliding with the 5-wave boss cadence.
+            if (this.lastWave && gap < 4) return null;
+            const chance = this.lastWave
+              ? Math.min(0.38, 0.2 + Math.max(0, gap - 4) * 0.035)
+              : Math.min(0.32, 0.12 + Math.max(0, wave - 4) * 0.025);
             if (Math.random() > chance) return null;
             const pool = this.events.filter((event) => event.id !== this.lastId);
             this.current = pick(pool);
@@ -17349,6 +17353,35 @@ body.netgame #revivetouch{display:flex}
           spawnPool: [],
           shopEnd: 0,
           timeLeft: 300,
+          // Each map leans toward a different mix of the active enemy archetypes. This makes
+          // repeated runs ask for different target priorities without resurrecting retired types.
+          mapSpawnBias: [
+            { 2: 1.15, 3: 1.4, 8: 0.8 },                 // City: armored pressure
+            { 0: 1.1, 3: 0.8, 5: 1.5, 8: 0.8 },         // Hospital: close-range swarm
+            { 1: 1.5, 3: 0.75, 5: 1.35 },               // Forest: fast flankers
+            { 0: 0.85, 2: 1.4, 8: 1.7 },                // Lab: constructed/cyborg threats
+            { 1: 1.25, 2: 0.85, 3: 1.15, 5: 1.2 },      // Snow: mobile mixed horde
+          ],
+          spawnWeight(type, wave = this.wave) {
+            const t = zombieTypes[type];
+            if (!t || t.wave > wave) return 0;
+            const age = Math.max(0, wave - t.wave);
+            const base = type === 0 ? 6 : type === 1 || type === 5 ? 3 : 1;
+            let ramp = 0;
+            if (type === 0) ramp = -Math.min(3, Math.max(0, Math.floor((wave - 12) / 8)));
+            else if (type === 1 || type === 5) ramp = Math.min(2, Math.floor(age / 6));
+            else ramp = Math.min(3, Math.floor(age / 4));
+            const floor = type === 0 ? 3 : 1;
+            const mapBias = this.mapSpawnBias[selectedMap]?.[type] ?? 1;
+            return Math.max(
+              floor,
+              Math.round(Math.max(floor, base + ramp) * mapBias * MutationManager.weight(type)),
+            );
+          },
+          activeCap() {
+            // Preserve total enemies while limiting simultaneous AI/rig load on touch devices.
+            return touchMode ? 64 : 85;
+          },
           start() {
             this.clearedAt = 0;
             this.wave++;
@@ -17359,10 +17392,9 @@ body.netgame #revivetouch{display:flex}
             );
             this.total = this.remaining;
             this.spawnClock = 0.3;
-            this.spawnPool = zombieTypes.flatMap((t, i) => {
-              if (t.wave > this.wave) return [];
-              const base = i === 0 ? 6 : i === 1 || i === 5 ? 3 : 1;
-              return Array(base * MutationManager.weight(i)).fill(i);
+            this.spawnPool = zombieTypes.flatMap((_t, i) => {
+              const weight = this.spawnWeight(i, this.wave);
+              return weight ? Array(weight).fill(i) : [];
             });
             const classFx = classEffects();
             if (classFx.waveHp) {
@@ -17482,7 +17514,7 @@ body.netgame #revivetouch{display:flex}
             if (
               this.remaining > 0 &&
               this.spawnClock <= 0 &&
-              ZombieManager.list.length < 85
+              ZombieManager.list.length < this.activeCap()
             ) {
               ZombieManager.spawn(pick(this.spawnPool));
               this.remaining--;
