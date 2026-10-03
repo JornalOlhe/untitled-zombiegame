@@ -1,8 +1,8 @@
 // Replayability regression: mutations must matter, map compositions must differ, retired
-// enemies must stay retired, and difficulty copy must match the deterministic coin economy.
+// enemies must stay retired, difficulty copy must match the deterministic coin economy,\n// and active mutations must remain visible in the wave HUD.
 const { chromium } = require('playwright');
 const http=require('http'),fs=require('fs'),path=require('path');
-const root=path.resolve('android/app/src/main/assets');
+const root=path.resolve('android/app/src/main/assets');\nconst source=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent(q.url.split('?')[0]==='/'?'index.html':q.url.split('?')[0]));fs.readFile(f,(e,d)=>{if(e){r.writeHead(404).end();return;}r.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');r.end(d)})});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const b=await chromium.launch({executablePath:process.env.PW_CHROMIUM||undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
@@ -49,8 +49,8 @@ if(!(res.byMap[0].swat>res.byMap[2].swat))bad.push('City should bias SWAT above 
 if(!(res.byMap[3].cyborg>res.byMap[0].cyborg))bad.push('Lab should bias Cyborg above City');
 if(res.retired.some(Boolean))bad.push('retired enemy entered an ordinary wave');
 if(res.labels.some(x=>/moedas\s*[×x]/i.test(x)))bad.push('difficulty UI still advertises a coin multiplier');
-if(res.desktopCap!==85)bad.push('desktop active horde cap changed unexpectedly');
+if(res.desktopCap!==85)bad.push('desktop active horde cap changed unexpectedly');\nif(!source.includes('class="mutation"')||!source.includes('const mutation = MutationManager.current;'))bad.push('active mutation is not persisted in the wave HUD');
 console.log(JSON.stringify(res));
 await b.close();server.close();
 if(bad.length){console.error('FAIL\n'+bad.join('\n'));process.exit(1);}
-console.log('PASS replayability, map composition and difficulty-copy regression');})().catch(e=>{console.error(e);process.exit(1);});
+console.log('PASS replayability, map composition, mutation HUD and difficulty-copy regression');})().catch(e=>{console.error(e);process.exit(1);});
