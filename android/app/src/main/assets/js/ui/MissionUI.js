@@ -128,27 +128,16 @@
         body.querySelector("[data-go-login]").onclick = () => this.game.openLogin();
       } else {
         let items = MM.of(this.tab);
-        // Unique missions: 100 new every month that never expire — filter by month and status.
-        let filterBar = "";
+        // Unique missions are permanent objectives. Keep the complete list visible instead of
+        // hiding entries behind period/status controls; claimed entries sort to the bottom.
         if (this.tab === "unique") {
-          const months = [...new Set(items.map((m) => m.month).filter(Boolean))].sort().reverse();
-          const monthName = (k) => {
-            const [y, mo] = k.split("-").map(Number);
-            return new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
-          };
-          if (!this.uMonth || (this.uMonth !== "all" && this.uMonth !== "perm" && !months.includes(this.uMonth))) this.uMonth = months[0] || "perm";
-          this.uStatus ||= "open";
-          const monthOpts = [["all", "Todos os períodos"], ...months.map((k) => [k, monthName(k)]), ["perm", "Conquistas permanentes"]];
-          filterBar = `<div class="mission-filters"><label>Período<select data-u-month>${monthOpts.map(([v, l]) => `<option value="${v}" ${v === this.uMonth ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label><label>Status<select data-u-status>${[["open", "Não concluídas"], ["done", "Concluídas"], ["all", "Todas"]].map(([v, l]) => `<option value="${v}" ${v === this.uStatus ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`;
-          items = items
-            .filter((m) => (this.uMonth === "all" ? true : this.uMonth === "perm" ? !m.month : m.month === this.uMonth))
-            .filter((m) => (this.uStatus === "all" ? true : this.uStatus === "done" ? m.completed : !m.completed));
+          items = [...items].sort((a, b) =>
+            Number(a.claimed) - Number(b.claimed) ||
+            Number(b.completed) - Number(a.completed) ||
+            String(a.title || "").localeCompare(String(b.title || ""), "pt-BR")
+          );
         }
-        if (!items.length && filterBar) {
-          summary.innerHTML = "";
-          body.innerHTML = filterBar + `<div class="empty-state"><h3>Nada por aqui</h3><p>Nenhuma missão com esses filtros.</p></div>`;
-          this.bindFilters(body);
-        } else if (!items.length) {
+        if (!items.length) {
           summary.innerHTML = "";
           body.innerHTML = `<div class="empty-state"><h3>${MM.loading ? "Carregando missões…" : online ? "Nenhuma missão carregada" : "OFFLINE"}</h3><p>${online ? "" : "Conecte-se para sincronizar suas missões."}</p></div>`;
         } else {
@@ -157,14 +146,19 @@
             done = main.filter((m) => m.completed).length,
             claimed = items.filter((m) => m.claimed).length;
           const periodic = this.tab !== "unique";
-          summary.innerHTML = `<div class="ms-stat"><span>${periodic ? "RENOVA EM" : "PERMANENTES"}</span><b data-countdown="${this.tab}">${periodic ? countdown(MM.endsIn(this.tab)) : "NUNCA RESETAM"}</b></div>
-            <div class="ms-stat"><span>CONCLUÍDAS</span><b>${done} / ${main.length}</b></div>
-            <div class="ms-stat"><span>RESGATADAS</span><b>${claimed} / ${items.length}</b></div>
-            <div class="ms-track"><i style="width:${(100 * done) / Math.max(1, main.length)}%"></i></div>
-            <p class="ms-note">${periodic ? `Complete as ${main.length} missões para liberar a recompensa final.` : "100 missões novas todo mês. As que você não terminar continuam aqui e acumulam com as do mês seguinte."}</p>`;
+          summary.classList.toggle("unique", !periodic);
+          summary.innerHTML = periodic
+            ? `<div class="ms-stat"><span>RENOVA EM</span><b data-countdown="${this.tab}">${countdown(MM.endsIn(this.tab))}</b></div>
+              <div class="ms-stat"><span>CONCLUÍDAS</span><b>${done} / ${main.length}</b></div>
+              <div class="ms-stat"><span>RESGATADAS</span><b>${claimed} / ${items.length}</b></div>
+              <div class="ms-track"><i style="width:${(100 * done) / Math.max(1, main.length)}%"></i></div>
+              <p class="ms-note">Complete as ${main.length} missões para liberar a recompensa final.</p>`
+            : `<div class="ms-stat"><span>CONCLUÍDAS</span><b>${done} / ${main.length}</b></div>
+              <div class="ms-stat"><span>RESGATADAS</span><b>${claimed} / ${items.length}</b></div>
+              <div class="ms-track"><i style="width:${(100 * done) / Math.max(1, main.length)}%"></i></div>
+              <p class="ms-note">Conquistas únicas não expiram. Todas ficam visíveis aqui e as resgatadas permanecem marcadas.</p>`;
           const sorted = periodic ? main : [...main].sort((a, b) => Number(a.claimed) - Number(b.claimed) || Number(b.completed) - Number(a.completed) || b.progress / b.target - a.progress / a.target);
-          body.innerHTML = filterBar + sorted.map((m) => this.card(m)).join("") + (final ? this.card(final) : "");
-          this.bindFilters(body);
+          body.innerHTML = sorted.map((m) => this.card(m)).join("") + (final ? this.card(final) : "");
         }
       }
       $("missions-offline").classList.toggle("hidden", !signed || online);
@@ -175,12 +169,6 @@
       $("indexbadge").textContent = !signed ? "Requer conta" : idx ? `${idx} recompensa${idx > 1 ? "s" : ""} disponíve${idx > 1 ? "is" : "l"}` : "Bestiário e marcos de abate";
       $("indexbtn").classList.toggle("has-reward", idx > 0);
       this.renderTracker();
-    },
-    bindFilters(body) {
-      const m = body.querySelector("[data-u-month]"),
-        s = body.querySelector("[data-u-status]");
-      if (m) m.onchange = () => { this.uMonth = m.value; this.render(); };
-      if (s) s.onchange = () => { this.uStatus = s.value; this.render(); };
     },
     renderTimers() {
       document.querySelectorAll("[data-countdown]").forEach((el) => {
