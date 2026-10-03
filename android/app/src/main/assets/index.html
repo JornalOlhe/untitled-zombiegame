@@ -10559,7 +10559,7 @@ body.netgame #revivetouch{display:flex}
             return m;
           },
           // Anything whose top is within STEP of your feet can be walked onto — no invisible walls.
-          STEP: 0.5,
+          STEP: 0.55,
           collides(x, z, r = 0.4, feet = 0) {
             const edge = this.half - 1.2;
             if (Math.abs(x) > edge - r || Math.abs(z) > edge - r) return true;
@@ -16849,6 +16849,7 @@ body.netgame #revivetouch{display:flex}
         // landings. Barrels and cones tip over and roll; everything settles and sleeps.
         const PhysicsProps = {
           items: [],
+          meshCache: [],
           defs: {
             barrel: { r: 0.32, h: 0.9, mass: 1, tex: "barrel", shape: "cyl", explosive: true },
             toxic: { r: 0.32, h: 0.9, mass: 1, tex: "toxic", shape: "cyl", explosive: true },
@@ -16913,6 +16914,7 @@ body.netgame #revivetouch{display:flex}
             for (const f of this.flashes) scene.remove(f.light);
             this.flashes = [];
             this.items = [];
+            this.meshCache.length = 0;
           },
           spawn(kind, x, z, y = null) {
             const d = this.defs[kind],
@@ -16939,6 +16941,7 @@ body.netgame #revivetouch{display:flex}
             mesh.userData.prop = p;
             this.pose(p);
             this.items.push(p);
+            this.meshCache.push(mesh);
             return p;
           },
           populate(index) {
@@ -16984,7 +16987,8 @@ body.netgame #revivetouch{display:flex}
             p.target = Math.PI / 2;
           },
           meshes() {
-            return this.items.map((p) => p.mesh);
+            // Hot path for bullets/streams/projectiles: avoid allocating a new array every raycast.
+            return this.meshCache;
           },
           // A bullet hit: push along the shot, spin, and tip light props over.
           shove(p, dir, point, damage) {
@@ -17057,6 +17061,7 @@ body.netgame #revivetouch{display:flex}
           detonate(p, index) {
             p.dead = true;
             this.items.splice(index, 1);
+            this.meshCache.splice(index, 1);
             p.group.parent?.remove(p.group);
             p.warnMat?.dispose();
             const at = p.pos.clone().add(new V(0, 0.5, 0)),
