@@ -1,0 +1,212 @@
+name: Publish Dead Recoil 0.35.0 (tag v40)
+# v40: 0.35.0 — final economy/backend alignment plus the complete v39 3D/loadout/third-person/UI stability set.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v40.yml']
+
+concurrency:
+  group: publish-v40
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  ui-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: node tests/js-syntax.cjs
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Full gameplay regression
+        env:
+          MONSTER_SHOTS: "0"
+        run: |
+          node tests/ui-smoke.cjs
+          node tests/pursuit-smoke.cjs
+          node tests/movement-smoke.cjs
+          node tests/economy-collision-smoke.cjs
+          node tests/replayability-smoke.cjs
+          node tests/weapons-smoke.cjs
+          node tests/cyborg-smoke.cjs
+          node tests/secret-smoke.cjs
+          node tests/monsters-smoke.cjs
+          node tests/intro-smoke.cjs
+          node tests/deathkill-smoke.cjs
+          node tests/projectiles-smoke.cjs
+          node tests/wall-smoke.cjs
+          node tests/stream-hitbox-smoke.cjs
+          node tests/dev-sandbox-smoke.cjs
+          node tests/melee-smoke.cjs
+          node tests/tp-smoke.cjs
+          node tests/spear-smoke.cjs
+          node tests/specter-smoke.cjs
+          node tests/ceiling-smoke.cjs
+          node tests/spawn-smoke.cjs
+          node tests/devmode-smoke.cjs
+          node tests/boss-audio-smoke.cjs
+          node tests/ascend-smoke.cjs
+          node tests/wings-tail-smoke.cjs
+          node tests/dof-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DeadRecoil-v40-UI
+          path: test-results/
+          retention-days: 15
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build Android
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_B64" ]; then
+            gradle assembleRelease --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
+      - name: Package and verify Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+              --out dist/DeadRecoil-v40.apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+            APK="dist/DeadRecoil-v40.apk"
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/DeadRecoil-v40-manual.apk
+            APK="dist/DeadRecoil-v40-manual.apk"
+            echo "::warning::Signing secrets are missing. Publishing manual-install APK."
+          fi
+          "$BT/apksigner" verify --print-certs "$APK" | head -5
+          BADGING=$("$BT/aapt" dump badging "$APK")
+          echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
+          echo "$BADGING" | grep -q "versionCode='40'"
+          echo "$BADGING" | grep -q "versionName='0.35.0'"
+          ANDROID_APK="$APK" python3 - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          apk = Path(os.environ["ANDROID_APK"])
+          source = Path("android/app/src/main/assets/index.html").read_bytes()
+          with zipfile.ZipFile(apk) as z:
+              packaged = z.read("assets/index.html")
+          if source != packaged:
+              raise SystemExit("Packaged game assets do not match current main.")
+          print("Android package contents verified.")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v40-Android
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate version
+        shell: pwsh
+        run: |
+          $package = Get-Content desktop/package.json | ConvertFrom-Json
+          if ($package.version -ne "0.35.0") { throw "Expected desktop 0.35.0" }
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+      - name: Smoke test
+        working-directory: desktop
+        run: npm run smoke
+      - name: Build Windows installer
+        working-directory: desktop
+        run: npm run dist
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $exe = "desktop/dist/DeadRecoil-Setup-0.35.0.exe"
+          if (!(Test-Path $exe)) { throw "Installer was not generated" }
+          if ((Get-Item $exe).Length -lt 50000000) { throw "Installer is unexpectedly small" }
+          Get-FileHash $exe -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v40-Windows
+          path: desktop/dist/DeadRecoil-Setup-0.35.0.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [ui-test, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-v40-Android
+          path: android-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-v40-Windows
+          path: windows-artifact
+      - name: Collect release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find android-artifact -type f -name '*.apk' -exec cp {} dist/ \;
+          find windows-artifact -type f -name '*.exe' -exec cp {} dist/ \;
+          test -n "$(find dist -maxdepth 1 -name '*.apk' -print -quit)"
+          test -f dist/DeadRecoil-Setup-0.35.0.exe
+          ls -lh dist
+      - name: Publish GitHub release v40
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v40 >/dev/null 2>&1; then
+            gh release upload v40 dist/*.apk dist/DeadRecoil-Setup-0.35.0.exe --clobber
+            gh release edit v40 --title "Dead Recoil 0.35.0" --notes-file release/v40-notes.md --latest
+          else
+            gh release create v40 dist/*.apk dist/DeadRecoil-Setup-0.35.0.exe \
+              --target "$GITHUB_SHA" --title "Dead Recoil 0.35.0" --notes-file release/v40-notes.md --latest
+          fi
+      - name: Verify release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view v40 --json tagName,name,isDraft,isPrerelease,assets,targetCommitish
