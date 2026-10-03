@@ -51,7 +51,8 @@ if(!(res.byMap[0].swat>res.byMap[2].swat))bad.push('City should bias SWAT above 
 if(!(res.byMap[3].cyborg>res.byMap[0].cyborg))bad.push('Lab should bias Cyborg above City');
 if(res.retired.some(Boolean))bad.push('retired enemy entered an ordinary wave');
 if(res.labels.some(x=>/moedas\s*[×x]/i.test(x)))bad.push('difficulty UI still advertises a coin multiplier');
-if(res.desktopCap!==85)bad.push('desktop active horde cap changed unexpectedly');\nif(!source.includes('class="mutation"')||!source.includes('const mutation = MutationManager.current;'))bad.push('active mutation is not persisted in the wave HUD');
+if(res.desktopCap!==85)bad.push('desktop active horde cap changed unexpectedly');
+if(!source.includes('class="mutation"')||!source.includes('const mutation = MutationManager.current;'))bad.push('active mutation is not persisted in the wave HUD');
 console.log(JSON.stringify(res));
 await b.close();server.close();
 if(bad.length){console.error('FAIL\n'+bad.join('\n'));process.exit(1);}
