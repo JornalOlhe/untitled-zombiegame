@@ -75,6 +75,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
       for (const [x, y] of [['idle', 'hover'], ['idle', 'forward'], ['hover', 'forward'], ['fall', 'idle'], ['takeoff', 'hover'], ['land', 'hover']])
         assert.ok(dist(a[x], a[y]) > 0.08, `angel: ${x} and ${y} are different wing shapes (${dist(a[x], a[y]).toFixed(3)})`);
       assert.ok(a.hover.tipVar > a.hover.rootVar, 'angel: primaries travel further than the root (chain follow-through)');
+      assert.ok(Math.abs(a.idle.root[1]) < 0.8, 'angel: resting wing root must not fold backward through the survivor');
     } else {
       assert.ok(a.rest.tipVar > 0.02 && a.run.tipVar > a.run.rootVar, 'demon: tail tip keeps swinging after the stop and leads the base in motion (inertia)');
       assert.ok(dist(a.turn, a.forward) > 0.03, 'demon: tail reacts to the turn');
