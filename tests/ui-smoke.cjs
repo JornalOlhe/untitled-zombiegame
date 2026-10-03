@@ -150,6 +150,7 @@ const server = http.createServer((req, res) => {
         };
       });
       assert.ok(armoryLayout.hud, 'Armory must use the Spin HUD layout');
+      assert.equal(await page.locator('#spin-buy').evaluate(el => getComputedStyle(el).display), 'none', 'Redundant BUY SPINS corner button must stay hidden');
       assert.ok(armoryLayout.canvas.width >= armoryLayout.width - 2 && armoryLayout.canvas.height >= armoryLayout.height - 2, `Character preview must be full-screen like the reference video ${JSON.stringify([armoryLayout.canvas,armoryLayout.width,armoryLayout.height])}`);
       assert.ok(armoryLayout.list.right < armoryLayout.lucky.left && armoryLayout.lucky.right < armoryLayout.bars.left, 'Left column, spin buttons and rarity column must stay ordered left-to-right');
       const blocks = ['list','bars','lucky','normal','tabs','back','pity','buy','title'];
@@ -169,6 +170,29 @@ const server = http.createServer((req, res) => {
       assert.ok(luckyRarities.some(text => /SECRETA.*0[,.]1%/.test(text)), 'Lucky Spin Secret chance must be 0.1%');
       await page.locator('[data-rarity-tier="4"]').click();
       assert.ok(await page.locator('#rarity-board .rarity-items .rarity-item').count() > 0, 'Clicking a rarity must reveal its items');
+      const preferredLayout = await page.evaluate(() => {
+        const items=()=>[...document.querySelectorAll('#rarity-board .rarity-items .rarity-item')];
+        const before=items().map(el=>el.dataset.previewId);
+        const target=items()[Math.min(1,items().length-1)];
+        const id=target.dataset.previewId, beforeIndex=before.indexOf(id);
+        target.click();
+        const after=items(), afterIds=after.map(el=>el.dataset.previewId), selected=after.find(el=>el.dataset.previewId===id);
+        const badge=selected?.querySelector('em.boost');
+        const result={beforeIndex,afterIndex:afterIds.indexOf(id),boost:!!badge,badgeColor:badge?getComputedStyle(badge).color:null,badgeBg:badge?getComputedStyle(badge).backgroundColor:null};
+        selected?.click(); // restore no preference so deterministic spin tests below stay unchanged
+        return result;
+      });
+      assert.equal(preferredLayout.afterIndex, preferredLayout.beforeIndex, 'x1.5 preference must not move the item downward');
+      assert.ok(preferredLayout.boost && preferredLayout.badgeBg !== 'rgba(0, 0, 0, 0)', 'x1.5 preference must keep its highlighted badge styling');
+      const confirmCompact = await page.evaluate(() => {
+        const dlg=document.querySelector('#spin-confirm'), card=dlg.querySelector('.spin-confirm-card'), actions=dlg.querySelector('.spin-confirm-actions');
+        dlg.classList.remove('hidden');
+        const c=card.getBoundingClientRect(), a=actions.getBoundingClientRect(), out={top:c.top,bottom:c.bottom,actionsTop:a.top,actionsBottom:a.bottom,height:innerHeight};
+        dlg.classList.add('hidden');
+        return out;
+      });
+      assert.ok(confirmCompact.top <= Math.max(80, confirmCompact.height*0.25), `replacement dialog must start high enough on compact screens: ${JSON.stringify(confirmCompact)}`);
+      assert.ok(confirmCompact.actionsBottom <= confirmCompact.height + 2, `proceed/cancel actions must not sit below the viewport: ${JSON.stringify(confirmCompact)}`);
       const armoryCopy = await page.locator('#classscreen').innerText();
       assert.ok(!/sacrificar|descartar resultado|eliminar resultado/i.test(armoryCopy), 'Old result/sacrifice flow must not be visible');
       const duplicateLoadout = await page.evaluate(async () => {
@@ -276,6 +300,10 @@ const server = http.createServer((req, res) => {
       assert.deepEqual(screenState.visible, ['menu'], 'screen transitions must leave exactly one menu visible');
       assert.deepEqual(screenState.hiddenInteractive, [], 'hidden menus must be inert and aria-hidden');
       await page.locator('#play').click();
+      await page.locator('#solo').click();
+      await page.locator('#backclass').click();
+      await page.locator('#playscreen:not(.hidden)').waitFor({state:'visible'});
+      assert.ok(await page.locator('#classscreen').evaluate(el=>el.classList.contains('hidden')), 'Map Back must return one step to Play, never open Loadout');
       await page.locator('#solo').click();
       const cards = await page.locator('#mapcards > button').evaluateAll(items => items.map(el => ({top:el.getBoundingClientRect().top,width:el.getBoundingClientRect().width})));
       assert.equal(cards.length,5);
