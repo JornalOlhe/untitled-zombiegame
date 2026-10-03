@@ -2575,6 +2575,26 @@ body.netgame #revivetouch{display:flex}
     <link rel="stylesheet" href="css/ui.css" />
     <link rel="stylesheet" href="css/spin-hud.css" />
 
+
+    <style id="v42-ui-fixes">
+      /* v42: remove the redundant corner purchase button; the + next to the spin controls keeps
+         the same explanation without competing with loadout actions. */
+      #spin-buy{display:none!important}
+      /* Replacement confirmation must stay in the usable upper/middle viewport on short screens. */
+      .spin-confirm{place-items:start center!important;padding:clamp(18px,7vh,72px) 16px 16px!important;overflow:auto!important}
+      .spin-confirm-card{max-height:calc(100dvh - 32px)!important;overflow:auto!important;padding:20px!important}
+      .spin-confirm-compare{margin:14px 0!important}
+      @media(max-height:520px){
+        .spin-confirm{padding-top:10px!important}
+        .spin-confirm-card{width:min(650px,96vw)!important;padding:13px 15px!important}
+        .spin-confirm-card h2{font-size:20px!important;margin-bottom:5px!important}
+        .spin-confirm-card>p{font-size:11px!important;line-height:1.3!important}
+        .spin-confirm-rarity{margin-bottom:4px!important}
+        .spin-confirm-compare{margin:8px 0!important;padding:8px!important}
+        .spin-confirm-actions{grid-template-columns:1fr 1.2fr!important}
+        .spin-confirm-actions button{min-height:38px!important;padding:7px 9px!important;font-size:10px!important}
+      }
+    </style>
 </head>
   <body>
     <canvas
@@ -3104,7 +3124,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.36.0";
+        const GAME_VERSION = "0.37.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -5339,7 +5359,9 @@ body.netgame #revivetouch{display:flex}
             staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.23, 0.2], grip: [0, -0.1, -0.23], rot: [0.08, Math.PI, -0.02], mode: "oneHand" } },
             scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.39, 0.24, 0.24], grip: [0, -0.12, -0.23], rot: [0.08, Math.PI, -0.035], mode: "oneHand" } },
             spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], rot: [1.25, 0, 0], mode: "spear" } },
-            specter: { fp: { r: null, l: null }, tp: { hold: [0.01, 0.19, 0.37], grip: [0, 0, 0], rot: [0, Math.PI, 0], mode: "conduct" } },
+            // Irelia-style: the five artifacts form a fan around the survivor, not one weapon held
+            // in front of the chest.
+            specter: { fp: { r: null, l: null }, tp: { hold: [0, 0.18, -0.16], grip: [0, 0, 0], rot: [0, Math.PI, 0], mode: "conduct" } },
             bow: { fp: null, tp: { hold: [-0.22, 0.3, 0.15], grip: [0, 0, -0.5], rot: [0, Math.PI, 0], mode: "bow" } },
             firearm: { fp: null, tp: { hold: [-0.05, 0.23, 0.34], grip: [0, -0.08, 0], leftGrip: [0, 0.015, -0.46], rot: [0, Math.PI, 0], mode: "rifle" } },
           },
@@ -5658,6 +5680,10 @@ body.netgame #revivetouch{display:flex}
             const model = scene.clone(true);
             gun.add(model);
             parts.model = model;
+            // The Demonic Fury GLB is authored opposite to the procedural scythe axis. Correct the
+            // visual model itself so both first- and third-person show the blade facing forward
+            // without disturbing the hand socket/attack animation.
+            if (w.scythe) model.rotation.y = Math.PI;
             for (const node of [...model.children]) {
               const role = /^mag/.test(node.name) ? "magazine" : /^pump/.test(node.name) ? "pump" : null;
               const pivot = role && parts[role];
@@ -17402,8 +17428,13 @@ body.netgame #revivetouch{display:flex}
             );
           },
           activeCap() {
-            // Preserve total enemies while limiting simultaneous AI/rig load on touch devices.
-            return touchMode ? 64 : 85;
+            // Keep the wave total intact, but scale simultaneous AI/rig pressure with graphics
+            // quality. This is especially important on Android, where 60+ animated rigs can
+            // saturate the CPU long before the GPU is full.
+            const caps = touchMode
+              ? { low: 36, medium: 46, high: 56, ultra: 64 }
+              : { low: 55, medium: 70, high: 85, ultra: 96 };
+            return caps[SettingsManager.data.graphics] ?? (touchMode ? 46 : 85);
           },
           start() {
             this.clearedAt = 0;
@@ -17539,13 +17570,23 @@ body.netgame #revivetouch{display:flex}
               this.spawnClock <= 0 &&
               ZombieManager.list.length < this.activeCap()
             ) {
-              ZombieManager.spawn(pick(this.spawnPool));
-              this.remaining--;
-              this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier());
+              // A failed spawn must never consume an enemy from the wave. Retry shortly instead:
+              // this prevents waves silently ending with fewer enemies when a spawn point/model
+              // is temporarily unavailable.
+              const spawned = ZombieManager.spawn(pick(this.spawnPool));
+              if (spawned) {
+                this.remaining--;
+                this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier());
+              } else this.spawnClock = 0.16;
             }
-            if (this.bossPending && this.remaining < this.total * 0.5) {
-              this.bossPending = false;
-              this.boss();
+            if (this.bossPending && this.remaining < this.total * 0.5 && this.spawnClock <= 0) {
+              // Keep the boss pending until creation actually succeeds; never lose the scheduled
+              // miniboss/boss because one spawn attempt returned null.
+              const spawnedBoss = this.boss();
+              if (spawnedBoss) {
+                this.bossPending = false;
+                this.spawnClock = Math.max(this.spawnClock, 0.22);
+              } else this.spawnClock = 0.22;
             }
             if (
               !this.remaining &&
@@ -23032,15 +23073,15 @@ body.netgame #revivetouch{display:flex}
               // curving down then up, ending in the three-bladed rotor tip from the template.
               tail.clear();
               tail.position.set(0, 0.02, -0.12);
-              const segs = [], N = 13;
+              const segs = [], N = 11;
               let parent = tail;
               for (let j = 0; j < N; j++) {
-                const k = j / (N - 1), len = 0.095 - k * 0.035, rad = 0.065 - k * 0.042;
+                const k = j / (N - 1), len = 0.105 - k * 0.055, rad = 0.052 - k * 0.032;
                 const seg = A.pivot(parent, 0, 0, j ? -segs[j - 1].userData.len : 0);
                 seg.userData.len = len;
-                seg.userData.base = j < 5 ? 0.2 : j < 9 ? 0.02 : -0.24; // down, level, then curling up
+                seg.userData.base = 0.08 - k * 0.26; // one continuous natural curve, no abrupt kinks
                 A.link(seg, [0, 0, 0], [0, 0, -len], rad, rad * 0.82, j % 2 ? horn : obsidian, "steel");
-                A.ellipsoid(seg, [0, 0, -len], [rad * 0.95, rad * 0.8, rad * 0.5], infernal, "steel", 0x5a0000);
+                A.ellipsoid(seg, [0, 0, -len], [rad * 0.72, rad * 0.62, rad * 0.42], j % 3 === 2 ? infernal : horn, "steel", j % 3 === 2 ? 0x350000 : 0);
                 A.link(seg, [0, rad * 0.7, -len * 0.4], [0, rad * 0.7 + 0.05 - k * 0.025, -len * 0.75], 0.012, 0.002, obsidian, "steel");
                 segs.push(seg);
                 parent = seg;
@@ -23103,9 +23144,9 @@ body.netgame #revivetouch{display:flex}
               if (src === parts.gun) parts.gun.visible = false;
               if (src) {
                 const slots = [
-                  [-0.72, 0.22, 0.02, -0.16], [0.72, 0.22, 0.02, 0.16],
-                  [-0.48, -0.42, 0.12, -0.3], [0.48, -0.42, 0.12, 0.3],
-                  [0, 0.68, 0.08, 0],
+                  [-0.78, 0.2, -0.08, -0.22], [0.78, 0.2, -0.08, 0.22],
+                  [-0.52, -0.42, -0.18, -0.35], [0.52, -0.42, -0.18, 0.35],
+                  [0, 0.72, -0.24, 0],
                 ];
                 slots.forEach((q, i) => {
                   const blade = src.clone(true);
@@ -23332,9 +23373,12 @@ body.netgame #revivetouch{display:flex}
                 sweep = k >= 0 && k < 1 ? Math.sin(Math.min(1, k / 0.55) * Math.PI * 0.5) : 0,
                 back = k >= 0.55 && k < 1 ? (k - 0.55) / 0.45 : 0;
               r.gun.visible = !(SecretWeaponSkills.spinUntil > simulationTime);
-              const x = k >= 0 && k < 1 ? (back ? -dir * 0.6 * (1 - back) + 0.46 * back : dir * 0.6 - dir * 1.2 * sweep) : 0.46;
-              r.gun.position.set(-x + Math.sin(t * 1.3) * 0.02, 0.3 + Math.sin(t * 2.1) * 0.04, 0.34 + (k >= 0 && k < 1 ? Math.sin(sweep * Math.PI) * 0.25 : 0));
-              r.gun.rotation.set(Math.PI / 2 - 0.2, Math.PI, (k >= 0 && k < 1 ? dir * 0.55 * (1 - back) : 0));
+              const x = k >= 0 && k < 1 ? (back ? -dir * 0.6 * (1 - back) : dir * 0.6 - dir * 1.2 * sweep) : 0;
+              // Idle formation stays wrapped around/behind the torso. During a strike the whole fan
+              // shifts only enough to sell the cut, then returns to the orbit instead of parking in
+              // front of the survivor.
+              r.gun.position.set(-x * 0.4 + Math.sin(t * 1.3) * 0.01, 0.28 + Math.sin(t * 2.1) * 0.025, -0.18 + (k >= 0 && k < 1 ? Math.sin(sweep * Math.PI) * 0.12 : 0));
+              r.gun.rotation.set(Math.PI / 2 - 0.2, Math.PI, (k >= 0 && k < 1 ? dir * 0.42 * (1 - back) : 0));
               r.gun.scale.setScalar(0.5);
               const specterBreath = Math.sin(t * 0.62) * 0.007;
               for (const p of r.specterPreview || []) {
@@ -23433,10 +23477,12 @@ body.netgame #revivetouch{display:flex}
                   spreadTips = falling ? 0.2 : 0.05;
                 } else {
                   const run = clamp((secret.hS - 3.5) / 3, 0, 1), walk = clamp(secret.hS / 3, 0, 1);
-                  fold = 0.86 - 0.06 * walk - 0.28 * run;
+                  // Keep the resting wings visibly outside the back instead of folding through /
+                  // behind the survivor. Motion still adds a natural partial fold while running.
+                  fold = 0.56 - 0.04 * walk - 0.16 * run;
                   amp = 0.025 + 0.02 * walk + 0.05 * run;
                   freq = 0.32 + 0.5 * walk + 0.55 * run; // breathing when idle
-                  sweep = 0.12 * run;
+                  sweep = 0.09 * run;
                 }
                 secret.beat = (secret.beat || 0) + dt * freq * Math.PI * 2;
                 const turnAsym = clamp(secret.turn * 0.3, -0.8, 0.8) * (0.4 + f * 0.6);
@@ -23454,7 +23500,7 @@ body.netgame #revivetouch{display:flex}
                       const w = [0.55, 0.3, 0.22, 0.16][i];
                       return {
                         z: (i === 0 ? 0.1 + lift - 0.25 * wFold : 0) + stroke * wAmp * w - (i >= 2 ? up * wAmp * 0.45 : 0),
-                        y: (i === 0 ? 0.15 + 1.05 * wFold + sweep : i === 1 ? 0.55 * wFold + sweep * 0.5 : i === 2 ? 0.95 * wFold + up * wAmp * 0.6 : 0.5 * wFold + up * wAmp * 0.35 - spreadTips),
+                        y: (i === 0 ? 0.08 + 0.58 * wFold + sweep * 0.65 : i === 1 ? 0.28 * wFold + sweep * 0.35 : i === 2 ? 0.5 * wFold + up * wAmp * 0.4 : 0.28 * wFold + up * wAmp * 0.25 - spreadTips),
                         x: (i === 3 ? -0.15 * spreadTips + stroke * wAmp * 0.12 : i === 0 ? 0.1 * wFold : 0),
                       };
                     });
@@ -23503,7 +23549,7 @@ body.netgame #revivetouch{display:flex}
                 const ak = ownD ? ClassAscend.since() : 99, de = ClassAscend.env(ak),
                   whipFront = (ak - ClassAscend.ANT) / 0.38; // travelling pulse position along the chain (0 base → 1 tip)
                 secret.whip = de.launch;
-                secret.tail.rotation.x = -0.35 * f - secret.lagX * (1 - f) * 0.5 + 0.6 * de.ant - 0.22 * de.launch;
+                secret.tail.rotation.x = -0.18 * f - secret.lagX * (1 - f) * 0.35 + 0.35 * de.ant - 0.12 * de.launch;
                 secret.tail.rotation.z = 0;
                 // Bone chain with inertia: every vertebra chases its target through its own spring,
                 // stiff at the base (it leads) and looser toward the tip (it arrives last and
@@ -23512,20 +23558,20 @@ body.netgame #revivetouch{display:flex}
                 secret._vel = vel;
                 secret.kick = (secret.kick || 0) + (clamp(-acc * 0.02, -0.35, 0.35) - (secret.kick || 0)) * (1 - Math.exp(-dt * 10));
                 secret.segs?.forEach((seg, i) => {
-                  const k = i / 12,
+                  const k = i / Math.max(1, secret.segs.length - 1),
                     ph = t * 10 - i * 0.55,
                     sway = t * (2.4 + moving * 3) - i * 0.5,
-                    walk = 0.09 + moving * 0.16;
+                    walk = 0.055 + moving * 0.1;
                   const swim = t * 5.2 - i * 0.62, pulse = whipFront >= 0 && whipFront < 1.4 ? Math.exp(-(((k - whipFront) * 4.5) ** 2)) : 0;
                   const tx =
                     seg.userData.base * (1 - f * 0.55) - secret.lagX * (1 - f) * 0.35 + secret.kick * (0.3 + k) * (1 - f) +
                     Math.sin(sway * 0.9) * walk * 0.6 * (1 - f) +
-                    f * Math.sin(swim * 0.5 + 1.1) * (0.03 + 0.06 * k) - // flight: slow vertical undulation
-                    de.ant * (0.04 + 0.3 * k) + // cast: coil up over the back (scorpion)
-                    pulse * 0.5 * (0.4 + 0.6 * k); // whip crack running down the chain
+                    f * Math.sin(swim * 0.5 + 1.1) * (0.02 + 0.04 * k) - // flight: restrained vertical undulation
+                    de.ant * (0.03 + 0.22 * k) + // cast: coil up over the back (scorpion)
+                    pulse * 0.32 * (0.4 + 0.6 * k); // whip crack running down the chain
                   const ty =
-                    Math.sin(sway) * walk * (1 - f) + secret.lagY * (0.4 + k) * (1 - f * 0.6) +
-                    f * Math.sin(swim) * (0.05 + 0.17 * k) + // flight: swimming S-wave, widest at the tip
+                    Math.sin(sway) * walk * (1 - f) + secret.lagY * (0.34 + k * 0.7) * (1 - f * 0.6) +
+                    f * Math.sin(swim) * (0.03 + 0.1 * k) + // flight: controlled S-wave, widest at the tip
                     de.ant * Math.sin(i * 0.5) * 0.06;
                   const S = (seg.userData.spr ||= { x: tx, y: ty, vx: 0, vy: 0 }), K = 320 - k * 230, C = 2 * (0.75 - k * 0.3) * Math.sqrt(K);
                   const n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
@@ -23537,7 +23583,9 @@ body.netgame #revivetouch{display:flex}
                   seg.rotation.y = S.y;
                 });
                 // tip blade: lazy idle turn, a short flourish on the whip, steady cruise in flight
-                secret.rotor.rotation.z += dt * (2.5 + 5.5 * f + 26 * de.launch);
+                // The tip is a blade ornament, not a helicopter: a restrained flourish follows the
+                // tail movement, with one sharper turn only during the launch/whip.
+                secret.rotor.rotation.z = Math.sin(t * (1.2 + 1.8 * f)) * (0.1 + 0.08 * f) + de.launch * 0.55;
                 if (!secret.trail) {
                   secret.trail = new BladeTrail(scene, 0xff2a14, 1, 0.4);
                   g.userData.tailTrail = secret.trail;
@@ -24166,9 +24214,14 @@ body.netgame #revivetouch{display:flex}
             const tiers = rarityNames.map((name, tier) => ({ name, tier, rate: rates[tier] })).filter((e) => e.rate > 0);
             const dense = tiers.length > 6, listTop = 73 + (dense ? 56 : 77) * tiers.length - (dense ? 10 : 15) + 22;
             const bars = tiers.map((e) => `<button type="button" class="rarity-line tier-${e.tier} ${e.tier === this.rarityFilter ? "active" : ""}" data-rarity-tier="${e.tier}" aria-pressed="${e.tier === this.rarityFilter}"><span>${e.name.toUpperCase()}</span><b>${e.rate}%</b></button>`).join("");
-            const inTier = catalog.map((item, id) => ({ item, id })).filter((e) => e.item.tier === this.rarityFilter && e.id !== prefId);
-            const items = inTier.map(({ item, id }) => `<button type="button" class="rarity-item ${id === currentId ? "equipped" : ""}" data-preview-id="${id}" style="--rarity:${rarityColors[item.tier]}" title="${+this.itemChance(kind, id, mode === "lucky").toFixed(3)}%">${item.name}</button>`).join("")
-              + (prefId != null ? `<button type="button" class="rarity-item preferred" data-preview-id="${prefId}" style="--rarity:${rarityColors[catalog[prefId].tier]}" title="Preferido: chance x1.5 dentro da raridade (toque para remover)">${catalog[prefId].name}<em>x1.5</em></button>` : "");
+            const inTier = catalog.map((item, id) => ({ item, id })).filter((e) => e.item.tier === this.rarityFilter);
+            // Preference is a visual state, not a reorder: keep the item in its original slot and
+            // only add the highlighted x1.5 badge. This prevents the selected item jumping downward.
+            const items = inTier.map(({ item, id }) => {
+              const preferred = id === prefId,
+                title = preferred ? "Preferido: chance x1.5 dentro da raridade (toque para remover)" : `${+this.itemChance(kind, id, mode === "lucky").toFixed(3)}%`;
+              return `<button type="button" class="rarity-item ${id === currentId ? "equipped" : ""} ${preferred ? "preferred" : ""}" data-preview-id="${id}" style="--rarity:${rarityColors[item.tier]}" title="${title}">${item.name}${preferred ? '<em class="boost">x1.5</em>' : ""}</button>`;
+            }).join("");
             $("rarity-board").innerHTML = `<div class="spin-mode"><button type="button" data-odds-mode="normal" class="${mode === "normal" ? "active" : ""}"><span class="t">NORMAL</span></button><button type="button" data-odds-mode="lucky" class="${mode === "lucky" ? "active" : ""}"><span class="t">LUCKY</span></button></div><div class="rarity-bars ${dense ? "dense" : ""}">${bars}</div><div class="rarity-items" style="--lt:${listTop}">${items}</div>`;
             $("armory-info").innerHTML = "";
             // BOTTOM centre — counter + LUCKY/NORMAL (icon + bar) + plus.
@@ -25481,7 +25534,7 @@ body.netgame #revivetouch{display:flex}
           UIManager.mapCards();
           UIManager.screen("mapscreen");
         };
-        $("backclass").onclick = () => Armory.open();
+        $("backclass").onclick = () => DR.LobbyUI.openPlay();
         $("nextmode").onclick = () => {
           $("chosenmap").textContent = `Zona selecionada: ${maps[selectedMap].name}`;
           document.querySelectorAll("[data-choice]").forEach((button) => {
