@@ -22742,7 +22742,7 @@ body.netgame #revivetouch{display:flex}
               [0, 0.21, 0],
               [0.26, 0.32, 0.155],
               shirt,
-              "cloth",
+              "skin",
             );
             A.ellipsoid(
               hips,
@@ -22830,11 +22830,35 @@ body.netgame #revivetouch{display:flex}
                 s.pants,
                 "cloth",
               );
+              // Cargo-pant silhouette from the approved base skin: outer pocket, thigh strap and
+              // a layered dark sneaker with a pale sole. These are geometry layers, so they remain
+              // readable in the 3D loadout/store preview without relying on a flat screenshot.
+              A.block(
+                leg,
+                [side * 0.082, -0.19, 0.075],
+                [0.052, 0.14, 0.045],
+                0x242a28,
+                "cloth",
+              );
+              A.block(
+                leg,
+                [0, -0.285, 0.088],
+                [0.19, 0.035, 0.035],
+                0x202523,
+                "cloth",
+              );
               A.block(
                 knee,
                 [0, -0.335, 0.055],
                 [0.15, 0.16, 0.29],
                 s.boots,
+                "polymer",
+              );
+              A.block(
+                knee,
+                [0, -0.405, 0.062],
+                [0.158, 0.045, 0.305],
+                0xd1d4d3,
                 "polymer",
               );
               legs.push(leg);
@@ -22848,7 +22872,7 @@ body.netgame #revivetouch{display:flex}
                 0.078,
                 0.063,
                 shirt,
-                "cloth",
+                "skin",
               );
               A.link(
                 elbow,
@@ -22857,7 +22881,7 @@ body.netgame #revivetouch{display:flex}
                 0.059,
                 0.042,
                 shirt,
-                "cloth",
+                "skin",
               );
               A.ellipsoid(
                 elbow,
@@ -22873,23 +22897,27 @@ body.netgame #revivetouch{display:flex}
               chest,
               [0, 0.23, 0.13],
               [0.36, 0.38, 0.045],
-              shirt,
-              "cloth",
+              skin,
+              "skin",
             );
+            // Subtle chest/abdomen planes keep the shirtless torso readable under neutral lighting.
+            const skinShade = new THREE.Color(skin).offsetHSL(0, 0, -0.075);
+            A.block(chest, [0, 0.145, 0.158], [0.018, 0.21, 0.012], skinShade, "skin");
+            A.block(chest, [0, 0.035, 0.154], [0.21, 0.018, 0.012], skinShade, "skin");
             for (const side of [-1, 1]) {
               A.block(
                 chest,
                 [side * 0.105, 0.32, 0.164],
                 [0.12, 0.12, 0.018],
-                shirt,
-                "cloth",
+                skin,
+                "skin",
               );
               A.block(
                 chest,
                 [side * 0.075, 0.49, 0.08],
                 [0.1, 0.04, 0.07],
-                shirt,
-                "cloth",
+                skin,
+                "skin",
               );
               A.ellipsoid(
                 head,
