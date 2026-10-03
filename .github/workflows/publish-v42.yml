@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.37.0 (tag v42)
-# v42: 0.37.0 — wave reliability, loadout navigation/UI, secret rigs, quality-aware horde caps and full regression gates. Final HEAD rebuild. Gate rebuild 3.
+# v42: 0.37.0 — wave reliability, loadout navigation/UI, secret rigs, quality-aware horde caps and full regression gates. Final HEAD rebuild. Gate rebuild 4.
 
 on:
   workflow_dispatch:
