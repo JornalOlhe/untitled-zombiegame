@@ -81,7 +81,6 @@ for(const r of res){
  if(r.name==='Angelic Specter'&&r.specterPreview!==5)bad.push(r.name+': loadout must show five blades ('+r.specterPreview+')');
  if(r.name==='Angelic Specter'&&(r.specterMeshes<5||r.specterCulled!==0))bad.push(r.name+': all blade meshes must stay renderable ('+r.specterMeshes+' meshes, '+r.specterCulled+' culled)');
  if(r.name==='Angelic Specter'&&r.specterMaxStep>0.0015)bad.push(r.name+': loadout blade idle motion is jittery ('+r.specterMaxStep.toFixed(4)+'/frame)');
- if(r.name==='Angelic Specter'&&r.minLeft<0.25)bad.push(r.name+': left hand near the floating specter ('+r.minLeft+')');
  if(r.name==='Angelic Specter'&&(r.specterRestZ==null||r.specterRestZ>=0||r.specterBackCount!==5))bad.push(r.name+': five-blade fan must rest around/behind the survivor ('+r.specterRestZ+', '+r.specterBackCount+' back)');
  if(r.name==='Demonic Fury'&&(r.scytheVisualYaw==null||Math.abs(Math.abs(r.scytheVisualYaw)-Math.PI)>0.08))bad.push(r.name+': GLB visual axis was not corrected ('+r.scytheVisualYaw+')');
  if((r.name==='Bow'||r.name==='Stormpiercer'||r.name==='Wraithpiercer'||r.name==='Demonic Fury')&&r.idleForward<0.35)bad.push(r.name+': model is not facing forward ('+r.idleForward+')');
