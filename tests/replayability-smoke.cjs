@@ -1,8 +1,10 @@
 // Replayability regression: mutations must matter, map compositions must differ, retired
-// enemies must stay retired, difficulty copy must match the deterministic coin economy,\n// and active mutations must remain visible in the wave HUD.
+// enemies must stay retired, difficulty copy must match the deterministic coin economy,
+// and active mutations must remain visible in the wave HUD.
 const { chromium } = require('playwright');
 const http=require('http'),fs=require('fs'),path=require('path');
-const root=path.resolve('android/app/src/main/assets');\nconst source=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const root=path.resolve('android/app/src/main/assets');
+const source=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent(q.url.split('?')[0]==='/'?'index.html':q.url.split('?')[0]));fs.readFile(f,(e,d)=>{if(e){r.writeHead(404).end();return;}r.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');r.end(d)})});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const b=await chromium.launch({executablePath:process.env.PW_CHROMIUM||undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
