@@ -82,6 +82,8 @@ try{
  assert.match(economySql,/when 'constructor' then 50[\s\S]*when 'swat' then 50[\s\S]*when 'cyborg' then 50/,'backend high-value enemy rewards must stay 50');
  assert.match(economySql,/greatest\(0, dspawn\) \* 10[\s\S]*greatest\(0, dc\) \* 50/,'backend must persist boss-spawn + wave rewards');
  assert.match(economySql,/set coins = case when major then 1000 else 500 end/,'backend boss catalog must persist 1000/500');
+ assert.doesNotMatch(economySql,/coins_earned\s*=\s*coins_earned\s*\+\s*v_coins/,'match rewards must not double-count coins_earned before _grant');
+ assert.match(economySql,/idx_v39_lobbies_host_id[\s\S]*idx_v39_player_badges_badge_key/,'backend FK performance indexes must stay present');
  assert.deepEqual(errs,[]);
  console.log('PASS collision volumes + deterministic economy rewards');
 }finally{await b.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exit(1);});
