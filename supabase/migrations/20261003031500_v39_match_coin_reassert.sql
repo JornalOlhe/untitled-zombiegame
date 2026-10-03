@@ -167,7 +167,7 @@ begin
     losses = losses + case when p_ended and p_result = 'loss' then 1 else 0 end,
     wins = wins + case when won then 1 else 0 end,
     multiplayer_matches = multiplayer_matches + case when p_ended and r.party_size > 1 then 1 else 0 end,
-    coins_earned = coins_earned + v_coins,
+    -- _grant() is the single source of truth for coins_earned; do not add v_coins here too.
     updated_at = now()
   where user_id = p_uid;
   perform public._grant(p_uid, v_coins, v_xp, nt, lt);
@@ -179,3 +179,12 @@ begin
     'mpMatch', case when p_ended and r.party_size > 1 then 1 else 0 end));
   return jsonb_build_object('coins', v_coins, 'xp', v_xp, 'normal', nt, 'lucky', lt, 'totals', t);
 end $$;
+
+
+-- Cover the foreign keys used by lobby joins/cleanup. These are intentionally narrow B-tree
+-- indexes and do not change RLS or public API behavior.
+create index if not exists idx_v39_lobbies_difficulty on public.lobbies(difficulty);
+create index if not exists idx_v39_lobbies_host_id on public.lobbies(host_id);
+create index if not exists idx_v39_lobbies_map_id on public.lobbies(map_id);
+create index if not exists idx_v39_lobby_bans_user_id on public.lobby_bans(user_id);
+create index if not exists idx_v39_player_badges_badge_key on public.player_badges(badge_key);
