@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.34.0 (tag v39)
-# v39: 0.34.0 — economy contract, loadout/third-person fixes, menu hardening and full regression gates.
+# v39: 0.34.0 — economy contract, loadout/third-person fixes, menu hardening and full regression gates. Final HEAD rebuild.
 
 on:
   workflow_dispatch:
