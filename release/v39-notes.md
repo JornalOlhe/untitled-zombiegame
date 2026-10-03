@@ -38,6 +38,8 @@ Esta release fecha a rodada de economia, loadout, terceira pessoa, menus, origem
 
 ## Performance e estabilidade
 - Removida uma alocação Vector3 por frame da animação da Specter.
+- A atualização da horda não cria mais uma cópia da lista inteira por frame; o vetor direção jogador→zumbi é reutilizado por inimigo.
+- Torres só procuram alvo quando podem disparar e não criam mais arrays temporários com filter/sort da horda.
 - Movimento visual da Specter foi simplificado sem remover as cinco lâminas independentes no gameplay.
 - Mantidos os limites de horda adaptados para mobile e desktop e as otimizações de clima/mapa da v38.
 - Suite de regressão cobre economia, replayability, UI, colisões, terceira pessoa, armas, projéteis, bosses, segredos e multiplayer.
