@@ -15,7 +15,10 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
  W.weapons.forEach((def,idx)=>{
   const g=S.create(0,def);T.scene.add(g);const r=g.userData.rig;
   let specterPreview=0,specterMeshes=0,specterCulled=0;
-  g.traverse(o=>{if(o.name&&/^LoadoutSpecter_0/.test(o.name))specterPreview++;if(r.specterWeapon&&o.isMesh){specterMeshes++;if(o.frustumCulled)specterCulled++;}});
+  for(const entry of r.specterPreview||[]){
+    specterPreview++;
+    entry.blade.traverse(o=>{if(o.isMesh){specterMeshes++;if(o.frustumCulled)specterCulled++;}});
+  }
   const rec={name:def.name,kind:def.kind,minLeft:1e9,maxLeftSpear:0,maxRight:0,maxPen:0,nan:false,oneHand:r.oneHand,spear:r.spearHold,
     specterPreview,specterMeshes,specterCulled,specterMaxStep:0,idleForward:null,muzzleAhead:null};
   let previousSpecter=null;
