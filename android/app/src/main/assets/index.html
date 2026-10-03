@@ -11361,9 +11361,9 @@ body.netgame #revivetouch{display:flex}
               k = since / dur,
               dir = (this.combo || 0) % 2 ? -1 : 1; // 1 = right → left
             this.model.visible = !spinning && !(w.spear && SpearThrow.active) && !SpecterSwarm.active;
-            const anchor = new V(0.44 + Math.sin(t * 1.3) * 0.012, -0.06 + Math.sin(t * 2.1) * 0.022, -0.82);
+            const anchor = new V(0.44 + Math.sin(t * 0.72) * 0.004, -0.06 + Math.sin(t * 0.86) * 0.008, -0.82);
             let pos = anchor,
-              tilt = 0.18 + Math.sin(t * 1.15) * 0.04,
+              tilt = 0.18 + Math.sin(t * 0.68) * 0.012,
               lean = 0;
             this.specterStriking = false;
             if (k >= 0 && k < 1 && lastShot > 0) {
@@ -11382,9 +11382,9 @@ body.netgame #revivetouch{display:flex}
               tilt += dir * 1.05 * swing * (k < 0.55 ? 1 : -1) * (k < 0.2 ? -1 : 1);
               lean = swing * 0.35;
             }
-            this.basePos.copy(this.basePos.clone().lerp(pos, k < 1 ? 1 : 1 - Math.exp(-dt * 10)));
+            this.basePos.lerp(pos, k < 1 ? 1 : 1 - Math.exp(-dt * 10));
             this.model.position.copy(this.basePos);
-            this.model.rotation.set(Math.PI / 2 - 0.22 - lean, Math.sin(t * 0.8) * 0.05, tilt);
+            this.model.rotation.set(Math.PI / 2 - 0.22 - lean, Math.sin(t * 0.52) * 0.015, tilt);
           },
           buildModel() {
             this.model.traverse((o) => {
@@ -19707,8 +19707,14 @@ body.netgame #revivetouch{display:flex}
           screen(id) {
             const epoch = ++this.screenEpoch;
             if (id === "pausescreen") this.pauseMenu();
-            for (const el of document.querySelectorAll(".screen"))
-              el.classList.toggle("hidden", el.id !== id);
+            const active = document.activeElement;
+            for (const el of document.querySelectorAll(".screen")) {
+              const hidden = el.id !== id;
+              if (hidden && active && el.contains(active) && active.blur) active.blur();
+              el.classList.toggle("hidden", hidden);
+              el.inert = hidden;
+              el.setAttribute("aria-hidden", String(hidden));
+            }
             $("touch").classList.toggle(
               "hidden",
               !touchMode || state !== GameState.PLAYING,
@@ -19719,6 +19725,7 @@ body.netgame #revivetouch{display:flex}
                 const target = $(id);
                 if (!target || target.classList.contains("hidden")) return;
                 target.scrollTop = 0;
+                target.scrollLeft = 0;
                 target.querySelector("button,select,input")?.focus({ preventScroll: true });
               });
             }
@@ -23088,15 +23095,24 @@ body.netgame #revivetouch{display:flex}
                   blade.visible = true;
                   blade.traverse((o) => {
                     // The procedural fallback contains the hidden muzzle sprite; keep it hidden
-                    // while making every actual mesh visible.
-                    if (o.isMesh) o.visible = true;
+                    // while making every actual mesh visible. Specter blades are small/fast-moving:
+                    // disable per-mesh frustum culling so one blade never flickers out in loadout.
+                    if (o.isMesh) {
+                      o.visible = true;
+                      o.frustumCulled = false;
+                    }
                     if (o.isSprite) o.visible = false;
                   });
                   blade.name = "LoadoutSpecter_0" + (i + 1);
                   blade.position.set(q[0], q[1], q[2]);
                   blade.rotation.set(Math.PI / 2, 0, q[3]);
                   gun.add(blade);
-                  specterPreview.push({ blade, base: new V(q[0], q[1], q[2]), phase: i * 1.37 });
+                  specterPreview.push({
+                    blade,
+                    base: new V(q[0], q[1], q[2]),
+                    baseRot: q[3],
+                    phase: i * 1.37,
+                  });
                 });
               }
             }
@@ -23152,12 +23168,14 @@ body.netgame #revivetouch{display:flex}
             g.updateMatrixWorld(true);
             const inv = g.matrixWorld.clone().invert(), ch = r.chest.getWorldPosition(new V()).applyMatrix4(inv), hp = r.hips.getWorldPosition(new V()).applyMatrix4(inv), S = r.gunSpan;
             let need = 0, side = 0;
-            for (let i = 0; i <= 8; i++) {
+            // Dense sampling + a slightly conservative torso capsule keeps long weapons out of
+            // chest/hip geometry even while the animation is between authored keyframes.
+            for (let i = 0; i <= 14; i++) {
               const q = S.c.clone();
-              q[S.ax] = S.lo + ((S.hi - S.lo) * i) / 8;
+              q[S.ax] = S.lo + ((S.hi - S.lo) * i) / 14;
               q.applyMatrix4(r.gun.matrixWorld).applyMatrix4(inv);
-              if (q.y > hp.y - 0.2 && q.y < ch.y + 0.3 && Math.abs(q.z - ch.z) < 0.18) {
-                const pen = 0.27 - Math.abs(q.x - ch.x);
+              if (q.y > hp.y - 0.24 && q.y < ch.y + 0.38 && Math.abs(q.z - ch.z) < 0.235) {
+                const pen = 0.34 - Math.abs(q.x - ch.x);
                 if (pen > need) { need = pen; side = Math.sign(q.x - ch.x) || -1; }
               }
             }
@@ -23292,11 +23310,16 @@ body.netgame #revivetouch{display:flex}
               r.gun.position.set(-x + Math.sin(t * 1.3) * 0.02, 0.3 + Math.sin(t * 2.1) * 0.04, 0.34 + (k >= 0 && k < 1 ? Math.sin(sweep * Math.PI) * 0.25 : 0));
               r.gun.rotation.set(Math.PI / 2 - 0.2, Math.PI, (k >= 0 && k < 1 ? dir * 0.55 * (1 - back) : 0));
               r.gun.scale.setScalar(0.5);
+              const specterBreath = Math.sin(t * 0.62) * 0.007;
               for (const p of r.specterPreview || []) {
                 p.blade.position.copy(p.base);
-                p.blade.position.y += Math.sin(t * 1.45 + p.phase) * 0.035;
-                p.blade.position.z += Math.cos(t * 0.8 + p.phase) * 0.018;
-                p.blade.rotation.z = Math.sin(t * 0.72 + p.phase) * 0.08;
+                p.blade.position.y += specterBreath + Math.sin(t * 0.43 + p.phase) * 0.004;
+                p.blade.position.z += Math.cos(t * 0.37 + p.phase) * 0.003;
+                p.blade.rotation.set(
+                  Math.PI / 2,
+                  0,
+                  (p.baseRot || 0) + Math.sin(t * 0.31 + p.phase) * 0.012,
+                );
               }
               // The right (guiding) hand only gestures beside the artifacts; the left arm stays relaxed.
               r.arms[0].rotation.x = -0.9 + (k >= 0 && k < 1 ? -0.5 * (1 - back) : Math.sin(t * 2.4) * 0.1);
