@@ -18,6 +18,16 @@ const server = http.createServer((q, r) => { const f = path.resolve(root, '.' + 
     W.equip({ ...W.weapons.find(x => x.name === 'Angelic Specter') }); W.buildModel();
     T.player.pos.set(0, 1.7, 0); T.setYaw(0); T.setPitch(0);
     const out = {};
+    // Cached strike sampling must preserve the exact authored path while avoiding
+    // rebuilding all 48 arc segments at 144 Hz. Returns still follow moving slots.
+    const points = [new V(0, 0, 0), new V(1, 2, -1), new V(-2, 1, -4), new V(0, 0, -6)];
+    const cache = {}; let maxPathError = 0;
+    for (let frame = 0; frame <= 144; frame++) {
+      maxPathError = Math.max(maxPathError, S.path(points, frame / 144).distanceTo(S.path(points, frame / 144, cache)));
+    }
+    const shifted = points.map(p => p.clone().add(new V(1, 0, 0)));
+    maxPathError = Math.max(maxPathError, S.path(shifted, 0.5).distanceTo(S.path(shifted, 0.5, cache)));
+    out.maxPathError = maxPathError;
     for (const fps of [30, 60, 144]) {
       Z.clear();
       const z = Z.spawn(0, null, new V(0.2, 0, -4.5)); z.hp = z.maxHp = 1e6;
@@ -52,6 +62,7 @@ const server = http.createServer((q, r) => { const f = path.resolve(root, '.' + 
     assert.ok(r.allHome, `${fps} fps: all blades return to the formation`);
     assert.ok(r.starts.some(s => new Set(s).size > 1), 'multi-blade attacks start at different times');
   }
+  assert.ok(res.maxPathError < 1e-10, 'arc cache preserves strike paths and invalidates replaced waypoints');
   // same damage whatever the frame rate (swept hit test, one hit per target per blade)
   const h30 = res['30'].hits.reduce((a, b) => a + b), h144 = res['144'].hits.reduce((a, b) => a + b);
   assert.ok(Math.abs(h30 - h144) / h144 < 0.25, `damage independent of fps (${h30} vs ${h144})`);

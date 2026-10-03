@@ -3104,7 +3104,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.35.0";
+        const GAME_VERSION = "0.36.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -18089,10 +18089,17 @@ body.netgame #revivetouch{display:flex}
             return this.cr(pts[Math.max(0, i - 1)], pts[i], pts[i + 1], pts[Math.min(n, i + 2)], x - i);
           },
           // arc-length parameterised: the time warp alone decides the blade's speed along the path
-          path(pts, s) {
-            const n = pts.length - 1, N = 48, acc = [0];
-            let prev = pts[0];
-            for (let j = 1; j <= N; j++) { const q = this.rawPath(pts, (j / N) * n); acc.push(acc[j - 1] + q.distanceTo(prev)); prev = q; }
+          path(pts, s, attack = null) {
+            const n = pts.length - 1, N = 48;
+            // Strike waypoints are immutable after launch. Cache their arc lengths once;
+            // return paths have a moving endpoint and deliberately remain uncached.
+            let acc = attack?.arcPoints === pts ? attack.arcLengths : null;
+            if (!acc) {
+              acc = new Float64Array(N + 1);
+              let prev = pts[0];
+              for (let j = 1; j <= N; j++) { const q = this.rawPath(pts, (j / N) * n); acc[j] = acc[j - 1] + q.distanceTo(prev); prev = q; }
+              if (attack) { attack.arcPoints = pts; attack.arcLengths = acc; }
+            }
             const want = clamp(s, 0, 1) * acc[N];
             let j = 1;
             while (j < N && acc[j] < want) j++;
@@ -18156,7 +18163,7 @@ body.netgame #revivetouch{display:flex}
                   }
                   const k = (t - a.start) / a.dur;
                   const s = this.warp(k);
-                  const p = this.path(a.pts, s);
+                  const p = this.path(a.pts, s, a);
                   b.prev.copy(b.pos);
                   b.pos.copy(p);
                   b.vel.copy(p.clone().sub(b.prev).divideScalar(Math.max(dt, 1e-3)));
@@ -18195,7 +18202,8 @@ body.netgame #revivetouch{display:flex}
                 const steps = Math.max(1, Math.ceil(dt / 0.008)), h = dt / steps;
                 b.prev.copy(b.pos);
                 for (let n = 0; n < steps; n++) {
-                  b.vel.addScaledVector(goal.clone().sub(b.pos).multiplyScalar(b.k).addScaledVector(b.vel, -c), h);
+                  b.springForce ||= new V();
+                  b.vel.addScaledVector(b.springForce.copy(goal).sub(b.pos).multiplyScalar(b.k).addScaledVector(b.vel, -c), h);
                   b.pos.addScaledVector(b.vel, h);
                 }
                 if (b.state === "idle" && b.pos.distanceToSquared(goal) < 0.0004 && b.vel.lengthSq() < 0.0225) {

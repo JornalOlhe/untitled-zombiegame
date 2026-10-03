@@ -7,6 +7,7 @@ on:
       - 'android/app/src/main/assets/index.html'
       - 'tests/**'
       - '.github/workflows/work-qa.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -15,7 +16,9 @@ permissions:
 jobs:
   gameplay:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      MONSTER_SHOTS: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,6 +44,7 @@ jobs:
           node tests/melee-smoke.cjs
           node tests/spear-smoke.cjs
           node tests/tp-smoke.cjs
+          node tests/rig-visual-audit.cjs
           node tests/weapons-smoke.cjs
           node tests/projectiles-smoke.cjs
           node tests/stream-hitbox-smoke.cjs
@@ -61,3 +65,9 @@ jobs:
           node tests/multiplayer-local.cjs
           node tests/devmode-smoke.cjs
           node tests/dev-sandbox-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gameplay-qa-${{ github.run_id }}
+          path: test-results/
+          retention-days: 15
