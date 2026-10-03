@@ -25,6 +25,8 @@ jobs:
         run: node tests/js-syntax.cjs
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
+      - name: UI and menu state
+        run: node tests/ui-smoke.cjs
       - name: Movement, collision and spawning
         run: |
           node tests/movement-smoke.cjs
