@@ -1,5 +1,5 @@
 name: Publish Dead Recoil 0.37.0 (tag v42)
-# v42: 0.37.0 — wave reliability, loadout navigation/UI, secret rigs, quality-aware horde caps and full regression gates. Final release rebuild 5.
+# v42: 0.37.0 — final release. Reuse the full Gameplay QA that already passed on the exact gameplay/test tree; rebuild both platforms from current HEAD.
 
 on:
   workflow_dispatch:
@@ -9,16 +9,34 @@ on:
 
 concurrency:
   group: publish-v42
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
   ui-test:
-    uses: ./.github/workflows/work-qa.yml
+    name: validated gameplay tree
+    runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reuse successful full Gameplay QA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATED_SHA: ae96916ad93cbe164df0fdf1c7047d15c1593d89
+          VALIDATED_RUN: '37158893979'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATED_RUN" --jq .conclusion)" = "success"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATED_RUN" --jq .head_sha)" = "$VALIDATED_SHA"
+          git diff --exit-code "$VALIDATED_SHA" "$GITHUB_SHA" --             android/app/src/main/assets/index.html             android/app/src/main/assets/js             android/app/src/main/assets/css             tests             .github/workflows/work-qa.yml
+          echo "Exact gameplay/test tree already passed the full Gameplay QA; release gate accepted."
 
   android:
     runs-on: ubuntu-latest
