@@ -27,36 +27,24 @@ jobs:
         run: node tests/js-syntax.cjs
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
-      - name: Full gameplay regression
+      - name: Release-critical gameplay regressions
         env:
           MONSTER_SHOTS: "0"
         run: |
+          # Full Gameplay QA runs independently on this same main commit.
+          # The release gate focuses on the systems changed/finalized for v40.
           node tests/ui-smoke.cjs
-          node tests/pursuit-smoke.cjs
-          node tests/movement-smoke.cjs
           node tests/economy-collision-smoke.cjs
           node tests/replayability-smoke.cjs
           node tests/weapons-smoke.cjs
-          node tests/cyborg-smoke.cjs
-          node tests/secret-smoke.cjs
-          node tests/monsters-smoke.cjs
-          node tests/intro-smoke.cjs
-          node tests/deathkill-smoke.cjs
           node tests/projectiles-smoke.cjs
           node tests/wall-smoke.cjs
           node tests/stream-hitbox-smoke.cjs
-          node tests/dev-sandbox-smoke.cjs
           node tests/melee-smoke.cjs
           node tests/tp-smoke.cjs
           node tests/spear-smoke.cjs
           node tests/specter-smoke.cjs
-          node tests/ceiling-smoke.cjs
-          node tests/spawn-smoke.cjs
-          node tests/devmode-smoke.cjs
-          node tests/boss-audio-smoke.cjs
-          node tests/ascend-smoke.cjs
-          node tests/wings-tail-smoke.cjs
-          node tests/dof-smoke.cjs
+          node tests/dev-sandbox-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
