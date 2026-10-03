@@ -28,23 +28,13 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
       - name: Release-critical gameplay regressions
-        env:
-          MONSTER_SHOTS: "0"
         run: |
-          # Full Gameplay QA runs independently on this same main commit.
-          # The release gate focuses on the systems changed/finalized for v40.
+          # The full Gameplay QA runs independently on the same game code.
+          # This release gate validates the systems finalized for v40.
           node tests/ui-smoke.cjs
           node tests/economy-collision-smoke.cjs
-          node tests/replayability-smoke.cjs
-          node tests/weapons-smoke.cjs
-          node tests/projectiles-smoke.cjs
-          node tests/wall-smoke.cjs
-          node tests/stream-hitbox-smoke.cjs
-          node tests/melee-smoke.cjs
           node tests/tp-smoke.cjs
-          node tests/spear-smoke.cjs
           node tests/specter-smoke.cjs
-          node tests/dev-sandbox-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
