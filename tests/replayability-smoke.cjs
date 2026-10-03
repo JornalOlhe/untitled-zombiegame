@@ -41,7 +41,33 @@ const res=await p.evaluate(()=>{
  }
  const retired=[4,6,7,9,10,11].map(type=>T.WaveManager.spawnWeight(type,50));
  const labels=[...document.querySelectorAll('#difficulty-options small')].map(n=>n.textContent);
- return {firstId,tooSoon:!!tooSoon,afterId,byMap,retired,labels,desktopCap:T.WaveManager.activeCap()};
+ // Quality changes simultaneous pressure only; total wave size is untouched.
+ const oldGraphics=T.SettingsManager.data.graphics;
+ T.SettingsManager.data.graphics='low'; const lowCap=T.WaveManager.activeCap();
+ T.SettingsManager.data.graphics='medium'; const mediumCap=T.WaveManager.activeCap();
+ T.SettingsManager.data.graphics='high'; const highCap=T.WaveManager.activeCap();
+ T.SettingsManager.data.graphics='ultra'; const ultraCap=T.WaveManager.activeCap();
+ T.SettingsManager.data.graphics=oldGraphics;
+ // Failed ordinary spawns must retry instead of consuming the wave counter.
+ const originalSpawn=T.ZombieManager.spawn;
+ T.ZombieManager.clear();
+ T.WaveManager.wave=3; T.WaveManager.remaining=1; T.WaveManager.total=1;
+ T.WaveManager.spawnPool=[0]; T.WaveManager.spawnClock=0; T.WaveManager.bossPending=false;
+ let spawnCalls=0;
+ T.ZombieManager.spawn=()=>++spawnCalls===1?null:{qa:true};
+ T.WaveManager.update(1/60); const remainingAfterFailedSpawn=T.WaveManager.remaining;
+ T.WaveManager.spawnClock=0; T.WaveManager.update(1/60); const remainingAfterSuccessfulSpawn=T.WaveManager.remaining;
+ T.ZombieManager.spawn=originalSpawn;
+ // A scheduled boss must remain pending when creation fails.
+ const originalBoss=T.WaveManager.boss;
+ T.WaveManager.wave=5; T.WaveManager.remaining=0; T.WaveManager.total=10;
+ T.WaveManager.bossPending=true; T.WaveManager.spawnClock=0; T.WaveManager.clearedAt=0;
+ T.WaveManager.boss=()=>null;
+ T.WaveManager.update(1/60); const bossPendingAfterFailure=T.WaveManager.bossPending;
+ T.WaveManager.boss=originalBoss;
+ T.WaveManager.bossPending=false;
+ return {firstId,tooSoon:!!tooSoon,afterId,byMap,retired,labels,lowCap,mediumCap,highCap,ultraCap,
+   remainingAfterFailedSpawn,remainingAfterSuccessfulSpawn,bossPendingAfterFailure};
 });
 const bad=[...errs];
 if(!res.firstId)bad.push('mutation should be eligible on wave 4 with a successful roll');
@@ -51,7 +77,10 @@ if(!(res.byMap[0].swat>res.byMap[2].swat))bad.push('City should bias SWAT above 
 if(!(res.byMap[3].cyborg>res.byMap[0].cyborg))bad.push('Lab should bias Cyborg above City');
 if(res.retired.some(Boolean))bad.push('retired enemy entered an ordinary wave');
 if(res.labels.some(x=>/moedas\s*[×x]/i.test(x)))bad.push('difficulty UI still advertises a coin multiplier');
-if(res.desktopCap!==85)bad.push('desktop active horde cap changed unexpectedly');
+if(!(res.lowCap<res.mediumCap&&res.mediumCap<res.highCap&&res.highCap<res.ultraCap))bad.push('desktop horde cap must scale with graphics quality');
+if(res.highCap!==85)bad.push('high-quality desktop horde cap must remain 85');
+if(res.remainingAfterFailedSpawn!==1||res.remainingAfterSuccessfulSpawn!==0)bad.push('failed spawn consumed a wave enemy instead of retrying');
+if(!res.bossPendingAfterFailure)bad.push('failed boss spawn cleared bossPending');
 if(!source.includes('class="mutation"')||!source.includes('const mutation = MutationManager.current;'))bad.push('active mutation is not persisted in the wave HUD');
 console.log(JSON.stringify(res));
 await b.close();server.close();
