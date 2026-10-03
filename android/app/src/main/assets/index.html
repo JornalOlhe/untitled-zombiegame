@@ -13043,8 +13043,11 @@ body.netgame #revivetouch{display:flex}
               (!!activeBurst.crouchInvisible &&
                 (keys.has("ControlLeft") || keys.has("ControlRight")));
 
-            for (const z of [...this.list]) {
-              if (z.dead) continue;
+            // Reverse iteration is safe when the current zombie dies/splices itself and avoids
+            // allocating a snapshot of the entire horde on every frame.
+            for (let zi = this.list.length - 1; zi >= 0; zi--) {
+              const z = this.list[zi];
+              if (!z || z.dead) continue;
               if (z.remote) {
                 NetGame.drivePuppet(z, dt);
                 continue;
@@ -13071,7 +13074,7 @@ body.netgame #revivetouch{display:flex}
                 continue;
               }
               const pos = z.group.position,
-                to = player.pos.clone().sub(pos);
+                to = (z.toPlayer ||= new V()).copy(player.pos).sub(pos);
               to.y = 0;
               const dist = to.length();
               const silent =
