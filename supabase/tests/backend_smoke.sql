@@ -14,6 +14,18 @@ begin
          now(), '{"provider":"email"}', jsonb_build_object('username', 'QA_' || right(u::text, 2)), now(), now()
   from unnest(array[a, b, c, d]) u;
 
+  -- Exact match-economy contract (server side). Run as postgres because the helper
+  -- functions are intentionally not executable by authenticated/anon clients.
+  perform set_config('role', 'postgres', true);
+  assert public._enemy_coin_reward('zombie') = 10, 'server normal zombie reward = 10';
+  assert public._enemy_coin_reward('crawler') = 10, 'server crawler reward = 10';
+  assert public._enemy_coin_reward('swat') = 50, 'server SWAT reward = 50';
+  assert public._enemy_coin_reward('constructor') = 50, 'server constructor/dynamite reward = 50';
+  assert public._enemy_coin_reward('cyborg') = 50, 'server cyborg/robot reward = 50';
+  assert public._wave_coin_reward(1, 1) = 50 and public._wave_coin_reward(99, 999) = 50, 'server wave reward = 50 regardless of difficulty/multiplier';
+  assert not exists (select 1 from public.catalog_bosses where major and coins <> 1000), 'every boss kill reward = 1000';
+  assert not exists (select 1 from public.catalog_bosses where not major and coins <> 500), 'every miniboss kill reward = 500';
+
   -- ── A: session, RLS, spins ──
   perform set_config('request.jwt.claims', jsonb_build_object('sub', a, 'role', 'authenticated')::text, true);
   perform set_config('role', 'authenticated', true);
