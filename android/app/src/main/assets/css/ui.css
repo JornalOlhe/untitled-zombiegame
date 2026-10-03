@@ -290,6 +290,17 @@ form.busy { opacity: .7; }
 #mapscreen h2, #rulescreen h2 { font-size: clamp(34px, 5vw, 64px); letter-spacing: .05em; }
 .step-label { font-family: var(--mono); color: var(--blood-2); letter-spacing: .24em; }
 #mapcards .card, .rule-options button { border-radius: 0; clip-path: var(--cut-s); }
+.rule-options button {
+  position: relative; overflow: hidden; display: grid; gap: 6px; justify-items: start; text-align: left;
+  min-height: 92px; padding: 14px 16px; isolation: isolate;
+  background: linear-gradient(150deg, rgba(255,255,255,.045), rgba(255,255,255,.012));
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.rule-options button::after { content:""; position:absolute; inset:auto 0 0; height:3px; transform:scaleX(0); transform-origin:left; background:linear-gradient(90deg,var(--blood-2),var(--amber)); transition:transform .2s ease; }
+.rule-options button strong { font-family:var(--display); font-size:clamp(22px,2.2vw,30px); letter-spacing:.05em; line-height:1; }
+.rule-options button small { max-width:34ch; font-family:var(--mono); font-size:10px; line-height:1.45; color:var(--dim); text-transform:none; letter-spacing:.04em; }
+.rule-options button:hover:not(:disabled), .rule-options button[aria-pressed="true"] { transform:translateY(-2px); background:linear-gradient(150deg, rgba(179,20,27,.18), rgba(255,255,255,.025)); }
+.rule-options button:hover:not(:disabled)::after, .rule-options button[aria-pressed="true"]::after { transform:scaleX(1); }
 .rule-options button[aria-pressed="true"], #mapcards [aria-pressed="true"] { border-color: var(--blood-2) !important; box-shadow: inset 0 0 0 1px var(--blood-2), 0 0 24px #b3141b55; }
 .rule-group legend { font-family: var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
 #gameoverscreen .dialog { border-color: var(--blood); }
@@ -504,13 +515,15 @@ body.bossdeath #announcement, body.bossdeath #hud, body.bossdeath #touch { opaci
 .mission-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; }
 .mission-filters label { display: flex; align-items: center; gap: 6px; font: 600 12px/1 var(--head); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .mission-filters select { padding: 6px 8px; background: rgba(19,15,13,.85); color: var(--bone); border: 1px solid var(--edge); border-radius: 4px; font: 600 13px/1 var(--head); }
-.mission-summary { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)) 1fr; gap: 8px 22px; align-items: end; padding: 12px 16px; background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut-s); }
+.mission-summary { display: grid; grid-template-columns: repeat(3, minmax(110px, max-content)) minmax(80px, 1fr); gap: 8px 22px; align-items: end; padding: 12px 16px; background: var(--panel); border: 1px solid var(--edge); clip-path: var(--cut-s); }
+.mission-summary.unique { grid-template-columns: repeat(2, minmax(110px, max-content)) minmax(80px, 1fr); }
 .mission-summary:empty { display: none; }
-.ms-stat { display: grid; gap: 2px; }
+.ms-stat { display: grid; gap: 2px; min-width: 0; }
 .ms-stat span { font-family: var(--mono); font-size: 10px; letter-spacing: .22em; color: var(--dim); }
-.ms-stat b { font-family: var(--display); font-weight: 400; font-size: 28px; letter-spacing: .05em; line-height: 1; color: var(--bone); }
+.ms-stat b { min-width: 0; font-family: var(--display); font-weight: 400; font-size: clamp(18px, 2.7vw, 28px); letter-spacing: .03em; line-height: 1; color: var(--bone); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ms-stat.hot b { color: var(--toxic); }
-.ms-track { grid-column: 4; height: 8px; background: #ffffff12; align-self: center; }
+.ms-track { grid-column: -2; height: 8px; background: #ffffff12; align-self: center; }
+.mission-summary.unique .ms-track { grid-column: 3; }
 .ms-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--blood), var(--amber)); transition: width .4s; }
 .ms-note { grid-column: 1 / -1; margin: 0; font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .panel-screen { overflow: auto; }
@@ -525,9 +538,18 @@ body.bossdeath #announcement, body.bossdeath #hud, body.bossdeath #touch { opaci
 .mission-foot { display: flex; align-items: center; justify-content: space-between; min-height: 34px; }
 .mission-pct { font-family: var(--mono); font-size: 12px; color: var(--faint); }
 .claimed-note { font-family: var(--mono); font-size: 11px; color: var(--dim); }
-.mission-card.claimed { opacity: .55; }
-.mission-card.claimed .mission-progress i { background: var(--faint); box-shadow: none; }
-.mission-flag.claimed { background: var(--faint); color: var(--bone); }
+.mission-card.claimed {
+  opacity: 1;
+  border-color: #7be66a88;
+  border-left-color: var(--toxic);
+  background: linear-gradient(110deg, rgba(37,84,35,.28), var(--panel) 58%);
+  box-shadow: inset 0 0 34px #67df5410, 0 0 0 1px #67df5410;
+}
+.mission-card.claimed h3 { color: #dfffd8; }
+.mission-card.claimed .mission-progress { background: #16301b; }
+.mission-card.claimed .mission-progress i { width: 100% !important; background: linear-gradient(90deg, #49a83f, var(--toxic)); box-shadow: 0 0 10px #74ff5f55; }
+.mission-card.claimed .claimed-note { color: #aaff9c; font-weight: 700; letter-spacing: .08em; }
+.mission-flag.claimed { background: var(--toxic); color: #071000; box-shadow: 0 0 12px #9dff4555; }
 .mission-card.final { grid-column: 1 / -1; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent); border-left-width: 5px;
   background: linear-gradient(100deg, color-mix(in srgb, var(--rarity) 18%, rgba(19,15,13,.95)), rgba(19,15,13,.92) 55%); }
 .mission-card.final h3 { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 2.4vw, 32px); letter-spacing: .05em; }
@@ -772,3 +794,16 @@ body.mouse-free .crosshair { transition: none; }
 @font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-800-italic.woff2") format("woff2"); font-weight: 800; font-style: italic; font-display: block; }
 @font-face { font-family: "Montserrat"; src: url("../fonts/montserrat-900-italic.woff2") format("woff2"); font-weight: 900; font-style: italic; font-display: block; }
 @font-face { font-family: "Permanent Marker"; src: url("../fonts/permanent-marker.woff2") format("woff2"); font-weight: 400; font-display: block; }
+
+/* Mission counters must fit on landscape phones without clipping large values. */
+@media (max-width: 760px), (max-height: 520px) {
+  .mission-summary, .mission-summary.unique { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+  .mission-summary .ms-track, .mission-summary.unique .ms-track { grid-column: 1 / -1; }
+  .mission-summary .ms-note { grid-column: 1 / -1; }
+  .ms-stat b { font-size: clamp(18px, 6vh, 26px); overflow: visible; }
+  .mission-card.claimed { border-left-width: 5px; }
+  .rule-options button { min-height: 76px; padding: 10px 12px; }
+  .rule-options button small { font-size: 9px; }
+}
+#classpreview { cursor: grab; touch-action: none; }
+#classpreview.dragging { cursor: grabbing; }
