@@ -20,7 +20,8 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
     entry.blade.traverse(o=>{if(o.isMesh){specterMeshes++;if(o.frustumCulled)specterCulled++;}});
   }
   const rec={name:def.name,kind:def.kind,minLeft:1e9,maxLeftSpear:0,maxRight:0,maxPen:0,nan:false,oneHand:r.oneHand,spear:r.spearHold,
-    specterPreview,specterMeshes,specterCulled,specterMaxStep:0,idleForward:null,muzzleAhead:null};
+    specterPreview,specterMeshes,specterCulled,specterMaxStep:0,idleForward:null,muzzleAhead:null,
+    specterRestZ:null,specterBackCount:0,scytheVisualYaw:null};
   let previousSpecter=null;
   for(const mode of ['idle','walk','attack','reload']){
    for(let i=0;i<40;i++){
@@ -38,6 +39,11 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
       const gl=g.worldToLocal(r.gun.getWorldPosition(new V()).clone()), ml=g.worldToLocal((r.parts.projectileOrigin||r.parts.flash).getWorldPosition(new V()).clone());
       rec.idleForward=+fwd.z.toFixed(3);
       rec.muzzleAhead=+(ml.z-gl.z).toFixed(3);
+      if(r.specterWeapon){
+        rec.specterRestZ=+r.gun.position.z.toFixed(3);
+        rec.specterBackCount=(r.specterPreview||[]).filter(entry=>entry.base.z<0).length;
+      }
+      if(def.scythe&&r.parts.model)rec.scytheVisualYaw=+r.parts.model.rotation.y.toFixed(3);
     }
     const gunP=r.gun.getWorldPosition(new V());
     const hand=(a)=>a.localToWorld(new V(0,-0.62,0));
@@ -76,6 +82,8 @@ for(const r of res){
  if(r.name==='Angelic Specter'&&(r.specterMeshes<5||r.specterCulled!==0))bad.push(r.name+': all blade meshes must stay renderable ('+r.specterMeshes+' meshes, '+r.specterCulled+' culled)');
  if(r.name==='Angelic Specter'&&r.specterMaxStep>0.0015)bad.push(r.name+': loadout blade idle motion is jittery ('+r.specterMaxStep.toFixed(4)+'/frame)');
  if(r.name==='Angelic Specter'&&r.minLeft<0.25)bad.push(r.name+': left hand near the floating specter ('+r.minLeft+')');
+ if(r.name==='Angelic Specter'&&(r.specterRestZ==null||r.specterRestZ>=0||r.specterBackCount!==5))bad.push(r.name+': five-blade fan must rest around/behind the survivor ('+r.specterRestZ+', '+r.specterBackCount+' back)');
+ if(r.name==='Demonic Fury'&&(r.scytheVisualYaw==null||Math.abs(Math.abs(r.scytheVisualYaw)-Math.PI)>0.08))bad.push(r.name+': GLB visual axis was not corrected ('+r.scytheVisualYaw+')');
  if((r.name==='Bow'||r.name==='Stormpiercer'||r.name==='Wraithpiercer'||r.name==='Demonic Fury')&&r.idleForward<0.35)bad.push(r.name+': model is not facing forward ('+r.idleForward+')');
  if(r.kind!=='melee'&&r.muzzleAhead<0.15)bad.push(r.name+': projectile origin is not ahead of the held weapon ('+r.muzzleAhead+')');
  if(oneHandMelee&&r.minLeft<0.2)bad.push(r.name+': left hand touches a one-hand melee weapon ('+r.minLeft+')');
