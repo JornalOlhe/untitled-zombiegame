@@ -570,6 +570,26 @@
         color: #c2cdd0;
         margin-top: 7px;
       }
+      .wave .mutation {
+        display: block;
+        width: max-content;
+        max-width: min(78vw, 390px);
+        margin: 7px auto 0;
+        padding: 4px 9px;
+        overflow: hidden;
+        border: 1px solid #ffcb6655;
+        border-radius: 999px;
+        background: #160f08d9;
+        color: #ffd27a;
+        box-shadow: 0 0 16px #ff9a241f;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
       .wallet {
         text-align: right;
         margin-left: auto;
@@ -19865,8 +19885,9 @@ body.netgame #revivetouch{display:flex}
             if (this.hudClock > 0) return;
             this.hudClock = touchMode ? 0.16 : 0.075;
             const w = WeaponSystem.current();
+            const mutation = MutationManager.current;
             $("wavehud").innerHTML =
-              `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>`;
+              `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`;
             $("wallethud").innerHTML =
               `◈ ${player.coins}<small>↻ ${player.normal} normal &nbsp; ✦ ${player.lucky} Lucky</small>`;
             $("classhud").textContent = classes[selectedClass].name;
