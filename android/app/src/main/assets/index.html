@@ -2879,9 +2879,9 @@ body.netgame #revivetouch{display:flex}
         <div class="rules-grid">
           <fieldset class="rule-group"><legend>Modo de jogo</legend>
             <div class="rule-options" id="mode-options">
-              <button type="button" data-choice="mode" data-value="classic"><strong>Clássico</strong><small>Sobreviva às ondas</small></button>
-              <button type="button" data-choice="mode" data-value="infinite"><strong>Infinito</strong><small>Horda crescente</small></button>
-              <button type="button" data-choice="mode" data-value="timed"><strong>Contra o tempo</strong><small>5 minutos de combate</small></button>
+              <button type="button" data-choice="mode" data-value="classic"><strong>Clássico</strong><small>Ondas com progressão normal, pausas entre ondas, minibosses e bosses nos marcos do mapa.</small></button>
+              <button type="button" data-choice="mode" data-value="infinite"><strong>Infinito</strong><small>Sem onda final: vida, velocidade e pressão da horda continuam escalando enquanto você resistir.</small></button>
+              <button type="button" data-choice="mode" data-value="timed"><strong>Contra o tempo</strong><small>Você tem 5 minutos: elimine o máximo possível enquanto as ondas continuam avançando.</small></button>
             </div>
             <select id="mode" class="sr-only" aria-label="Modo de jogo"><option value="classic">Clássico</option><option value="infinite">Infinito</option><option value="timed">Contra o tempo</option></select>
           </fieldset>
@@ -4052,7 +4052,7 @@ body.netgame #revivetouch{display:flex}
         // cell, parented to pivots (hips, shoulders, neck) so the walk cycles are driven in code.
         const VoxelMonsters = {
           P: 0.056,
-          CRAWL_PITCH: 1.25, // body pitch of the crawler: π/2 would be flat on the ground
+          CRAWL_PITCH: 1.46, // low crawler silhouette: body + real mesh hitboxes stay close to the floor
           geoCache: new Map(),
           matCache: new Map(),
           // Regular archetypes reskinned with the voxel roster (type index -> skin key).
@@ -16914,8 +16914,9 @@ body.netgame #revivetouch{display:flex}
             this.flashes = [];
             this.items = [];
           },
-          spawn(kind, x, z, y = 0) {
+          spawn(kind, x, z, y = null) {
             const d = this.defs[kind],
+              groundY = y == null ? MapManager.groundAt(x, z, 0.3, 0.2) : y,
               group = new THREE.Group(),
               tilt = new THREE.Group(),
               mesh = new THREE.Mesh(this.geo(d.shape), PropKit.mat(d.tex));
@@ -16931,7 +16932,7 @@ body.netgame #revivetouch{display:flex}
             }
             tilt.add(mesh);
             group.add(tilt);
-            group.position.set(x, y, z);
+            group.position.set(x, Number.isFinite(groundY) ? groundY : 0, z);
             group.rotation.y = rand(0, 6.28);
             MapManager.group.add(group);
             const p = { kind, d, group, tilt, mesh, pos: group.position, vel: new V(), spin: 0, angle: 0, target: 0, axis: new V(1, 0, 0), roll: 0, awake: true };
@@ -17807,7 +17808,11 @@ body.netgame #revivetouch{display:flex}
             raycaster.set(origin, aim);
             raycaster.far = w.range;
             const wall = raycaster.intersectObjects(MapManager.walls)[0],
-              reach = Math.max(0, Math.min(w.range, wall ? wall.distance - 0.04 : w.range));
+              propHit = raycaster.intersectObjects(PhysicsProps.meshes())[0],
+              propBeforeWall = propHit && (!wall || propHit.distance < wall.distance),
+              reach = Math.max(0, Math.min(w.range, propBeforeWall ? propHit.distance : wall ? wall.distance - 0.04 : w.range));
+            if (propBeforeWall && propHit.distance <= w.range)
+              PhysicsProps.shove(propHit.object.userData.prop, aim, propHit.point, damage);
             this.emit(origin, aim, kind, kind === "fire" ? 5 : 4, reach);
             muzzleLight.color.set(kind === "fire" ? 0xff7a2a : 0x8fdcff);
             muzzleLight.intensity = 1.4 + Math.random() * 0.6;
@@ -18890,7 +18895,15 @@ body.netgame #revivetouch{display:flex}
             ).slice(0, w.multiHit || 1);
             for (const hit of hits)
               ZombieManager.hit(hit.target, damage, false, hit.point, w);
-            if (hits.length) AudioManager.meleeImpact();
+            const meleeDir = forward().normalize();
+            raycaster.set(player.pos, meleeDir);
+            raycaster.far = reach;
+            const propHit = raycaster.intersectObjects(PhysicsProps.meshes())[0],
+              wallHit = raycaster.intersectObjects(MapManager.walls)[0];
+            if (propHit && (!wallHit || propHit.distance < wallHit.distance)) {
+              PhysicsProps.shove(propHit.object.userData.prop, meleeDir, propHit.point, damage);
+              if (!hits.length) AudioManager.meleeImpact();
+            } else if (hits.length) AudioManager.meleeImpact();
           },
           // Divine spear: a quick click is a longer-reach poke; holding the attack button
           // charges a throw that releases a piercing spear projectile.
@@ -19503,13 +19516,18 @@ body.netgame #revivetouch{display:flex}
                 step = p.vel.clone().multiplyScalar(dt);
               raycaster.set(previous, step.clone().normalize());
               raycaster.far = step.length() + 0.2;
-              const wall = raycaster.intersectObjects(MapManager.walls)[0];
+              const wall = raycaster.intersectObjects(MapManager.walls)[0],
+                prop = p.kind === "rocket" ? raycaster.intersectObjects(PhysicsProps.meshes())[0] : null;
               p.pos.add(step);
+              if (prop && (!wall || prop.distance < wall.distance)) {
+                PhysicsProps.shove(prop.object.userData.prop, step.clone().normalize(), prop.point, p.damage);
+                p.pos.copy(prop.point);
+              }
               if (Math.random() < 0.8) ParticleSystem.emit(previous.clone().addScaledVector(p.vel, -0.03), 0x9a9a9a, 1, 0.4);
               ParticleSystem.line(previous, p.pos, 0xffb060, 0.08);
               const hitPlayer = player && player.pos.distanceTo(p.pos) < 1.0;
               const ground = p.pos.y < MapManager.groundAt(p.pos.x, p.pos.z, 0.1, p.pos.y) + 0.05;
-              if (wall || hitPlayer || ground || p.life <= 0 || Math.abs(p.pos.x) > MapManager.half + 4 || Math.abs(p.pos.z) > MapManager.half + 4) {
+              if (wall || prop || hitPlayer || ground || p.life <= 0 || Math.abs(p.pos.x) > MapManager.half + 4 || Math.abs(p.pos.z) > MapManager.half + 4) {
                 CyborgRockets.explode(wall ? wall.point : p.pos, p.damage);
                 removeProjectile(i);
               }
@@ -19528,8 +19546,17 @@ body.netgame #revivetouch{display:flex}
               raycaster.set(previous, dirN);
               raycaster.far = len + 0.45;
               const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
-                wh = raycaster.intersectObjects(MapManager.walls)[0];
+                wh = raycaster.intersectObjects(MapManager.walls)[0],
+                ph = raycaster.intersectObjects(PhysicsProps.meshes())[0];
               const floor = MapManager.groundAt(previous.x, previous.z, 0.05, previous.y);
+              if (ph && (!wh || ph.distance < wh.distance) && (!zh || ph.distance < zh.distance)) {
+                PhysicsProps.shove(ph.object.userData.prop, dirN, ph.point, p.damage);
+                p.pos.copy(ph.point).addScaledVector(dirN, 0.05);
+                p.stuck = true;
+                p.life = 1.5;
+                ParticleSystem.emit(ph.point, 0xffc070, 5, 1.2);
+                continue;
+              }
               if (zh && (!wh || zh.distance < wh.distance)) {
                 const z = zh.object.userData.zombie,
                   head = !!zh.object.userData.head;
@@ -19597,8 +19624,13 @@ body.netgame #revivetouch{display:flex}
             if (movement.lengthSq() > 0) {
               raycaster.set(previous, movement.clone().normalize());
               raycaster.far = movement.length() + 0.15;
-              const wall = raycaster.intersectObjects(MapManager.walls);
-              collided = wall.length > 0;
+              const wall = raycaster.intersectObjects(MapManager.walls),
+                prop = p.kind !== "enemy" ? raycaster.intersectObjects(PhysicsProps.meshes())[0] : null;
+              if (prop && (!wall.length || prop.distance < wall[0].distance)) {
+                PhysicsProps.shove(prop.object.userData.prop, movement.clone().normalize(), prop.point, p.damage || 1);
+                p.pos.copy(prop.point);
+                collided = true;
+              } else collided = wall.length > 0;
             }
             if (!collided) p.pos.add(movement);
             else if (p.kind === "grenade") {
@@ -20140,7 +20172,8 @@ body.netgame #revivetouch{display:flex}
           // arrives after a newer profile response.
           applyNonSpending(profile) {
             if (!profile) return;
-            const current = Progression.data || {};
+            const current = Progression.data || {},
+              live = { coins: Number(player.coins || 0), normal: Number(player.normal || 0), lucky: Number(player.lucky || 0) };
             const safe = {
               ...profile,
               coins: Math.max(Number(current.coins || 0), Number(profile.coins || 0)),
@@ -20148,6 +20181,11 @@ body.netgame #revivetouch{display:flex}
               lucky: Math.max(Number(current.lucky || 0), Number(profile.lucky || 0)),
             };
             this.apply(safe);
+            // Do not persist optimistic run earnings, but never make the live HUD jump backwards.
+            player.coins = Math.max(player.coins || 0, live.coins);
+            player.normal = Math.max(player.normal || 0, live.normal);
+            player.lucky = Math.max(player.lucky || 0, live.lucky);
+            UIManager.hudClock = 0;
           },
           badge() {
             const online = DR.Backend.isOnline();
@@ -22693,7 +22731,7 @@ body.netgame #revivetouch{display:flex}
               arms = [],
               elbows = [];
             const skin = s.skin,
-              shirt = s.shirt;
+              shirt = skin; // base survivor is shirtless; class/cosmetic outerwear is layered separately
             A.ellipsoid(
               chest,
               [0, 0.21, 0],
@@ -22820,8 +22858,8 @@ body.netgame #revivetouch{display:flex}
                 elbow,
                 [0, -0.29, 0],
                 [0.052, 0.085, 0.047],
-                0x30342e,
-                "cloth",
+                skin,
+                "skin",
               );
               arms.push(arm);
               elbows.push(elbow);
@@ -24427,11 +24465,20 @@ body.netgame #revivetouch{display:flex}
           chance(kind, id, lucky) { const list = Progression.economy.catalogs[kind], tier = list[id].tier; return +(Progression.economy.rates[lucky ? "lucky" : "normal"][tier] / list.filter((i) => i.tier === tier).length).toFixed(3); },
           customization() {
             const opts = {
-              face: ["Rosto", [["angular", "Angular"], ["round", "Arredondado"], ["scar", "Cicatriz"]]], hair: ["Cabelo", [["short", "Curto"], ["shaved", "Raspado"], ["long", "Comprido"]]], skin: ["Pele", [["#c39b7d", "Clara"], ["#986e50", "Média"], ["#664936", "Escura"]]], hairColor: ["Cor do cabelo", [["#292622", "Preto"], ["#59402c", "Castanho"], ["#99918a", "Grisalho"]]], shirt: ["Camiseta", [["#4c5547", "Oliva"], ["#333b43", "Grafite"], ["#655044", "Terra"]]], pants: ["Calça", [["#303632", "Floresta"], ["#3b3d46", "Cinza"], ["#514b40", "Areia"]]], boots: ["Botas", [["#252522", "Pretas"], ["#3a3027", "Marrons"]]], accessory: ["Acessório", [["none", "Nenhum"], ["glasses", "Óculos"], ["mask", "Máscara"], ["pack", "Mochila"]]],
+              face: ["Rosto", [["angular", "Angular"], ["round", "Arredondado"], ["scar", "Cicatriz"]]], hair: ["Cabelo", [["short", "Curto"], ["shaved", "Raspado"], ["long", "Comprido"]]], skin: ["Pele", [["#c39b7d", "Clara"], ["#986e50", "Média"], ["#664936", "Escura"]]], hairColor: ["Cor do cabelo", [["#292622", "Preto"], ["#59402c", "Castanho"], ["#99918a", "Grisalho"]]], pants: ["Calça", [["#303632", "Floresta"], ["#3b3d46", "Cinza"], ["#514b40", "Areia"]]], boots: ["Botas", [["#252522", "Pretas"], ["#3a3027", "Marrons"]]], accessory: ["Acessório", [["none", "Nenhum"], ["glasses", "Óculos"], ["mask", "Máscara"], ["pack", "Mochila"]]],
             };
-            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""}" style="--rarity:${rarityColors[item.tier]}"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]}</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
+            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""}" data-cosmetic-preview="${item.id}" style="--rarity:${rarityColors[item.tier]}" tabindex="0"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]} · PRÉVIA 3D</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
             $("cosmetic-fields").querySelectorAll("select").forEach((el) => el.onchange = () => { CharacterStyle.data[el.dataset.cosmetic] = el.value; Account.savePreferences(); updatePreview(); });
             $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach((b) => b.onclick = () => Cosmetics.select(b.dataset.cosmeticItem));
+            $("cosmetic-fields").querySelectorAll("[data-cosmetic-preview]").forEach((card) => {
+              const preview = (e) => {
+                if (e?.target?.closest?.("button")) return;
+                this.previewCosmetic = card.dataset.cosmeticPreview;
+                updatePreview();
+              };
+              card.onclick = preview;
+              card.onfocusin = preview;
+            });
             $("cosmetic-fields").querySelectorAll("[data-cosmetic-clear]").forEach((b) => b.onclick = () => Cosmetics.unequip(b.dataset.cosmeticClear));
           },
           confirmReroll(kind, lucky, payment) {
@@ -24685,8 +24732,15 @@ body.netgame #revivetouch{display:flex}
           Armory.render();
         };
         const oldReward = Progression.reward.bind(Progression);
-        Progression.reward = function (...args) {
-          if (!Account.user) oldReward(...args);
+        Progression.reward = function (coins = 0, normal = 0, lucky = 0) {
+          if (!Account.user) return oldReward(coins, normal, lucky);
+          // Signed-in wallets are server-authoritative, but match feedback must be immediate.
+          // Keep the optimistic amount only on the live player HUD; checkpoint/profile responses
+          // still decide what is persisted to the account economy.
+          if (Number.isFinite(coins) && coins > 0) player.coins = Math.min(1e9, Math.round((player.coins || 0) + coins));
+          if (Number.isFinite(normal) && normal > 0) player.normal = Math.min(1e9, Math.round((player.normal || 0) + normal));
+          if (Number.isFinite(lucky) && lucky > 0) player.lucky = Math.min(1e9, Math.round((player.lucky || 0) + lucky));
+          UIManager.hudClock = 0;
         };
         const oldSettingsSave = SettingsManager.save.bind(SettingsManager);
         SettingsManager.save = function () {
@@ -25224,12 +25278,19 @@ body.netgame #revivetouch{display:flex}
           const selectedWeaponPreview = Armory?.mode === "armory" && activeKind === "weapon" && Number.isInteger(Armory.selection) ? Armory.selection : null;
           const previewClassId = spinClass != null ? spinClass : selectedClassPreview != null ? selectedClassPreview : DevMode.current("class", Progression.data.classId);
           const previewWeaponId = spinWeapon != null ? spinWeapon : selectedWeaponPreview != null ? selectedWeaponPreview : DevMode.current("weapon", Progression.data.weaponId);
-          const styleKey = CharacterStyle?.data ? JSON.stringify(CharacterStyle.data) : "";
-          const nextKey = `${previewClassId}|${previewWeaponId}|${styleKey}`;
+          const previewItem = Armory?.mode === "customize" && Armory.previewCosmetic ? Cosmetics.byId(Armory.previewCosmetic) : null,
+            previewStyle = previewItem ? { ...CharacterStyle.data, [previewItem.slot]: previewItem.id } : CharacterStyle.data,
+            styleKey = previewStyle ? JSON.stringify(previewStyle) : "",
+            nextKey = `${previewClassId}|${previewWeaponId}|${styleKey}`;
           if (previewModelKey !== nextKey || !previewModel) {
             Survivor.dispose(previewModel);
-            if (Armory.preloaded?.key === nextKey) { previewModel = Armory.preloaded.model; Armory.preloaded = null; }
-            else previewModel = Survivor.create(previewClassId, WeaponSystem.weapons[previewWeaponId]);
+            if (!previewItem && Armory.preloaded?.key === nextKey) { previewModel = Armory.preloaded.model; Armory.preloaded = null; }
+            else {
+              const savedStyle = CharacterStyle.data;
+              CharacterStyle.data = previewStyle;
+              try { previewModel = Survivor.create(previewClassId, WeaponSystem.weapons[previewWeaponId]); }
+              finally { CharacterStyle.data = savedStyle; }
+            }
             previewScene.add(previewModel);
             previewModelKey = nextKey;
           }
@@ -25483,6 +25544,27 @@ body.netgame #revivetouch{display:flex}
           SpinSFX.press();
           Armory.render();
         };
+        let previewYaw = 0, previewDrag = null;
+        const previewCanvas = $("classpreview");
+        previewCanvas?.addEventListener("pointerdown", (e) => {
+          if ($("classscreen").classList.contains("hidden") || Armory.roll) return;
+          previewDrag = { id: e.pointerId, x: e.clientX };
+          previewCanvas.setPointerCapture?.(e.pointerId);
+          previewCanvas.classList.add("dragging");
+        });
+        previewCanvas?.addEventListener("pointermove", (e) => {
+          if (!previewDrag || previewDrag.id !== e.pointerId) return;
+          const dx = e.clientX - previewDrag.x;
+          previewDrag.x = e.clientX;
+          previewYaw += dx * 0.012;
+        });
+        const endPreviewDrag = (e) => {
+          if (!previewDrag || (e.pointerId != null && previewDrag.id !== e.pointerId)) return;
+          previewDrag = null;
+          previewCanvas.classList.remove("dragging");
+        };
+        previewCanvas?.addEventListener("pointerup", endPreviewDrag);
+        previewCanvas?.addEventListener("pointercancel", endPreviewDrag);
         addEventListener("resize", () => { if (Armory.hudActive && !$("classscreen").classList.contains("hidden")) Armory.hudScale(); });
         $("loadoutbtn").onclick = () => {
           Armory.tab = "weapon";
@@ -26352,7 +26434,7 @@ body.netgame #revivetouch{display:flex}
                   previewRenderer.setSize(rect.width, rect.height, false);
                 previewCamera.aspect = rect.width / rect.height;
                 previewCamera.updateProjectionMatrix();
-                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12;Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);Armory.update(dt);
+                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=(rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12)+previewYaw;Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);Armory.update(dt);
                 if (Armory.light && menuTime > (Armory.revealUntil || 0)) {
                   // HUD: a frontal blue fill that the reveal briefly recolours (video: the character
                   // is lit in the rarity colour for ~0.3 s). Customize keeps the old back light.
