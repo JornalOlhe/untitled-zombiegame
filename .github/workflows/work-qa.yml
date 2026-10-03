@@ -33,6 +33,7 @@ jobs:
           node tests/ceiling-smoke.cjs
           node tests/spawn-smoke.cjs
           node tests/pursuit-smoke.cjs
+          node tests/replayability-smoke.cjs
       - name: Combat, weapons and projectiles
         run: |
           node tests/melee-smoke.cjs
