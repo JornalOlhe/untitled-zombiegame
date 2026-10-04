@@ -11,3 +11,5 @@ Includes:
 This file intentionally triggers .github/workflows/publish-v46.yml.
 
 Gate retry after isolating Dawn Spear return state between red/toxic barrel regression cases.
+
+Final gate retry after deterministic bow coverage and same-frame moved toxic-barrel hitbox invalidation.
