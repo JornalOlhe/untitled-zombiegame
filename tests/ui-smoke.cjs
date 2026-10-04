@@ -322,7 +322,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#difficulty').inputValue(),'easy');
       await page.locator('#rulescreen:not(.hidden)').waitFor({state:'visible'});
       await page.waitForTimeout(220);
-      assert.equal(await page.locator('#chosenmap').textContent(),'Zona selecionada: Arctic Base');
+      assert.equal(await page.locator('#chosenmap').textContent(),'Contra o tempo · Arctic Base');
       assert.ok(await page.locator('#rulescreen .rules-grid').isVisible(), 'Rules UI must be visible after its entrance animation');
       await diagnosticScreenshot(page, {path:`test-results/rules-${width}.png`});
       await page.locator('#deploy').click();
