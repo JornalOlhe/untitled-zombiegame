@@ -1841,6 +1841,21 @@
 @keyframes slotPulse{from{box-shadow:0 0 8px color-mix(in srgb,var(--rarity) 18%,transparent)}to{box-shadow:0 0 27px color-mix(in srgb,var(--rarity) 58%,transparent)}}
 /* Customize is intentionally outside Armory: same preview stage, different route/state. */
 #classscreen.customize-mode .armory-layout{grid-template-columns:minmax(390px,44%) 1fr}#classscreen.customize-mode .armory-inventory{padding:24px 0 70px}#classscreen.customize-mode .armory-details{display:none}#classscreen.customize-mode #cosmetic-fields{display:block!important;overflow:auto;height:100%;padding:0 10px 20px 0}#classscreen.customize-mode .survivor-stage{grid-column:2}#classscreen.customize-mode #roll-controls{display:none!important}#classscreen.customize-mode #armory-identity h2{font-size:36px!important}.cosmetic-layout{display:grid;grid-template-columns:1fr;gap:12px}.customize-panel{padding:12px;border:1px solid #ffffff1e;background:#09102ad1}.customize-panel label{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:8px;margin:7px 0!important;font-size:10px!important}.customize-panel select{margin:0!important;padding:7px!important}.cosmetic-shop{display:grid;grid-template-columns:1fr;gap:6px}.cosmetic-card{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:8px;padding:8px;border:1px solid var(--rarity);background:#111a37}.cosmetic-card b{display:block;font-size:10px}.cosmetic-card small{display:block;font-size:8px;color:var(--rarity)}.cosmetic-card button{font-size:8px!important;padding:7px!important}
+
+/* 3D cosmetic showroom: catalogue rail + large rotatable stage. */
+#classscreen.customize-mode .armory-layout{grid-template-columns:minmax(330px,36%) minmax(0,1fr)!important;gap:18px!important}
+#classscreen.customize-mode .armory-inventory{background:linear-gradient(180deg,#060b20f2,#0a1029e8);border-right:1px solid #ffffff18;padding:22px 12px 74px!important}
+#classscreen.customize-mode .survivor-stage{position:relative;overflow:hidden;border:1px solid #ffffff1b;background:radial-gradient(ellipse at 50% 62%,#1d34505e 0 16%,#08112e 45%,#030717 78%)}
+#classscreen.customize-mode .survivor-stage:before{content:"SHOWROOM 3D · ARRASTE PARA GIRAR";position:absolute;left:22px;top:20px;z-index:3;color:#dce8ffb8;font-size:10px;font-weight:900;letter-spacing:.16em;pointer-events:none}
+#classscreen.customize-mode .survivor-stage:after{content:"";position:absolute;left:12%;right:12%;bottom:7%;height:24%;border-radius:50%;background:radial-gradient(ellipse,#65b8ff2c 0 12%,#1b4d7b22 35%,transparent 70%);border:1px solid #8fd0ff22;transform:perspective(280px) rotateX(67deg);pointer-events:none}
+#classscreen.customize-mode #classpreview{cursor:grab;touch-action:none}
+#classscreen.customize-mode #classpreview.dragging{cursor:grabbing}
+#classscreen.customize-mode .cosmetic-shop{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+#classscreen.customize-mode .cosmetic-card{min-height:92px!important;grid-template-columns:38px 1fr!important;grid-template-rows:1fr auto!important;border:1px solid color-mix(in srgb,var(--rarity) 48%,#ffffff1a)!important;background:linear-gradient(145deg,#111a3d,#081027)!important;transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease}
+#classscreen.customize-mode .cosmetic-card:hover,#classscreen.customize-mode .cosmetic-card:focus-within,#classscreen.customize-mode .cosmetic-card.previewing{transform:translateY(-2px);border-color:var(--rarity)!important;box-shadow:0 8px 24px #0007,0 0 20px color-mix(in srgb,var(--rarity) 20%,transparent)}
+#classscreen.customize-mode .cosmetic-card.previewing:after{content:"EM EXIBIÇÃO";position:absolute;right:7px;top:6px;font-size:7px;font-weight:1000;letter-spacing:.1em;color:var(--rarity)}
+#classscreen.customize-mode .cosmetic-card .cosmetic-icon{width:38px;height:38px;font-size:20px}
+#classscreen.customize-mode .cosmetic-card button{grid-column:1/-1!important}
 @media(max-width:1150px){.armory-layout{grid-template-columns:210px minmax(420px,1fr) 260px;padding:0 18px;gap:10px}.armory-header{grid-template-columns:140px 1fr 220px;padding:12px 18px}.rarity-line{min-height:45px}.rarity-line span{font-size:15px}.rarity-line b{font-size:14px}.slot-card{min-height:134px}.armory-details{padding-top:62px}}
 @media(max-width:820px){#classscreen.armory-screen{overflow:auto}.armory-header{position:sticky;top:0;grid-template-columns:auto 1fr;z-index:20;background:#050a20}.armory-section-label{display:none}.armory-header #bank{grid-column:2}.armory-layout{height:auto;min-height:980px;grid-template-columns:1fr 1fr;grid-template-rows:520px auto;padding:0 12px 80px}.survivor-stage{grid-column:1/-1;grid-row:1}.armory-inventory{grid-column:1;padding:15px 0}.armory-details{grid-column:2;padding:15px 0}.armory-footer{position:fixed;left:0;right:0;bottom:0}.slot-card{min-height:120px}.rarity-line{min-height:40px}.rarity-line span{font-size:13px}#classscreen.customize-mode .armory-layout{grid-template-columns:1fr;grid-template-rows:auto 500px}#classscreen.customize-mode .survivor-stage{grid-column:1;grid-row:2}}
 
@@ -8988,12 +9003,8 @@ body.netgame #revivetouch{display:flex}
             // One batched draw for the whole skyline (no collision, no shadows needed that far out).
             K.soft("skyline", [x, h / 2, z], [w, h, w], null, 0.35);
           }
-          // Perimeter facades so the playable area has a believable edge.
-          for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
-            const m = M.solid(x, 7, z, w, 14, d, 0x3a4246);
-            m.material = VisualArt.surface("red_brick_03", 0x5c5654, "concrete");
-            VisualArt.tileUV(m, 3.2);
-          }
+          // No giant perimeter facade slabs: the map bounds remain solid and the street-end
+          // barricades + distant skyline close the scene visually without red wall blocks.
           const floor = M.group.children.find((m) => m.isMesh && m.position.y === -0.3);
           if (floor) {
             floor.material = VisualArt.surface("asphalt_02", 0x6a7478, "asphalt", { roughness: 0.82 });
@@ -20087,10 +20098,10 @@ body.netgame #revivetouch{display:flex}
             face: "angular",
             hair: "short",
             skin: "#c39b7d",
-            hairColor: "#292622",
+            hairColor: "#161817",
             shirt: "#4c5547",
-            pants: "#303632",
-            boots:"#252522", accessory:"none", headgear:"none", facewear:"none", backpack:"none", outerwear:"none", gloves:"none", footwear:"none",
+            pants: "#222624",
+            boots:"#181a19", accessory:"none", headgear:"none", facewear:"none", backpack:"none", outerwear:"none", gloves:"none", footwear:"none",
           },
           data:{}, owned:["standard"],
           load(){
@@ -22809,6 +22820,10 @@ body.netgame #revivetouch{display:flex}
                   "cloth",
                 );
             }
+            // Blocky fringe from the approved UV/model reference: dark, uneven locks over the forehead.
+            A.block(head, [-0.07, 0.19, 0.142], [0.07, 0.09, 0.035], s.hairColor, "cloth", [0, 0, -0.12]);
+            A.block(head, [0.015, 0.205, 0.148], [0.065, 0.105, 0.032], s.hairColor, "cloth", [0, 0, 0.08]);
+            A.block(head, [0.082, 0.18, 0.139], [0.052, 0.075, 0.03], s.hairColor, "cloth", [0, 0, 0.18]);
             for (const side of [-1, 1]) {
               const leg = A.pivot(hips, side * 0.125, -0.03, 0),
                 knee = A.pivot(leg, 0, -0.38, 0);
@@ -23345,6 +23360,28 @@ body.netgame #revivetouch{display:flex}
               f = hand.sub(elbowPos).normalize();
             arm.quaternion.setFromUnitVectors(down, u);
             elbow.quaternion.setFromUnitVectors(down, f.applyQuaternion(arm.quaternion.clone().invert()));
+          },
+          ladderPose(g, t, phase = "climb") {
+            const r = g?.userData?.rig;
+            if (!r) return;
+            const exit = phase === "exit",
+              cycle = Math.sin(t * 7.2),
+              reach = exit ? 0.35 : cycle,
+              other = exit ? -0.2 : -cycle;
+            r.chest.rotation.x = exit ? -0.08 : 0.12;
+            r.chest.rotation.y *= 0.25;
+            r.arms[0].rotation.set(-1.55 + reach * 0.32, 0, 0.08);
+            r.arms[1].rotation.set(-1.55 + other * 0.32, 0, -0.08);
+            r.elbows[0].rotation.x = -0.28 - reach * 0.12;
+            r.elbows[1].rotation.x = -0.28 - other * 0.12;
+            r.legs[0].rotation.x = -0.15 - other * 0.42;
+            r.legs[1].rotation.x = -0.15 - reach * 0.42;
+            r.knees[0].rotation.x = 0.42 + Math.max(0, other) * 0.45;
+            r.knees[1].rotation.x = 0.42 + Math.max(0, reach) * 0.45;
+            if (r.gun) {
+              r.gun.visible = false;
+              r.ladderHidden = true;
+            }
           },
           animate(
             g,
@@ -23931,7 +23968,12 @@ body.netgame #revivetouch{display:flex}
             camera.position.y = Math.min(MapManager.ceilingAt() - 0.2, Math.max(0.22, camera.position.y));
             if (this.avatar) {
               this.avatar.visible = distance > 0.6;
-              this.avatar.position.set(player.pos.x, (player.ground || 0) + player.jump, player.pos.z);
+              const avatarRig = this.avatar.userData?.rig;
+              if (avatarRig?.ladderHidden && !player.onLadder) {
+                avatarRig.gun.visible = true;
+                avatarRig.ladderHidden = false;
+              }
+              this.avatar.position.set(player.pos.x, player.ground || 0, player.pos.z);
               this.avatar.rotation.y = yaw + Math.PI;
               Survivor.animate(
                 this.avatar,
@@ -23947,6 +23989,7 @@ body.netgame #revivetouch{display:flex}
                 !!reloadEnd,
                 state === GameState.GAMEOVER,
               );
+              if (player.onLadder) Survivor.ladderPose(this.avatar, simulationTime, player.climb?.phase || "climb");
             }
             WeaponSystem.model.visible =
               distance < 0.6 &&
@@ -24500,7 +24543,7 @@ body.netgame #revivetouch{display:flex}
             const opts = {
               face: ["Rosto", [["angular", "Angular"], ["round", "Arredondado"], ["scar", "Cicatriz"]]], hair: ["Cabelo", [["short", "Curto"], ["shaved", "Raspado"], ["long", "Comprido"]]], skin: ["Pele", [["#c39b7d", "Clara"], ["#986e50", "Média"], ["#664936", "Escura"]]], hairColor: ["Cor do cabelo", [["#292622", "Preto"], ["#59402c", "Castanho"], ["#99918a", "Grisalho"]]], pants: ["Calça", [["#303632", "Floresta"], ["#3b3d46", "Cinza"], ["#514b40", "Areia"]]], boots: ["Botas", [["#252522", "Pretas"], ["#3a3027", "Marrons"]]], accessory: ["Acessório", [["none", "Nenhum"], ["glasses", "Óculos"], ["mask", "Máscara"], ["pack", "Mochila"]]],
             };
-            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""}" data-cosmetic-preview="${item.id}" style="--rarity:${rarityColors[item.tier]}" tabindex="0"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]} · PRÉVIA 3D</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
+            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""} ${this.previewCosmetic === item.id ? "previewing" : ""}" data-cosmetic-preview="${item.id}" style="--rarity:${rarityColors[item.tier]}" tabindex="0"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]} · PRÉVIA 3D</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
             $("cosmetic-fields").querySelectorAll("select").forEach((el) => el.onchange = () => { CharacterStyle.data[el.dataset.cosmetic] = el.value; Account.savePreferences(); updatePreview(); });
             $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach((b) => b.onclick = () => Cosmetics.select(b.dataset.cosmeticItem));
             $("cosmetic-fields").querySelectorAll("[data-cosmetic-preview]").forEach((card) => {
