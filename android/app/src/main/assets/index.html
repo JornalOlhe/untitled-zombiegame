@@ -12851,7 +12851,7 @@ body.netgame #revivetouch{display:flex}
                 mode === "infinite"
                   ? Math.pow(1.085, WaveManager.wave - 1)
                   : 1 + 0.08 * (WaveManager.wave - 1),
-              hp = boss ? boss.hp : t.hp * scaling;
+              hp = (boss ? boss.hp : t.hp * scaling) * diff[difficulty].enemyHp * modeRules().hp;
             const z = {
               group: g,
               type,
@@ -12862,6 +12862,7 @@ body.netgame #revivetouch{display:flex}
                 (boss ? boss.speed : t.speed) *
                 (1 + 0.02 * (WaveManager.wave - 1)) *
                 diff[difficulty].speed *
+                modeRules().speed *
                 (typeof MutationManager !== "undefined" ? MutationManager.speedMultiplier(type) : 1),
               phase: 1,
               attack: 0,
@@ -17574,22 +17575,13 @@ body.netgame #revivetouch{display:flex}
         // Special enemies pay more, bosses pay a fixed tier reward, and every boss appearance
         // grants a small team-wide spawn bonus.
         const EconomyRewards = {
-          enemy(type = 0) {
-            return ({ 0: 10, 2: 50, 3: 50, 5: 10, 8: 50 }[type] ?? 10);
-          },
-          // Backward-compatible helper used by older tests/callers: a normal zombie is 10.
-          kill(_head = false, _multiplier = 1, type = 0) {
-            return this.enemy(type);
-          },
-          bossSpawn() {
-            return 10;
-          },
-          bossKill(boss) {
-            return boss?.major || (boss?.rank || 0) >= 3 ? 1000 : 500;
-          },
-          wave() {
-            return 50;
-          },
+          multiplier() { return rewardMultiplier(); },
+          scale(base) { return scaledCoinReward(base); },
+          enemy(type = 0) { return this.scale(({ 0: 10, 2: 50, 3: 50, 5: 10, 8: 50 }[type] ?? 10)); },
+          kill(_head = false, _multiplier = 1, type = 0) { return this.enemy(type); },
+          bossSpawn() { return this.scale(10); },
+          bossKill(boss) { return this.scale(boss?.major || (boss?.rank || 0) >= 3 ? 1000 : 500); },
+          wave() { return this.scale(50); },
         };
 
         // WaveManager: paced spawns, short breaks and guaranteed low-value rewards.
@@ -17641,7 +17633,7 @@ body.netgame #revivetouch{display:flex}
             player.waveKills = 0;
             MutationManager.roll(this.wave);
             this.remaining = Math.round(
-              (7 + 3 * (this.wave - 1)) * diff[difficulty].count * MutationManager.countMultiplier(),
+              (7 + 3 * (this.wave - 1)) * diff[difficulty].count * modeRules().count * MutationManager.countMultiplier(),
             );
             this.total = this.remaining;
             this.spawnClock = 0.3;
@@ -17658,7 +17650,7 @@ body.netgame #revivetouch{display:flex}
               player.grenades++;
               UIManager.toast(`${classOf().name}: +1 granada.`);
             }
-            this.bossPending = this.wave % 5 === 0;
+            this.bossPending = this.rankFor(this.wave) > 0;
             UIManager.announce(
               `ONDA ${this.wave}`,
               this.bossPending
@@ -17707,13 +17699,29 @@ body.netgame #revivetouch{display:flex}
             ["mutant", "prototype_x", "abomination", "omega"],
             ["frost_brute", "cryo_hunter", "yeti", "avalanche_titan"],
           ],
+          storyRankFor(wave) {
+            if (!StoryMode.active()) return null;
+            if (storyLevel < 3) return 0;
+            if (storyLevel < 5) {
+              if (wave % 5 !== 0) return 0;
+              return wave % 10 === 0 ? 2 : 1;
+            }
+            if (wave === 5) return 1;
+            if (wave === 10) return 3;
+            if (wave === 15) return 2;
+            if (wave === 20) return 4;
+            return 0;
+          },
           rankFor(wave) {
+            const storyRank = this.storyRankFor(wave);
+            if (storyRank !== null) return storyRank;
             if (wave % 20 === 0) return 4;
             if (wave % 10 === 0) return 3;
             return Math.floor(wave / 10) % 2 === 0 ? 1 : 2;
           },
           bossFor(wave, map = selectedMap) {
-            return (this.mapRosters[map] || this.mapRosters[0])[this.rankFor(wave) - 1];
+            const rank = this.rankFor(wave);
+            return rank ? (this.mapRosters[map] || this.mapRosters[0])[rank - 1] : null;
           },
           rewardBossSpawn(data, z = null) {
             const coins = EconomyRewards.bossSpawn();
@@ -17727,8 +17735,9 @@ body.netgame #revivetouch{display:flex}
             }
           },
           boss(forceId = null) {
-            const id = forceId || this.bossFor(this.wave),
-              base = this.bossRoster[id],
+            const id = forceId || this.bossFor(this.wave);
+            if (!id) return null;
+            const base = this.bossRoster[id],
               rank = base.rank,
               major = rank >= 3,
               since = Math.max(0, this.wave - [0, 5, 15, 10, 20][rank]);
@@ -17801,8 +17810,13 @@ body.netgame #revivetouch{display:flex}
                 AudioManager.coin();
                 AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
               } else if (simulationTime - this.clearedAt >= 3) {
-                this.clearedAt = 0;
-                this.start();
+                if (StoryMode.active() && this.wave >= 20) {
+                  this.clearedAt = 0;
+                  PlayerController.end(true, true, "story");
+                } else {
+                  this.clearedAt = 0;
+                  this.start();
+                }
               }
             }
           },
@@ -18966,6 +18980,7 @@ body.netgame #revivetouch{display:flex}
             CameraRig.reset();fallback=false;document.body.classList.remove("mouse-captured");
           },
           hurt(amount, fromNet = false) {
+            if (!fromNet) amount *= modeRules().damage;
             if (!fromNet && NetGame.hurtRemote(amount)) return;
             if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
@@ -19668,13 +19683,15 @@ body.netgame #revivetouch{display:flex}
             SpatialSound.update();
             muzzleLight.intensity *= Math.exp(-dt * 35);
           },
-          end(timed, force = false) {
+          end(timed, force = false, reason = null) {
             if (!timed && !force && state === GameState.PLAYING && !DeathFX.active) {
               DeathFX.start();
               return;
             }
             if (state === GameState.GAMEOVER) return;
             if (NetGame.active) NetGame.finish(timed ? "win" : "loss");
+            let storyStars = 0;
+            if (reason === "story") storyStars = StoryMode.finishRun({ ...RunStats.report(), result: "win" });
             Account.checkpoint(true, timed ? "win" : "loss");
             state = GameState.GAMEOVER;
             mouse.down = false;
@@ -19685,9 +19702,11 @@ body.netgame #revivetouch{display:flex}
             UIManager.hudClock = 0;
             UIManager.hud(0);
             UIManager.screen("gameoverscreen");
-            $("endtitle").textContent = timed
-              ? "Tempo encerrado."
-              : "A noite venceu.";
+            $("endtitle").textContent = reason === "story"
+              ? `LEVEL ${storyLevel} CONCLUÍDO · ${"★".repeat(storyStars)}${"☆".repeat(3-storyStars)}`
+              : timed
+                ? "Tempo encerrado."
+                : "A noite venceu.";
             $("endsub").textContent =
               `${classes[selectedClass].name} em ${maps[selectedMap].name}. ${Math.floor(elapsed / 60)}min ${Math.floor(elapsed % 60)}s de resistência.`;
             $("endstats").innerHTML =
@@ -20151,7 +20170,7 @@ body.netgame #revivetouch{display:flex}
             $("pause-title").innerHTML = online ? "CUIDADO.<br />O JOGO CONTINUA." : "RESPIRE.<br />A HORDA ESPERA.";
             $("pause-sub").textContent = online
               ? "No multiplayer o mundo continua rodando enquanto este menu está aberto."
-              : `${maps[selectedMap].name} · ${{ easy: "Fácil", medium: "Médio", hard: "Difícil", nightmare: "Pesadelo" }[difficulty] || ""}`;
+              : `${maps[selectedMap].name} · ${diff[difficulty]?.label || ""}`;
             const t = Math.floor(elapsed);
             $("pause-stats").innerHTML = [
               [WaveManager.wave, "Onda"],
@@ -20562,6 +20581,7 @@ body.netgame #revivetouch{display:flex}
               if (displaySnapshot && r.last?.profile)
                 this.acknowledgeServerWallet(r.last.profile, confirmedBefore, displaySnapshot);
               if (r.last?.profile) this.applyNonSpending(r.last.profile);
+              if (r.last?.story) StoryMode.setServer(r.last.story);
               if (r.last?.missions) DR.MissionManager.set(r.last.missions);
               UIManager.toast(`${r.synced} partida(s) offline sincronizada(s).`);
             }
@@ -20655,7 +20675,7 @@ body.netgame #revivetouch{display:flex}
               try {
                 const op = this.pending
                   .catch(() => {})
-                  .then(() => DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId));
+                  .then(() => DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId, DR.Backend.uuid(), mode === "classic" && !lobbyId ? storyLevel : null));
                 this.pending = op.catch(() => {});
                 const r = await op;
                 this.run = { id: r.run, offline: false };
@@ -20669,7 +20689,7 @@ body.netgame #revivetouch{display:flex}
             this.run = { id: null, offline: true };
           },
           report(result = null) {
-            return { ...RunStats.report(), mode, map: Number(selectedMap), difficulty, result };
+            return { ...RunStats.report(), mode, map: Number(selectedMap), difficulty, storyLevel: mode === "classic" && !NetGame.active ? storyLevel : null, result };
           },
           checkpoint(ended = false, result = "quit") {
             if (!this.signedIn() || !this.run) return Promise.resolve();
@@ -20700,6 +20720,7 @@ body.netgame #revivetouch{display:flex}
               .then((r) => {
                 if (r.profile) this.acknowledgeServerWallet(r.profile, confirmedBefore, displaySnapshot);
                 this.applyNonSpending(r.profile);UIManager.hudClock=0;UIManager.hud(0);
+                if (r.story) StoryMode.setServer(r.story);
                 DR.MissionManager.set(r.missions);
               })
               .catch((e) => {
