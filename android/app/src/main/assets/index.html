@@ -3589,7 +3589,7 @@ body.netgame #revivetouch{display:flex}
           selectedClass = 0,
           selectedMap = 0,
           mode = "classic",
-          difficulty = "medium",
+          difficulty = "easy",
           elapsed = 0,
           menuTime = 0,
           simulationTime = 0,
@@ -13724,6 +13724,7 @@ body.netgame #revivetouch{display:flex}
             return m;
           },
           damagePlayer(amount) {
+            amount *= modeRules().damage;
             if (NetGame.hurtRemote(amount)) return;
             if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
@@ -17571,7 +17572,7 @@ body.netgame #revivetouch{display:flex}
           },
         };
 
-        // Match economy is intentionally deterministic: difficulty/headshots do not change coins.
+        // Match economy is deterministic from event type, then multiplied by mode × difficulty.
         // Special enemies pay more, bosses pay a fixed tier reward, and every boss appearance
         // grants a small team-wide spawn bonus.
         const EconomyRewards = {
