@@ -15,9 +15,9 @@ has('PhysicsProps.meshes()', 'damage paths use physical prop mesh cache');
 assert.ok((html.match(/PhysicsProps\.shove\(/g) || []).length >= 5,
   'hitscan/projectile/stream/melee paths must all be able to hit physical/explosive props');
 
-has('Ondas com progressão normal, pausas entre ondas, minibosses e bosses', 'classic mode explains real rules');
-has('Sem onda final: vida, velocidade e pressão da horda continuam escalando', 'infinite mode explains real rules');
-has('Você tem 5 minutos: elimine o máximo possível', 'timed mode explains real rules');
+has('Campanha com 10 níveis por mapa, 20 waves por nível, três estrelas e recompensas próprias.', 'Story mode explains the campaign rules');
+has('Sem wave final. A horda escala continuamente, fica mais resistente e a partida tende a durar muito mais.', 'Infinity mode explains real rules');
+has('5 minutos de pressão máxima. Mais inimigos, zumbis mais rápidos e ataques muito mais perigosos.', 'timed mode explains real rules');
 
 assert.ok(/if \(this\.tab === "unique"\)[\s\S]{0,900}claimed/.test(missions),
   'unique missions remain as one permanent list with claimed state');
