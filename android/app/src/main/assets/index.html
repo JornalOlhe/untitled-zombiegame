@@ -22821,9 +22821,12 @@ body.netgame #revivetouch{display:flex}
                 );
             }
             // Blocky fringe from the approved UV/model reference: dark, uneven locks over the forehead.
-            A.block(head, [-0.07, 0.19, 0.142], [0.07, 0.09, 0.035], s.hairColor, "cloth", [0, 0, -0.12]);
-            A.block(head, [0.015, 0.205, 0.148], [0.065, 0.105, 0.032], s.hairColor, "cloth", [0, 0, 0.08]);
-            A.block(head, [0.082, 0.18, 0.139], [0.052, 0.075, 0.03], s.hairColor, "cloth", [0, 0, 0.18]);
+            const fringeL = A.block(head, [-0.07, 0.19, 0.142], [0.07, 0.09, 0.035], s.hairColor, "cloth"),
+              fringeC = A.block(head, [0.015, 0.205, 0.148], [0.065, 0.105, 0.032], s.hairColor, "cloth"),
+              fringeR = A.block(head, [0.082, 0.18, 0.139], [0.052, 0.075, 0.03], s.hairColor, "cloth");
+            fringeL.rotation.z = -0.12;
+            fringeC.rotation.z = 0.08;
+            fringeR.rotation.z = 0.18;
             for (const side of [-1, 1]) {
               const leg = A.pivot(hips, side * 0.125, -0.03, 0),
                 knee = A.pivot(leg, 0, -0.38, 0);
