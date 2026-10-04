@@ -199,6 +199,17 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       return out;
     });
     for (const r of roster) assert.ok(r.voxel && r.hits >= 6, `type ${r.type} (${r.name}) must use a voxel rig`);
+    // Taking damage must not swap/tint the voxel body's materials. Earlier hit feedback cloned
+    // the shared skin material and added white emissive, making monsters flash white/red.
+    const hitMaterial = await page.evaluate(() => {
+      const T = DeadRecoilTest, z = T.ZombieManager.list.find(z => z.speed > 0);
+      const before = z.rig.hits.map(m => m.material.uuid);
+      T.ZombieManager.hit(z, 1, false, z.group.position.clone().add(new THREE.Vector3(0, 1, 0)), { kind: 'gun' });
+      const after = z.rig.hits.map(m => m.material.uuid);
+      return { before, after, flashMat: !!z.flashMat };
+    });
+    assert.deepEqual(hitMaterial.after, hitMaterial.before, 'hits must preserve monster body materials');
+    assert.equal(hitMaterial.flashMat, false, 'hits must not create a full-body emissive flash material');
     await waitSim(0.3);
     const finite = await page.evaluate(() => DeadRecoilTest.ZombieManager.list.every(z => [z.rig.upper.rotation.x, z.rig.neck.rotation.x, z.rig.body.position.y].every(Number.isFinite)));
     assert.ok(finite, 'every voxel rig pose must stay finite (the Constructor once vanished from a NaN)');
