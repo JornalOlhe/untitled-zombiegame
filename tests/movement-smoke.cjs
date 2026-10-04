@@ -40,11 +40,21 @@ const server = http.createServer((req, res) => {
         p.pos.set(l.x - ix * 0.9, 1.7, l.z - iz * 0.9); p.ground = 0; p.jump = 0; p.vy = 0; p.climb = null;
         faceDir(ix, iz);
         T.keys.add('KeyW');
-        let maxFeet = 0, grabbed = false;
-        for (let i = 0; i < 150; i++) { T.stepPlayer(1 / 30, 1); maxFeet = Math.max(maxFeet, feet()); grabbed ||= !!p.climb; if (!p.climb && feet() >= l.top - 0.05 && i > 5) break; }
+        let maxFeet = 0, grabbed = false, avatarRootError = 0, ladderPoseSeen = false;
+        for (let i = 0; i < 150; i++) {
+          T.stepPlayer(1 / 30, 1);
+          maxFeet = Math.max(maxFeet, feet());
+          grabbed ||= !!p.climb;
+          if (p.onLadder && T.CameraRig.avatar) {
+            avatarRootError = Math.max(avatarRootError, Math.abs(T.CameraRig.avatar.position.y - (p.ground || 0)));
+            ladderPoseSeen ||= !!T.CameraRig.avatar.userData?.rig?.ladderHidden;
+          }
+          if (!p.climb && feet() >= l.top - 0.05 && i > 5) break;
+        }
         T.keys.delete('KeyW');
         T.stepPlayer(1 / 30, 15);
-        out.ladderTop = { top: l.top, feet: +feet().toFixed(2), grabbed, onRoof: Math.abs(feet() - l.top) < 0.1, climbing: !!p.climb, vy: p.vy };
+        out.ladderTop = { top: l.top, feet: +feet().toFixed(2), grabbed, onRoof: Math.abs(feet() - l.top) < 0.1, climbing: !!p.climb, vy: p.vy,
+          avatarRootError:+avatarRootError.toFixed(3), ladderPoseSeen };
         // Walk back over the edge: must grab and climb down, not fall.
         T.keys.add('KeyS');
         let minFeet = 99, grabbedDown = false, fastest = 0, prev = feet();
@@ -173,6 +183,7 @@ const server = http.createServer((req, res) => {
     console.log(JSON.stringify(r));
     assert.ok(r.ladders > 0, 'City must have ladders');
     assert.ok(r.ladderTop.grabbed && r.ladderTop.onRoof && !r.ladderTop.climbing, 'ladder: climb and step onto the roof');
+    assert.ok(r.ladderTop.avatarRootError < 0.04 && r.ladderTop.ladderPoseSeen, 'ladder: third-person root stays on floor and climb pose is active: ' + JSON.stringify(r.ladderTop));
     assert.ok(r.ladderDown.grabbedDown && r.ladderDown.maxDescentSpeed < 4, 'ladder: climb down, not fall');
     assert.ok(r.lowStep.crossed && r.lowStep.maxFeet >= 0.3, 'low obstacle is stepped over');
     assert.ok(r.tall.blocked && r.tall.feet < 0.1, 'tall obstacle blocks');
