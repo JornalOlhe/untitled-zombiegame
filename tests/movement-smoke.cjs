@@ -61,6 +61,28 @@ const server = http.createServer((req, res) => {
         for (let i = 0; i < 200; i++) { T.stepPlayer(1 / 30, 1); const f = feet(); if (i > 1) fastest = Math.max(fastest, (prev - f) * 30); prev = f; minFeet = Math.min(minFeet, f); grabbedDown ||= !!p.climb; if (f < 0.05 && !p.climb) break; }
         T.keys.delete('KeyS');
         out.ladderDown = { grabbedDown, minFeet: +minFeet.toFixed(2), maxDescentSpeed: +fastest.toFixed(2), climbing: !!p.climb };
+
+        // Fresh jump press while established on the ladder must detach upward instead of being
+        // swallowed by climb mode. This models keyboard and mobile (both write jumpQueuedAt).
+        p.pos.set(l.x - ix * 0.75, 1.7, l.z - iz * 0.75); p.ground = 0; p.jump = 0; p.vy = 0; p.climb = null; p.jumpQueuedAt = -9;
+        faceDir(ix, iz); T.keys.add('KeyW');
+        for (let i = 0; i < 20 && !p.climb; i++) T.stepPlayer(1 / 60, 1);
+        T.keys.delete('KeyW');
+        const jumpGrabbed = !!p.climb;
+        T.stepPlayer(1 / 60, 12); // make it an established climb, not the same press that grabbed it
+        const beforeJumpFeet = feet();
+        T.queueJump();
+        T.stepPlayer(1 / 60, 1);
+        const detached = !p.climb, launchVy = p.vy, releaseUntil = p.ladderReleaseUntil || 0;
+        T.stepPlayer(1 / 60, 8);
+        out.ladderJump = {
+          grabbed: jumpGrabbed,
+          detached,
+          launchVy: +launchVy.toFixed(2),
+          rose: +(feet() - beforeJumpFeet).toFixed(2),
+          cooldown: +(releaseUntil - T.time).toFixed(2),
+          regrabbed: !!p.climb,
+        };
       }
       // Step-up and tall obstacle in an open spot.
       let sx = 0, sz = 0;
@@ -177,6 +199,19 @@ const server = http.createServer((req, res) => {
       reset(); T.queueJump(); T.stepPlayer(1 / 60, 2); T.keys.add('KeyD'); let airMax = 0; run(0.5, 60, () => { if (p.jump > 0) airMax = Math.max(airMax, sp()); }); T.keys.clear();
       out.air = { airMax: +airMax.toFixed(3), wish: G.AIR_WISH };
       reset();
+
+      // Collision geometry regression: a long narrow diagonal prop must block on its visible body,
+      // but not in the empty corner of its enclosing axis-aligned bounding box.
+      const savedObstacles = M.obstacles;
+      M.obstacles = [];
+      M.indexed = null;
+      T.WorldProps.rotCollider(0, 0, 0.5, 6, Math.PI / 4, 2, 0);
+      const bodyBlocked = M.collides(1.4, 1.4, 0.18, 0);
+      const emptyCornerBlocked = M.collides(1.8, -1.8, 0.18, 0);
+      out.diagonalCollider = { bodyBlocked, emptyCornerBlocked, pieces: M.obstacles.length };
+      M.obstacles = savedObstacles;
+      M.indexed = null;
+
       out.nan = !isFinite(p.pos.x + p.pos.y + p.pos.z);
       return out;
     });
@@ -185,6 +220,8 @@ const server = http.createServer((req, res) => {
     assert.ok(r.ladderTop.grabbed && r.ladderTop.onRoof && !r.ladderTop.climbing, 'ladder: climb and step onto the roof');
     assert.ok(r.ladderTop.avatarRootError < 0.04 && r.ladderTop.ladderPoseSeen, 'ladder: third-person root stays on floor and climb pose is active: ' + JSON.stringify(r.ladderTop));
     assert.ok(r.ladderDown.grabbedDown && r.ladderDown.maxDescentSpeed < 4, 'ladder: climb down, not fall');
+    assert.ok(r.ladderJump.grabbed && r.ladderJump.detached && r.ladderJump.launchVy > 4 && r.ladderJump.rose > 0.15 && !r.ladderJump.regrabbed,
+      'ladder: a fresh jump press must detach upward without immediate re-grab: ' + JSON.stringify(r.ladderJump));
     assert.ok(r.lowStep.crossed && r.lowStep.maxFeet >= 0.3, 'low obstacle is stepped over');
     assert.ok(r.tall.blocked && r.tall.feet < 0.1, 'tall obstacle blocks');
     const S = r.sprint;
@@ -213,6 +250,8 @@ const server = http.createServer((req, res) => {
     assert.ok(r.airTurn.speedRatio > 0.72, 'turning in air should preserve most momentum: ' + JSON.stringify(r.airTurn));
     assert.ok(r.airTurn.speed <= r.airTurn.cap + 0.02, 'air steering cannot exceed bhop cap: ' + JSON.stringify(r.airTurn));
     assert.ok(r.air.airMax <= r.air.wish + 0.08, 'air control is limited: ' + JSON.stringify(r.air));
+    assert.ok(r.diagonalCollider.bodyBlocked && !r.diagonalCollider.emptyCornerBlocked && r.diagonalCollider.pieces > 1,
+      'diagonal colliders must hug visible geometry instead of making invisible AABB corners: ' + JSON.stringify(r.diagonalCollider));
     assert.ok(!r.nan);
     assert.deepEqual(errors, []);
     console.log('PASS movement');
