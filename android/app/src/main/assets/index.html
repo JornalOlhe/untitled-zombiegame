@@ -10573,8 +10573,10 @@ body.netgame #revivetouch{display:flex}
             moon.castShadow = false;
             moon.userData.moon = true;
             WorldProps.finish(index);
-            this.validateSpawns();
             this.makeGrid();
+            const start=this.playerStart || [0,10];
+            this.updateFlow({x:start[0],z:start[1]});
+            this.validateSpawns();
             WorldArt.build(index);
             LightPool.adopt(this.group);
             Nature.build(index);
@@ -10648,18 +10650,25 @@ body.netgame #revivetouch{display:flex}
             if (!this.collides(pos.x, pos.z + dz, r, feet)) pos.z += dz;
           },
           validateSpawns() {
+            const reachable=(x,z)=>{const [cx,cz]=this.worldToCell(x,z);return !this.collides(x,z,1.15) && this.flow[cz*this.gridSize+cx]<99999;};
             this.spawns = this.spawns.map(([sx, sz]) => {
-              if (!this.collides(sx, sz, 1.15)) return [sx, sz];
+              if (reachable(sx,sz)) return [sx,sz];
               for (let r = 1; r <= 7; r++) {
                 for (let i = 0; i < 16; i++) {
                   const a = (i / 16) * Math.PI * 2,
                     x = clamp(sx + Math.cos(a) * r, -this.half + 4, this.half - 4),
                     z = clamp(sz + Math.sin(a) * r, -this.half + 4, this.half - 4);
-                  if (!this.collides(x, z, 1.15)) return [x, z];
+                  if (reachable(x,z)) return [x,z];
                 }
               }
-              return [sx, sz];
-            });
+              // A clear pocket can still be isolated by scenery. Use the nearest connected cell.
+              let best=null,distance=Infinity;
+              for(let z=0;z<this.gridSize;z++)for(let x=0;x<this.gridSize;x++){
+                const [wx,wz]=this.cellToWorld(x,z),d=(wx-sx)**2+(wz-sz)**2;
+                if(d<distance && reachable(wx,wz)){best=[wx,wz];distance=d;}
+              }
+              return best;
+            }).filter(Boolean);
           },
           chooseSpawn(target = player.pos) {
             const ranked = this.spawns
@@ -10745,9 +10754,9 @@ body.netgame #revivetouch{display:flex}
             l.inward = blockedA && !blockedB ? a : blockedB && !blockedA ? [-a[0], -a[1]] : [-a[0], -a[1]];
             return l.inward;
           },
-          updateFlow() {
+          updateFlow(target = player.pos) {
             const n = this.gridSize,
-              [x, z] = this.cellAt(player.pos.x, player.pos.z),
+              [x, z] = this.cellAt(target.x, target.z),
               queue = new Int32Array(n * n);
             this.flow.fill(99999);
             let head = 0,
