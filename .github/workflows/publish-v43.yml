@@ -1,19 +1,10 @@
 name: Publish Dead Recoil 0.38.0 (tag v43)
 
+# v43 is already published and immutable. Keep this workflow available only for
+# manual forensic/rebuild runs so later main-branch fixes cannot accidentally try
+# to republish or move the v43 tag.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/publish-v43.yml'
-      - '.github/workflows/work-qa.yml'
-      - 'android/app/src/main/assets/**'
-      - 'android/app/src/main/java/**'
-      - 'android/app/build.gradle'
-      - 'desktop/**'
-      - 'tests/**'
-      - 'tools/ci/android-boot-smoke.sh'
-      - 'release/v43-notes.md'
 
 concurrency:
   group: publish-v43
