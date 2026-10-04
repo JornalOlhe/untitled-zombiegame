@@ -20272,12 +20272,21 @@ body.netgame #revivetouch{display:flex}
           // without persisting optimistic match earnings as confirmed account currency.
           applyNonSpending(profile) {
             if (!profile) return;
-            const confirmed = this.profile || {};
+            const current = Progression.data || {};
+            // Progression.data is the live wallet. Remove the still-pending overlay before
+            // comparing with a server snapshot, so stale responses cannot roll confirmed
+            // currency backwards and optimistic rewards are never cached as confirmed.
+            const confirmedNow = (key) =>
+              Math.max(
+                0,
+                Number(current[key] || 0) - this.pendingReward(key),
+                Number(this.profile?.[key] || 0),
+              );
             const safe = {
               ...profile,
-              coins: Math.max(Number(confirmed.coins || 0), Number(profile.coins || 0)),
-              normal: Math.max(Number(confirmed.normal || 0), Number(profile.normal || 0)),
-              lucky: Math.max(Number(confirmed.lucky || 0), Number(profile.lucky || 0)),
+              coins: Math.max(confirmedNow("coins"), Number(profile.coins || 0)),
+              normal: Math.max(confirmedNow("normal"), Number(profile.normal || 0)),
+              lucky: Math.max(confirmedNow("lucky"), Number(profile.lucky || 0)),
             };
             this.apply(safe);
             this.applyLiveWallet();
