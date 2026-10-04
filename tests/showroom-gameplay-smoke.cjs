@@ -26,7 +26,8 @@ const result=await page.evaluate(async()=>{
  ray.set(new V(0,.3,3),new V(0,0,-1));const low=ray.intersectObjects(T.ZombieManager.hitMeshes).length;
  T.PhysicsProps.clear?.();const prop=T.PhysicsProps.spawn('barrel',0,0,0);const barrel=T.PhysicsProps.items.at(-1);
  T.PhysicsProps.damageSegment(new V(0,.45,2),new V(0,.45,-1),20);const armed=barrel.fuse;
- const user=T.Account.user;T.Account.user='test';T.Progression.data.coins=100;T.player.coins=100;
+ const user=T.Account.user,profile=T.Account.profile;T.Account.user='test';T.Progression.data.coins=100;T.player.coins=100;
+ T.Account.profile={...(profile||{}),coins:100,normal:T.Progression.data.normal||0,lucky:T.Progression.data.lucky||0};
  T.Account.rewardDisplay={earned:{coins:0,normal:0,lucky:0},acknowledged:{coins:0,normal:0,lucky:0}};
  T.Progression.reward(10);const immediate=T.UIManager.displayBalance('coins'),spendable=T.Progression.data.coins;
  // A delayed report acknowledges only the rewards captured when that report was sent.
@@ -35,8 +36,8 @@ const result=await page.evaluate(async()=>{
  const checkpoint=T.Account.checkpoint();await Promise.resolve();await Promise.resolve();
  T.Progression.reward(50);
  resolve({profile:{...T.Progression.data,coins:110,username:'test',userId:'test'},missions:[]});await checkpoint;
- const reconciled=T.UIManager.displayBalance('coins');DR.RunRepository.report=old;T.Account.user=user;
+ const reconciled=T.UIManager.displayBalance('coins');DR.RunRepository.report=old;T.Account.user=user;T.Account.profile=profile;
  return {above,low,armed,immediate,spendable,reconciled};
 });
-console.log(JSON.stringify(result));assert.equal(result.above,0,'crawler has no standing hit volume');assert.ok(result.low>0,'crawler is hittable at its actual body height');assert.ok(result.armed>0,'swept blade segment arms barrel');assert.equal(result.immediate,110);assert.equal(result.spendable,100);assert.equal(result.reconciled,160,'in-flight reward survives reconciliation without double counting');assert.deepEqual(errors,[]);console.log('PASS showroom, crawler pose, barrel segment and delayed reward reconciliation');
+console.log(JSON.stringify(result));assert.equal(result.above,0,'crawler has no standing hit volume');assert.ok(result.low>0,'crawler is hittable at its actual body height');assert.ok(result.armed>0,'swept blade segment arms barrel');assert.equal(result.immediate,110);assert.equal(result.spendable,110,'HUD and Loadout must share the same live wallet');assert.equal(result.reconciled,160,'in-flight reward survives reconciliation without double counting');assert.deepEqual(errors,[]);console.log('PASS showroom, crawler pose, barrel segment and delayed reward reconciliation');
 }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1});
