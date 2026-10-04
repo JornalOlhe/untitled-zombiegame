@@ -301,19 +301,21 @@ const server = http.createServer((req, res) => {
       assert.deepEqual(screenState.hiddenInteractive, [], 'hidden menus must be inert and aria-hidden');
       await page.locator('#play').click();
       await page.locator('#solo').click();
-      await page.locator('#backclass').click();
+      await page.locator('#modescreen:not(.hidden)').waitFor({state:'visible'});
+      await page.locator('#backplay').click();
       await page.locator('#playscreen:not(.hidden)').waitFor({state:'visible'});
-      assert.ok(await page.locator('#classscreen').evaluate(el=>el.classList.contains('hidden')), 'Map Back must return one step to Play, never open Loadout');
+      assert.ok(await page.locator('#classscreen').evaluate(el=>el.classList.contains('hidden')), 'Mode Back must return one step to Play, never open Loadout');
       await page.locator('#solo').click();
+      await page.locator('[data-choice="mode"][data-value="timed"]').click();
+      assert.equal(await page.locator('#mode').inputValue(),'timed');
+      await page.locator('#nextmap').click();
       const cards = await page.locator('#mapcards > button').evaluateAll(items => items.map(el => ({top:el.getBoundingClientRect().top,width:el.getBoundingClientRect().width})));
       assert.equal(cards.length,5);
       assert.ok(cards.every(c => Math.abs(c.top-cards[0].top)<2 && c.width>=140), 'Maps must remain in one horizontal row');
       await page.locator('[data-map="4"]').click();
       await diagnosticScreenshot(page, {path:`test-results/maps-${width}.png`});
       await page.locator('#nextmode').click();
-      await page.locator('[data-choice="mode"][data-value="timed"]').click();
       await page.locator('[data-choice="difficulty"][data-value="easy"]').click();
-      assert.equal(await page.locator('#mode').inputValue(),'timed');
       await page.locator('#backmaps').click();
       assert.equal(await page.locator('[data-map="4"]').getAttribute('aria-pressed'),'true');
       await page.locator('#nextmode').click();
@@ -325,7 +327,7 @@ const server = http.createServer((req, res) => {
       await diagnosticScreenshot(page, {path:`test-results/rules-${width}.png`});
       await page.locator('#deploy').click();
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PLAYING);
-      assert.equal(await page.evaluate(() => DeadRecoilTest.player.maxhp),150);
+      assert.equal(await page.evaluate(() => DeadRecoilTest.player.maxhp),100);
       const before = await page.evaluate(() => DeadRecoilTest.player.pos.z);
       await page.keyboard.down('KeyW');
       // Software GL compiles the map shaders on the first frames; give movement a few seconds.
