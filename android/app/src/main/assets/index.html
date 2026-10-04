@@ -17071,6 +17071,9 @@ body.netgame #revivetouch{display:flex}
             p.tilt.position.y = up + (side - up) * Math.min(1, Math.max(0, k));
             p.tilt.quaternion.setFromAxisAngle(p.axis, p.angle);
             if (p.roll) p.mesh.rotation.y = p.roll;
+            // A prop may be moved/tipped after another weapon already queried meshes() in this
+            // simulation frame. Force the next raycast to see the new world transform.
+            this.matrixAt = -1;
           },
           knock(p, dir) {
             if (p.d.shape === "box" || p.target) return;
