@@ -1,0 +1,10 @@
+Dead Recoil v45 / 0.40.0 release gate.
+
+Includes:
+- live wallet consistency across HUD/Profile/Armory/Loadout;
+- stale Supabase snapshot rollback protection;
+- pending rewards retained across account responses;
+- monster hit materials no longer flash white/red;
+- regression tests for wallet and monster materials.
+
+This file intentionally triggers .github/workflows/publish-v45.yml.
