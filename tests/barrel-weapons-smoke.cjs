@@ -14,8 +14,6 @@ const rows=await page.evaluate(()=>{
    T.player.pos.set(0,1.7,12);T.setYaw(0);T.setPitch(-Math.atan2(1.7-.6,1.6));
    W.equip({...def});W.buildModel?.();const w=W.current();w.ammo=999;
    const barrel=T.PhysicsProps.spawn(barrelKind,0,10.4,0);T.scene.updateMatrixWorld(true);
-   // Move/tip it after the scene matrix pass: weapon raycasts must still refresh the prop matrix.
-   barrel.pos.x=.12;barrel.target=Math.PI/2;barrel.angle=.55;T.PhysicsProps.pose(barrel);
    T.stepPlayer(1/60,2);T.setTime(T.time+5);T.mouse.down=false;
    if(w.charge){P.chargeHeldSince=T.time-2;P.updateChargeShot(w,1/60);}
    else if(w.spear){P.spearHeldSince=T.time-2;P.updateSpear(w,1/60);}
@@ -31,7 +29,17 @@ const rows=await page.evaluate(()=>{
  }
  return rows;
 });
-console.log(JSON.stringify(rows));assert.deepEqual(rows.filter(r=>!r.armed),[],'every weapon must arm red and toxic/green explosive barrels, including after prop movement');
+console.log(JSON.stringify(rows));assert.deepEqual(rows.filter(r=>!r.armed),[],'every weapon must arm red and toxic/green explosive barrels');
+const moved=await page.evaluate(()=>{
+ const T=DeadRecoilTest,P=T.PhysicsProps,V=THREE.Vector3;
+ P.clear();T.MapManager.walls=[];T.MapManager.obstacles=[];T.MapManager.groundAt=()=>0;
+ const b=P.spawn('toxic',1.2,10.4,0);T.scene.updateMatrixWorld(true);
+ // Prime the matrix cache at the old transform, then move/tip the barrel without advancing time.
+ P.meshes();b.pos.x=0;b.target=Math.PI/2;b.angle=.65;P.pose(b);
+ P.damageSegment(new V(0,.45,12),new V(0,.45,9),20);
+ return {armed:!!b.fuse||!!b.dead,matrixAt:P.matrixAt};
+});
+console.log('moved-toxic',JSON.stringify(moved));assert.equal(moved.armed,true,'same-frame moved/tipped toxic barrel must use its new hitbox');
 const stress=await page.evaluate(()=>{
  const T=DeadRecoilTest,P=T.PhysicsProps;
  P.clear();T.ParticleSystem.clear();T.player.pos.set(30,1.7,30);T.MapManager.walls=[];T.MapManager.obstacles=[];T.MapManager.groundAt=()=>0;
