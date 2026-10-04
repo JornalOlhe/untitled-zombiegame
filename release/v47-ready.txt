@@ -1,0 +1,11 @@
+Dead Recoil v47 / 0.42.0 release gate.
+
+Includes:
+- rotation-aware segmented movement colliders to remove invisible diagonal corners;
+- ladder jump-off with upward/away impulse and short re-grab cooldown;
+- wallet reconciliation that only acknowledges server-confirmed reward deltas;
+- stale non-spending profile responses cannot roll a live gameplay wallet backward;
+- authoritative spending can still lower balances normally;
+- regression coverage for diagonal collision, ladder jump and 4k -> 6k gameplay/lobby wallet persistence.
+
+This file intentionally triggers .github/workflows/publish-v47.yml.
