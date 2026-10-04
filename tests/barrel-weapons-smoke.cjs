@@ -22,6 +22,11 @@ const rows=await page.evaluate(()=>{
    else P.shoot();
    for(let i=0;i<90;i++){T.setTime(T.time+1/60);P.update(1/60);T.updateProjectiles(1/60);T.SpecterSwarm.update(1/60);}
    rows.push({name:w.name,kind:w.kind,barrelKind,armed:!!barrel.fuse||!!barrel.dead});
+   // A thrown Dawn Spear has a return phase. Let it actually come back before the next
+   // independent barrel case instead of deleting the projectile while SpearThrow still owns it.
+   if(w.spear) for(let i=0;i<180&&T.projectiles.some(q=>q.kind==='spear');i++){
+    T.setTime(T.time+1/60);P.update(1/60);T.updateProjectiles(1/60);
+   }
   }
  }
  return rows;
