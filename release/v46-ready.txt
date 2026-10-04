@@ -1,0 +1,11 @@
+Dead Recoil v46 / 0.41.0 stability release gate.
+
+Includes:
+- explosion debris and VFX caps by device/quality;
+- reusable short noise buffers and throttled chain-reaction audio;
+- debris cleanup and no repeated blood work from barrel fragments;
+- per-frame physical prop matrix refresh for reliable moved/tilted barrel hitboxes;
+- red + toxic/green barrel coverage for every weapon;
+- 30-barrel explosion stress regression.
+
+This file intentionally triggers .github/workflows/publish-v46.yml.
