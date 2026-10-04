@@ -114,10 +114,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          ram-size: 2560M
+          # v42's release gate was stable with this exact emulator footprint. Keep v43 on the
+          # known-good profile: the leaner 2560M/camera-disabled variant intermittently killed
+          # the app/emulator before the WebView could emit DEAD_RECOIL_READY.
+          ram-size: 3072M
           disable-animations: true
-          emulator-boot-timeout: 480
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.38.0 android-boot-v43.png
       - name: Android real boot smoke · fresh-emulator retry
         id: boot2
@@ -130,10 +133,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          ram-size: 2560M
+          # v42's release gate was stable with this exact emulator footprint. Keep v43 on the
+          # known-good profile: the leaner 2560M/camera-disabled variant intermittently killed
+          # the app/emulator before the WebView could emit DEAD_RECOIL_READY.
+          ram-size: 3072M
           disable-animations: true
-          emulator-boot-timeout: 480
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.38.0 android-boot-v43.png
       - name: Require boot gate pass
         if: always()
