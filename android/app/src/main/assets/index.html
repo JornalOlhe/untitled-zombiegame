@@ -3139,7 +3139,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.39.0";
+        const GAME_VERSION = "0.40.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -4769,15 +4769,12 @@ body.netgame #revivetouch{display:flex}
             }
           },
           flash(z) {
-            if (!z.flashMat) {
-              z.flashMat = z.rig.hits[0].material.clone();
-              z.flashMat.emissive = new THREE.Color(0xffffff);
-              z.group.traverse((o) => {
-                if (o.isMesh && o.material === z.rig.hits[0].material) o.material = z.flashMat;
-              });
-            }
-            z.flashUntil = simulationTime + 0.09;
-            z.flashMat.emissiveIntensity = 0.55;
+            // Never replace or tint the monster's body material on hit. The old full-body
+            // emissive flash washed voxel textures to white (and some atlas/tint combinations
+            // appeared red). BloodFX, impact marks, damage numbers and the hitmarker already
+            // provide clear hit feedback without corrupting the character's visual material.
+            if (z.flashMat) z.flashMat.emissiveIntensity = 0;
+            z.flashUntil = 0;
           },
           // Voxel death physics: the body topples away from the killing blow, bounces once, limbs go
           // limp on springs, it slides with friction and finally sinks. Crawlers roll onto their side;
