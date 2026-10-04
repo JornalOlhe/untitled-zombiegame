@@ -4,7 +4,16 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-v43.yml', '.github/workflows/work-qa.yml']
+    paths:
+      - '.github/workflows/publish-v43.yml'
+      - '.github/workflows/work-qa.yml'
+      - 'android/app/src/main/assets/**'
+      - 'android/app/src/main/java/**'
+      - 'android/app/build.gradle'
+      - 'desktop/**'
+      - 'tests/**'
+      - 'tools/ci/android-boot-smoke.sh'
+      - 'release/v43-notes.md'
 
 concurrency:
   group: publish-v43
