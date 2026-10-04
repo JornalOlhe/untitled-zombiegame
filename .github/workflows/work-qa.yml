@@ -35,6 +35,7 @@ jobs:
         run: |
           node tests/ui-smoke.cjs
           node tests/showroom-gameplay-smoke.cjs
+          node tests/wallet-reconciliation-smoke.cjs
           node tests/release-version.cjs
           node tests/navigation-race.cjs
       - uses: actions/upload-artifact@v4
