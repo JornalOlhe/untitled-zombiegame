@@ -14,11 +14,10 @@ permissions:
   contents: read
 
 jobs:
-  gameplay:
+  ui:
+    name: UI, syntax and menu state
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      MONSTER_SHOTS: "0"
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,10 +25,33 @@ jobs:
           node-version: '22'
       - name: Syntax
         run: node tests/js-syntax.cjs
-      - run: npm install --no-save --package-lock=false playwright@1.62.1
-      - run: npx playwright install --with-deps chromium
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
       - name: UI and menu state
         run: node tests/ui-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gameplay-qa-ui-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 15
+
+  movement:
+    name: Movement, collision and spawning
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
       - name: Movement, collision and spawning
         run: |
           node tests/movement-smoke.cjs
@@ -39,6 +61,27 @@ jobs:
           node tests/spawn-smoke.cjs
           node tests/pursuit-smoke.cjs
           node tests/replayability-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gameplay-qa-movement-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 15
+
+  combat:
+    name: Combat, weapons and projectiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
       - name: Combat, weapons and projectiles
         run: |
           node tests/melee-smoke.cjs
@@ -49,6 +92,29 @@ jobs:
           node tests/projectiles-smoke.cjs
           node tests/stream-hitbox-smoke.cjs
           node tests/cyborg-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gameplay-qa-combat-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 15
+
+  visuals:
+    name: Bosses, secrets and visual systems
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MONSTER_SHOTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
       - name: Bosses, secrets and visual systems
         run: |
           node tests/monsters-smoke.cjs
@@ -60,6 +126,27 @@ jobs:
           node tests/specter-smoke.cjs
           node tests/wings-tail-smoke.cjs
           node tests/dof-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gameplay-qa-visuals-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 15
+
+  multiplayer:
+    name: Multiplayer and developer safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
       - name: Multiplayer and developer safety
         run: |
           node tests/multiplayer-local.cjs
@@ -68,6 +155,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: gameplay-qa-${{ github.run_id }}
+          name: gameplay-qa-multiplayer-${{ github.run_id }}
           path: test-results/
+          if-no-files-found: ignore
           retention-days: 15
