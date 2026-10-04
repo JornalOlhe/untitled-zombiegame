@@ -289,7 +289,7 @@ begin
   mode_mult := case r.mode when 'infinite' then 1.5 when 'timed' then 2.5 else 1 end;
   v_coins := round(v_coins * diff_mult * mode_mult);
   v_xp := v_xp + dk * 10 + dh * 4 + dw * 40 + dd / 500 + dr * 60;
-  if p_ended and p_result = 'win' and r.mode = 'timed' and el >= 290 then won := true; end if;
+  won := p_ended and p_result = 'win' and ((r.mode = 'timed' and el >= 290) or (r.mode = 'classic' and r.story_level is not null and v_cleared >= 20));
   t := jsonb_build_object('kills', v_kills, 'headshots', v_heads, 'wave', v_wave, 'wavesCleared', v_cleared, 'bossSpawns', v_boss_spawns, 'damage', dmg, 'noDamageWaves', nod,
     'revives', rev, 'bosses', v_bosses, 'families', fams, 'types', types, 'elapsed', greatest(coalesce((prev ->> 'elapsed')::int, 0), floor(el_claim)::int),
     'coins', coalesce((prev ->> 'coins')::bigint, 0) + v_coins, 'xp', coalesce((prev ->> 'xp')::bigint, 0) + v_xp);
