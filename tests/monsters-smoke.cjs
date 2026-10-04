@@ -39,12 +39,22 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     const SFX = ['roar', 'blizzard', 'demon', 'trident', 'frost', 'land', 'leap', 'medkit'];
     assert.ok(await page.evaluate(names => names.every(k => window.DR_MONSTER_SFX?.[k]), SFX), 'boss SFX data must load');
 
-    // Boss schedule on the City map: each 5th wave follows the map roster (Quarterback, Juggernaut, Roadblock, Wrecker).
-    const schedule = await page.evaluate(() => [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(w => DeadRecoilTest.WaveManager.bossFor(w)));
-    assert.deepEqual(schedule, ['quarterback', 'juggernaut', 'roadblock', 'wrecker', 'quarterback', 'juggernaut', 'roadblock', 'wrecker', 'quarterback', 'juggernaut']);
+    // Story boss schedule: levels 1-2 have no bosses; level 5+ uses both minibosses and both bosses.
+    const schedule = await page.evaluate(() => {
+      const T = DeadRecoilTest;
+      T.setStoryLevel(1);
+      const early = [5, 10, 15, 20].map(w => T.WaveManager.bossFor(w));
+      T.setStoryLevel(5);
+      const advanced = [5, 10, 15, 20].map(w => T.WaveManager.bossFor(w));
+      return { early, advanced };
+    });
+    assert.deepEqual(schedule.early, [null, null, null, null]);
+    assert.deepEqual(schedule.advanced, ['quarterback', 'juggernaut', 'roadblock', 'wrecker']);
 
     await page.locator('#play').click();
     await page.locator('#solo').click();
+    await page.locator('[data-choice="mode"][data-value="infinite"]').click();
+    await page.locator('#nextmap').click();
     await page.locator('[data-map="0"]').click();
     await page.locator('#nextmode').click();
     await page.locator('#rulescreen:not(.hidden)').waitFor({ state: 'visible' });
