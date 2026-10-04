@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-v43.yml']
+    paths: ['.github/workflows/publish-v43.yml', '.github/workflows/work-qa.yml']
 
 concurrency:
   group: publish-v43
