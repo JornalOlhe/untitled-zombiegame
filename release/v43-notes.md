@@ -2,6 +2,10 @@
 
 Release de acabamento de gameplay, interface e estabilidade sobre a v42.
 
+- Economia definitiva: zumbi normal/rastejante = 10 moedas; SWAT/Constructor(Dinamite)/Cyborg(Robot) = 50; aparição de boss ou miniboss = 10; miniboss = 500; boss = 1000; onda concluída = 50. Cliente e persistência Supabase seguem a mesma tabela.
+- Multiplayer: eliminado o ciclo de reconexão do host causado por eventos de canais Realtime antigos; heartbeats do lobby também são serializados para não se sobreporem durante a partida.
+- Loadout/terceira pessoa: Angelic Specter mantém cinco lâminas independentes e estáveis; Demonic Fury/foice, arcos e melees tiveram orientação/sockets preservados; armas não atravessam o tronco nos golpes testados e projéteis/tracers partem do muzzle real da arma em 1ª/3ª pessoa.
+
 - Economia em partida: recompensas continuam nos valores definidos e agora aparecem imediatamente no HUD mesmo em contas autenticadas, sem transformar o saldo local em fonte autoritativa.
 - Missões únicas: removidos os filtros de período/status; todas ficam visíveis, resgatadas vão para o fim e agora têm estado visual verde/bem marcado em vez de apenas cinza.
 - Missões em telas pequenas: contadores e barras foram ajustados para números grandes caberem em landscape/mobile.
