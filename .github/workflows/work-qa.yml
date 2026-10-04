@@ -32,7 +32,11 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.62.1
           npx playwright install --with-deps chromium
       - name: UI and menu state
-        run: node tests/ui-smoke.cjs
+        run: |
+          node tests/ui-smoke.cjs
+          node tests/showroom-gameplay-smoke.cjs
+          node tests/release-version.cjs
+          node tests/navigation-race.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,6 +67,7 @@ jobs:
           node tests/spawn-smoke.cjs
           node tests/pursuit-smoke.cjs
           node tests/replayability-smoke.cjs
+          node tests/resource-cycle.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -93,6 +98,7 @@ jobs:
           node tests/weapons-smoke.cjs
           node tests/projectiles-smoke.cjs
           node tests/stream-hitbox-smoke.cjs
+          node tests/barrel-weapons-smoke.cjs
           node tests/cyborg-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
