@@ -28,6 +28,10 @@
     username_taken: "Esse nome de usuário já está em uso.",
     invalid_username: "Nome de usuário: 3–20 letras, números ou _.",
     offline_run_too_old: "Partida offline antiga demais para sincronizar.",
+    story_incomplete: "Complete os 20 waves antes de resgatar esta recompensa.",
+    story_reward_claimed: "Esta recompensa da História já foi resgatada.",
+    story_chapter_incomplete: "Complete os 10 níveis deste mapa nesta dificuldade.",
+    story_master_incomplete: "Complete todos os mapas e níveis da História em todas as dificuldades.",
     not_authenticated: "Sessão expirada. Entre novamente.",
     network: "Sem conexão com o servidor.",
     timeout: "O servidor demorou para responder.",
@@ -149,12 +153,21 @@
   };
 
   const RunRepository = {
-    start: (mode, map, difficulty, lobbyId = null, requestId = uuid()) =>
-      Backend.rpc("run_start", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId }),
+    start: (mode, map, difficulty, lobbyId = null, requestId = uuid(), storyLevel = null) =>
+      Backend.rpc("run_start_v48", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId, p_story_level: Number.isInteger(storyLevel) ? storyLevel : null }),
     report: (runId, report, ended = false, result = null, requestId = uuid()) =>
       Backend.rpc("run_report", { p_run: runId, p_report: report, p_ended: ended, p_result: result, p_request: requestId }),
     submitOffline: (requestId, report) => Backend.rpc("run_submit_offline", { p_request: requestId, p_report: report }),
     mutation: (runId, wave, id, requestId = uuid()) => Backend.rpc("mutation_reward", { p_run: runId, p_wave: wave, p_id: id, p_request: requestId }),
+  };
+
+  const StoryRepository = {
+    list: () => Backend.rpc("story_list"),
+    claimLevel: (map, level, difficulty, requestId = uuid()) =>
+      Backend.rpc("story_claim_level", { p_map: map, p_level: level, p_difficulty: difficulty, p_request: requestId }),
+    claimChapter: (map, difficulty, requestId = uuid()) =>
+      Backend.rpc("story_claim_chapter", { p_map: map, p_difficulty: difficulty, p_request: requestId }),
+    claimMaster: (requestId = uuid()) => Backend.rpc("story_claim_master", { p_request: requestId }),
   };
 
   const MissionRepository = {
@@ -225,6 +238,7 @@
   DR.InventoryRepository = InventoryRepository;
   DR.DevRepository = DevRepository;
   DR.RunRepository = RunRepository;
+  DR.StoryRepository = StoryRepository;
   DR.MissionRepository = MissionRepository;
   DR.LobbyRepository = LobbyRepository;
   DR.OfflineQueue = OfflineQueue;
