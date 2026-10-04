@@ -7,6 +7,7 @@ const missions = fs.readFileSync("android/app/src/main/assets/js/ui/MissionUI.js
 const has = (needle, label) => assert.ok(html.includes(needle), label || needle);
 
 // v43 gameplay/UI contracts.
+has('const GAME_VERSION = "0.38.0";', 'runtime boot marker must match v43 package version');
 has('this.weather', 'game source loaded');
 has('UIManager.hudClock = 0', 'live reward path can invalidate HUD immediately');
 has('CRAWL_PITCH: 1.46', 'crawler uses a low body pose');
