@@ -20057,8 +20057,9 @@ body.netgame #revivetouch{display:flex}
             if(el && el._hudHTML!==html){el.innerHTML=html;el._hudHTML=html;}
           },
           displayBalance(key) {
-            const d = Account.rewardDisplay;
-            return player[key] + (Account.user && d ? Math.max(0, d.earned[key] - d.acknowledged[key]) : 0);
+            // player/economy already include the current session's unacknowledged rewards.
+            // Keeping the HUD on that same live wallet prevents a second, visual-only balance.
+            return Math.max(0, Number(player[key] || 0));
           },
           hud(dt) {
             this.hudClock -= dt;
@@ -20246,19 +20247,40 @@ body.netgame #revivetouch{display:flex}
             } catch {}
             this.badge();
           },
+          pendingReward(key) {
+            const d = this.rewardDisplay;
+            return this.user && d
+              ? Math.max(0, Number(d.earned[key] || 0) - Number(d.acknowledged[key] || 0))
+              : 0;
+          },
+          // Materialise pending match rewards into the session wallet so every surface
+          // (HUD, profile, Armory/Loadout) reads the same number. The confirmed profile
+          // remains untouched and is the only value persisted to the account cache.
+          applyLiveWallet() {
+            if (!this.user || !this.profile) return;
+            for (const key of ["coins", "normal", "lucky"]) {
+              const confirmed = Math.max(0, Number(this.profile[key] || 0));
+              const live = Math.min(1e9, confirmed + this.pendingReward(key));
+              Progression.economy.data[key] = live;
+              player[key] = live;
+            }
+            DR.ProfileUI?.chip();
+          },
           // Run start/checkpoints/mutations/offline sync are reward-only operations.
-          // They must never reduce wallet balances, even if an older server snapshot
-          // arrives after a newer profile response.
+          // First cache the authoritative server profile, then re-apply only rewards that
+          // are still in flight. This prevents stale snapshots from rolling the wallet back
+          // without persisting optimistic match earnings as confirmed account currency.
           applyNonSpending(profile) {
             if (!profile) return;
-            const current = Progression.data || {};
+            const confirmed = this.profile || {};
             const safe = {
               ...profile,
-              coins: Math.max(Number(current.coins || 0), Number(profile.coins || 0)),
-              normal: Math.max(Number(current.normal || 0), Number(profile.normal || 0)),
-              lucky: Math.max(Number(current.lucky || 0), Number(profile.lucky || 0)),
+              coins: Math.max(Number(confirmed.coins || 0), Number(profile.coins || 0)),
+              normal: Math.max(Number(confirmed.normal || 0), Number(profile.normal || 0)),
+              lucky: Math.max(Number(confirmed.lucky || 0), Number(profile.lucky || 0)),
             };
             this.apply(safe);
+            this.applyLiveWallet();
           },
           badge() {
             const online = DR.Backend.isOnline();
@@ -24713,9 +24735,14 @@ body.netgame #revivetouch{display:flex}
         const oldReward = Progression.reward.bind(Progression);
         Progression.reward = function (...args) {
           if (!Account.user) oldReward(...args);
-          else for (let i = 0; i < 3; i++) {
-            const key = ["coins", "normal", "lucky"][i], amount = args[i];
-            if (Number.isSafeInteger(amount) && amount > 0) Account.rewardDisplay.earned[key] += amount;
+          else {
+            for (let i = 0; i < 3; i++) {
+              const key = ["coins", "normal", "lucky"][i], amount = args[i];
+              if (Number.isSafeInteger(amount) && amount > 0) Account.rewardDisplay.earned[key] += amount;
+            }
+            // Signed-in match rewards are visible/spendable in the whole current session
+            // immediately; server checkpoints still decide what becomes persisted currency.
+            Account.applyLiveWallet();
           }
           UIManager.hudClock = 0;
           UIManager.hud(0);
