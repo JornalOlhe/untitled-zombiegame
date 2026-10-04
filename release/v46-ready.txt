@@ -9,3 +9,5 @@ Includes:
 - 30-barrel explosion stress regression.
 
 This file intentionally triggers .github/workflows/publish-v46.yml.
+
+Gate retry after isolating Dawn Spear return state between red/toxic barrel regression cases.
