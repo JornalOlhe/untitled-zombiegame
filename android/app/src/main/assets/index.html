@@ -8245,6 +8245,7 @@ body.netgame #revivetouch{display:flex}
           buses: {},
           route: null,
           nextNote: 0,
+          noiseBuffers: new Map(),
           init() {
             if (!this.ctx) {
               try {
@@ -8316,11 +8317,20 @@ body.netgame #revivetouch{display:flex}
           },
           noise(duration = 0.13, volume = 0.2) {
             if (!this.ctx) return;
-            const n = Math.floor(this.ctx.sampleRate * duration),
-              b = this.ctx.createBuffer(1, n, this.ctx.sampleRate),
-              a = b.getChannelData(0);
-            for (let i = 0; i < n; i++)
-              a[i] = (Math.random() * 2 - 1) * (1 - i / n);
+            // Reuse short noise buffers instead of allocating/filling a new AudioBuffer for every
+            // shot/explosion. Chain reactions used to create a large burst of GC/audio work.
+            const key = Math.max(1, Math.round(duration * 1000)),
+              cacheKey = this.ctx.sampleRate + ":" + key;
+            let b = this.noiseBuffers.get(cacheKey);
+            if (!b) {
+              const n = Math.max(1, Math.floor(this.ctx.sampleRate * duration)),
+                a = (b = this.ctx.createBuffer(1, n, this.ctx.sampleRate)).getChannelData(0);
+              for (let i = 0; i < n; i++)
+                a[i] = (Math.random() * 2 - 1) * (1 - i / n);
+              this.noiseBuffers.set(cacheKey, b);
+              if (this.noiseBuffers.size > 18)
+                this.noiseBuffers.delete(this.noiseBuffers.keys().next().value);
+            }
             const src = this.ctx.createBufferSource(),
               g = this.ctx.createGain(),
               f = this.ctx.createBiquadFilter();
@@ -12614,10 +12624,14 @@ body.netgame #revivetouch{display:flex}
           color = 0xff9d46,
           weapon = null,
         ) {
-          ParticleSystem.emit(pos, color, 65, 6);
+          const fx = PhysicsProps.fxScale?.() ?? 1;
+          ParticleSystem.emit(pos, color, Math.round(44 * fx), 6);
           PhysicsProps.impulse(pos, radius * 1.8, 11);
-          AudioManager.noise(0.4, 0.9);
-          AudioManager.tone(80, 0.35, "sawtooth", 0.5, 20);
+          if (simulationTime - (PhysicsProps.lastBlastSoundAt || -99) > 0.09) {
+            PhysicsProps.lastBlastSoundAt = simulationTime;
+            AudioManager.noise(0.32, 0.75);
+            AudioManager.tone(80, 0.28, "sawtooth", 0.42, 20);
+          }
           if (enemy) {
             const distance = player.pos.distanceTo(pos);
             if (distance < radius)
@@ -16909,6 +16923,26 @@ body.netgame #revivetouch{display:flex}
           },
           geometry: {},
           debris: [],
+          matrixAt: -1,
+          lastBlastSoundAt: -99,
+          debrisLimit() {
+            const g = SettingsManager.data.graphics;
+            if (nativeAndroid) return g === "low" ? 14 : g === "medium" ? 20 : 26;
+            return g === "low" ? 28 : g === "medium" ? 40 : 52;
+          },
+          addDebris(d) {
+            const limit = this.debrisLimit();
+            while (this.debris.length >= limit) {
+              const old = this.debris.shift();
+              old?.mesh?.parent?.remove(old.mesh);
+            }
+            this.debris.push(d);
+          },
+          fxScale() {
+            if (SettingsManager.data.vfx === "off") return 0;
+            if (nativeAndroid) return SettingsManager.data.vfx === "low" ? 0.28 : 0.42;
+            return SettingsManager.data.vfx === "low" ? 0.45 : 0.72;
+          },
           // Detach a mesh into world space and let it fly (headshot kills pop the head off).
           fling(mesh, vel, spin = 8, life = 4) {
             mesh.updateMatrixWorld(true);
@@ -16921,7 +16955,7 @@ body.netgame #revivetouch{display:flex}
             mesh.quaternion.copy(wq);
             mesh.scale.copy(ws);
             scene.add(mesh);
-            this.debris.push({ mesh, vel, spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin, life, half: ws.y * 0.5 });
+            this.addDebris({ mesh, vel, spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin, life, half: ws.y * 0.5, gore: true, splashed: false });
           },
           updateDebris(dt) {
             for (let i = this.debris.length - 1; i >= 0; i--) {
@@ -16938,7 +16972,12 @@ body.netgame #revivetouch{display:flex}
                 d.vel.x *= 0.7;
                 d.vel.z *= 0.7;
                 d.spin *= 0.6;
-                if (Math.random() < 0.4) BloodFX.emit(m.position.clone(), 4);
+                // Only organic/head debris can splatter, and only once. Barrel fragments used to
+                // generate blood work every frame while resting on the floor.
+                if (d.gore && !d.splashed && Math.abs(d.vel.y) > 0.4) {
+                  d.splashed = true;
+                  BloodFX.emit(m.position.clone(), 4);
+                }
               }
               if (d.life < 0.6) m.scale.multiplyScalar(Math.pow(0.02, dt));
               if (d.life <= 0) {
@@ -16958,13 +16997,16 @@ body.netgame #revivetouch{display:flex}
             return this.geometry[shape];
           },
           clear() {
-            for (const p of this.items) {
-              p.group.parent?.remove(p.group);
+            for (const p of this.items) p.group.parent?.remove(p.group);
+            for (const d of this.debris) d.mesh?.parent?.remove(d.mesh);
+            this.debris.length = 0;
+            for (const f of this.flashes) {
+              f.light.intensity = 0;
             }
-            for (const f of this.flashes) scene.remove(f.light);
             this.flashes = [];
             this.items = [];
             this.meshCache.length = 0;
+            this.matrixAt = -1;
           },
           spawn(kind, x, z, y = null) {
             const d = this.defs[kind],
@@ -17037,7 +17079,13 @@ body.netgame #revivetouch{display:flex}
             p.target = Math.PI / 2;
           },
           meshes() {
-            // Hot path for bullets/streams/projectiles: avoid allocating a new array every raycast.
+            // Every weapon path raycasts this shared list. Props can move after the scene's normal
+            // matrix update, so refresh once per simulation frame; otherwise a moved/tilted barrel
+            // (especially toxic/green barrels) can keep a stale hitbox and ignore shots.
+            if (this.matrixAt !== simulationTime) {
+              for (const p of this.items) p.group.updateMatrixWorld(true);
+              this.matrixAt = simulationTime;
+            }
             return this.meshCache;
           },
           damageSegment(from, to, damage) {
@@ -17045,7 +17093,6 @@ body.netgame #revivetouch{display:flex}
             if(length<.0001)return;
             const ray=new THREE.Raycaster(from,delta.divideScalar(length),0,length+.08);
             const wall=ray.intersectObjects(MapManager.walls)[0];
-            for(const p of this.items)p.group.updateMatrixWorld(true);
             const hit=ray.intersectObjects(this.meshes())[0];
             if(hit && (!wall||hit.distance<wall.distance))this.shove(hit.object.userData.prop,ray.ray.direction,hit.point,damage);
           },
@@ -17127,26 +17174,31 @@ body.netgame #revivetouch{display:flex}
               toxic = p.kind === "toxic",
               radius = 6.5,
               color = toxic ? 0x8dff3a : 0xff7a26;
-            // Fire, smoke and debris.
-            ParticleSystem.emit(at, color, 70, 7);
-            ParticleSystem.emit(at, 0xffe2a0, 30, 4);
-            ParticleSystem.emit(at.clone().add(new V(0, 0.6, 0)), 0x3a3a3a, 40, 2.2);
-            ParticleSystem.emit(at.clone().add(new V(0, 1.2, 0)), 0x5a5a5a, 25, 1.4);
-            for (let j = 0; j < 6; j++) {
+            // Fire/smoke stay visible, but scale the one-frame allocation burst to the device.
+            const fx = this.fxScale();
+            ParticleSystem.emit(at, color, Math.round(42 * fx), 7);
+            ParticleSystem.emit(at, 0xffe2a0, Math.round(18 * fx), 4);
+            ParticleSystem.emit(at.clone().add(new V(0, 0.6, 0)), 0x3a3a3a, Math.round(24 * fx), 2.2);
+            ParticleSystem.emit(at.clone().add(new V(0, 1.2, 0)), 0x5a5a5a, Math.round(14 * fx), 1.4);
+            const pieces = nativeAndroid ? 2 : SettingsManager.data.graphics === "low" ? 2 : 4;
+            for (let j = 0; j < pieces; j++) {
               const piece = new THREE.Mesh(this.geo("box"), PropKit.mat(p.d.tex));
               piece.scale.set(rand(0.12, 0.28), rand(0.05, 0.12), rand(0.12, 0.26));
               piece.position.copy(at);
               scene.add(piece);
-              this.debris.push({ mesh: piece, vel: new V(rand(-7, 7), rand(5, 10), rand(-7, 7)), spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin: rand(6, 14), life: 3.5, half: 0.05 });
+              this.addDebris({ mesh: piece, vel: new V(rand(-7, 7), rand(5, 10), rand(-7, 7)), spinAxis: new V(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize(), spin: rand(6, 14), life: 2.4, half: 0.05, gore: false });
             }
             // Momentary light from a fixed pool: adding a new PointLight to the scene changes the
             // light count and recompiles every material (that was the freeze on barrel blasts).
             const flash = this.flashLight(color, radius * 3.2, at.clone().add(new V(0, 0.6, 0)));
             if (flash) this.flashes.push({ light: flash, t: 0 });
-            // Sound: crack + low boom.
-            AudioManager.noise(0.6, 1);
-            AudioManager.tone(55, 0.7, "sawtooth", 0.6, 18);
-            MonsterAudio.play("land", { volume: 1.1 });
+            // Sound: collapse chain-reaction audio bursts into one boom every few frames.
+            if (simulationTime - this.lastBlastSoundAt > 0.09) {
+              this.lastBlastSoundAt = simulationTime;
+              AudioManager.noise(0.42, 0.85);
+              AudioManager.tone(55, 0.55, "sawtooth", 0.5, 18);
+              MonsterAudio.play("land", { volume: 0.9 });
+            }
             // Damage: zombies take heavy damage, players take falloff damage.
             for (const z of [...ZombieManager.list]) {
               const d = z.group.position.distanceTo(at);
