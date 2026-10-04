@@ -8601,27 +8601,8 @@ body.netgame #revivetouch{display:flex}
           // a diagonal car/cabin leaves big invisible corners. Near-axis boxes get one AABB; any
           // other angle is split into slices along its long side, each wrapped by its own small
           // AABB — the union hugs the real outline (≤ ~15 cm of extra reach).
-          rotCol(x, z, ry, w, d, top) {
-            const c = Math.cos(ry),
-              s = Math.sin(ry),
-              ac = Math.abs(c),
-              as = Math.abs(s);
-            if (Math.min(ac, as) < 0.08) {
-              this.col(x, z, w * ac + d * as, w * as + d * ac, top);
-              return;
-            }
-            const long = Math.max(w, d),
-              short = Math.min(w, d),
-              alongZ = d >= w,
-              n = Math.max(1, Math.min(12, Math.ceil(long / Math.max(0.35, short * 0.45)))),
-              seg = long / n;
-            for (let i = 0; i < n; i++) {
-              const t = -long / 2 + seg * (i + 0.5),
-                [cx, cz] = alongZ ? this.at(x, z, ry, 0, t) : this.at(x, z, ry, t, 0),
-                sw = alongZ ? short : seg,
-                sd = alongZ ? seg : short;
-              this.col(cx, cz, sw * ac + sd * as, sw * as + sd * ac, top);
-            }
+          rotCol(x, z, ry, w, d, top, base = 0) {
+            WorldProps.rotCollider(x, z, w, d, ry, top, base);
           },
           // A building volume with a photo-textured shell (tileUV keeps bricks their real size).
           building(M, x, z, w, d, h, surface, tint, tile = 3.2) {
@@ -16748,6 +16729,30 @@ body.netgame #revivetouch{display:flex}
           collider(x, z, w, d, top, base = 0) {
             MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: Math.max(0, top - base), top, base });
           },
+          // Approximate a yaw-rotated box with a chain of tight AABBs. A single enclosing AABB
+          // around a diagonal prop creates empty triangular corners that feel like invisible walls.
+          rotCollider(x, z, w, d, ry, top, base = 0) {
+            const c = Math.cos(ry), sn = Math.sin(ry), ac = Math.abs(c), as = Math.abs(sn);
+            if (Math.min(ac, as) < 0.08) {
+              this.collider(x, z, w * ac + d * as, w * as + d * ac, top, base);
+              return;
+            }
+            const long = Math.max(w, d),
+              short = Math.min(w, d),
+              alongZ = d >= w,
+              n = Math.max(1, Math.min(14, Math.ceil(long / Math.max(0.3, short * 0.42)))),
+              seg = long / n;
+            for (let i = 0; i < n; i++) {
+              const t = -long / 2 + seg * (i + 0.5),
+                ox = alongZ ? 0 : t,
+                oz = alongZ ? t : 0,
+                cx = x + ox * c + oz * sn,
+                cz = z - ox * sn + oz * c,
+                sw = alongZ ? short : seg,
+                sd = alongZ ? seg : short;
+              this.collider(cx, cz, sw * ac + sd * as, sw * as + sd * ac, top, base);
+            }
+          },
           free(x, z, r) {
             if (Math.abs(x) > MapManager.half - 3 - r || Math.abs(z) > MapManager.half - 3 - r) return false;
             if (MapManager.near(x, z, r).some((o) => Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r)) return false;
@@ -16894,10 +16899,14 @@ body.netgame #revivetouch{display:flex}
                 const [x,y,z]=b.pos,[w,h,d]=b.size;
                 if(Math.min(w,h,d)<.025)continue;
                 if(MapManager.obstacles.some(o=>Math.abs(x-o.x)<=o.w && Math.abs(z-o.z)<=o.d && y>=(o.base||0) && y<=o.top))continue;
-                matrix.compose(new V(x,y,z),quat.setFromEuler(new THREE.Euler(...(b.rot||[0,0,0]),"YXZ")),new V(1,1,1));
+                const [rx, ry, rz] = b.rot || [0, 0, 0];
+                matrix.compose(new V(x,y,z),quat.setFromEuler(new THREE.Euler(rx,ry,rz,"YXZ")),new V(1,1,1));
                 bounds.set(new V(-w/2,-h/2,-d/2),new V(w/2,h/2,d/2)).applyMatrix4(matrix);
                 const size=bounds.getSize(new V()),center=bounds.getCenter(new V());
-                this.collider(center.x,center.z,size.x,size.z,bounds.max.y,bounds.min.y);
+                if (Math.abs(rx) < 0.03 && Math.abs(rz) < 0.03)
+                  this.rotCollider(x,z,w,d,ry,bounds.max.y,bounds.min.y);
+                else
+                  this.collider(center.x,center.z,size.x,size.z,bounds.max.y,bounds.min.y);
               }
             }
             const hard = PropKit.build(this.hard, MapManager.group);
@@ -18832,6 +18841,7 @@ body.netgame #revivetouch{display:flex}
               classCharge: 0,
               reviveUsed: false,
               flightDescentUntil: 0,
+              ladderReleaseUntil: 0,
             };
             player.maxhp = Math.round(player.baseMaxHp * classValue("maxHp", 1));
             player.hp = player.maxhp;
@@ -19427,13 +19437,14 @@ body.netgame #revivetouch{display:flex}
             // top the player is carried over the edge onto the roof instead of being launched.
             const flying = flyingNow;
             let climbing = false;
-            if (!player.climb && !flying) {
+            if (!player.climb && !flying && simulationTime >= (player.ladderReleaseUntil || 0)) {
               const l = MapManager.ladders?.find((l) => Math.hypot(player.pos.x - l.x, player.pos.z - l.z) < 0.9 && feet < l.top - 0.25);
               if (l) {
                 const inward = MapManager.ladderInward(l),
                   into = moveWX * inward[0] + moveWZ * inward[1];
                 if (into > 0.35 || (keys.has("Space") && player.jump === 0 && !jumpedNow)) {
-                  player.climb = { l, inward, phase: "climb", t: 0 };
+                  player.climb = { l, inward, phase: "climb", t: 0, startedAt: simulationTime };
+                  if (jumpBuffered) player.jumpQueuedAt = -9;
                   player.vy = 0;
                 }
               }
@@ -19443,11 +19454,25 @@ body.netgame #revivetouch{display:flex}
                 const inward = MapManager.ladderInward(top),
                   into = moveWX * inward[0] + moveWZ * inward[1];
                 if (into < -0.35) {
-                  player.climb = { l: top, inward, phase: "climb", t: 0 };
+                  player.climb = { l: top, inward, phase: "climb", t: 0, startedAt: simulationTime };
                   feet = top.top - 0.05;
                   player.vy = 0;
                 }
               }
+            }
+            if (
+              player.climb &&
+              jumpBuffered &&
+              simulationTime - (player.climb.startedAt ?? simulationTime) > 0.12
+            ) {
+              const [ix, iz] = player.climb.inward;
+              player.jumpQueuedAt = -9;
+              player.climb = null;
+              player.ladderReleaseUntil = simulationTime + 0.28;
+              player.vy = 5.6 * classValue("jump", 1);
+              MapManager.move(player.pos, -ix * 0.42, -iz * 0.42, 0.4, feet);
+              this.motion.takeoff(simulationTime, speedCap, false);
+              jumpedNow = true;
             }
             if (player.climb) {
               const c = player.climb,
@@ -20330,9 +20355,6 @@ body.netgame #revivetouch{display:flex}
           applyNonSpending(profile) {
             if (!profile) return;
             const current = Progression.data || {};
-            // Progression.data is the live wallet. Remove the still-pending overlay before
-            // comparing with a server snapshot, so stale responses cannot roll confirmed
-            // currency backwards and optimistic rewards are never cached as confirmed.
             const confirmedNow = (key) =>
               Math.max(
                 0,
@@ -20346,6 +20368,21 @@ body.netgame #revivetouch{display:flex}
               lucky: Math.max(confirmedNow("lucky"), Number(profile.lucky || 0)),
             };
             this.apply(safe);
+          },
+          acknowledgeServerWallet(profile, before, earnedSnapshot) {
+            if (!profile || !earnedSnapshot) return;
+            for (const key of ["coins", "normal", "lucky"]) {
+              const prior = Math.max(0, Number(before?.[key] || 0)),
+                next = Math.max(prior, Number(profile[key] || 0)),
+                confirmedDelta = Math.max(0, next - prior),
+                ack = Math.max(0, Number(this.rewardDisplay.acknowledged[key] || 0)),
+                earnedAtRequest = Math.max(ack, Number(earnedSnapshot[key] || 0)),
+                outstanding = Math.max(0, earnedAtRequest - ack);
+              this.rewardDisplay.acknowledged[key] = Math.min(
+                earnedAtRequest,
+                ack + Math.min(outstanding, confirmedDelta),
+              );
+            }
           },
           badge() {
             const online = DR.Backend.isOnline();
@@ -20406,7 +20443,8 @@ body.netgame #revivetouch{display:flex}
             try {
               const r = await DR.ProfileRepository.session();
               this.online = true;
-              this.apply(r.profile);
+              if (this.profile && this.user) this.applyNonSpending(r.profile);
+              else this.apply(r.profile);
               if (!DevMode.active) {
                 if (r.profile.settings && Object.keys(r.profile.settings).length) {
                   SettingsManager.data = { ...SettingsManager.defaults, ...r.profile.settings };
@@ -20426,7 +20464,10 @@ body.netgame #revivetouch{display:flex}
               try {
                 cached = JSON.parse(localStorage.getItem(this.profileCacheKey(this.userId)) || "null");
               } catch {}
-              if (cached) this.apply(cached);
+              if (cached) {
+                if (this.profile && this.user) this.applyNonSpending(cached);
+                else this.apply(cached);
+              }
               else this.user = DR.AuthService.user()?.email?.split("@")[0] || "Sobrevivente";
               DR.MissionManager.loadCache();
               this.badge();
@@ -20437,12 +20478,19 @@ body.netgame #revivetouch{display:flex}
             // Every operation that can return a profile snapshot must run in the same
             // serial queue. Otherwise an older run/offline response can arrive after a
             // newer one and visually roll the wallet back to a stale coin balance.
-            const op = this.pending.catch(() => {}).then(() => DR.OfflineQueue.flush(this.userId));
+            let confirmedBefore = null;
+            const op = this.pending.catch(() => {}).then(() => {
+              confirmedBefore = this.profile
+                ? Object.fromEntries(["coins","normal","lucky"].map((key) => [key, Number(this.profile[key] || 0)]))
+                : null;
+              return DR.OfflineQueue.flush(this.userId);
+            });
             this.pending = op.catch(() => {});
             const displaySnapshot = this.offlineDisplayPending && { ...this.offlineDisplayPending };
             const r = await op.catch(() => null);
             if (r?.synced) {
-              if(displaySnapshot && r.last?.profile)for(const key of ["coins","normal","lucky"])this.rewardDisplay.acknowledged[key]=Math.max(this.rewardDisplay.acknowledged[key],displaySnapshot[key]);
+              if (displaySnapshot && r.last?.profile)
+                this.acknowledgeServerWallet(r.last.profile, confirmedBefore, displaySnapshot);
               if (r.last?.profile) this.applyNonSpending(r.last.profile);
               if (r.last?.missions) DR.MissionManager.set(r.last.missions);
               UIManager.toast(`${r.synced} partida(s) offline sincronizada(s).`);
@@ -20516,7 +20564,7 @@ body.netgame #revivetouch{display:flex}
             this.timer = setTimeout(() => {
               if (this.signedIn() && DR.Backend.isOnline())
                 this.queue("preferences", { cosmetics: { ...CharacterStyle.data }, settings: { ...SettingsManager.data } })
-                  .then((r) => this.apply(r.profile))
+                  .then((r) => this.applyNonSpending(r.profile))
                   .catch((e) => UIManager.toast(e.message));
               else if (!this.signedIn()) {
                 try {
@@ -20568,13 +20616,19 @@ body.netgame #revivetouch{display:flex}
             }
             const snapshot = this.report(result);
             const displaySnapshot = { ...this.rewardDisplay.earned };
+            let confirmedBefore = null;
             const op = this.pending
               .catch(() => {})
-              .then(() => DR.RunRepository.report(run.id, snapshot, ended, ended ? result : null));
+              .then(() => {
+                confirmedBefore = this.profile
+                  ? Object.fromEntries(["coins","normal","lucky"].map((key) => [key, Number(this.profile[key] || 0)]))
+                  : null;
+                return DR.RunRepository.report(run.id, snapshot, ended, ended ? result : null);
+              });
             this.pending = op.catch(() => {});
             return op
               .then((r) => {
-                if(r.profile)for(const key of ["coins","normal","lucky"])this.rewardDisplay.acknowledged[key]=Math.max(this.rewardDisplay.acknowledged[key],displaySnapshot[key]);
+                if (r.profile) this.acknowledgeServerWallet(r.profile, confirmedBefore, displaySnapshot);
                 this.applyNonSpending(r.profile);UIManager.hudClock=0;UIManager.hud(0);
                 DR.MissionManager.set(r.missions);
               })
@@ -26239,7 +26293,7 @@ body.netgame #revivetouch{display:flex}
           maps: () => maps,
           inMatch: () => NetGame.active,
           applyProfile(p) {
-            Account.apply(p);
+            Account.applyNonSpending(p);
           },
           openLogin(message = "") {
             DR.LoginUI.open("login", message);
