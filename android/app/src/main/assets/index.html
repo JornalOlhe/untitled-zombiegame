@@ -23071,37 +23071,81 @@ body.netgame #revivetouch{display:flex}
             const skin = s.skin,
               shirt = skin; // base survivor is shirtless; class/cosmetic outerwear is layered separately
             // One shared block rig for the showroom, local player and remote players.
+            // Reference-sheet survivor v48: shirtless block body, shaggy black fringe, dark
+            // multi-pocket cargo pants, segmented belt/buckles and black high-top sneakers
+            // with pale toe/sole/laces. The class gear is still layered on top of this base.
             TemplateBody.box(chest,[0,.22,0],[.47,.57,.26],"torso");
             TemplateBody.box(hips,[0,.025,0],[.44,.17,.28],"pants");
             TemplateBody.box(head,[0,.12,0],[.37,.38,.34],"head");
             TemplateBody.box(head,[0,-.08,0],[.13,.12,.13],"skin");
+
+            // Large square eyes and tiny neutral mouth from the supplied front/head close-up.
             for(const side of [-1,1]){
-              A.block(head,[side*.078,.15,.174],[.060,.060,.008],0xe6e8e5);
-              A.block(head,[side*.067,.148,.18],[.034,.052,.008],0x141519);
+              A.block(head,[side*.078,.15,.174],[.060,.060,.008],0xf0efea);
+              A.block(head,[side*.067,.148,.181],[.034,.052,.008],0x101217);
+              A.block(head,[side*.058,.166,.186],[.010,.014,.006],0xffffff);
             }
             A.block(head,[0,.033,.174],[.038,.006,.008],0x9b6c57);
+
+            // Dense layered black hair: crown/back volume plus irregular front bangs hanging
+            // over the forehead, matching the asymmetrical Minecraft-style reference silhouette.
             for (let x=-3;x<=3;x++) for (let z=-2;z<=2;z++) {
               const y=.31+((x*x+z*z)%3)*.016;
-              A.block(head,[x*.058,y,z*.063],[.065,.1,.072],0x141518,"cloth");
-              if (z===2 && x!==0) A.block(head,[x*.058,.265-(Math.abs(x)%2)*.02,.174],[.062,.07,.065],0x191a1d,"cloth");
-              if (Math.abs(x)===3 || z===-2) A.block(head,[x*.058,.16,z*.063],[.067,.22,.075],0x141518,"cloth");
+              const shade=((x+z)&1)?0x111317:0x17191d;
+              A.block(head,[x*.058,y,z*.063],[.066,.105,.074],shade,"cloth");
+              if (Math.abs(x)===3 || z===-2)
+                A.block(head,[x*.058,.16,z*.063],[.068,.22,.077],0x121418,"cloth");
             }
+            const bangs=[
+              [-.158,.250,.177,.064,.145],[-.095,.225,.181,.062,.185],[-.032,.205,.183,.066,.220],
+              [.034,.235,.182,.064,.172],[.100,.214,.181,.062,.202],[.158,.248,.176,.060,.140]
+            ];
+            for(const [x,y,z,w,h] of bangs) A.block(head,[x,y,z],[w,h,.068],0x15171b,"cloth");
+            A.block(head,[-.184,.145,.070],[.055,.245,.090],0x121418,"cloth");
+            A.block(head,[ .184,.158,.050],[.052,.220,.086],0x15171b,"cloth");
+
+            // Shirtless torso definition is deliberately subtle so it reads as skin, not armor.
+            const skinLine=0xb97f68;
+            A.block(chest,[0,.245,.134],[.012,.225,.009],skinLine,"skin");
+            A.block(chest,[0,.310,.136],[.215,.010,.009],skinLine,"skin");
+            A.block(chest,[-.072,.160,.136],[.060,.010,.009],skinLine,"skin");
+            A.block(chest,[ .072,.160,.136],[.060,.010,.009],skinLine,"skin");
+
             for (const side of [-1,1]) {
               const leg=A.pivot(hips,side*.125,-.03,0), knee=A.pivot(leg,0,-.38,0);
               TemplateBody.box(leg,[0,-.17,0],[.225,.38,.27],"pants");
               TemplateBody.box(knee,[0,-.16,0],[.22,.34,.26],"pants");
+
+              // Cargo pocket + flap + thigh strap. The outer pocket sits proud of the leg like
+              // the model sheet instead of being painted flat into the trouser texture.
+              A.block(leg,[side*.119,-.165,.018],[.052,.160,.190],0x202328,"cloth");
+              A.block(leg,[side*.124,-.085,.020],[.058,.035,.196],0x2b2e34,"cloth");
+              A.block(leg,[0,-.300,.118],[.220,.038,.032],0x16191d,"cloth");
+              A.block(leg,[side*.080,-.300,.139],[.040,.052,.014],0x989b9e,"metal");
+              A.block(leg,[side*.080,-.300,.148],[.021,.032,.008],0x161719,"polymer");
+
+              // Black high-top with bright sole/toe and three white lace bars.
               TemplateBody.box(knee,[0,-.335,.055],[.235,.16,.34],"shoe");
-              A.block(knee,[0,-.4,.055],[.24,.042,.35],0xe0e0da);
-              A.block(leg,[side*.115,-.2,.025],[.035,.14,.19],0x24252a,"cloth");
+              A.block(knee,[0,-.400,.055],[.245,.046,.355],0xe6e5df,"polymer");
+              A.block(knee,[0,-.338,.224],[.188,.060,.030],0xe2e1dc,"polymer");
+              for(let ly=0;ly<3;ly++)
+                A.block(knee,[0,-.305+ly*.035,.228],[.138,.012,.010],0xe9e8e2,"cloth");
+
               legs.push(leg);knees.push(knee);
               const arm=A.pivot(chest,side*.29,.4,0),elbow=A.pivot(arm,0,-.29,0);
               TemplateBody.box(arm,[0,-.13,0],[.16,.29,.18],"skin");
               TemplateBody.box(elbow,[0,-.13,0],[.15,.29,.17],"skin");
+              // Thin black wrist cuff visible in the side/front reference.
+              A.block(elbow,[0,-.258,.005],[.154,.032,.174],0x17191d,"cloth");
               arms.push(arm);elbows.push(elbow);
             }
-            A.block(hips,[0,.105,.148],[.44,.065,.026],0x181a1d,"cloth");
-            A.block(hips,[0,.105,.17],[.072,.056,.012],0x9b9d9e);
-            A.block(hips,[0,.105,.18],[.045,.032,.006],0x151617);
+
+            // Layered black belt, loops and silver square buckle.
+            A.block(hips,[0,.105,.148],[.44,.065,.026],0x15171a,"cloth");
+            for(const bx of [-.165,-.082,.082,.165])
+              A.block(hips,[bx,.105,.168],[.026,.083,.015],0x24272b,"cloth");
+            A.block(hips,[0,.105,.174],[.078,.060,.014],0xb4b7b8,"metal");
+            A.block(hips,[0,.105,.184],[.047,.033,.008],0x121416,"polymer");
             const tactical = [1, 4, 7, 8, 9].includes(cls);
             if (tactical) {
               A.block(
