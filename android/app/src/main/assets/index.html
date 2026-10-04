@@ -2167,44 +2167,70 @@
         html.native-android #slotshud .slot { display:none; }
         html.native-android #slotshud .slot.active { display:block; min-width:96px; max-width:108px; padding:4px 6px; font-size:9px; }
       }
-      /* Two concise steps; maps remain in one horizontal row on every viewport. */
-      #mapscreen, #rulescreen { overflow:auto; }
-      #mapscreen .container, #rulescreen .container { width:100%; }
-      #mapscreen .topline, #rulescreen .topline { margin-bottom:12px; }
-      .step-label { color:var(--gold);font-size:11px;letter-spacing:.19em;font-weight:800;margin:0 0 10px; }
-      #mapcards.selection { display:grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(152px,1fr);gap:10px;overflow-x:auto;overflow-y:hidden;max-width:100%;margin:14px 0 18px;padding:3px 3px 13px;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch; }
-      #mapcards .card { scroll-snap-align:start;min-width:0;transition:border-color .18s ease,background .18s ease; }
-      #mapcards .card.selected { background:#20272a;box-shadow:inset 0 -4px var(--gold),0 0 0 1px var(--gold); }
-      #mapcards .mapart { height:clamp(88px,20vh,150px);background:radial-gradient(circle at 65% 25%,#f4c58544,transparent 27%),linear-gradient(170deg,var(--mapcolor),#07111a 85%); }
-      #mapcards .mapart::before { opacity:.88;filter:drop-shadow(4px 4px 5px #020508); }
-      #mapcards .mapart::after { background:linear-gradient(transparent 5%,#050a10c9);opacity:.8; }
-      #mapcards .card:nth-child(2) .mapart::before { transform:scaleX(.7) skew(-5deg); }
-      #mapcards .card:nth-child(3) .mapart::before { transform:scaleY(.78);transform-origin:bottom; }
-      #mapcards .card:nth-child(4) .mapart::before { transform:skew(12deg); }
-      #mapcards .card:nth-child(5) .mapart::before { transform:scaleX(.86) skew(-9deg); }
-      #mapcards .card .info { padding:11px; }
-      #mapcards .card h3 { font-size:clamp(13px,1.8vw,18px);margin-bottom:4px; }
-      #mapcards .card p { font-size:11px;line-height:1.35;margin-bottom:5px; }
-      #mapcards .card .tag { font-size:9px; }
-      .rules-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2vw,22px); }
-      .rule-group { min-width:0;margin:0;padding:10px;border:1px solid #ffffff24;background:#0d171dcf; }
-      .rule-group legend { color:var(--gold);padding:0 8px;font-size:13px;font-weight:800; }
-      .rule-options { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px; }
-      .rule-options button { text-align:left;min-width:0;min-height:74px;padding:10px;background:#172229;border:1px solid #ffffff30; }
-      .rule-options button[aria-pressed="true"] { border-color:var(--gold);background:#293027;box-shadow:inset 0 -3px var(--gold); }
-      .rule-options strong,.rule-options small { display:block; }
-      .rule-options small { font-size:10px;color:var(--muted);margin-top:5px;line-height:1.25; }
-      .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
-      #mapscreen .footer-actions,#rulescreen .footer-actions { margin-top:12px; }
-      @media(max-width:850px) { .rules-grid { grid-template-columns:1fr;gap:9px; } .rule-options button { min-height:58px; } #mapscreen,#rulescreen { padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left)); } #mapscreen .topline h2,#rulescreen .topline h2 { font-size:clamp(19px,4vw,28px); } #mapscreen .topline p,#rulescreen .topline p { margin:4px 0; } }
-      @media(max-height:420px) { #mapcards .mapart { height:68px; } #mapcards .card p { display:none; } .rule-options button { min-height:48px;padding:7px; } .rules-grid { gap:6px; } }
-      .screen:not(.hidden) > .container { animation:screen-in .2s ease-out; }
-      @keyframes screen-in { from { opacity:0;transform:translateY(7px); } to { opacity:1;transform:translateY(0); } }
-      button:focus-visible { outline:2px solid #f0c777;outline-offset:3px; }
-      .rule-options button { transition:background .16s ease,border-color .16s ease; }
-      #mapscreen .footer-actions,#rulescreen .footer-actions { position:sticky;bottom:0;padding:9px 0;background:#09131bf2;z-index:3; }
-      @media(pointer:coarse) { button { touch-action:manipulation; } #mapcards { touch-action:pan-x; } .rule-options button { min-height:48px; } }
-      @media(prefers-reduced-motion:reduce) { .screen:not(.hidden) > .container { animation:none; } .rule-options button,#mapcards .card { transition:none; } }
+      /* Mission prep: mode → map → difficulty → Story level (Story only). */
+      #modescreen,#mapscreen,#rulescreen,#storyscreen{overflow:auto}
+      #modescreen .container,#mapscreen .container,#rulescreen .container,#storyscreen .container{width:100%}
+      #modescreen .topline,#mapscreen .topline,#rulescreen .topline,#storyscreen .topline{margin-bottom:12px}
+      .step-label{color:var(--gold);font-size:11px;letter-spacing:.19em;font-weight:800;margin:0 0 10px}
+      .mode-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+      .mode-card{position:relative;min-height:180px;padding:18px;text-align:left;overflow:hidden;background:linear-gradient(155deg,#15232d,#0a1117);border:1px solid #ffffff2b}
+      .mode-card:before{content:"";position:absolute;inset:auto -20% -55% 20%;height:160px;background:radial-gradient(circle,var(--mode-glow,#90b7cf55),transparent 68%);pointer-events:none}
+      .mode-card[aria-pressed="true"]{border-color:var(--gold);box-shadow:inset 0 -4px var(--gold),0 0 0 1px #f2ca7e66;transform:translateY(-2px)}
+      .mode-card strong,.mode-card small,.mode-card em{position:relative;z-index:1;display:block}
+      .mode-card strong{font-size:clamp(20px,3vw,34px);text-transform:uppercase;letter-spacing:.06em}
+      .mode-card small{max-width:36ch;color:#a9b7c2;line-height:1.45;margin-top:10px}
+      .mode-card em{margin-top:18px;color:#ffe29e;font:900 12px/1 var(--mono,monospace);letter-spacing:.13em;font-style:normal}
+      #mapcards.selection{display:grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(152px,1fr);gap:10px;overflow-x:auto;overflow-y:hidden;max-width:100%;margin:14px 0 18px;padding:3px 3px 13px;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+      #mapcards .card{scroll-snap-align:start;min-width:0;transition:border-color .18s ease,background .18s ease}
+      #mapcards .card.selected{background:#20272a;box-shadow:inset 0 -4px var(--gold),0 0 0 1px var(--gold)}
+      #mapcards .mapart{height:clamp(88px,20vh,150px);background:radial-gradient(circle at 65% 25%,#f4c58544,transparent 27%),linear-gradient(170deg,var(--mapcolor),#07111a 85%)}
+      #mapcards .mapart::before{opacity:.88;filter:drop-shadow(4px 4px 5px #020508)}
+      #mapcards .mapart::after{background:linear-gradient(transparent 5%,#050a10c9);opacity:.8}
+      #mapcards .card:nth-child(2) .mapart::before{transform:scaleX(.7) skew(-5deg)}
+      #mapcards .card:nth-child(3) .mapart::before{transform:scaleY(.78);transform-origin:bottom}
+      #mapcards .card:nth-child(4) .mapart::before{transform:skew(12deg)}
+      #mapcards .card:nth-child(5) .mapart::before{transform:scaleX(.86) skew(-9deg)}
+      #mapcards .card .info{padding:11px}
+      #mapcards .card h3{font-size:clamp(13px,1.8vw,18px);margin-bottom:4px}
+      #mapcards .card p{font-size:11px;line-height:1.35;margin-bottom:5px}
+      #mapcards .card .tag{font-size:9px}
+      .rules-grid{display:grid;grid-template-columns:1fr;gap:clamp(10px,2vw,22px)}
+      .rule-group{min-width:0;margin:0;padding:12px;border:1px solid #ffffff24;background:#0d171dcf}
+      .rule-group legend{color:var(--gold);padding:0 8px;font-size:13px;font-weight:800}
+      .rule-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+      .rule-options button{position:relative;text-align:left;min-width:0;min-height:96px;padding:12px;background:#172229;border:1px solid #ffffff30;overflow:hidden}
+      .rule-options button[aria-pressed="true"]{border-color:var(--gold);background:#293027;box-shadow:inset 0 -3px var(--gold)}
+      .rule-options strong,.rule-options small,.rule-options em{display:block}
+      .rule-options small{font-size:10px;color:var(--muted);margin-top:5px;line-height:1.3}
+      .rule-options em{margin-top:8px;font:900 10px/1 var(--mono,monospace);font-style:normal;color:#ffe29e;letter-spacing:.08em}
+      .hardcore-choice{border-color:#bb343466!important;background:linear-gradient(150deg,#2b1014,#130b0d)!important}
+      .hardcore-choice[aria-pressed="true"]{border-color:#ff554f!important;box-shadow:inset 0 -3px #ff554f,0 0 26px #ff302033!important}
+      .hardcore-skull{display:inline-block;margin-right:7px;filter:drop-shadow(0 0 8px #ff3322);animation:hardcore-skull 1.2s ease-in-out infinite;transform-origin:50% 70%}
+      @keyframes hardcore-skull{0%,100%{transform:scale(1) rotate(-2deg);filter:drop-shadow(0 0 5px #ff3322)}45%{transform:scale(1.18) rotate(3deg);filter:drop-shadow(0 0 16px #ff2a18)}55%{transform:scale(1.1) rotate(-3deg)}}
+      .story-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.8fr);gap:14px;align-items:start}
+      .story-levels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+      .story-level{min-height:100px;text-align:left;padding:11px;background:#111b22;border:1px solid #ffffff24;position:relative}
+      .story-level.selected{border-color:var(--gold);box-shadow:inset 0 -3px var(--gold);background:#202820}
+      .story-level.locked{opacity:.44;filter:saturate(.4)}
+      .story-level b,.story-level span,.story-level small{display:block}
+      .story-level b{font-size:17px}.story-level small{color:#8fa0ac;margin-top:5px}
+      .story-stars{color:#f2c85f;letter-spacing:.14em;margin-top:9px;font-size:16px}
+      .story-detail,.story-rewards{border:1px solid #ffffff1f;background:#0c151bdc;padding:14px}
+      .story-detail{margin-top:12px}.story-detail h3,.story-rewards h3{margin:0 0 9px;font-size:18px}
+      .story-objectives{display:grid;gap:7px;margin:11px 0}
+      .story-objective{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:8px;background:#111c23;border:1px solid #ffffff14}
+      .story-objective i{color:#f2c85f;font-style:normal;font-size:18px}.story-objective.done{border-color:#87d86f55;background:#132117}.story-objective.done i{color:#8dff76}.story-objective small{color:#91a0ab}
+      .story-rewards{position:sticky;top:10px;display:grid;gap:10px}
+      .story-reward-card{padding:10px;border:1px solid #ffffff1c;background:#111a20}.story-reward-card b,.story-reward-card small{display:block}.story-reward-card small{color:#93a2ad;line-height:1.35;margin:5px 0 9px}.story-reward-card.claimed{opacity:.62;border-color:#76c96b44}
+      .story-summary{color:#cbd6dd;margin:0 0 12px}
+      .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      #modescreen .footer-actions,#mapscreen .footer-actions,#rulescreen .footer-actions,#storyscreen .footer-actions{margin-top:12px;position:sticky;bottom:0;padding:9px 0;background:#09131bf2;z-index:3}
+      .screen:not(.hidden)>.container{animation:screen-in .2s ease-out}@keyframes screen-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}button:focus-visible{outline:2px solid #f0c777;outline-offset:3px}
+      .rule-options button,.mode-card,#mapcards .card,.story-level{transition:background .16s ease,border-color .16s ease,transform .16s ease}
+      @media(max-width:850px){.mode-grid{grid-template-columns:1fr}.rule-options{grid-template-columns:repeat(2,minmax(0,1fr))}.story-layout{grid-template-columns:1fr}.story-levels{grid-template-columns:repeat(5,minmax(82px,1fr));overflow-x:auto}.story-rewards{position:static}.rule-options button{min-height:72px}#modescreen,#mapscreen,#rulescreen,#storyscreen{padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left))}}
+      @media(max-height:420px){#mapcards .mapart{height:68px}#mapcards .card p{display:none}.mode-card{min-height:115px}.rule-options button{min-height:58px;padding:8px}.story-level{min-height:76px}}
+      @media(pointer:coarse){button{touch-action:manipulation}#mapcards{touch-action:pan-x}.rule-options button{min-height:64px}}
+      @media(prefers-reduced-motion:reduce){.screen:not(.hidden)>.container{animation:none}.hardcore-skull{animation:none}.rule-options button,.mode-card,#mapcards .card,.story-level{transition:none}}
 </style>
 
     <style id="armory-spin-v4">
@@ -2868,49 +2894,45 @@ body.netgame #revivetouch{display:flex}
         </div>
       </div>
     </section>
+    <section id="modescreen" class="screen hidden">
+      <div class="container">
+        <div class="topline"><div><p class="step-label">01 / ESCOLHA O MODO</p><h2>Como você quer sobreviver?</h2><p>O modo define duração, pressão da horda e multiplicador de moedas.</p></div><button id="backplay">Voltar</button></div>
+        <div class="mode-grid" id="mode-options">
+          <button type="button" class="mode-card" style="--mode-glow:#e6c46a55" data-choice="mode" data-value="classic"><strong>Story</strong><small>Campanha com 10 níveis por mapa, 20 waves por nível, três estrelas e recompensas próprias.</small><em>×1 MOEDAS</em></button>
+          <button type="button" class="mode-card" style="--mode-glow:#6ab3e655" data-choice="mode" data-value="infinite"><strong>Infinity</strong><small>Sem wave final. A horda escala continuamente, fica mais resistente e a partida tende a durar muito mais.</small><em>×1,5 MOEDAS</em></button>
+          <button type="button" class="mode-card" style="--mode-glow:#e64f4f66" data-choice="mode" data-value="timed"><strong>Contra o tempo</strong><small>5 minutos de pressão máxima. Mais inimigos, zumbis mais rápidos e ataques muito mais perigosos.</small><em>×2,5 MOEDAS</em></button>
+        </div>
+        <select id="mode" class="sr-only" aria-label="Modo de jogo"><option value="classic">Story</option><option value="infinite">Infinity</option><option value="timed">Contra o tempo</option></select>
+        <div class="footer-actions"><span class="hint">Story tem progressão própria; Infinity e Contra o tempo entram direto após a dificuldade.</span><button id="nextmap" class="primary">Continuar · mapa</button></div>
+      </div>
+    </section>
     <section id="mapscreen" class="screen hidden">
       <div class="container">
-        <div class="topline">
-          <div>
-            <h2>Nenhuma zona é segura.</h2>
-            <p>Escolha onde manter sua posição.</p>
-          </div>
-          <button id="backclass">Voltar</button>
-        </div>
-        <p class="step-label">01 / ESCOLHA O MAPA</p>
+        <div class="topline"><div><p class="step-label">02 / ESCOLHA O MAPA</p><h2>Nenhuma zona é segura.</h2><p id="mode-summary">Escolha onde manter sua posição.</p></div><button id="backmode">Voltar aos modos</button></div>
         <div id="mapcards" class="selection" aria-label="Mapas disponíveis"></div>
-        <div class="footer-actions">
-          <span class="hint">Deslize para o lado para ver os cinco mapas.</span>
-          <button id="nextmode" class="primary">Continuar · modo e dificuldade</button>
-        </div>
+        <div class="footer-actions"><span class="hint">Deslize para o lado para ver os cinco mapas.</span><button id="nextmode" class="primary">Continuar · dificuldade</button></div>
       </div>
     </section>
     <section id="rulescreen" class="screen hidden">
       <div class="container">
-        <div class="topline">
-          <div><p class="step-label">02 / PREPARE A MISSÃO</p><h2>Defina a sobrevivência.</h2><p id="chosenmap"></p></div>
-          <button id="backmaps">Voltar aos mapas</button>
-        </div>
-        <div class="rules-grid">
-          <fieldset class="rule-group"><legend>Modo de jogo</legend>
-            <div class="rule-options" id="mode-options">
-              <button type="button" data-choice="mode" data-value="classic"><strong>Clássico</strong><small>Ondas com progressão normal, pausas entre ondas, minibosses e bosses nos marcos do mapa.</small></button>
-              <button type="button" data-choice="mode" data-value="infinite"><strong>Infinito</strong><small>Sem onda final: vida, velocidade e pressão da horda continuam escalando enquanto você resistir.</small></button>
-              <button type="button" data-choice="mode" data-value="timed"><strong>Contra o tempo</strong><small>Você tem 5 minutos: elimine o máximo possível enquanto as ondas continuam avançando.</small></button>
-            </div>
-            <select id="mode" class="sr-only" aria-label="Modo de jogo"><option value="classic">Clássico</option><option value="infinite">Infinito</option><option value="timed">Contra o tempo</option></select>
-          </fieldset>
-          <fieldset class="rule-group"><legend>Dificuldade</legend>
-            <div class="rule-options" id="difficulty-options">
-              <button type="button" data-choice="difficulty" data-value="easy"><strong>Fácil</strong><small>150 HP · horda -20% · dano -20%</small></button>
-              <button type="button" data-choice="difficulty" data-value="medium"><strong>Médio</strong><small>100 HP · ritmo padrão</small></button>
-              <button type="button" data-choice="difficulty" data-value="hard"><strong>Difícil</strong><small>75 HP · horda +20% · dano +30%</small></button>
-              <button type="button" data-choice="difficulty" data-value="nightmare"><strong>Pesadelo</strong><small>60 HP · horda +40% · dano +60%</small></button>
-            </div>
-            <select id="difficulty" class="sr-only" aria-label="Dificuldade"><option value="easy">Fácil</option><option value="medium" selected>Médio</option><option value="hard">Difícil</option><option value="nightmare">Pesadelo</option></select>
-          </fieldset>
-        </div>
-        <div class="footer-actions"><span class="hint">Celular: joystick à esquerda · arraste à direita para mirar.</span><button id="deploy" class="primary">Entrar na zona</button></div>
+        <div class="topline"><div><p class="step-label">03 / DIFICULDADE</p><h2>Quanto a horda pode cobrar?</h2><p id="chosenmap"></p></div><button id="backmaps">Voltar aos mapas</button></div>
+        <div class="rules-grid"><fieldset class="rule-group"><legend>Dificuldade</legend>
+          <div class="rule-options" id="difficulty-options">
+            <button type="button" data-choice="difficulty" data-value="easy"><strong>Normal</strong><small>Força padrão da horda. O ponto de partida da campanha.</small><em>×1 MOEDAS</em></button>
+            <button type="button" data-choice="difficulty" data-value="medium"><strong>Médio</strong><small>+20% vida, +8% velocidade, +15% dano e mais inimigos.</small><em>×1,25 MOEDAS</em></button>
+            <button type="button" data-choice="difficulty" data-value="hard"><strong>Hard</strong><small>+45% vida, +18% velocidade, +35% dano e ondas maiores.</small><em>×1,5 MOEDAS</em></button>
+            <button type="button" class="hardcore-choice" data-choice="difficulty" data-value="nightmare"><strong><span class="hardcore-skull" aria-hidden="true">☠</span>Hardcore</strong><small>+85% vida, +32% velocidade, +65% dano. Feito para cobrar cada erro.</small><em>×2,5 MOEDAS</em></button>
+          </div>
+          <select id="difficulty" class="sr-only" aria-label="Dificuldade"><option value="easy" selected>Normal</option><option value="medium">Médio</option><option value="hard">Hard</option><option value="nightmare">Hardcore</option></select>
+        </fieldset></div>
+        <div class="footer-actions"><span id="reward-mult-summary" class="hint"></span><button id="deploy" class="primary">Continuar</button></div>
+      </div>
+    </section>
+    <section id="storyscreen" class="screen hidden">
+      <div class="container">
+        <div class="topline"><div><p class="step-label">04 / STORY</p><h2 id="story-title">Escolha o nível.</h2><p id="story-map" class="story-summary"></p></div><button id="backdifficulty">Voltar à dificuldade</button></div>
+        <div class="story-layout"><div><div id="story-levels" class="story-levels" aria-label="Níveis da história"></div><div id="story-detail" class="story-detail"></div></div><aside id="story-rewards" class="story-rewards" aria-label="Recompensas da história"></aside></div>
+        <div class="footer-actions"><span class="hint">Cada nível tem 20 waves e 3 objetivos. Complete o anterior para liberar o próximo.</span><button id="story-deploy" class="primary">Iniciar nível</button></div>
       </div>
     </section>
     <section id="pausescreen" class="screen modal hidden">
@@ -3591,10 +3613,58 @@ body.netgame #revivetouch{display:flex}
           toastTimer,
           settingsReturn = "menu";
         const diff = {
-          easy: { hp: 150, speed: 0.8, damage: 0.8, coins: 1, count: 0.8 },
-          medium: { hp: 100, speed: 1, damage: 1, coins: 1.25, count: 1 },
-          hard: { hp: 75, speed: 1.2, damage: 1.3, coins: 1.5, count: 1.2 },
-          nightmare: { hp: 60, speed: 1.35, damage: 1.6, coins: 2, count: 1.4 },
+          easy: { label: "Normal", hp: 100, enemyHp: 1, speed: 1, damage: 1, coins: 1, count: 1 },
+          medium: { label: "Médio", hp: 100, enemyHp: 1.2, speed: 1.08, damage: 1.15, coins: 1.25, count: 1.08 },
+          hard: { label: "Hard", hp: 90, enemyHp: 1.45, speed: 1.18, damage: 1.35, coins: 1.5, count: 1.18 },
+          nightmare: { label: "Hardcore", hp: 75, enemyHp: 1.85, speed: 1.32, damage: 1.65, coins: 2.5, count: 1.35 },
+        };
+        const modeConfig = {
+          classic: { label: "Story", coins: 1, hp: 1, speed: 1, damage: 1, count: 1 },
+          infinite: { label: "Infinity", coins: 1.5, hp: 1.08, speed: 1.06, damage: 1.1, count: 1.1 },
+          timed: { label: "Contra o tempo", coins: 2.5, hp: 1.12, speed: 1.25, damage: 1.35, count: 1.2 },
+        };
+        let storyLevel = 1;
+        const modeRules = () => modeConfig[mode] || modeConfig.classic;
+        const rewardMultiplier = () => (diff[difficulty]?.coins || 1) * modeRules().coins;
+        const scaledCoinReward = (base) => Math.max(0, Math.round(Number(base || 0) * rewardMultiplier()));
+        const isStoryRun = () => mode === "classic" && !NetGame.active;
+        const StoryMode = {
+          data: { progress: [], claims: [] }, loadedFor: null, localKey: "deadrecoil.story.v1",
+          row(map=selectedMap,level=storyLevel,d=difficulty){return this.data.progress.find(r=>r.map===map&&r.level===level&&r.difficulty===d)||null},
+          setServer(v){if(!v)return;this.data={progress:Array.isArray(v.progress)?v.progress.map(r=>({...r,map:Number(r.map),level:Number(r.level),stars:Number(r.stars||0),claimedStars:Number(r.claimedStars||0)})):[],claims:Array.isArray(v.claims)?v.claims:[]};this.loadedFor=Account.userId||"guest"},
+          loadLocal(){try{const v=JSON.parse(localStorage.getItem(this.localKey)||"null");if(v?.progress)this.setServer(v);else this.data={progress:[],claims:[]}}catch{this.data={progress:[],claims:[]}}},
+          saveLocal(){try{localStorage.setItem(this.localKey,JSON.stringify(this.data))}catch{}},
+          async load(force=false){const who=Account.signedIn()?Account.userId:"guest";if(!force&&this.loadedFor===who)return;if(Account.signedIn()&&DR.Backend.isOnline()){try{this.setServer(await DR.StoryRepository.list());return}catch(e){UIManager.toast(e.message)}}this.loadedFor=who;this.loadLocal()},
+          objectives(map,level){
+            const second=(map+level)%3,third=(map*2+level)%3,mk=(type,target,label)=>({type,target,label});
+            const o2=second===0?mk("kills",90+level*12,`Elimine ${90+level*12} inimigos`):second===1?mk("headshots",15+level*4,`Consiga ${15+level*4} headshots`):mk("noDamageWaves",2+Math.floor(level/2),`Passe ${2+Math.floor(level/2)} waves sem sofrer dano`);
+            const o3=third===0?mk("damage",12000+level*2500,`Cause ${(12000+level*2500).toLocaleString("pt-BR")} de dano`):third===1?mk("kills",120+level*15,`Elimine ${120+level*15} inimigos`):mk("headshots",25+level*5,`Consiga ${25+level*5} headshots`);
+            return [mk("wavesCleared",20,"Conclua as 20 waves"),o2,o3];
+          },
+          value(report,type){return Math.max(0,Number(report?.[type]||0))},
+          starsFor(report,map=selectedMap,level=storyLevel){if((report?.result||"win")!=="win"||this.value(report,"wavesCleared")<20)return 0;let stars=1,o=this.objectives(map,level);if(this.value(report,o[1].type)>=o[1].target)stars=2;else return stars;if(this.value(report,o[2].type)>=o[2].target)stars=3;return stars},
+          active(){return isStoryRun()}, unlocked(level){return level===1||(this.row(selectedMap,level-1,difficulty)?.stars||0)>=1},
+          upsert(map,level,d,stars,best={}){let r=this.row(map,level,d);if(!r){r={map,level,difficulty:d,stars:0,claimedStars:0,best:{}};this.data.progress.push(r)}if(stars>=r.stars)r.best=best;r.stars=Math.max(r.stars||0,stars);return r},
+          finishRun(report){if(!this.active())return 0;const stars=this.starsFor({...report,result:"win"});if(stars){this.upsert(selectedMap,storyLevel,difficulty,stars,{kills:report.kills||0,headshots:report.headshots||0,damage:report.damage||0,noDamageWaves:report.noDamageWaves||0});if(!Account.signedIn())this.saveLocal()}return stars},
+          levelReward(level=storyLevel,d=difficulty){const each=Math.round((150+level*75)*(diff[d]?.coins||1));return{each,max:each*3}},
+          chapterKey(map=selectedMap,d=difficulty){return`chapter:${map}:${d}`},
+          chapterReady(map=selectedMap,d=difficulty){return Array.from({length:10},(_,i)=>this.row(map,i+1,d)).every(r=>(r?.stars||0)>=1)},
+          masterReady(){return[0,1,2,3,4].every(m=>["easy","medium","hard","nightmare"].every(d=>Array.from({length:10},(_,i)=>(this.row(m,i+1,d)?.stars||0)>=1)))},
+          grantLocal(coins,normal=0,lucky=0){Progression.reward(coins,normal,lucky)},
+          async claimLevel(){const r=this.row();if(!r||r.stars<=(r.claimedStars||0))return UIManager.toast("Nenhuma estrela nova para resgatar.");if(Account.signedIn()){if(!DR.Backend.isOnline())return UIManager.toast("Conecte-se para resgatar recompensas da História.");try{const x=await DR.StoryRepository.claimLevel(selectedMap,storyLevel,difficulty);Account.applyNonSpending(x.profile);this.setServer(x.story);UIManager.toast(`Recompensa coletada: +${x.reward?.coins||0} moedas.`)}catch(e){UIManager.toast(e.message)}}else{const rw=this.levelReward(),delta=r.stars-(r.claimedStars||0),cross=(r.claimedStars||0)<3&&r.stars>=3;this.grantLocal(rw.each*delta,cross?1:0,cross&&storyLevel===10?1:0);r.claimedStars=r.stars;this.saveLocal();UIManager.toast("Recompensa do nível coletada.")}this.render()},
+          async claimChapter(){const key=this.chapterKey();if(!this.chapterReady())return UIManager.toast("Complete os 10 níveis desta dificuldade primeiro.");if(this.data.claims.includes(key))return UIManager.toast("Recompensa já coletada.");if(Account.signedIn()){if(!DR.Backend.isOnline())return UIManager.toast("Conecte-se para resgatar recompensas da História.");try{const x=await DR.StoryRepository.claimChapter(selectedMap,difficulty);Account.applyNonSpending(x.profile);this.setServer(x.story);UIManager.toast(`Mapa concluído: +${x.reward?.coins||0} moedas.`)}catch(e){UIManager.toast(e.message)}}else{const coins=Math.round(5000*(diff[difficulty]?.coins||1));this.grantLocal(coins,3,1);this.data.claims.push(key);this.saveLocal();UIManager.toast(`Mapa concluído: +${coins} moedas.`)}this.render()},
+          async claimMaster(){if(!this.masterReady())return UIManager.toast("Ainda faltam níveis/dificuldades para a recompensa máxima.");if(this.data.claims.includes("master"))return UIManager.toast("Recompensa máxima já coletada.");if(Account.signedIn()){if(!DR.Backend.isOnline())return UIManager.toast("Conecte-se para resgatar a recompensa máxima.");try{const x=await DR.StoryRepository.claimMaster();Account.applyNonSpending(x.profile);this.setServer(x.story);UIManager.toast("STORY COMPLETA · recompensa máxima recebida.")}catch(e){UIManager.toast(e.message)}}else{this.grantLocal(100000,25,10);this.data.claims.push("master");this.saveLocal();UIManager.toast("STORY COMPLETA · recompensa máxima recebida.")}this.render()},
+          async open(){await this.load();this.render();UIManager.screen("storyscreen")},
+          render(){
+            const title=maps[selectedMap]?.name||"Mapa";$("story-title").textContent=`${title} · Story`;$("story-map").textContent=`${diff[difficulty]?.label||difficulty} · 10 níveis · 20 waves por nível · ×${String(diff[difficulty]?.coins||1).replace(".",",")} moedas`;
+            $("story-levels").innerHTML=Array.from({length:10},(_,i)=>{const level=i+1,r=this.row(selectedMap,level,difficulty),stars=r?.stars||0,unlocked=this.unlocked(level);return`<button class="story-level ${level===storyLevel?"selected":""} ${unlocked?"":"locked"}" data-story-level="${level}" ${unlocked?"":"disabled"}><b>LEVEL ${level}</b><small>20 WAVES</small><span class="story-stars">${"★".repeat(stars)}${"☆".repeat(3-stars)}</span></button>`}).join("");
+            $("story-levels").querySelectorAll("[data-story-level]").forEach(b=>b.onclick=()=>{storyLevel=Number(b.dataset.storyLevel);this.render()});
+            const r=this.row(),o=this.objectives(selectedMap,storyLevel),best=r?.best||{},stars=r?.stars||0,rw=this.levelReward(),values={...best,wavesCleared:stars?20:0};
+            $("story-detail").innerHTML=`<h3>LEVEL ${storyLevel} · ${stars}/3 estrelas</h3><p>${storyLevel<3?"Sem elites programados. Aprenda a rota e sobreviva.":storyLevel<5?"Mini-boss a cada 5 waves.":"Mini-bosses nas waves 5/15 · Boss I na 10 · Boss II mais forte na 20."}</p><div class="story-objectives">${o.map((x,i)=>{const done=i<stars;return`<div class="story-objective ${done?"done":""}"><i>${done?"★":"☆"}</i><span><b>${x.label}</b><small>${Math.min(this.value(values,x.type),x.target).toLocaleString("pt-BR")} / ${x.target.toLocaleString("pt-BR")}</small></span><b>${done?"FEITO":""}</b></div>`}).join("")}</div><p class="hint">Cada estrela vale ◈ ${rw.each.toLocaleString("pt-BR")}. A 3ª estrela também dá 1 ticket normal${storyLevel===10?" + 1 Lucky":""}.</p>`;
+            const claimed=r?.claimedStars||0,key=this.chapterKey(),chapterClaimed=this.data.claims.includes(key),masterClaimed=this.data.claims.includes("master");
+            $("story-rewards").innerHTML=`<h3>RECOMPENSAS</h3><div class="story-reward-card ${stars<=claimed&&stars?"claimed":""}"><b>LEVEL ${storyLevel} · ESTRELAS</b><small>${stars} obtida(s) · ${claimed} resgatada(s) · até ◈ ${rw.max.toLocaleString("pt-BR")}</small><button id="story-claim-level" ${stars<=claimed?"disabled":""}>Resgatar estrelas</button></div><div class="story-reward-card ${chapterClaimed?"claimed":""}"><b>MAPA · ${diff[difficulty]?.label}</b><small>Complete os 10 níveis nesta dificuldade. Recompensa: ◈ ${Math.round(5000*(diff[difficulty]?.coins||1)).toLocaleString("pt-BR")} + 3 Normal + 1 Lucky.</small><button id="story-claim-chapter" ${!this.chapterReady()||chapterClaimed?"disabled":""}>Resgatar mapa</button></div><div class="story-reward-card ${masterClaimed?"claimed":""}"><b>STORY 100%</b><small>Todos os 5 mapas, 10 níveis e 4 dificuldades. Recompensa máxima: ◈ 100.000 + 25 Normal + 10 Lucky.</small><button id="story-claim-master" ${!this.masterReady()||masterClaimed?"disabled":""}>Resgatar recompensa máxima</button></div>`;
+            $("story-claim-level").onclick=()=>this.claimLevel();$("story-claim-chapter").onclick=()=>this.claimChapter();$("story-claim-master").onclick=()=>this.claimMaster();$("story-deploy").disabled=!this.unlocked(storyLevel);$("story-deploy").textContent=`Iniciar Level ${storyLevel}`;
+          }
         };
         let player = {
           pos: new V(0, 1.7, 10),
@@ -25769,49 +25839,19 @@ body.netgame #revivetouch{display:flex}
           }
           fullscreenWasActive = active;
         });
-        $("classcontinue").onclick = () => {
-          if (Progression.busy) return;
-          state = GameState.MAP_SELECT;
-          UIManager.mapCards();
-          UIManager.screen("mapscreen");
-        };
-        $("backclass").onclick = () => DR.LobbyUI.openPlay();
-        $("nextmode").onclick = () => {
-          $("chosenmap").textContent = `Zona selecionada: ${maps[selectedMap].name}`;
-          document.querySelectorAll("[data-choice]").forEach((button) => {
-            button.setAttribute("aria-pressed", String(button.dataset.value === $(button.dataset.choice).value));
-          });
-          UIManager.screen("rulescreen");
-        };
-        $("backmaps").onclick = () => UIManager.screen("mapscreen");
-        document.querySelectorAll("[data-choice]").forEach((button) => {
-          button.onclick = () => {
-            const group = button.dataset.choice;
-            $(group).value = button.dataset.value;
-            document.querySelectorAll(`[data-choice="${group}"]`).forEach((option) =>
-              option.setAttribute("aria-pressed", String(option === button)));
-          };
-        });
-
-        $("deploy").onclick = async () => {
-          if ($("deploy").disabled) return;
-          $("deploy").disabled = true;
-          const full = enterFullscreen();
-          mode = $("mode").value;
-          difficulty = $("difficulty").value;
-          try {
-            await Promise.all([full, Account.begin()]);
-          } catch (e) {
-            UIManager.toast(e.message);
-            $("deploy").disabled = false;
-            return;
-          }
-          $("deploy").disabled = false;
-          mode = $("mode").value;
-          difficulty = $("difficulty").value;
-          WeaponSystem.model.visible = true;
-          PlayerController.start();
-        };
+        const updatePrepSummary=()=>{const m=modeConfig[$("mode").value]||modeConfig.classic,d=diff[$("difficulty").value]||diff.easy,total=m.coins*d.coins;if($("mode-summary"))$("mode-summary").textContent=`${m.label} · ×${String(m.coins).replace(".",",")} moedas · escolha a zona.`;if($("chosenmap"))$("chosenmap").textContent=`${m.label} · ${maps[selectedMap].name}`;if($("reward-mult-summary"))$("reward-mult-summary").textContent=`Multiplicador final: ×${String(total).replace(".",",")} moedas · modo × dificuldade`;$("deploy").textContent=$("mode").value==="classic"?"Continuar · níveis":"Entrar na zona"};
+        const openModeSelect=()=>{state=GameState.MAP_SELECT;document.querySelectorAll('[data-choice="mode"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.value===$("mode").value)));UIManager.screen("modescreen")};
+        $("classcontinue").onclick=()=>{if(!Progression.busy)openModeSelect()};
+        $("backplay").onclick=()=>DR.LobbyUI.openPlay();
+        $("nextmap").onclick=()=>{mode=$("mode").value;UIManager.mapCards();updatePrepSummary();UIManager.screen("mapscreen")};
+        $("backmode").onclick=()=>UIManager.screen("modescreen");
+        $("nextmode").onclick=()=>{mode=$("mode").value;updatePrepSummary();document.querySelectorAll('[data-choice="difficulty"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.value===$("difficulty").value)));UIManager.screen("rulescreen")};
+        $("backmaps").onclick=()=>UIManager.screen("mapscreen");
+        $("backdifficulty").onclick=()=>UIManager.screen("rulescreen");
+        document.querySelectorAll("[data-choice]").forEach(button=>{button.onclick=()=>{const group=button.dataset.choice;$(group).value=button.dataset.value;if(group==="mode")mode=button.dataset.value;if(group==="difficulty")difficulty=button.dataset.value;document.querySelectorAll(`[data-choice="${group}"]`).forEach(o=>o.setAttribute("aria-pressed",String(o===button)));updatePrepSummary()}});
+        const deployPreparedRun=async()=>{if($("deploy").disabled||$("story-deploy").disabled)return;$("deploy").disabled=$("story-deploy").disabled=true;const full=enterFullscreen();mode=$("mode").value;difficulty=$("difficulty").value;try{await Promise.all([full,Account.begin()])}catch(e){UIManager.toast(e.message);$("deploy").disabled=$("story-deploy").disabled=false;return}$("deploy").disabled=$("story-deploy").disabled=false;WeaponSystem.model.visible=true;PlayerController.start()};
+        $("deploy").onclick=async()=>{mode=$("mode").value;difficulty=$("difficulty").value;if(mode==="classic"){await StoryMode.open();return}await deployPreparedRun()};
+        $("story-deploy").onclick=()=>deployPreparedRun();
         $("resume").onclick = resume;
         $("fallback").onclick = () => {
           resume();
@@ -26322,9 +26362,7 @@ body.netgame #revivetouch{display:flex}
           },
           startSolo() {
             AudioManager.init();
-            state = GameState.MAP_SELECT;
-            UIManager.mapCards();
-            UIManager.screen("mapscreen");
+            openModeSelect();
           },
           // Lobby moved to in_game: every member starts the shared match.
           async startMatch(lobby) {
@@ -26740,6 +26778,12 @@ body.netgame #revivetouch{display:flex}
             ArsenalArt,
             Progression,
             EconomyRewards,
+            StoryMode,
+            modeConfig,
+            diff,
+            rewardMultiplier,
+            setStoryLevel: (v) => (storyLevel = clamp(Number(v) || 1, 1, 10)),
+            getStoryLevel: () => storyLevel,
             Armory,
             rarityNames,
             ZombieManager,
