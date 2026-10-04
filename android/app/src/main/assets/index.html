@@ -20245,6 +20245,11 @@ body.netgame #revivetouch{display:flex}
             try {
               localStorage.setItem(this.profileCacheKey(this.userId), JSON.stringify(profile));
             } catch {}
+            // Any authoritative profile response (slot/spin/cosmetic/settings included)
+            // must keep rewards that are still in flight visible in the current session.
+            // applyLiveWallet only changes the in-memory economy/player mirrors; the cache
+            // above remains the exact server-confirmed profile.
+            this.applyLiveWallet();
             this.badge();
           },
           pendingReward(key) {
@@ -20289,7 +20294,6 @@ body.netgame #revivetouch{display:flex}
               lucky: Math.max(confirmedNow("lucky"), Number(profile.lucky || 0)),
             };
             this.apply(safe);
-            this.applyLiveWallet();
           },
           badge() {
             const online = DR.Backend.isOnline();
