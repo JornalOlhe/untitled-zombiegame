@@ -72,7 +72,7 @@
     },
     async open({ from = null } = {}) {
       this.from = from;
-      if (!from && this.game.animateTo) await this.game.animateTo("missionscreen");
+      if (!from && this.game.animateTo && await this.game.animateTo("missionscreen") === false) return;
       this.game.screen("missionscreen");
       $("missionscreen").classList.toggle("in-match", this.inMatch());
       this.render();
@@ -235,7 +235,7 @@
     // ── INDEX ────────────────────────────────────────────────────────────────────────────
     async openIndex(from = null) {
       this.from = from;
-      if (!from && this.game.animateTo) await this.game.animateTo("indexscreen");
+      if (!from && this.game.animateTo && await this.game.animateTo("indexscreen") === false) return;
       this.game.screen("indexscreen");
       $("indexscreen").classList.toggle("in-match", this.inMatch());
       this.renderIndex();

@@ -7,7 +7,7 @@ const missions = fs.readFileSync("android/app/src/main/assets/js/ui/MissionUI.js
 const has = (needle, label) => assert.ok(html.includes(needle), label || needle);
 
 // v43 gameplay/UI contracts.
-has('const GAME_VERSION = "0.38.0";', 'runtime boot marker must match v43 package version');
+require("./release-version.cjs"); // The runtime marker must match the current package.
 has('this.weather', 'game source loaded');
 has('UIManager.hudClock = 0', 'live reward path can invalidate HUD immediately');
 has('CRAWL_PITCH: 1.46', 'crawler uses a low body pose');
@@ -28,7 +28,7 @@ has('SHOWROOM 3D · ARRASTE PARA GIRAR', 'Customize exposes an explicit rotatabl
 has('this.previewCosmetic === item.id ? "previewing"', 'catalog marks the item currently previewed');
 has('shirt = skin; // base survivor is shirtless', 'base survivor remains shirtless');
 has('pants: "#222624"', 'base cargo pants use the approved dark palette');
-has('Blocky fringe from the approved UV/model reference', 'base hair follows the supplied reference silhouette');
+has('TemplateBody.box(head', 'base body uses the attached UV reference');
 
 has('No giant perimeter facade slabs', 'City does not render the giant edge slabs');
 assert.ok(!html.includes('m.material = VisualArt.surface("red_brick_03", 0x5c5654, "concrete")'),

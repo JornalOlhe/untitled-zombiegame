@@ -3139,7 +3139,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.38.0";
+        const GAME_VERSION = "0.39.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -5849,6 +5849,12 @@ body.netgame #revivetouch{display:flex}
                 inst.receiveShadow = true;
                 inst.userData.propModel = name;
                 parent.add(inst);
+                // Ray-test trunks with small proxies, never every triangle of every tree instance.
+                if(part.name === "trunk") for(const it of list){
+                  const proxy=new THREE.Mesh((this.collisionGeometry ||= new THREE.BoxGeometry(1,1,1)),(this.collisionMaterial ||= new THREE.MeshBasicMaterial()));
+                  proxy.position.set(0,1.5,0);proxy.scale.set(.55,3,.55);proxy.updateMatrix();
+                  proxy.applyMatrix4(it.m);proxy.visible=false;parent.add(proxy);MapManager.walls.push(proxy);
+                }
               }
             }
             this.pending.clear();
@@ -7412,8 +7418,7 @@ body.netgame #revivetouch{display:flex}
           const candidates = [];
           for (const target of targets) {
             if (target.dead) continue;
-            const point = target.group.position.clone();
-            point.y += Math.min(1.4, target.size || 1);
+            const point = zombieBodyPoint(target);
             const offset = point.clone().sub(origin),
               distance = offset.length();
             if (distance > range || distance < 0.001) continue;
@@ -10105,7 +10110,17 @@ body.netgame #revivetouch{display:flex}
             this.group.add(this.flies);
           },
           build(index) {
-            if (this.group) { scene.remove(this.group); this.group.traverse((o) => { if (o.isMesh && o.geometry && !o.isInstancedMesh) o.geometry.dispose(); }); }
+            if (this.group) {
+              scene.remove(this.group);
+              const geometries = new Set(), materials = new Set();
+              this.group.traverse(o => {
+                if (o.geometry) geometries.add(o.geometry);
+                for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m) materials.add(m);
+                if (o.isInstancedMesh) o.dispose?.();
+              });
+              geometries.forEach(g => g.dispose());
+              materials.forEach(m => m.dispose());
+            }
             this.group = new THREE.Group();
             this.group.name = "Nature";
             scene.add(this.group);
@@ -10271,9 +10286,10 @@ body.netgame #revivetouch{display:flex}
                 for (const material of Array.isArray(o.material) ? o.material : [o.material])
                   material?.dispose?.();
               }
-              if (o.userData.disposableGeometry && o.geometry)
+              if ((o.userData.disposableGeometry || o.userData.propBatch) && o.geometry)
                 o.geometry.dispose();
             });
+            this.group.traverse(o=>{if(o.isInstancedMesh)o.dispose?.();});
             scene.remove(this.group);
             this.group = new THREE.Group();
             scene.add(this.group);
@@ -12078,7 +12094,7 @@ body.netgame #revivetouch{display:flex}
           point(max = 140) {
             this.ray.setFromCamera({ x: this.x, y: this.y }, camera);
             this.ray.far = max;
-            const hit = this.ray.intersectObjects([...MapManager.walls, ...ZombieManager.hitMeshes])[0];
+            const hit = this.ray.intersectObjects([...MapManager.walls, ...ZombieManager.hitMeshes, ...PhysicsProps.meshes()])[0];
             if (hit) return hit.point.clone();
             const p = new V();
             if (this.ray.ray.intersectPlane(new THREE.Plane(new V(0, 1, 0), 0), p) && p.distanceTo(camera.position) < max) return p;
@@ -12112,7 +12128,9 @@ body.netgame #revivetouch{display:flex}
           if (wall.length) d = Math.min(d, wall[0].distance);
           const zh = raycaster.intersectObjects(ZombieManager.hitMeshes);
           if (zh.length) d = Math.min(d, zh[0].distance);
-          return player.pos.clone().addScaledVector(aimDir(), Math.max(2, d));
+          const prop = raycaster.intersectObjects(PhysicsProps.meshes())[0];
+          if(prop) d = Math.min(d, prop.distance);
+          return player.pos.clone().addScaledVector(aimDir(), Math.max(.1, d));
         }
         function aimPoint() {
           if (FreeAim.active()) return FreeAim.point(100);
@@ -16847,6 +16865,21 @@ body.netgame #revivetouch{display:flex}
               this.scatter(5, (x, z) => this.rock(x, z, rand(1.2, 1.8), rand(0.8, 1.2), "ice"), 1.5);
             }
             PropModels.flush(MapManager.group);
+            // Physical dressing must have a movement collider as well as a bullet mesh.
+            // Existing authored colliders are retained; fill only uncovered hard pieces.
+            const bounds=new THREE.Box3(),matrix=new THREE.Matrix4(),quat=new THREE.Quaternion();
+            for(const [kind,pieces] of this.hard){
+              if(kind==="ladder")continue;
+              for(const b of pieces){
+                const [x,y,z]=b.pos,[w,h,d]=b.size;
+                if(Math.min(w,h,d)<.025)continue;
+                if(MapManager.obstacles.some(o=>Math.abs(x-o.x)<=o.w && Math.abs(z-o.z)<=o.d && y>=(o.base||0) && y<=o.top))continue;
+                matrix.compose(new V(x,y,z),quat.setFromEuler(new THREE.Euler(...(b.rot||[0,0,0]),"YXZ")),new V(1,1,1));
+                bounds.set(new V(-w/2,-h/2,-d/2),new V(w/2,h/2,d/2)).applyMatrix4(matrix);
+                const size=bounds.getSize(new V()),center=bounds.getCenter(new V());
+                this.collider(center.x,center.z,size.x,size.z,bounds.max.y,bounds.min.y);
+              }
+            }
             const hard = PropKit.build(this.hard, MapManager.group);
             MapManager.walls.push(...hard);
             PropKit.build(this.soft, MapManager.group);
@@ -17000,6 +17033,15 @@ body.netgame #revivetouch{display:flex}
           meshes() {
             // Hot path for bullets/streams/projectiles: avoid allocating a new array every raycast.
             return this.meshCache;
+          },
+          damageSegment(from, to, damage) {
+            const delta=to.clone().sub(from),length=delta.length();
+            if(length<.0001)return;
+            const ray=new THREE.Raycaster(from,delta.divideScalar(length),0,length+.08);
+            const wall=ray.intersectObjects(MapManager.walls)[0];
+            for(const p of this.items)p.group.updateMatrixWorld(true);
+            const hit=ray.intersectObjects(this.meshes())[0];
+            if(hit && (!wall||hit.distance<wall.distance))this.shove(hit.object.userData.prop,ray.ray.direction,hit.point,damage);
           },
           // A bullet hit: push along the shot, spin, and tip light props over.
           shove(p, dir, point, damage) {
@@ -17639,12 +17681,21 @@ body.netgame #revivetouch{display:flex}
           raycaster.far = d;
           return raycaster.intersectObjects(MapManager.walls).some((h) => h.distance < d - tolerance);
         }
+        function zombieBodyPoint(z) {
+          const mesh = z.rig?.torso || z.rig?.hits?.[0];
+          if (!mesh) return z.group.position.clone().add(new V(0, Math.min(1.4, z.size || 1), 0));
+          mesh.updateWorldMatrix(true, false);
+          if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+          return mesh.geometry.boundingBox.getCenter(new V()).applyMatrix4(mesh.matrixWorld);
+        }
         function canReachZombie(from, z, tolerance = 0.05) {
-          const h = 1.8 * (z.size || 1),
-            base = z.group.position;
-          for (const k of [0.6, 0.95, 0.25])
-            if (!wallBetween(from, new V(base.x, base.y + h * k, base.z), tolerance)) return true;
-          return false;
+          for (const mesh of z.rig?.hits || []) {
+            mesh.updateWorldMatrix(true, false);
+            if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+            const center = mesh.geometry.boundingBox.getCenter(new V()).applyMatrix4(mesh.matrixWorld);
+            if (!wallBetween(from, center, tolerance)) return true;
+          }
+          return !wallBetween(from, zombieBodyPoint(z), tolerance);
         }
         // Developer-only combat overlay (DEV > DEBUG). One dynamic LineSegments; nothing is allocated
         // or drawn unless a debug flag is on.
@@ -17819,6 +17870,7 @@ body.netgame #revivetouch{display:flex}
               origin = isFinite(muzzle.x + muzzle.y + muzzle.z) && muzzle.distanceTo(eye) < 3 ? muzzle : eye,
               kind = w.kind === "cryo" ? "cryo" : "fire",
               cone = Math.max(0.06, w.cone || 0.12);
+            aim.copy(aimTarget(w.range).sub(origin).normalize());
             // One physical stream volume drives both visuals and damage. The first wall clamps
             // the stream, so flames/ice and their hit volume end at the same surface.
             raycaster.set(origin, aim);
@@ -17840,7 +17892,7 @@ body.netgame #revivetouch{display:flex}
             for (const z of ZombieManager.list) {
               if (z.dead) continue;
               const size = Math.min(2, z.size || 1),
-                c = z.group.position.clone().add(new V(0, 0.9 * size, 0)),
+                c = zombieBodyPoint(z),
                 to = c.clone().sub(origin),
                 axial = to.dot(aim);
               if (axial <= 0.08 || axial > reach) continue;
@@ -18066,6 +18118,7 @@ body.netgame #revivetouch{display:flex}
           },
           target(w) {
             const hit = SecretWeaponSkills.rayTarget(this.RANGE);
+            if(hit.prop) return {zombie:null,point:hit.point};
             let z = hit.zombie && !hit.zombie.dead ? hit.zombie : null;
             if (!z) {
               const fwd = CameraRig.aim().normalize();
@@ -18078,7 +18131,7 @@ body.netgame #revivetouch{display:flex}
                 if (score > 0.62 && score > best) { best = score; z = c; }
               }
             }
-            if (z) return { zombie: z, point: z.group.position.clone().add(new V(0, Math.min(1.15, (z.size || 1) * 1.05), 0)) };
+            if (z) return { zombie: z, point: zombieBodyPoint(z) };
             const p = hit.point.clone(), d = p.distanceTo(player.pos);
             if (d > 5.2) p.copy(player.pos).addScaledVector(hit.dir, 5.2);
             return { zombie: null, point: p };
@@ -18347,10 +18400,11 @@ body.netgame #revivetouch{display:flex}
             this.fx = this.fx.filter((it) => it.life > 0);
           },
           sweep(b, a, w) {
+            PhysicsProps.damageSegment(b.prev,b.pos,a.atk.dmg*a.mult);
             const seg = new THREE.Line3(b.prev.clone(), b.pos.clone()), cp = new V();
             for (const z of [...ZombieManager.list]) {
               if (z.dead || a.hits.has(z)) continue;
-              const c = z.group.position.clone().add(new V(0, Math.min(1.1, (z.size || 1) * 1.0), 0));
+              const c = zombieBodyPoint(z);
               seg.closestPointToPoint(c, true, cp);
               const rad = 0.42 + (z.size || 1) * 0.36;
               if (cp.distanceTo(c) <= rad && Math.abs(cp.y - c.y) < (z.size || 1) * 1.1) {
@@ -18453,6 +18507,9 @@ body.netgame #revivetouch{display:flex}
             syncHitMatrices();
             const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
               wh = raycaster.intersectObjects(MapManager.walls)[0];
+            const ph = raycaster.intersectObjects(PhysicsProps.meshes())[0];
+            if(ph && (!zh || ph.distance < zh.distance) && (!wh || ph.distance < wh.distance))
+              return {origin,dir,point:ph.point.clone(),prop:ph.object.userData.prop,zombie:null,head:false};
             if (zh && (!wh || zh.distance < wh.distance)) {
               return {
                 origin, dir, point: zh.point.clone(),
@@ -19518,6 +19575,7 @@ body.netgame #revivetouch{display:flex}
               else if (p.kind !== "spear") p.life = Math.min(p.life, 0);
             }
             if (p.kind === "spear") {
+              if(p.vel)PhysicsProps.damageSegment(p.pos,p.pos.clone().addScaledVector(p.vel,dt),p.damage);
               if (SpearThrow.step(p, dt)) removeProjectile(i);
               continue;
             }
@@ -19573,7 +19631,7 @@ body.netgame #revivetouch{display:flex}
                 ParticleSystem.emit(ph.point, 0xffc070, 5, 1.2);
                 continue;
               }
-              if (zh && (!wh || zh.distance < wh.distance)) {
+            if (zh && (!wh || zh.distance < wh.distance)) {
                 const z = zh.object.userData.zombie,
                   head = !!zh.object.userData.head;
                 ZombieManager.hit(z, p.damage * (head ? p.weapon?.head || 2 : 1), head, zh.point, p.weapon);
@@ -19687,22 +19745,14 @@ body.netgame #revivetouch{display:flex}
                 continue;
               }
             } else if (p.kind !== "grenade") {
-              // Test the flight segment against the zombie's whole body axis (feet to head), not
-              // one point at hip height: rockets and orbs aimed at the head used to pass through.
-              const segment = new THREE.Line3(previous, p.pos),
-                closest = new V(),
-                probe = new V();
-              hit = ZombieManager.list.find((z) => {
-                if (z.dead) return false;
-                const base = z.group.position,
-                  S = z.size || 1;
-                for (let k = 0; k < 5; k++) {
-                  probe.set(base.x, base.y + S * (0.35 + k * 0.38), base.z);
-                  segment.closestPointToPoint(probe, true, closest);
-                  if (probe.distanceTo(closest) < S * 0.55) return true;
-                }
-                return false;
-              });
+              // Use the animated render meshes: no upright capsule above a crawler.
+              const delta=p.pos.clone().sub(previous),len=delta.length();
+              if(len>.00001){
+                syncHitMatrices();
+                raycaster.set(previous,delta.divideScalar(len));raycaster.far=len+.08;
+                const body=raycaster.intersectObjects(ZombieManager.hitMeshes)[0];
+                if(body){hit=body.object.userData.zombie;p.pos.copy(body.point);}
+              }
             }
             if (
               p.life <= 0 ||
@@ -19993,29 +20043,33 @@ body.netgame #revivetouch{display:flex}
               $("scores").append(row);
             });
           },
+          hudHTML(id,html) {
+            const el=$(id);
+            if(el && el._hudHTML!==html){el.innerHTML=html;el._hudHTML=html;}
+          },
+          displayBalance(key) {
+            const d = Account.rewardDisplay;
+            return player[key] + (Account.user && d ? Math.max(0, d.earned[key] - d.acknowledged[key]) : 0);
+          },
           hud(dt) {
             this.hudClock -= dt;
             if (this.hudClock > 0) return;
             this.hudClock = touchMode ? 0.16 : 0.075;
             const w = WeaponSystem.current();
             const mutation = MutationManager.current;
-            $("wavehud").innerHTML =
-              `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`;
-            $("wallethud").innerHTML =
-              `◈ ${player.coins}<small>↻ ${player.normal} normal &nbsp; ✦ ${player.lucky} Lucky</small>`;
+            this.hudHTML("wavehud", `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`);
+            this.hudHTML("wallethud", `◈ ${this.displayBalance("coins")}<small>↻ ${this.displayBalance("normal")} normal &nbsp; ✦ ${this.displayBalance("lucky")} Lucky</small>`);
             $("classhud").textContent = classes[selectedClass].name;
-            $("healthhud").innerHTML =
-              `<div class="value">${Math.ceil(player.hp)} <small>/ ${player.maxhp + player.bonus}</small></div><div class="meter"><i style="width:${clamp((player.hp / (player.maxhp + player.bonus)) * 100, 0, 100)}%"></i></div><span class="hint">${player.grenades} granadas · G</span>`;
+            this.hudHTML("healthhud", `<div class="value">${Math.ceil(player.hp)} <small>/ ${player.maxhp + player.bonus}</small></div><div class="meter"><i style="width:${clamp((player.hp / (player.maxhp + player.bonus)) * 100, 0, 100)}%"></i></div><span class="hint">${player.grenades} granadas · G</span>`);
             $("healthhud").classList.toggle("low", player.hp < 30);
-            $("slotshud").innerHTML = player.inventory
+            this.hudHTML("slotshud", player.inventory
               .map(
                 (w, i) =>
                   `<div class="slot ${i === player.slot ? "active" : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small>${i + 1} ${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</small><b>${w ? w.name : "Sem arma"}</b><span>${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small>${w && w.ammo !== Infinity ? "/ " + w.mag : ""}</small></div>`,
               )
-              .join("");
+              .join(""));
             const cd = Math.max(0, player.cooldown - simulationTime);
-            $("abilityhud").innerHTML =
-              `<strong>Q · ${cd > 0 ? Math.ceil(cd) + "s" : "Pronto"}</strong>${classes[selectedClass].ability}<div class="meter"><i style="background:var(--gold);width:${100 - (cd / classes[selectedClass].cd) * 100}%"></i></div>`;
+            this.hudHTML("abilityhud", `<strong>Q · ${cd > 0 ? Math.ceil(cd) + "s" : "Pronto"}</strong>${classes[selectedClass].ability}<div class="meter"><i style="background:var(--gold);width:${100 - (cd / classes[selectedClass].cd) * 100}%"></i></div>`);
             if (touchMode) {
               const skillButton = $("qtouch"),
                 grenadeButton = $("grenadetouch"),
@@ -20188,8 +20242,7 @@ body.netgame #revivetouch{display:flex}
           // arrives after a newer profile response.
           applyNonSpending(profile) {
             if (!profile) return;
-            const current = Progression.data || {},
-              live = { coins: Number(player.coins || 0), normal: Number(player.normal || 0), lucky: Number(player.lucky || 0) };
+            const current = Progression.data || {};
             const safe = {
               ...profile,
               coins: Math.max(Number(current.coins || 0), Number(profile.coins || 0)),
@@ -20197,11 +20250,6 @@ body.netgame #revivetouch{display:flex}
               lucky: Math.max(Number(current.lucky || 0), Number(profile.lucky || 0)),
             };
             this.apply(safe);
-            // Do not persist optimistic run earnings, but never make the live HUD jump backwards.
-            player.coins = Math.max(player.coins || 0, live.coins);
-            player.normal = Math.max(player.normal || 0, live.normal);
-            player.lucky = Math.max(player.lucky || 0, live.lucky);
-            UIManager.hudClock = 0;
           },
           badge() {
             const online = DR.Backend.isOnline();
@@ -20295,8 +20343,10 @@ body.netgame #revivetouch{display:flex}
             // newer one and visually roll the wallet back to a stale coin balance.
             const op = this.pending.catch(() => {}).then(() => DR.OfflineQueue.flush(this.userId));
             this.pending = op.catch(() => {});
+            const displaySnapshot = this.offlineDisplayPending && { ...this.offlineDisplayPending };
             const r = await op.catch(() => null);
             if (r?.synced) {
+              if(displaySnapshot && r.last?.profile)for(const key of ["coins","normal","lucky"])this.rewardDisplay.acknowledged[key]=Math.max(this.rewardDisplay.acknowledged[key],displaySnapshot[key]);
               if (r.last?.profile) this.applyNonSpending(r.last.profile);
               if (r.last?.missions) DR.MissionManager.set(r.last.missions);
               UIManager.toast(`${r.synced} partida(s) offline sincronizada(s).`);
@@ -20320,6 +20370,7 @@ body.netgame #revivetouch{display:flex}
           },
           clearLocal() {
             this.user = this.userId = this.profile = null;
+            for(const values of Object.values(this.rewardDisplay))for(const key of Object.keys(values))values[key]=0;
             this.run = null;
             Progression.load();
             CharacterStyle.load();
@@ -20412,6 +20463,7 @@ body.netgame #revivetouch{display:flex}
             if (ended) this.run = null;
             if (run.offline) {
               if (ended && player.kills + WaveManager.wave > 0) {
+                this.offlineDisplayPending={...this.rewardDisplay.earned};
                 DR.OfflineQueue.push(this.userId, this.report(result));
                 if (DR.Backend.isOnline()) this.flushOffline();
                 else UIManager.toast("Partida salva offline. Será sincronizada quando a conexão voltar.");
@@ -20419,18 +20471,21 @@ body.netgame #revivetouch{display:flex}
               return Promise.resolve();
             }
             const snapshot = this.report(result);
+            const displaySnapshot = { ...this.rewardDisplay.earned };
             const op = this.pending
               .catch(() => {})
               .then(() => DR.RunRepository.report(run.id, snapshot, ended, ended ? result : null));
             this.pending = op.catch(() => {});
             return op
               .then((r) => {
-                this.applyNonSpending(r.profile);
+                if(r.profile)for(const key of ["coins","normal","lucky"])this.rewardDisplay.acknowledged[key]=Math.max(this.rewardDisplay.acknowledged[key],displaySnapshot[key]);
+                this.applyNonSpending(r.profile);UIManager.hudClock=0;UIManager.hud(0);
                 DR.MissionManager.set(r.missions);
               })
               .catch((e) => {
                 if (ended && (e.code === "network" || e.code === "timeout")) {
                   // Keep the final report for later: the server clamps it to the real run time.
+                  this.offlineDisplayPending=displaySnapshot;
                   DR.OfflineQueue.push(this.userId, snapshot);
                   UIManager.toast("Sem conexão: resultado será sincronizado depois.");
                 } else if (ended) this.run = null;
@@ -22725,6 +22780,31 @@ body.netgame #revivetouch{display:flex}
             });
           },
         };
+        // Atlas coordinates reference the supplied sheet directly; no generated skin substitute.
+        const TemplateBody = {
+          cache:new Map(), material:null,
+          rects:{torso:[272,662,350,776],skin:[62,515,109,558],head:[62,515,109,558],pants:[208,797,261,911],shoe:[435,883,493,947]},
+          box(parent,pos,size,part){
+            if(!this.material){
+              const map=new THREE.TextureLoader().load("textures/survivor-reference.png");
+              map.encoding=THREE.sRGBEncoding;map.magFilter=THREE.NearestFilter;
+              map.minFilter=THREE.LinearMipmapLinearFilter;
+              this.material=new THREE.MeshStandardMaterial({map,roughness:.92});
+            }
+            const key=part+size.join('/');
+            if(!this.cache.has(key)){
+              const geo=new THREE.BoxGeometry(...size),uv=geo.attributes.uv;
+              for(let f=0;f<6;f++){
+                let rect=this.rects[part];
+                if(part==='head' && f!==4) rect=f===5?[432,50,490,112]:[242,51,291,116];
+                if(part==='torso' && f===5) rect=[410,160,467,243];
+                for(let v=0;v<4;v++){const i=f*4+v;uv.setXY(i,(rect[0]+uv.getX(i)*(rect[2]-rect[0]))/1536,1-(rect[3]-uv.getY(i)*(rect[3]-rect[1]))/1024);}
+              }
+              this.cache.set(key,geo);
+            }
+            const mesh=new THREE.Mesh(this.cache.get(key),this.material);mesh.position.set(...pos);mesh.castShadow=true;parent.add(mesh);return mesh;
+          }
+        };
         const Survivor = {
           dispose(g) {
             if (!g) return;
@@ -22748,225 +22828,38 @@ body.netgame #revivetouch{display:flex}
               elbows = [];
             const skin = s.skin,
               shirt = skin; // base survivor is shirtless; class/cosmetic outerwear is layered separately
-            A.ellipsoid(
-              chest,
-              [0, 0.21, 0],
-              [0.26, 0.32, 0.155],
-              shirt,
-              "skin",
-            );
-            A.ellipsoid(
-              hips,
-              [0, 0.025, 0],
-              [0.22, 0.14, 0.15],
-              s.pants,
-              "cloth",
-            );
-            A.tube(head, [0, -0.075, 0], 0.07, 0.15, skin, "skin", "y");
-            A.ellipsoid(
-              head,
-              [0, 0.1, 0],
-              [s.face === "round" ? 0.155 : 0.14, 0.205, 0.145],
-              skin,
-              "skin",
-            );
-            A.ellipsoid(
-              head,
-              [0, 0.02, 0.12],
-              [0.102, 0.092, 0.07],
-              skin,
-              "skin",
-            );
-            A.ellipsoid(
-              head,
-              [0, 0.08, 0.151],
-              [0.029, 0.047, 0.035],
-              skin,
-              "skin",
-            );
-            for (const x of [-0.06, 0.06]) {
-              A.block(head, [x, 0.12, 0.141], [0.052, 0.012, 0.008], 0x202321);
-              A.block(
-                head,
-                [x, 0.152, 0.139],
-                [0.061, 0.009, 0.015],
-                s.hairColor,
-              );
+            // One shared block rig for the showroom, local player and remote players.
+            TemplateBody.box(chest,[0,.22,0],[.47,.57,.26],"torso");
+            TemplateBody.box(hips,[0,.025,0],[.44,.17,.28],"pants");
+            TemplateBody.box(head,[0,.12,0],[.37,.38,.34],"head");
+            TemplateBody.box(head,[0,-.08,0],[.13,.12,.13],"skin");
+            for(const side of [-1,1]){
+              A.block(head,[side*.078,.15,.174],[.060,.060,.008],0xe6e8e5);
+              A.block(head,[side*.067,.148,.18],[.034,.052,.008],0x141519);
             }
-            if (s.face === "scar")
-              A.link(
-                head,
-                [0.09, 0.17, 0.139],
-                [0.035, 0.04, 0.167],
-                0.004,
-                0.004,
-                0x73493f,
-                "skin",
-              );
-            if (s.hair !== "shaved") {
-              A.ellipsoid(
-                head,
-                [0, 0.238, -0.02],
-                [0.15, 0.085, 0.139],
-                s.hairColor,
-                "cloth",
-              );
-              if (s.hair === "long")
-                A.ellipsoid(
-                  head,
-                  [0, 0.02, -0.13],
-                  [0.135, 0.23, 0.065],
-                  s.hairColor,
-                  "cloth",
-                );
+            A.block(head,[0,.033,.174],[.038,.006,.008],0x9b6c57);
+            for (let x=-3;x<=3;x++) for (let z=-2;z<=2;z++) {
+              const y=.31+((x*x+z*z)%3)*.016;
+              A.block(head,[x*.058,y,z*.063],[.065,.1,.072],0x141518,"cloth");
+              if (z===2 && x!==0) A.block(head,[x*.058,.265-(Math.abs(x)%2)*.02,.174],[.062,.07,.065],0x191a1d,"cloth");
+              if (Math.abs(x)===3 || z===-2) A.block(head,[x*.058,.16,z*.063],[.067,.22,.075],0x141518,"cloth");
             }
-            // Blocky fringe from the approved UV/model reference: dark, uneven locks over the forehead.
-            const fringeL = A.block(head, [-0.07, 0.19, 0.142], [0.07, 0.09, 0.035], s.hairColor, "cloth"),
-              fringeC = A.block(head, [0.015, 0.205, 0.148], [0.065, 0.105, 0.032], s.hairColor, "cloth"),
-              fringeR = A.block(head, [0.082, 0.18, 0.139], [0.052, 0.075, 0.03], s.hairColor, "cloth");
-            fringeL.rotation.z = -0.12;
-            fringeC.rotation.z = 0.08;
-            fringeR.rotation.z = 0.18;
-            for (const side of [-1, 1]) {
-              const leg = A.pivot(hips, side * 0.125, -0.03, 0),
-                knee = A.pivot(leg, 0, -0.38, 0);
-              A.link(
-                leg,
-                [0, 0, 0],
-                [0, -0.38, 0],
-                0.095,
-                0.085,
-                s.pants,
-                "cloth",
-              );
-              A.link(
-                knee,
-                [0, 0, 0],
-                [0, -0.32, 0],
-                0.075,
-                0.06,
-                s.pants,
-                "cloth",
-              );
-              // Cargo-pant silhouette from the approved base skin: outer pocket, thigh strap and
-              // a layered dark sneaker with a pale sole. These are geometry layers, so they remain
-              // readable in the 3D loadout/store preview without relying on a flat screenshot.
-              A.block(
-                leg,
-                [side * 0.082, -0.19, 0.075],
-                [0.052, 0.14, 0.045],
-                0x242a28,
-                "cloth",
-              );
-              A.block(
-                leg,
-                [0, -0.285, 0.088],
-                [0.19, 0.035, 0.035],
-                0x202523,
-                "cloth",
-              );
-              A.block(
-                knee,
-                [0, -0.335, 0.055],
-                [0.15, 0.16, 0.29],
-                s.boots,
-                "polymer",
-              );
-              A.block(
-                knee,
-                [0, -0.405, 0.062],
-                [0.158, 0.045, 0.305],
-                0xd1d4d3,
-                "polymer",
-              );
-              legs.push(leg);
-              knees.push(knee);
-              const arm = A.pivot(chest, side * 0.29, 0.4, 0),
-                elbow = A.pivot(arm, 0, -0.29, 0);
-              A.link(
-                arm,
-                [0, 0, 0],
-                [0, -0.29, 0],
-                0.078,
-                0.063,
-                shirt,
-                "skin",
-              );
-              A.link(
-                elbow,
-                [0, 0, 0],
-                [0, -0.27, 0],
-                0.059,
-                0.042,
-                shirt,
-                "skin",
-              );
-              A.ellipsoid(
-                elbow,
-                [0, -0.29, 0],
-                [0.052, 0.085, 0.047],
-                skin,
-                "skin",
-              );
-              arms.push(arm);
-              elbows.push(elbow);
+            for (const side of [-1,1]) {
+              const leg=A.pivot(hips,side*.125,-.03,0), knee=A.pivot(leg,0,-.38,0);
+              TemplateBody.box(leg,[0,-.17,0],[.225,.38,.27],"pants");
+              TemplateBody.box(knee,[0,-.16,0],[.22,.34,.26],"pants");
+              TemplateBody.box(knee,[0,-.335,.055],[.235,.16,.34],"shoe");
+              A.block(knee,[0,-.4,.055],[.24,.042,.35],0xe0e0da);
+              A.block(leg,[side*.115,-.2,.025],[.035,.14,.19],0x24252a,"cloth");
+              legs.push(leg);knees.push(knee);
+              const arm=A.pivot(chest,side*.29,.4,0),elbow=A.pivot(arm,0,-.29,0);
+              TemplateBody.box(arm,[0,-.13,0],[.16,.29,.18],"skin");
+              TemplateBody.box(elbow,[0,-.13,0],[.15,.29,.17],"skin");
+              arms.push(arm);elbows.push(elbow);
             }
-            A.block(
-              chest,
-              [0, 0.23, 0.13],
-              [0.36, 0.38, 0.045],
-              skin,
-              "skin",
-            );
-            // Subtle chest/abdomen planes keep the shirtless torso readable under neutral lighting.
-            const skinShade = new THREE.Color(skin).offsetHSL(0, 0, -0.075);
-            A.block(chest, [0, 0.145, 0.158], [0.018, 0.21, 0.012], skinShade, "skin");
-            A.block(chest, [0, 0.035, 0.154], [0.21, 0.018, 0.012], skinShade, "skin");
-            for (const side of [-1, 1]) {
-              A.block(
-                chest,
-                [side * 0.105, 0.32, 0.164],
-                [0.12, 0.12, 0.018],
-                skin,
-                "skin",
-              );
-              A.block(
-                chest,
-                [side * 0.075, 0.49, 0.08],
-                [0.1, 0.04, 0.07],
-                skin,
-                "skin",
-              );
-              A.ellipsoid(
-                head,
-                [side * 0.145, 0.095, 0],
-                [0.027, 0.059, 0.026],
-                skin,
-                "skin",
-              );
-              A.ellipsoid(
-                head,
-                [side * 0.058, 0.112, 0.145],
-                [0.016, 0.012, 0.009],
-                0x181b18,
-                "skin",
-              );
-              A.block(
-                hips,
-                [side * 0.15, 0.095, 0.14],
-                [0.08, 0.09, 0.045],
-                0x333831,
-                "cloth",
-              );
-            }
-            A.block(
-              hips,
-              [0, 0.1, 0.155],
-              [0.36, 0.052, 0.027],
-              0x292d28,
-              "cloth",
-            );
-            A.block(hips, [0, 0.1, 0.176], [0.065, 0.045, 0.015], 0x767564);
+            A.block(hips,[0,.105,.148],[.44,.065,.026],0x181a1d,"cloth");
+            A.block(hips,[0,.105,.17],[.072,.056,.012],0x9b9d9e);
+            A.block(hips,[0,.105,.18],[.045,.032,.006],0x151617);
             const tactical = [1, 4, 7, 8, 9].includes(cls);
             if (tactical) {
               A.block(
@@ -23075,15 +22968,15 @@ body.netgame #revivetouch{display:flex}
                   "glass",
                 );
             if(s.accessory==="pack"||cls===1)A.block(chest,[0,.19,-.23],[.36,.44,.19],0x414a3e,"cloth");
-            if(s.headgear==="scout_cap"){A.ellipsoid(head,[0,.247,-.005],[.166,.07,.158],0x504a38,"cloth");A.block(head,[0,.225,.17],[.22,.022,.13],0x504a38,"cloth")}
-            if(s.headgear==="riot_helmet"){A.ellipsoid(head,[0,.245,-.005],[.19,.13,.18],0x343b39,"polymer");A.block(head,[0,.105,.165],[.26,.12,.025],0x293337,"glass")}
-            if(s.headgear==="reaper_hood"){A.ellipsoid(head,[0,.13,-.045],[.205,.30,.19],0x1f2022,"cloth");A.ellipsoid(head,[0,.08,.135],[.145,.17,.06],0x121516,"cloth")}
+            if(s.headgear==="scout_cap"){A.ellipsoid(head,[0,.35,-.005],[.235,.09,.21],0x504a38,"cloth");A.block(head,[0,.31,.22],[.32,.025,.16],0x504a38,"cloth")}
+            if(s.headgear==="riot_helmet"){A.ellipsoid(head,[0,.31,-.005],[.24,.18,.22],0x343b39,"polymer");A.block(head,[0,.15,.22],[.36,.16,.025],0x293337,"glass")}
+            if(s.headgear==="reaper_hood"){A.ellipsoid(head,[0,.15,-.04],[.25,.32,.24],0x1f2022,"cloth");A.ellipsoid(head,[0,.08,.135],[.145,.17,.06],0x121516,"cloth")}
             if(s.facewear==="respirator"){A.ellipsoid(head,[0,.02,.145],[.14,.09,.075],0x353c39,"polymer");for(const side of[-1,1])A.ellipsoid(head,[side*.115,.015,.165],[.055,.055,.04],0x657064,"polymer")}
             if(s.backpack==="field_pack"){A.block(chest,[0,.19,-.25],[.39,.47,.2],0x343c35,"cloth");A.block(chest,[0,.09,-.36],[.22,.20,.07],0x292f2b,"cloth")}
             if(s.outerwear==="field_jacket"){A.block(chest,[0,.22,.16],[.49,.46,.07],0x3b433c,"cloth");for(const side of[-1,1])A.block(chest,[side*.15,.13,.215],[.12,.14,.045],0x2e3530,"cloth")}
             if(s.outerwear==="ballistic_vest"){A.block(chest,[0,.24,.175],[.5,.44,.10],0x252d2a,"cloth");A.block(chest,[0,.30,.235],[.28,.22,.035],0x485047,"polymer");for(let x=-1;x<=1;x++)A.block(chest,[x*.13,.11,.235],[.10,.15,.05],0x353d36,"cloth")}
-            if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.30,0],[.063,.095,.055],0x1f2422,"cloth");
-            if(s.footwear==="reinforced_boots")for(const knee of knees)A.block(knee,[0,-.36,.065],[.17,.19,.31],0x191d1c,"polymer");
+            if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.30,0],[.086,.095,.095],0x1f2422,"cloth");
+            if(s.footwear==="reinforced_boots")for(const knee of knees)A.block(knee,[0,-.36,.065],[.25,.2,.36],0x191d1c,"polymer");
             let secretAccessories = null;
             if (cls === 22) {
               const gold = 0xd6ad55, holy = 0x74dcff, feather = 0xf3fbff;
@@ -24018,6 +23911,7 @@ body.netgame #revivetouch{display:flex}
             const hit = this.ray.intersectObjects([
               ...MapManager.walls,
               ...ZombieManager.hitMeshes,
+              ...PhysicsProps.meshes(),
             ])[0];
             return (
               hit
@@ -24310,10 +24204,10 @@ body.netgame #revivetouch{display:flex}
             tabs.classList.toggle("customize-hidden", customizing);
             if (customizing) {
               this.identityKey = "";
-              title.textContent = "CUSTOMIZE"; subtitle.textContent = "Monte a aparência do sobrevivente.";
+              title.textContent = "SHOWROOM"; subtitle.textContent = "Monte a aparência do sobrevivente.";
               $("bank").textContent = `${d.coins.toLocaleString("pt-BR")} moedas`;
               $("armory-identity").style.setProperty("--rarity", "#d7dcef");
-              $("armory-identity").innerHTML = `<span class="item-index">SOBREVIVENTE</span><h2>${Account.user || "Visitante"}</h2><b>VISUAL DO PERSONAGEM</b><p>Customize fica separado do Armory. Alterações aparecem no personagem do centro e são salvas por conta.</p>`;
+              $("armory-identity").innerHTML = `<span class="item-index">SOBREVIVENTE</span><h2>${Account.user || "Visitante"}</h2><b>VISUAL DO PERSONAGEM</b><p>Arraste para girar · experimente um item antes de comprar.</p>`;
               $("armory-info").innerHTML = ""; $("roll-controls").innerHTML = "";
               this.customization(); updatePreview(); Account.badge(); return;
             }
@@ -24543,22 +24437,18 @@ body.netgame #revivetouch{display:flex}
           },
           chance(kind, id, lucky) { const list = Progression.economy.catalogs[kind], tier = list[id].tier; return +(Progression.economy.rates[lucky ? "lucky" : "normal"][tier] / list.filter((i) => i.tier === tier).length).toFixed(3); },
           customization() {
-            const opts = {
-              face: ["Rosto", [["angular", "Angular"], ["round", "Arredondado"], ["scar", "Cicatriz"]]], hair: ["Cabelo", [["short", "Curto"], ["shaved", "Raspado"], ["long", "Comprido"]]], skin: ["Pele", [["#c39b7d", "Clara"], ["#986e50", "Média"], ["#664936", "Escura"]]], hairColor: ["Cor do cabelo", [["#292622", "Preto"], ["#59402c", "Castanho"], ["#99918a", "Grisalho"]]], pants: ["Calça", [["#303632", "Floresta"], ["#3b3d46", "Cinza"], ["#514b40", "Areia"]]], boots: ["Botas", [["#252522", "Pretas"], ["#3a3027", "Marrons"]]], accessory: ["Acessório", [["none", "Nenhum"], ["glasses", "Óculos"], ["mask", "Máscara"], ["pack", "Mochila"]]],
-            };
-            $("cosmetic-fields").innerHTML = `<div class="cosmetic-layout"><div class="customize-panel"><h3>VISUAL BASE</h3>${Object.entries(opts).map(([key, [label, values]]) => `<label>${label}<select data-cosmetic="${key}">${values.map(([v, l]) => `<option value="${v}" ${CharacterStyle.data[key] === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>`).join("")}</div><div class="customize-panel"><h3>COSMÉTICOS ESPECIAIS</h3><p class="armory-note">Cosméticos continuam compráveis aqui; armas e classes não.</p><div class="cosmetic-shop">${cosmeticCatalog.map((item) => { const owned = Cosmetics.owns(item.id), equipped = CharacterStyle.data[item.slot] === item.id; return `<article class="cosmetic-card ${equipped ? "equipped" : ""} ${this.previewCosmetic === item.id ? "previewing" : ""}" data-cosmetic-preview="${item.id}" style="--rarity:${rarityColors[item.tier]}" tabindex="0"><span class="cosmetic-icon">${item.icon}</span><span><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]} · PRÉVIA 3D</small></span><button data-cosmetic-item="${item.id}" ${Progression.busy || equipped ? "disabled" : ""}>${equipped ? "Equipado" : owned ? "Equipar" : "◈ " + item.price}</button></article>`; }).join("")}</div>${Object.entries(cosmeticSlots).map(([slot, label]) => CharacterStyle.data[slot] !== "none" ? `<button class="small" data-cosmetic-clear="${slot}">Remover ${label.toLowerCase()}</button>` : "").join("")}</div></div>`;
-            $("cosmetic-fields").querySelectorAll("select").forEach((el) => el.onchange = () => { CharacterStyle.data[el.dataset.cosmetic] = el.value; Account.savePreferences(); updatePreview(); });
-            $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach((b) => b.onclick = () => Cosmetics.select(b.dataset.cosmeticItem));
-            $("cosmetic-fields").querySelectorAll("[data-cosmetic-preview]").forEach((card) => {
-              const preview = (e) => {
-                if (e?.target?.closest?.("button")) return;
-                this.previewCosmetic = card.dataset.cosmeticPreview;
-                updatePreview();
-              };
-              card.onclick = preview;
-              card.onfocusin = preview;
+            const active=this.shopCategory||"all";
+            const items=cosmeticCatalog.filter(i=>active==="all"||i.slot===active);
+            $("cosmetic-fields").innerHTML=`<div class="showroom-toolbar"><h3>SEU ESTILO. SUA SOBREVIVÊNCIA.</h3><p>Explore os itens em 3D. Arraste o personagem para girar.</p><nav aria-label="Categorias do catálogo">${[["all","Todos"],...Object.entries(cosmeticSlots)].map(([key,label])=>`<button data-shop-category="${key}" aria-pressed="${key===active}">${label}</button>`).join("")}</nav><div class="showroom-rotate"><button data-shop-turn="-0.4" aria-label="Girar personagem à esquerda">↶</button><button data-shop-turn="0" aria-label="Vista frontal">Frente</button><button data-shop-turn="0.4" aria-label="Girar personagem à direita">↷</button></div></div><div class="cosmetic-shop">${items.map(item=>{const owned=Cosmetics.owns(item.id),equipped=CharacterStyle.data[item.slot]===item.id;return `<article class="cosmetic-card ${equipped?"equipped":""} ${this.previewCosmetic === item.id ? "previewing" : ""}" style="--rarity:${rarityColors[item.tier]}"><div class="cosmetic-thumb" data-shop-thumb="${item.id}" role="button" tabindex="0" aria-label="Experimentar ${item.name}"><span>Carregando prévia…</span></div><b>${item.name}</b><small>${cosmeticSlots[item.slot]} · ${rarityNames[item.tier]}</small><button data-cosmetic-item="${item.id}" ${Progression.busy||equipped?"disabled":""}>${equipped?"✓ Equipado":owned?"Equipar":"Comprar · ◈ "+item.price}</button>${equipped?`<button data-cosmetic-clear="${item.slot}">Remover</button>`:""}</article>`}).join("")}</div>`;
+            $("cosmetic-fields").querySelectorAll("[data-shop-category]").forEach(b=>b.onclick=()=>{this.shopCategory=b.dataset.shopCategory;this.customization();});
+            $("cosmetic-fields").querySelectorAll("[data-shop-turn]").forEach(b=>b.onclick=()=>{const n=Number(b.dataset.shopTurn);this.shopYaw=n? (this.shopYaw||0)+n:0;previewYaw=this.shopYaw;});
+            $("cosmetic-fields").querySelectorAll("[data-cosmetic-item]").forEach(b=>b.onclick=()=>Cosmetics.select(b.dataset.cosmeticItem));
+            $("cosmetic-fields").querySelectorAll("[data-cosmetic-clear]").forEach(b=>b.onclick=()=>Cosmetics.unequip(b.dataset.cosmeticClear));
+            $("cosmetic-fields").querySelectorAll("[data-shop-thumb]").forEach(el=>{
+              const select=()=>{this.previewCosmetic=el.dataset.shopThumb;this.shopYaw=Cosmetics.byId(this.previewCosmetic).slot==="backpack"?Math.PI:0;previewYaw=this.shopYaw;updatePreview();};
+              el.onclick=select;el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select();}};
             });
-            $("cosmetic-fields").querySelectorAll("[data-cosmetic-clear]").forEach((b) => b.onclick = () => Cosmetics.unequip(b.dataset.cosmeticClear));
+            ShopPortraits.fill($("cosmetic-fields"));
           },
           confirmReroll(kind, lucky, payment) {
             const current = Progression.economy.catalogs[kind][Progression.data[kind + "Id"]];
@@ -24810,16 +24700,16 @@ body.netgame #revivetouch{display:flex}
           UIManager.toast("Giro cancelado.");
           Armory.render();
         };
+        Account.rewardDisplay = { earned: {coins:0,normal:0,lucky:0}, acknowledged: {coins:0,normal:0,lucky:0} };
         const oldReward = Progression.reward.bind(Progression);
-        Progression.reward = function (coins = 0, normal = 0, lucky = 0) {
-          if (!Account.user) return oldReward(coins, normal, lucky);
-          // Signed-in wallets are server-authoritative, but match feedback must be immediate.
-          // Keep the optimistic amount only on the live player HUD; checkpoint/profile responses
-          // still decide what is persisted to the account economy.
-          if (Number.isFinite(coins) && coins > 0) player.coins = Math.min(1e9, Math.round((player.coins || 0) + coins));
-          if (Number.isFinite(normal) && normal > 0) player.normal = Math.min(1e9, Math.round((player.normal || 0) + normal));
-          if (Number.isFinite(lucky) && lucky > 0) player.lucky = Math.min(1e9, Math.round((player.lucky || 0) + lucky));
+        Progression.reward = function (...args) {
+          if (!Account.user) oldReward(...args);
+          else for (let i = 0; i < 3; i++) {
+            const key = ["coins", "normal", "lucky"][i], amount = args[i];
+            if (Number.isSafeInteger(amount) && amount > 0) Account.rewardDisplay.earned[key] += amount;
+          }
           UIManager.hudClock = 0;
+          UIManager.hud(0);
         };
         const oldSettingsSave = SettingsManager.save.bind(SettingsManager);
         SettingsManager.save = function () {
@@ -25348,6 +25238,41 @@ body.netgame #revivetouch{display:flex}
           },
         };
         let previewModelKey = "";
+        const ShopPortraits = {
+          cache:new Map(),generation:0,
+          async fill(root){
+            const generation=++this.generation;
+            for(const el of root.querySelectorAll("[data-shop-thumb]")){
+              await new Promise(resolve=>setTimeout(resolve,32));
+              if(generation!==this.generation || !el.isConnected)return;
+              const id=el.dataset.shopThumb;
+              let url=this.cache.get(id);
+              if(!url){
+                if(!TemplateBody.material?.map?.image){await new Promise(resolve=>setTimeout(resolve,300));}
+                if(!MonsterPortraits.target)MonsterPortraits.setup();
+                const P=MonsterPortraits,saved=CharacterStyle.data;
+                let model;
+                try{
+                  const item=Cosmetics.byId(id);
+                  CharacterStyle.data={...CharacterStyle.defaults,[item.slot]:id};
+                  model=Survivor.create(0,WeaponSystem.weapons[0]);
+                  model.userData.rig.gun.visible=false;
+                }finally{CharacterStyle.data=saved;}
+                P.scene.add(model);model.rotation.y=Cosmetics.byId(id).slot==="backpack"?Math.PI-.3:-.3;
+                P.camera.position.set(0,1.15,4.1);P.camera.lookAt(0,1,0);
+                const target=renderer.getRenderTarget(),color=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha();
+                try{
+                  renderer.setRenderTarget(P.target);renderer.setClearColor(0x20232a,1);renderer.clear();renderer.render(P.scene,P.camera);
+                  renderer.readRenderTargetPixels(P.target,0,0,P.size,P.size,P.pixels);
+                  const ctx=P.canvas.getContext("2d"),img=ctx.createImageData(P.size,P.size),row=P.size*4;
+                  for(let y=0;y<P.size;y++)img.data.set(P.pixels.subarray((P.size-1-y)*row,(P.size-y)*row),y*row);
+                  ctx.putImageData(img,0,0);url=P.canvas.toDataURL("image/png");this.cache.set(id,url);
+                }finally{renderer.setRenderTarget(target);renderer.setClearColor(color,alpha);Survivor.dispose(model);}
+              }
+              el.style.backgroundImage=`url(${url})`;el.textContent="";
+            }
+          }
+        };
         function updatePreview() {
           if (!previewRenderer) return;
           const activeKind = Armory?.tab === "class" ? "class" : "weapon";
@@ -26307,10 +26232,16 @@ body.netgame #revivetouch{display:flex}
           openGameMissions: () => openGameMissions(),
           // Short exit animation of the home menu before a page opens from it.
           animateTo(id) {
-            const menu = $("menu");
-            if (menu.classList.contains("hidden") || matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+            const menu = $("menu"), request = this.transitionId = (this.transitionId || 0) + 1;
+            if (menu.classList.contains("hidden") || matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve(true);
             menu.classList.add("leaving");
-            return new Promise((r) => setTimeout(() => { menu.classList.remove("leaving"); $(id).classList.add("entering"); setTimeout(() => $(id).classList.remove("entering"), 400); r(); }, 180));
+            const epoch=UIManager.screenEpoch;
+            return new Promise((r) => setTimeout(() => {
+              menu.classList.remove("leaving");
+              const current=epoch===UIManager.screenEpoch && request===this.transitionId;
+              if(current){$(id).classList.add("entering");setTimeout(()=>$(id).classList.remove("entering"),400);}
+              r(current);
+            },180));
           },
           monsterPortraits: (root) => MonsterPortraits.fill(root),
         };
@@ -26512,8 +26443,15 @@ body.netgame #revivetouch{display:flex}
                 if (size.x !== rect.width || size.y !== rect.height)
                   previewRenderer.setSize(rect.width, rect.height, false);
                 previewCamera.aspect = rect.width / rect.height;
+                if(Armory.mode==="customize"){
+                  const distance=2.45/(2*Math.tan(THREE.MathUtils.degToRad(previewCamera.fov/2)))*Math.max(1,.65/previewCamera.aspect);
+                  previewCamera.position.set(0,1.08,distance);previewCamera.lookAt(0,.95,0);
+                }
                 previewCamera.updateProjectionMatrix();
-                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=(rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12)+previewYaw;Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);Armory.update(dt);
+                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=Armory.mode==="customize"?previewYaw:(rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12);Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);
+                const shop=Armory.mode==="customize",rig=previewModel.userData.rig;rig.gun.visible=!shop;
+                if(shop){rig.arms.forEach((a,i)=>a.rotation.set(0,0,i?-.08:.08));rig.elbows.forEach(e=>e.rotation.set(0,0,0));}
+                Armory.update(dt);
                 if (Armory.light && menuTime > (Armory.revealUntil || 0)) {
                   // HUD: a frontal blue fill that the reveal briefly recolours (video: the character
                   // is lit in the rarity colour for ~0.3 s). Customize keeps the old back light.

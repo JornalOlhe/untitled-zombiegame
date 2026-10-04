@@ -1,0 +1,42 @@
+const {chromium}=require('playwright');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
+const root=path.resolve('android/app/src/main/assets');
+const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+(req.url.split('?')[0]==='/'?'/index.html':req.url.split('?')[0]));if(!f.startsWith(root+path.sep))return res.writeHead(403).end();fs.readFile(f,(e,data)=>{if(e)return res.writeHead(404).end();res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.png')?'image/png':'text/html');res.end(data);});});
+(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+try{const page=await browser.newPage({viewport:{width:1280,height:720}}),errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error(e.stack);});
+await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await page.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
+await page.evaluate(()=>DeadRecoilTest.Armory.openCustomize());
+await page.waitForFunction(()=>[...document.querySelectorAll('[data-shop-thumb]')].length===9 && [...document.querySelectorAll('[data-shop-thumb]')].every(e=>e.style.backgroundImage),null,{timeout:90000}).catch(async e=>{console.log(await page.evaluate(()=>[...document.querySelectorAll('[data-shop-thumb]')].map(el=>({id:el.dataset.shopThumb,image:!!el.style.backgroundImage,text:el.textContent}))));throw e;});
+fs.mkdirSync('test-results/current',{recursive:true});await page.screenshot({path:'test-results/current/showroom-1280.png'});
+await page.locator('[data-shop-turn="0.4"]').click();assert.equal(await page.evaluate(()=>DeadRecoilTest.Armory.shopYaw),.4);
+await page.locator('[data-shop-category="headgear"]').click();assert.equal(await page.locator('[data-shop-thumb]').count(),3);
+for(const [width,height] of [[740,360],[390,844]]){await page.setViewportSize({width,height});await page.waitForTimeout(350);await page.screenshot({path:`test-results/current/showroom-${width}.png`});}
+await page.locator('[data-shop-category="all"]').click();
+await page.locator('[data-shop-thumb]').last().scrollIntoViewIfNeeded();
+assert.ok(await page.locator('[data-shop-thumb]').last().isVisible(),'last catalog item reachable by scrolling');
+assert.ok(await page.locator('#classpreview').evaluate(el=>el.getBoundingClientRect().height<=el.parentElement.getBoundingClientRect().height+2),'preview fits its mobile stage');
+const balanceBefore=await page.evaluate(()=>DeadRecoilTest.Progression.data.coins);
+await page.locator('[data-shop-thumb]').last().focus();await page.keyboard.press('Enter');
+assert.equal(await page.evaluate(()=>DeadRecoilTest.Progression.data.coins),balanceBefore,'trying on never buys');
+const result=await page.evaluate(async()=>{
+ const T=DeadRecoilTest,V=THREE.Vector3;T.setMap(4);T.PlayerController.start();T.pause();T.ZombieManager.clear();T.MapManager.walls=[];
+ const z=T.ZombieManager.spawn(5,null,new V(0,0,0));z.group.updateMatrixWorld(true);
+ const ray=new THREE.Raycaster(new V(0,1.7,3),new V(0,0,-1),0,6);
+ const above=ray.intersectObjects(T.ZombieManager.hitMeshes).length;
+ ray.set(new V(0,.3,3),new V(0,0,-1));const low=ray.intersectObjects(T.ZombieManager.hitMeshes).length;
+ T.PhysicsProps.clear?.();const prop=T.PhysicsProps.spawn('barrel',0,0,0);const barrel=T.PhysicsProps.items.at(-1);
+ T.PhysicsProps.damageSegment(new V(0,.45,2),new V(0,.45,-1),20);const armed=barrel.fuse;
+ const user=T.Account.user;T.Account.user='test';T.Progression.data.coins=100;T.player.coins=100;
+ T.Account.rewardDisplay={earned:{coins:0,normal:0,lucky:0},acknowledged:{coins:0,normal:0,lucky:0}};
+ T.Progression.reward(10);const immediate=T.UIManager.displayBalance('coins'),spendable=T.Progression.data.coins;
+ // A delayed report acknowledges only the rewards captured when that report was sent.
+ T.Account.run={id:'test',offline:false};T.Account.userId='test';
+ let resolve;const old=DR.RunRepository.report;DR.RunRepository.report=()=>new Promise(r=>resolve=r);
+ const checkpoint=T.Account.checkpoint();await Promise.resolve();await Promise.resolve();
+ T.Progression.reward(50);
+ resolve({profile:{...T.Progression.data,coins:110,username:'test',userId:'test'},missions:[]});await checkpoint;
+ const reconciled=T.UIManager.displayBalance('coins');DR.RunRepository.report=old;T.Account.user=user;
+ return {above,low,armed,immediate,spendable,reconciled};
+});
+console.log(JSON.stringify(result));assert.equal(result.above,0,'crawler has no standing hit volume');assert.ok(result.low>0,'crawler is hittable at its actual body height');assert.ok(result.armed>0,'swept blade segment arms barrel');assert.equal(result.immediate,110);assert.equal(result.spendable,100);assert.equal(result.reconciled,160,'in-flight reward survives reconciliation without double counting');assert.deepEqual(errors,[]);console.log('PASS showroom, crawler pose, barrel segment and delayed reward reconciliation');
+}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1});
