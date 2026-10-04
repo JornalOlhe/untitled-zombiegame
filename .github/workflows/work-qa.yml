@@ -28,6 +28,7 @@ jobs:
           node tests/js-syntax.cjs
           node tests/v43-contract-smoke.cjs
           node tests/story-modes-smoke.cjs
+          node tests/v48-survivor-smoke.cjs
       - name: Install browser test runtime
         run: |
           npm install --no-save --package-lock=false playwright@1.62.1
