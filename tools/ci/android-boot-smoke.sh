@@ -13,6 +13,13 @@ note() {
   echo
 }
 progress() { echo "::notice title=Android boot gate::$1"; }
+dump_failure_context() {
+  echo "::group::Android boot diagnostics"
+  timeout 8 adb shell dumpsys activity exit-info com.deadrecoil.game 2>/dev/null | tail -120 || true
+  timeout 8 adb shell dumpsys meminfo com.deadrecoil.game 2>/dev/null | tail -120 || true
+  timeout 8 adb logcat -d 2>/dev/null | grep -iE 'DeadRecoil|AndroidRuntime|chromium|webview|cr_|lowmemory|lmkd|am_crash|am_kill|render|FATAL EXCEPTION|Fatal signal' | tail -260 || true
+  echo "::endgroup::"
+}
 trap 'rc=$?; [ $rc -ne 0 ] && note "failed at line $LINENO (exit $rc): $BASH_COMMAND"' EXIT
 
 rm -f "$MARKER"
@@ -38,6 +45,7 @@ grep -q "Status: ok" <<<"$start" || progress "am start did not report Status: ok
 
 ok=0
 lost=0
+missing_pid=0
 # Poll for ~3 minutes. A dead emulator fails fast instead of turning every logcat into a
 # 20-second wait that consumes the whole Actions timeout.
 for i in $(seq 1 75); do
@@ -74,8 +82,15 @@ for i in $(seq 1 75); do
 
   pid=$(timeout 4 adb shell pidof com.deadrecoil.game 2>/dev/null || true)
   if [ "$i" -gt 8 ] && [ -z "$pid" ]; then
-    note "game process exited before DEAD_RECOIL_READY $VERSION"
-    exit 87
+    missing_pid=$((missing_pid + 1))
+    progress "game pid unavailable (${missing_pid}/3) while waiting for READY"
+    if [ "$missing_pid" -ge 3 ]; then
+      dump_failure_context
+      note "game process exited before DEAD_RECOIL_READY $VERSION"
+      exit 87
+    fi
+  else
+    missing_pid=0
   fi
   sleep 2
 done
@@ -83,6 +98,7 @@ done
 if [ "$ok" != 1 ]; then
   echo "Game never emitted DEAD_RECOIL_READY $VERSION."
   timeout 5 adb shell pidof com.deadrecoil.game || true
+  dump_failure_context
   timeout 8 adb logcat -d | tail -400 || true
   note "no READY. DeadRecoil log: $(timeout 8 adb logcat -d -s DeadRecoil:V '*:S' | tail -20 || true)"
   note "chromium/webview: $(timeout 8 adb logcat -d | grep -iE 'chromium|console|webview|cr_' | tail -25 || true)"
