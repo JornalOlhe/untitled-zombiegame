@@ -163,7 +163,7 @@ jobs:
           $package = Get-Content desktop/package.json | ConvertFrom-Json
           if ($package.version -ne "0.43.0") { throw "Expected desktop 0.43.0" }
           $gradle = Get-Content android/app/build.gradle -Raw
-          if ($gradle -notmatch "versionCode\s+48" -or $gradle -notmatch "versionName\s+'0\.42\.0'") {
+          if ($gradle -notmatch "versionCode\s+48" -or $gradle -notmatch "versionName\s+'0\.43\.0'") {
             throw "Android source version is not v48 / 0.43.0"
           }
       - name: Install dependencies
