@@ -1,1 +1,2 @@
 Dead Recoil v51 / 0.46.0 ready: survivor skin, grip/IK, gamepad, puddle reflections, FireFX, headlights, impacts, adaptive audio.
+Retrigger after fixing per-map FX geometry release (resource-cycle).

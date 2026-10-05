@@ -6625,18 +6625,18 @@ body.netgame #revivetouch{display:flex}
               const gg = geo.clone();
               gg.setAttribute("seed", new THREE.Float32BufferAttribute(new Array(4).fill(seed + i * 0.31), 1));
               const m = new THREE.Mesh(gg, this.mat); m.rotation.y = (i * Math.PI) / 3; m.renderOrder = 3; m.frustumCulled = true;
-              m.scale.setScalar(i ? 0.78 : 1);
+              m.scale.setScalar(i ? 0.78 : 1); m.userData.disposableGeometry = true;
               g.add(m);
             }
             const E = 22, pos = new Float32Array(E * 3), ember = [];
             for (let i = 0; i < E; i++) ember.push({ life: Math.random(), vx: 0, vz: 0, sp: 0 });
             const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-            const pts = new THREE.Points(pg, this.emberMat); pts.frustumCulled = false; g.add(pts);
+            const pts = new THREE.Points(pg, this.emberMat); pts.frustumCulled = false; pts.userData.disposableGeometry = true; g.add(pts);
             const smoke = [];
             for (let i = 0; i < 5; i++) { const s = new THREE.Sprite(this.smokeMat.clone()); s.userData.disposableMaterial = true; g.add(s); smoke.push({ s, life: i / 5 }); }
             if (size >= 1.2 && size < 2) {
               const bed = new THREE.Mesh(new THREE.CircleGeometry(size * 0.38, 12), new THREE.MeshBasicMaterial({ color: 0xff5a14, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
-              bed.rotation.x = -Math.PI / 2; bed.position.y = 0.03; bed.userData.disposableMaterial = true; g.add(bed);
+              bed.rotation.x = -Math.PI / 2; bed.position.y = 0.03; bed.userData.disposableMaterial = bed.userData.disposableGeometry = true; g.add(bed);
             }
             const fx = { g, size, ember, pos, pg, smoke, light, base: light ? light.intensity : 0, seed };
             this.list.push(fx);
@@ -7355,13 +7355,13 @@ body.netgame #revivetouch{display:flex}
             const beamGeo = (this._beamGeo ||= (() => { const c = new THREE.ConeGeometry(1.15, 7, 14, 1, true); c.translate(0, -3.5, 0); c.rotateX(-Math.PI / 2); return c; })());
             for (const [x, z, ry, police] of list) {
               const car = new THREE.Group(); car.position.set(x, 0, z); car.rotation.y = ry + Math.PI; /* GLB car fronts face local +z */ g.add(car);
-              const lens = new THREE.MeshBasicMaterial({ color: 0xfff6e2, toneMapped: false }), flick = { lens, beams: [], pool: null, t: Math.random() * 9 };
+              const lens = new THREE.MeshBasicMaterial({ color: 0xfff6e2, toneMapped: false }); lens.userData.perCar = true; const flick = { lens, beams: [], pool: null, t: Math.random() * 9 };
               for (const ox of [-0.62, 0.62]) {
-                const l = new THREE.Mesh(new THREE.CircleGeometry(0.11, 10), lens); l.position.set(ox, 0.72, -2.2); l.rotation.y = Math.PI; car.add(l);
+                const l = new THREE.Mesh(new THREE.CircleGeometry(0.11, 10), lens); l.position.set(ox, 0.72, -2.2); l.rotation.y = Math.PI; l.userData.disposableGeometry = l.userData.disposableMaterial = true; car.add(l);
                 const b = new THREE.Mesh(beamGeo, beamMat); b.position.set(ox, 0.72, -2.2); b.rotation.x = -0.09; b.renderOrder = 2; car.add(b); flick.beams.push(b);
               }
               const pool = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 7.5), new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
-              pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.03, -6.4); pool.userData.disposableMaterial = true; car.add(pool); flick.pool = pool;
+              pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.03, -6.4); pool.userData.disposableMaterial = pool.userData.disposableGeometry = true; car.add(pool); flick.pool = pool;
               this.decor.push({ type: "headlight", ...flick });
             }
           },
