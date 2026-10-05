@@ -17196,7 +17196,11 @@ body.netgame #revivetouch{display:flex}
           begin() {
             this.soft = PropKit.batch();
             this.hard = PropKit.batch();
+            // MapManager disposes map-owned geometry/materials on unload; rebuild these tiny shared
+            // rock resources per map so no disposed WebGL object is ever reused.
             this.rockQueue = [];
+            this.rockGeometry = null;
+            this.rockMaterials = null;
           },
           collider(x, z, w, d, top, base = 0) {
             MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: Math.max(0, top - base), top, base });
