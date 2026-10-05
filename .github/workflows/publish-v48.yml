@@ -1,0 +1,240 @@
+name: Publish Dead Recoil 0.43.0 (tag v48)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'release/v48-ready.txt'
+
+concurrency:
+  group: publish-v48
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  qa:
+    name: Full gameplay regression gate
+    uses: ./.github/workflows/work-qa.yml
+
+  android:
+    needs: qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build Android
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_B64" ]; then
+            gradle assembleRelease --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
+      - name: Package and verify Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+              --out dist/DeadRecoil.apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+            cp dist/DeadRecoil.apk dist/DeadRecoil-v48.apk
+            APK="dist/DeadRecoil.apk"
+            echo "Stable release-signed APK prepared."
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/DeadRecoil-v48-manual.apk
+            APK="dist/DeadRecoil-v48-manual.apk"
+            echo "::warning::Signing secrets are missing. Publishing manual-install APK only; updater will not auto-install it."
+          fi
+          export ANDROID_APK="$APK"
+          echo "ANDROID_APK=$APK" >> "$GITHUB_ENV"
+          "$BT/apksigner" verify --print-certs "$APK" | head -5
+          BADGING=$("$BT/aapt" dump badging "$ANDROID_APK")
+          echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
+          echo "$BADGING" | grep -q "versionCode='48'"
+          echo "$BADGING" | grep -q "versionName='0.43.0'"
+          python3 - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          apk = Path(os.environ["ANDROID_APK"])
+          root = Path("android/app/src/main/assets")
+          with zipfile.ZipFile(apk) as z:
+              for file in root.rglob("*"):
+                  if file.is_file():
+                      name = "assets/" + file.relative_to(root).as_posix()
+                      if z.read(name) != file.read_bytes():
+                          raise SystemExit("Stale packaged asset: " + name)
+          print("Android package contents verified.")
+          PY
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Reset Android boot marker
+        run: rm -f android-boot-ok.txt android-boot-v48.png
+      - name: Android real boot smoke · attempt 1
+        id: boot1
+        timeout-minutes: 13
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          # v42's release gate was stable with this exact emulator footprint. Keep v48 on the
+          # known-good profile: the leaner 2560M/camera-disabled variant intermittently killed
+          # the app/emulator before the WebView could emit DEAD_RECOIL_READY.
+          ram-size: 3072M
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.43.0 android-boot-v48.png
+      - name: Android real boot smoke · fresh-emulator retry
+        id: boot2
+        if: ${{ steps.boot1.outcome != 'success' && hashFiles('android-boot-ok.txt') == '' }}
+        timeout-minutes: 13
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          # v42's release gate was stable with this exact emulator footprint. Keep v48 on the
+          # known-good profile: the leaner 2560M/camera-disabled variant intermittently killed
+          # the app/emulator before the WebView could emit DEAD_RECOIL_READY.
+          ram-size: 3072M
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/ci/android-boot-smoke.sh "$ANDROID_APK" 0.43.0 android-boot-v48.png
+      - name: Require boot gate pass
+        if: always()
+        run: |
+          test -f android-boot-ok.txt || { echo "::error::Android boot gate did not pass (attempt 1: ${{ steps.boot1.outcome }}, attempt 2: ${{ steps.boot2.outcome }})"; exit 1; }
+          cat android-boot-ok.txt
+          test -f android-boot-v48.png || echo "::warning::no boot screenshot"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v48-Android
+          path: |
+            dist/*.apk
+            android-boot-v48.png
+          if-no-files-found: warn
+          retention-days: 30
+
+  windows:
+    needs: qa
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate version
+        shell: pwsh
+        run: |
+          $package = Get-Content desktop/package.json | ConvertFrom-Json
+          if ($package.version -ne "0.43.0") { throw "Expected desktop 0.43.0" }
+          $gradle = Get-Content android/app/build.gradle -Raw
+          if ($gradle -notmatch "versionCode\s+48" -or $gradle -notmatch "versionName\s+'0\.42\.0'") {
+            throw "Android source version is not v48 / 0.43.0"
+          }
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+      - name: Smoke test
+        working-directory: desktop
+        run: npm run smoke
+      - name: Build Windows installer
+        working-directory: desktop
+        run: npm run dist
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $exe = "desktop/dist/DeadRecoil-Setup-0.43.0.exe"
+          if (!(Test-Path $exe)) { throw "Installer was not generated" }
+          if ((Get-Item $exe).Length -lt 50000000) { throw "Installer is unexpectedly small" }
+          $p = Start-Process $exe -ArgumentList "/S" -WindowStyle Hidden -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Installer failed" }
+          $installed = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs") -Filter "Dead Recoil.exe" -Recurse -Depth 2 | Select-Object -First 1 -ExpandProperty FullName
+          if (!$installed) { throw "Silent install did not produce Dead Recoil.exe" }
+          $smoke = Start-Process $installed -ArgumentList "--smoke-test" -WindowStyle Hidden -PassThru -Wait
+          if ($smoke.ExitCode -ne 0) { throw "Installed game failed smoke test" }
+          Get-FileHash $exe -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadRecoil-v48-Windows
+          path: desktop/dist/DeadRecoil-Setup-0.43.0.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [qa, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-v48-Android
+          path: android-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeadRecoil-v48-Windows
+          path: windows-artifact
+      - name: Collect release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find android-artifact -type f -name '*.apk' -exec cp {} dist/ \;
+          find windows-artifact -type f -name '*.exe' -exec cp {} dist/ \;
+          ls -lh dist
+      - name: Publish GitHub release v48
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -maxdepth 1 -name '*.apk' -print -quit)"
+          test -f dist/DeadRecoil-Setup-0.43.0.exe
+          test "$(gh api repos/$GITHUB_REPOSITORY/commits/main --jq .sha)" = "$GITHUB_SHA" || {
+            echo "Main changed during validation; rebuild the new HEAD before publishing."
+            exit 1
+          }
+          if gh release view v48 >/dev/null 2>&1; then
+            echo "Release v48 already exists; refusing to replace assets or move its tag."
+            exit 1
+          fi
+          gh release create v48 dist/*.apk dist/DeadRecoil-Setup-0.43.0.exe \
+            --target "$GITHUB_SHA" --title "Dead Recoil 0.43.0" --notes-file release/v48-notes.md --latest
+      - name: Verify release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view v48 --json tagName,name,isDraft,isPrerelease,assets
