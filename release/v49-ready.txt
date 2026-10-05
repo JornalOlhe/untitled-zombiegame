@@ -1,1 +1,2 @@
 Dead Recoil v49 / 0.44.0 ready for gated publication after wallet settlement regression, full gameplay QA, Android boot smoke, and Windows install smoke.
+Retry after fixing the Windows validation check to require Android versionName 0.44.0.
