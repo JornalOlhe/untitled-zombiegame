@@ -1,1 +1,1 @@
-Apply v49 authoritative final-wallet hotfix and prepare 0.44.0. Retry with patch script.
+Apply v49 authoritative final-wallet hotfix and prepare 0.44.0. Retry after workflow permission fix.
