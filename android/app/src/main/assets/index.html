@@ -3161,7 +3161,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.42.0";
+        const GAME_VERSION = "0.43.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -23071,8 +23071,8 @@ body.netgame #revivetouch{display:flex}
             const skin = s.skin,
               shirt = skin; // base survivor is shirtless; class/cosmetic outerwear is layered separately
             // One shared block rig for the showroom, local player and remote players.
-            // Reference-sheet survivor v48: shirtless block body, shaggy black fringe, dark
-            // multi-pocket cargo pants, segmented belt/buckles and black high-top sneakers
+            // Reference-sheet survivor v48: shirtless block body, shaggy black fringe, dark multi-pocket cargo pants,
+            // segmented belt/buckles and black high-top sneakers
             // with pale toe/sole/laces. The class gear is still layered on top of this base.
             TemplateBody.box(chest,[0,.22,0],[.47,.57,.26],"torso");
             TemplateBody.box(hips,[0,.025,0],[.44,.17,.28],"pants");
