@@ -6575,6 +6575,108 @@ body.netgame #revivetouch{display:flex}
         };
 
         // World detailing and atmospheric particles, with bounded draw calls.
+        // Volumetric-looking fire: crossed noise-shader flame cards (no texture), rising embers,
+        // soft smoke puffs and a multi-frequency light flicker. Materials are shared per kind, so
+        // any number of fires costs one shader program; each fire is ~4 draw calls.
+        const FireFX = {
+          mat: null, smokeMat: null, emberMat: null, list: [],
+          materials() {
+            if (this.mat) return;
+            this.mat = new THREE.ShaderMaterial({
+              uniforms: { uTime: { value: 0 } },
+              transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+              vertexShader: `varying vec2 vUv; varying float vSeed; attribute float seed;
+                void main(){ vUv=uv; vSeed=seed; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+              fragmentShader: `uniform float uTime; varying vec2 vUv; varying float vSeed;
+                float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+                float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+                  return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+                float fbm(vec2 p){ float v=0.,a=.55; for(int k=0;k<4;k++){ v+=a*n(p); p*=2.1; a*=.5; } return v; }
+                void main(){
+                  vec2 uv=vUv; float t=uTime*1.6+vSeed*7.;
+                  float x=(uv.x-.5)*2.;
+                  // turbulence scrolls upward and sways the tongue sideways
+                  float q=fbm(vec2(uv.x*3.+vSeed*3., uv.y*2.6-t));
+                  x+= (q-.5)*.9*uv.y + sin(t*1.3+uv.y*4.)*.06*uv.y;
+                  float body=1.-smoothstep(.0,1.,abs(x)/(1.05-uv.y*.95));
+                  float tongues=fbm(vec2(uv.x*5.+vSeed, uv.y*4.-t*1.4));
+                  float a=body*smoothstep(1.,.25,uv.y+ (tongues-.5)*.55)*smoothstep(0.,.08,uv.y);
+                  a=clamp(a*1.7,0.,1.);
+                  vec3 c=mix(vec3(.75,.12,.02),vec3(1.,.55,.12),smoothstep(.05,.45,a));
+                  c=mix(c,vec3(1.,.93,.7),smoothstep(.6,.95,a)*(1.-uv.y));
+                  gl_FragColor=vec4(c*a*1.35,a);
+                }`,
+            });
+            const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+            const cx = cv.getContext("2d"), gr = cx.createRadialGradient(32, 32, 2, 32, 32, 31);
+            gr.addColorStop(0, "rgba(255,255,255,.85)"); gr.addColorStop(0.5, "rgba(255,255,255,.35)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+            cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+            const puff = new THREE.CanvasTexture(cv);
+            this.smokeMat = new THREE.SpriteMaterial({ map: puff, color: 0x2a2624, transparent: true, depthWrite: false, opacity: 0.4 });
+            this.emberMat = new THREE.PointsMaterial({ map: puff, color: 0xffa040, size: 0.07, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+          },
+          // size: flame height in metres; light: optional PointLight it drives.
+          create(parent, x, y, z, size = 1.4, light = null) {
+            this.materials();
+            const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g);
+            const w = size * 0.74, seed = Math.random();
+            const geo = new THREE.PlaneGeometry(w, size, 1, 1); geo.translate(0, size / 2, 0);
+            for (let i = 0; i < 3; i++) {
+              const gg = geo.clone();
+              gg.setAttribute("seed", new THREE.Float32BufferAttribute(new Array(4).fill(seed + i * 0.31), 1));
+              const m = new THREE.Mesh(gg, this.mat); m.rotation.y = (i * Math.PI) / 3; m.renderOrder = 3; m.frustumCulled = true;
+              m.scale.setScalar(i ? 0.78 : 1);
+              g.add(m);
+            }
+            const E = 22, pos = new Float32Array(E * 3), ember = [];
+            for (let i = 0; i < E; i++) ember.push({ life: Math.random(), vx: 0, vz: 0, sp: 0 });
+            const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+            const pts = new THREE.Points(pg, this.emberMat); pts.frustumCulled = false; g.add(pts);
+            const smoke = [];
+            for (let i = 0; i < 5; i++) { const s = new THREE.Sprite(this.smokeMat.clone()); s.userData.disposableMaterial = true; g.add(s); smoke.push({ s, life: i / 5 }); }
+            if (size >= 1.2 && size < 2) {
+              const bed = new THREE.Mesh(new THREE.CircleGeometry(size * 0.38, 12), new THREE.MeshBasicMaterial({ color: 0xff5a14, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+              bed.rotation.x = -Math.PI / 2; bed.position.y = 0.03; bed.userData.disposableMaterial = true; g.add(bed);
+            }
+            const fx = { g, size, ember, pos, pg, smoke, light, base: light ? light.intensity : 0, seed };
+            this.list.push(fx);
+            return fx;
+          },
+          step(fx, dt, t) {
+            const S = fx.size;
+            for (let i = 0; i < fx.ember.length; i++) {
+              const e = fx.ember[i];
+              e.life += dt * (0.45 + e.sp);
+              if (e.life >= 1) { e.life = 0; e.sp = Math.random() * 0.5; e.vx = (Math.random() - 0.5) * 0.5; e.vz = (Math.random() - 0.5) * 0.5; e.x = (Math.random() - 0.5) * S * 0.3; e.z = (Math.random() - 0.5) * S * 0.3; }
+              const k = e.life;
+              fx.pos[i * 3] = (e.x || 0) + e.vx * k * S + Math.sin(t * 3 + i) * 0.08 * k;
+              fx.pos[i * 3 + 1] = S * (0.3 + k * 1.9);
+              fx.pos[i * 3 + 2] = (e.z || 0) + e.vz * k * S + Math.cos(t * 2.6 + i) * 0.08 * k;
+            }
+            fx.pg.attributes.position.needsUpdate = true;
+            for (const p of fx.smoke) {
+              p.life += dt * 0.16; if (p.life > 1) p.life -= 1;
+              const k = p.life, sc = S * (0.5 + k * 1.6);
+              p.s.position.set(Math.sin(t * 0.4 + p.life * 6) * 0.25 * k + (WindManager?.strength || 0) * k * 0.8, S * (0.8 + k * 2.6), 0);
+              p.s.scale.set(sc, sc, 1);
+              p.s.material.opacity = 0.38 * Math.sin(Math.PI * Math.min(1, k * 1.2));
+            }
+            if (fx.light) {
+              const f = 0.78 + 0.12 * Math.sin(t * 9.1 + fx.seed * 9) + 0.08 * Math.sin(t * 23.7 + fx.seed * 3) + 0.06 * Math.sin(t * 4.3);
+              fx.light.intensity = fx.base * f;
+              fx.light.position.y = fx.g.position.y + S * 0.55 + 0.05 * Math.sin(t * 7);
+            }
+          },
+          update(dt) {
+            if (!this.mat) return;
+            this.mat.uniforms.uTime.value = menuTime;
+            for (let i = this.list.length - 1; i >= 0; i--) {
+              const fx = this.list[i];
+              if (!fx.g.parent) { this.list.splice(i, 1); continue; }
+              this.step(fx, dt, menuTime);
+            }
+          },
+        };
         // Map point lights rendered through a fixed pool sized by graphics level: every map lamp stays a
         // source (flicker/alarm code keeps driving it), but only the N most relevant to the camera are
         // real lights. Fixed count = no shader recompiles; swaps fade out/in far from the player.
@@ -6735,23 +6837,10 @@ body.netgame #revivetouch{display:flex}
                   const ring = A.ring(g, [x, y, z], 0.33, 0x77816d);
                   ring.rotation.x = Math.PI / 2;
                 }
-                const flame = new THREE.Sprite(
-                  new THREE.SpriteMaterial({
-                    map: A.texture("glow"),
-                    color: 0xff8c35,
-                    transparent: true,
-                    blending: THREE.AdditiveBlending,
-                    depthWrite: false,
-                  }),
-                );
-                flame.position.set(x, 1.2, z);
-                flame.scale.set(0.8, 1.8, 1);
-                flame.userData.disposableMaterial = true;
-                g.add(flame);
                 const light = new THREE.PointLight(0xff8a38, 1.4, 13, 2);
                 light.position.set(x, 1.3, z);
                 g.add(light);
-                this.decor.push({ type: "fire", light, flame });
+                this.decor.push({ type: "fire", light, fx: FireFX.create(g, x, 0.98, z, 1.1, light) });
               }
             }
             if (!MapDesigns[map] && map === 1) {
@@ -6821,18 +6910,12 @@ body.netgame #revivetouch{display:flex}
                   A.tube(g, [x, y0 + 0.5, z], 0.32, 1, 0x45554d, "steel", "y");
                   WorldProps.collider(x, z, 0.7, 0.7, y0 + 1, y0);
                 }
-                const flame = new THREE.Sprite(
-                  new THREE.SpriteMaterial({ map: A.texture("glow"), color: 0xff8c35, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
-                );
                 const camp = big === "camp";
-                flame.position.set(x, y0 + (camp ? 0.6 : big ? 1.4 : 1.2), z);
-                flame.scale.set(camp ? 1.2 : big ? 2.4 : 0.8, camp ? 1.6 : big ? 3.2 : 1.8, 1);
-                flame.userData.disposableMaterial = true;
-                g.add(flame);
                 const light = new THREE.PointLight(0xff8a38, camp ? 1.8 : big ? 2.4 : 1.4, big ? 18 : 13, 2);
                 light.position.set(x, y0 + (camp ? 0.9 : 1.3), z);
                 g.add(light);
-                this.decor.push({ type: "fire", light, flame });
+                const fx = FireFX.create(g, x, y0 + (camp ? 0.12 : big ? 0.55 : 0.98), z, camp ? 1.25 : big ? 2.6 : 1.1, light);
+                this.decor.push({ type: "fire", light, fx });
               }
               for (const [x, z] of MapManager.beacons) {
                 const rig = A.pivot(g, x, 1.72, z);
@@ -6853,6 +6936,7 @@ body.netgame #revivetouch{display:flex}
               if (MapManager.panels?.length) this.buildPanels(g, MapManager.panels);
               if (MapManager.puddles?.length) this.buildPuddles(g, MapManager.puddles);
               if (MapManager.decals?.length) this.buildDecals(g, MapManager.decals);
+              if (MapManager.headlights?.length) this.buildHeadlights(g, MapManager.headlights);
               if (MapManager.capsule) this.buildCapsule(g, MapManager.capsule);
               if (MapManager.landscape) this.buildLandscape(g, MapManager.landscape);
             }
@@ -7255,6 +7339,32 @@ body.netgame #revivetouch{display:flex}
             this._blobs.set(key, t);
             return t;
           },
+          // Headlights of abandoned cars: hot lens glow, a soft volumetric beam (additive cone with
+          // a view-angle + length fade shader) and an elongated light pool on the road. No real
+          // lights, so any number of them is cheap; a slow battery flicker sells "abandoned".
+          buildHeadlights(g, list) {
+            const beamMat = (this._beamMat ||= new THREE.ShaderMaterial({
+              uniforms: { uCol: { value: new THREE.Color(0xfff1d6) }, uA: { value: 0.34 } },
+              transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+              vertexShader: `varying float vL; varying vec3 vN; varying vec3 vV;
+                void main(){ vL=uv.y; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+              fragmentShader: `uniform vec3 uCol; uniform float uA; varying float vL; varying vec3 vN; varying vec3 vV;
+                void main(){ float edge=pow(abs(dot(vN,vV)),1.6); float a=uA*edge*pow(vL,1.8); gl_FragColor=vec4(uCol*a,a); }`,
+            }));
+            const poolTex = (this._poolTex ||= (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 1, 32, 32, 31); gr.addColorStop(0, "rgba(255,240,210,.9)"); gr.addColorStop(0.45, "rgba(255,230,190,.35)"); gr.addColorStop(1, "rgba(255,230,190,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })());
+            const beamGeo = (this._beamGeo ||= (() => { const c = new THREE.ConeGeometry(1.15, 7, 14, 1, true); c.translate(0, -3.5, 0); c.rotateX(-Math.PI / 2); return c; })());
+            for (const [x, z, ry, police] of list) {
+              const car = new THREE.Group(); car.position.set(x, 0, z); car.rotation.y = ry + Math.PI; /* GLB car fronts face local +z */ g.add(car);
+              const lens = new THREE.MeshBasicMaterial({ color: 0xfff6e2, toneMapped: false }), flick = { lens, beams: [], pool: null, t: Math.random() * 9 };
+              for (const ox of [-0.62, 0.62]) {
+                const l = new THREE.Mesh(new THREE.CircleGeometry(0.11, 10), lens); l.position.set(ox, 0.72, -2.2); l.rotation.y = Math.PI; car.add(l);
+                const b = new THREE.Mesh(beamGeo, beamMat); b.position.set(ox, 0.72, -2.2); b.rotation.x = -0.09; b.renderOrder = 2; car.add(b); flick.beams.push(b);
+              }
+              const pool = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 7.5), new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
+              pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.03, -6.4); pool.userData.disposableMaterial = true; car.add(pool); flick.pool = pool;
+              this.decor.push({ type: "headlight", ...flick });
+            }
+          },
           buildDecals(g, list) {
             const byKind = new Map();
             list.forEach((d, i) => { const k = d[0] + (i % 3); if (!byKind.has(k)) byKind.set(k, []); byKind.get(k).push(d); });
@@ -7398,6 +7508,15 @@ body.netgame #revivetouch{display:flex}
                 for (const [m, i, c] of o.inst) { m.setColorAt(i, (this._tc ||= new THREE.Color()).copy(c).multiplyScalar(k)); m.instanceColor.needsUpdate = true; }
                 continue;
               }
+              if (o.type === "headlight") {
+                // weak battery: steady with an occasional brown-out dip
+                o.t += dt;
+                const k = 0.82 + 0.18 * Math.sin(o.t * 0.7) * Math.sin(o.t * 1.9) - (Math.sin(o.t * 0.31) > 0.985 ? 0.6 : 0);
+                o.pool.material.opacity = 0.6 * k;
+                for (const b of o.beams) b.visible = k > 0.4;
+                o.lens.color.setScalar(Math.max(0.3, k));
+                continue;
+              }
               if (o.type === "alarm") {
                 o.light.intensity = o.light.userData.base * (0.35 + 0.65 * Math.max(0, Math.sin(menuTime * 3.2)));
                 continue;
@@ -7420,9 +7539,8 @@ body.netgame #revivetouch{display:flex}
                 o.light.color.set(
                   Math.sin(menuTime * 2.1) > 0 ? 0xe64632 : 0x377ec2,
                 );
-              } else {
+              } else if (!o.fx) {
                 o.light.intensity = 1.2 + Math.sin(menuTime * 9) * 0.2;
-                o.flame.scale.y = 1.5 + Math.sin(menuTime * 11) * 0.2;
               }
             }
             for (const figure of MapManager.group.children)
@@ -9124,6 +9242,9 @@ body.netgame #revivetouch{display:flex}
           car(x, z, ry, style = "carRed", opts = {}) {
             const model = style === "carBurnt" ? "car_burnt" : style === "policeBW" ? "car_police" : "car_sedan";
             const paint = { carRed: 0x9b2b25, carBlue: 0x2d4f86, carGray: 0x7c8186, carWhite: 0xd9dcdc, carGreen: 0x3d5f3b }[style];
+            // Roughly a third of the intact abandoned cars still have a dying battery: headlights on.
+            if (style !== "carBurnt" && !opts.tilt && (Math.abs(Math.sin(x * 12.9898 + z * 78.233)) * 43758.5453) % 1 < 0.55)
+              (MapManager.headlights ||= []).push([x, z, ry, style === "policeBW"]);
             if (PropModels.place(model, x, 0, z, ry, 1, { tilt: opts.tilt || 0, color: paint })) {
               this.rotCol(x, z, ry, 1.9, 4.3, 1.45);
               return;
@@ -9895,6 +10016,8 @@ body.netgame #revivetouch{display:flex}
             const a = (i / 9) * Math.PI * 2;
             K.hard("stone", [1 + Math.cos(a) * 0.75, 0.12, 3 + Math.sin(a) * 0.75], [0.35, 0.24, 0.3], [0, a, 0]);
           }
+          // Firewood teepee inside the ring (rendered as round charred logs).
+          for (let i = 0; i < 4; i++) K.soft("charcoal", [1 + Math.cos(i * 1.57) * 0.2, 0.2, 3 + Math.sin(i * 1.57) * 0.2], [0.13, 0.13, 0.85], [0.55, i * 1.57 + 0.4, 0]);
           K.col(1, 3, 1.6, 1.6, 0.3);
           M.fires.push([1, 3, "camp"]);
           for (const [x, z, ry] of [[-1.6, 3.2, 1.4], [3.7, 3.4, 1.7], [1.2, 5.8, 0.1]]) {
@@ -10767,6 +10890,7 @@ body.netgame #revivetouch{display:flex}
             this.panels = [];
             this.puddles = [];
             this.decals = [];
+            this.headlights = [];
             WorldProps.begin();
             this.spawns = this.spawnSets[index].map((p) => p.slice());
             this.spawnCursor = 0;
@@ -16744,6 +16868,11 @@ body.netgame #revivetouch{display:flex}
                 }
                 dots([46, 30, 20], 14, 10);
                 break;
+              case "charcoal":
+                fill([34, 26, 22], 14);
+                dots([12, 10, 9], 30, 6);
+                dots([190, 70, 20], 10, 30);
+                break;
               case "leaf":
               case "leafDark":
               case "pine": {
@@ -17134,6 +17263,39 @@ body.netgame #revivetouch{display:flex}
             if (!batch.has(kind)) batch.set(kind, []);
             batch.get(kind).push({ pos, size, rot, density });
           },
+          // Natural materials should not read as cubes: long bark boxes become round logs/trunks
+          // (axis = longest side) and small stone blocks become irregular faceted rocks. The box
+          // footprint is kept, so colliders authored for the box still match.
+          organic(kind, w, h, d, density = 1) {
+            const dims = [w, h, d], L = Math.max(w, h, d), i = dims.indexOf(L), o = dims.filter((_, k) => k !== i);
+            let g = null;
+            if ((kind === "bark" || kind === "log" || kind === "trunk" || kind === "charcoal") && L > 2.1 * Math.max(...o) && Math.max(...o) < 1.4 * Math.min(...o) + 0.05) {
+              const r = (o[0] + o[1]) / 4;
+              g = new THREE.CylinderGeometry(r * 0.94, r, L, 10, 1);
+              const uvA = g.attributes.uv, circ = Math.PI * 2 * r * (density || 1);
+              for (let k = 0; k < uvA.count; k++) uvA.setXY(k, uvA.getX(k) * circ, uvA.getY(k) * L * (density || 1));
+              if (i === 0) g.rotateZ(Math.PI / 2); else if (i === 2) g.rotateX(Math.PI / 2);
+              // irregular bark: a little radial wobble per vertex ring
+              const P = g.attributes.position;
+              for (let k = 0; k < P.count; k++) { const sx = 1 + Math.sin(k * 12.9898) * 0.04; if (i !== 0) { P.setX(k, P.getX(k) * sx); } if (i !== 2) P.setZ(k, P.getZ(k) * sx); }
+              g.computeVertexNormals();
+            } else if ((kind === "stone" || kind === "rock" || kind === "rubble") && L < 0.95 && Math.min(...dims) > 0.08) {
+              g = new THREE.DodecahedronGeometry(0.5, 0);
+              const P = g.attributes.position, seed = w * 31.7 + h * 17.3 + d * 7.1;
+              for (let k = 0; k < P.count; k++) {
+                const x = P.getX(k), y = P.getY(k), z = P.getZ(k), n = 1 + 0.13 * Math.sin(x * 9.1 + y * 5.3 + z * 7.7 + seed);
+                P.setXYZ(k, x * n * w * 1.08, (y < -0.2 ? -0.42 : y * n) * h * 1.05, z * n * d * 1.08);
+              }
+              const uvA = g.attributes.uv;
+              for (let k = 0; k < uvA.count; k++) uvA.setXY(k, P.getX(k) * 1.6 + P.getZ(k) * 0.7, P.getY(k) * 1.6);
+              g = g.toNonIndexed ? g.toNonIndexed() : g;
+              g.computeVertexNormals();
+            }
+            if (!g) return null;
+            if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
+            g.userData.organic = true;
+            return g;
+          },
           // Merge every queued box of a material into one mesh: hundreds of props, a handful of draws.
           build(batch, parent) {
             const meshes = [],
@@ -17148,13 +17310,15 @@ body.netgame #revivetouch{display:flex}
                 idx = [];
               let offset = 0;
               for (const b of boxes) {
-                const [w, h, d] = b.size,
-                  g = new THREE.BoxGeometry(w, h, d),
-                  faceDims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]],
-                  uvA = g.attributes.uv;
-                for (let i = 0; i < uvA.count; i++) {
-                  const f = Math.floor(i / 4);
-                  if (b.density) uvA.setXY(i, uvA.getX(i) * faceDims[f][0] * b.density, uvA.getY(i) * faceDims[f][1] * b.density);
+                const [w, h, d] = b.size;
+                let g = this.organic(kind, w, h, d, b.density);
+                const uvA = (g ||= new THREE.BoxGeometry(w, h, d)).attributes.uv;
+                if (!g.userData.organic) {
+                  const faceDims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+                  for (let i = 0; i < uvA.count; i++) {
+                    const f = Math.floor(i / 4);
+                    if (b.density) uvA.setXY(i, uvA.getX(i) * faceDims[f][0] * b.density, uvA.getY(i) * faceDims[f][1] * b.density);
+                  }
                 }
                 // Yaw first, then pitch/roll in the object's own frame (tilted roofs, wrecks, panels).
                 const [rx, ry, rz] = b.rot || [0, 0, 0];
@@ -27346,6 +27510,7 @@ body.netgame #revivetouch{display:flex}
             BloodFX.update(dt);
             WorldArt.update(dt);
             LightPool.update(dt);
+            FireFX.update(dt);
             if (
               selectedMap === 4 &&
               state === GameState.PLAYING &&
@@ -27433,6 +27598,7 @@ body.netgame #revivetouch{display:flex}
             SpinStage3D,
             Perf,
             LightPool,
+            FireFX,
             Nature,
             WindManager,
             CameraRig,
