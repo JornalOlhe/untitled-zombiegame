@@ -9047,11 +9047,32 @@ body.netgame #revivetouch{display:flex}
           rotCol(x, z, ry, w, d, top, base = 0) {
             WorldProps.rotCollider(x, z, w, d, ry, top, base);
           },
-          // A building volume with a photo-textured shell (tileUV keeps bricks their real size).
+          // A building volume with a photo-textured shell plus real facade depth. The structural
+          // collider stays the original clean box; trims are visual-only, so detail never creates
+          // invisible corners or extra movement collision.
           building(M, x, z, w, d, h, surface, tint, tile = 3.2) {
             const m = M.solid(x, h / 2, z, w, h, d, tint);
             m.material = VisualArt.surface(surface, tint, "concrete");
             VisualArt.tileUV(m, tile);
+            const trim = surface === "red_brick_03" ? "concrete" : "curb",
+              lip = 0.07,
+              bandH = Math.min(0.32, h * 0.055),
+              capY = Math.max(0.5, h - bandH * 0.7);
+            // Ground plinth and top cornice break the old single-box silhouette.
+            for (const [pz, yy] of [[z - d / 2 - lip, 0.34], [z + d / 2 + lip, 0.34], [z - d / 2 - lip, capY], [z + d / 2 + lip, capY]])
+              this.soft(trim, [x, yy, pz], [w + 0.18, bandH, 0.14], null, 1.4);
+            for (const [px, yy] of [[x - w / 2 - lip, 0.34], [x + w / 2 + lip, 0.34], [x - w / 2 - lip, capY], [x + w / 2 + lip, capY]])
+              this.soft(trim, [px, yy, z], [0.14, bandH, d + 0.18], null, 1.4);
+            // Tall facades get shallow corner pilasters and floor bands for stronger parallax.
+            if (h >= 8) {
+              const ph = h - 1.2;
+              for (const sx of [-1, 1]) for (const sz of [-1, 1])
+                this.soft(trim, [x + sx * (w / 2 + 0.055), 0.6 + ph / 2, z + sz * (d / 2 + 0.055)], [0.13, ph, 0.13], null, 1.3);
+              for (let y = 3.05; y < h - 1.15; y += 3.2) {
+                this.soft(trim, [x, y, z - d / 2 - 0.065], [w + 0.1, 0.1, 0.1], null, 1.5);
+                this.soft(trim, [x, y, z + d / 2 + 0.065], [w + 0.1, 0.1, 0.1], null, 1.5);
+              }
+            }
             return m;
           },
           // Window grid on the four faces; `skip` lists faces to leave blank ("n","s","e","w").
@@ -17169,9 +17190,13 @@ body.netgame #revivetouch{display:flex}
         const WorldProps = {
           soft: null,
           hard: null,
+          rockQueue: null,
+          rockGeometry: null,
+          rockMaterials: null,
           begin() {
             this.soft = PropKit.batch();
             this.hard = PropKit.batch();
+            this.rockQueue = [];
           },
           collider(x, z, w, d, top, base = 0) {
             MapManager.obstacles.push({ x, z, w: w / 2, d: d / 2, h: Math.max(0, top - base), top, base });
@@ -17258,24 +17283,96 @@ body.netgame #revivetouch{display:flex}
             pool.position.set(x + side * 1.0, 0.06, z);
             MapManager.group.add(pool);
           },
-          // Rock clusters: low ones can simply be walked onto, taller ones need a jump.
+          // Rocks never fall back to cube stacks. They are queued immediately and flushed as a
+          // handful of faceted InstancedMeshes, so the shape is stable even while Blender GLBs are
+          // still decoding on slow Android WebViews.
           rock(x, z, size = 1, top = 0.45, kind = "stone") {
-            const tint = { stone: 0x8e8f8a, mossy: 0x6d7b58, snow: 0xe6eef2, ice: 0xb8d3e3, concrete: 0x8c8b86 }[kind] ?? 0x8e8f8a;
-            if (PropModels.place(Math.random() < 0.5 ? "rock_a" : "rock_b", x, -0.05, z, rand(0, 6.28), 1, { color: tint, scale: [size * 0.62, top / 0.8, size * 0.62] })) {
-              this.collider(x, z, size * 0.95, size * 0.95, top);
-              return;
-            }
-            const n = 2 + ((Math.random() * 3) | 0);
-            PropKit.add(this.hard, kind, [x, top / 2, z], [size, top, size * rand(0.8, 1.2)], [0, rand(0, 1.5), 0]);
-            for (let i = 0; i < n; i++) {
-              const s = size * rand(0.35, 0.6),
-                h = top * rand(0.35, 0.75);
-              PropKit.add(this.hard, kind, [x + rand(-0.6, 0.6) * size, h / 2, z + rand(-0.6, 0.6) * size], [s, h, s], [0, rand(0, 1.5), 0]);
-            }
+            this.rockQueue ||= [];
+            this.rockQueue.push({
+              x, z, size, top, kind,
+              ry: rand(0, Math.PI * 2),
+              tilt: rand(-0.16, 0.16),
+              aspect: rand(0.82, 1.18),
+              variant: Math.random() < 0.5 ? 0 : 1,
+            });
             this.collider(x, z, size * 0.95, size * 0.95, top);
+          },
+          flushRocks(parent) {
+            if (!this.rockQueue?.length) return [];
+            // Two deliberately asymmetric low-poly shapes keep boulders organic without adding
+            // per-rock draw calls. Geometry is shared across every map and material is cached.
+            if (!this.rockGeometry) {
+              this.rockGeometry = [0, 1].map((variant) => {
+                const g = new THREE.IcosahedronGeometry(1, 1).toNonIndexed(),
+                  p = g.attributes.position;
+                for (let i = 0; i < p.count; i++) {
+                  const x = p.getX(i), y = p.getY(i), z = p.getZ(i),
+                    n = Math.sin(x * 7.13 + y * 11.7 + z * 5.9 + variant * 2.4) * 0.12 +
+                        Math.sin(x * 3.1 - z * 8.2 + variant) * 0.06;
+                  p.setXYZ(i, x * (1 + n), y * (1 + n * 0.55), z * (1 + n * 0.9));
+                }
+                p.needsUpdate = true;
+                g.computeVertexNormals();
+                g.computeBoundingSphere();
+                return g;
+              });
+            }
+            this.rockMaterials ||= new Map();
+            const groups = new Map();
+            for (const r of this.rockQueue) {
+              const key = r.kind + ":" + r.variant;
+              if (!groups.has(key)) groups.set(key, []);
+              groups.get(key).push(r);
+            }
+            const out = [],
+              matrix = new THREE.Matrix4(),
+              quat = new THREE.Quaternion(),
+              scale = new V(),
+              pos = new V();
+            for (const [key, list] of groups) {
+              const [kind, variantText] = key.split(":"),
+                variant = Number(variantText);
+              if (!this.rockMaterials.has(kind)) {
+                const mat = PropKit.mat(kind).clone();
+                mat.flatShading = true;
+                mat.roughness = kind === "ice" ? 0.38 : 0.96;
+                mat.metalness = 0;
+                mat.needsUpdate = true;
+                this.rockMaterials.set(kind, mat);
+              }
+              const mesh = new THREE.InstancedMesh(this.rockGeometry[variant], this.rockMaterials.get(kind), list.length);
+              mesh.castShadow = mesh.receiveShadow = true;
+              mesh.userData.propBatch = true;
+              for (let i = 0; i < list.length; i++) {
+                const r = list[i],
+                  sx = r.size * 0.55,
+                  sy = Math.max(0.12, r.top * 0.5),
+                  sz = r.size * 0.55 * r.aspect;
+                pos.set(r.x, r.top * 0.5, r.z);
+                quat.setFromEuler(new THREE.Euler(r.tilt, r.ry, r.tilt * 0.35, "YXZ"));
+                scale.set(sx, sy, sz);
+                matrix.compose(pos, quat, scale);
+                mesh.setMatrixAt(i, matrix);
+              }
+              mesh.instanceMatrix.needsUpdate = true;
+              mesh.computeBoundingSphere?.();
+              parent.add(mesh);
+              out.push(mesh);
+            }
+            this.rockQueue.length = 0;
+            return out;
           },
           crate(x, z, s = 0.9, y = 0, kind = "crate") {
             PropKit.add(this.hard, kind, [x, y + s / 2, z], [s, s, s], null, 1 / s);
+            // Real reinforcement strips make supply crates read as objects instead of textured cubes.
+            const strap = kind === "metal" ? "curb" : "bark",
+              face = s / 2 + 0.012;
+            for (const yy of [y + s * 0.28, y + s * 0.72]) {
+              PropKit.add(this.soft, strap, [x, yy, z - face], [s * 0.82, s * 0.075, 0.035], null, 2);
+              PropKit.add(this.soft, strap, [x, yy, z + face], [s * 0.82, s * 0.075, 0.035], null, 2);
+            }
+            for (const xx of [x - face, x + face])
+              PropKit.add(this.soft, strap, [xx, y + s * 0.5, z], [0.035, s * 0.82, s * 0.075], null, 2);
             this.collider(x, z, s, s, y + s);
           },
           // A staircase of crates up to a height so players can climb onto something taller.
@@ -17337,6 +17434,9 @@ body.netgame #revivetouch{display:flex}
               this.scatter(5, (x, z) => this.rock(x, z, rand(1.2, 1.8), rand(0.8, 1.2), "ice"), 1.5);
             }
             PropModels.flush(MapManager.group);
+            // Faceted rocks are independent of async GLB load timing and are valid bullet surfaces.
+            const rockMeshes = this.flushRocks(MapManager.group);
+            MapManager.walls.push(...rockMeshes);
             // Physical dressing must have a movement collider as well as a bullet mesh.
             // Existing authored colliders are retained; fill only uncovered hard pieces.
             const bounds=new THREE.Box3(),matrix=new THREE.Matrix4(),quat=new THREE.Quaternion();
@@ -17359,7 +17459,7 @@ body.netgame #revivetouch{display:flex}
             const hard = PropKit.build(this.hard, MapManager.group);
             MapManager.walls.push(...hard);
             PropKit.build(this.soft, MapManager.group);
-            this.soft = this.hard = null;
+            this.soft = this.hard = this.rockQueue = null;
             PhysicsProps.populate(index);
             Medkits.clear();
           },
