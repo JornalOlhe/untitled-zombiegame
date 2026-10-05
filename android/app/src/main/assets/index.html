@@ -6838,6 +6838,7 @@ body.netgame #revivetouch{display:flex}
               }
               if (MapManager.panels?.length) this.buildPanels(g, MapManager.panels);
               if (MapManager.puddles?.length) this.buildPuddles(g, MapManager.puddles);
+              if (MapManager.decals?.length) this.buildDecals(g, MapManager.decals);
               if (MapManager.capsule) this.buildCapsule(g, MapManager.capsule);
               if (MapManager.landscape) this.buildLandscape(g, MapManager.landscape);
             }
@@ -7092,6 +7093,54 @@ body.netgame #revivetouch{display:flex}
               quad.rotation.x = Math.PI / 2; quad.position.set(p.x, y0 - (p.drop ?? 0.07), p.z); quad.scale.set(p.w, p.d, 1);
               g.add(quad);
               this.decor.push({ type: "panelFlicker", quad, base: new THREE.Color(p.color ?? 0xfff2d8), inst: p.inst.map(([k, i]) => [k === "pool" ? P : Wm, i, (k === "pool" ? pools : washes)[i].c.clone()]), next: Math.random() * 3, on: true, burst: 0, hum: Math.random() * 6 });
+            }
+          },
+          // Ground decals: each kind gets 3 procedural blob masks (noisy outline, inner variation,
+          // feathered edge) and is drawn as 3 instanced meshes — patches never show box edges.
+          DECALS: {
+            mud: { col: 0x2b2117, rough: 0.95, a: 0.9 }, mossy: { col: 0x34421f, rough: 0.95, a: 0.85 },
+            dirt: { col: 0x3d3125, rough: 0.97, a: 0.92, long: true }, rut: { col: 0x1d1610, rough: 0.6, a: 0.85, long: true },
+            blood: { col: 0x4a0405, rough: 0.28, a: 0.92, splat: true },
+          },
+          blobTex(seed, kind) {
+            const key = kind + seed;
+            if ((this._blobs ||= new Map()).has(key)) return this._blobs.get(key);
+            const N = 128, c = document.createElement("canvas"); c.width = c.height = N;
+            const x = c.getContext("2d"), img = x.createImageData(N, N), D = this.DECALS[kind] || {};
+            let sd = seed * 9301 + 49297; const rnd = () => ((sd = (sd * 9301 + 49297) % 233280) / 233280);
+            const lobes = Array.from({ length: 7 }, () => [rnd() * 6.28, 0.06 + rnd() * 0.12, 1 + Math.floor(rnd() * 4)]);
+            // smooth value noise (seeded lattice, smoothstep) for the inner mottling
+            const G = Array.from({ length: 24 * 24 }, () => rnd());
+            const vn = (fx, fy) => { const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty), g = (a, b) => G[((b % 24) + 24) % 24 * 24 + ((a % 24) + 24) % 24];
+              return (g(x0, y0) * (1 - sx) + g(x0 + 1, y0) * sx) * (1 - sy) + (g(x0, y0 + 1) * (1 - sx) + g(x0 + 1, y0 + 1) * sx) * sy; };
+            const blots = D.splat ? Array.from({ length: 9 }, () => [rnd() * 2 - 1, rnd() * 2 - 1, 0.04 + rnd() * 0.08]) : [];
+            for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+              const u = (i / (N - 1)) * 2 - 1, v = (j / (N - 1)) * 2 - 1, a = Math.atan2(v, u), r = Math.hypot(u, D.long ? v * 0.55 : v);
+              let edge = 0.72; for (const [ph, amp, f] of lobes) edge += Math.sin(a * f + ph) * amp * 0.5;
+              let m = Math.min(1, Math.max(0, (edge - r) / 0.16));
+              for (const [bx, by, br] of blots) m = Math.max(m, Math.min(1, Math.max(0, (br - Math.hypot(u - bx * 0.95, v - by * 0.95)) / 0.03)));
+              const n = 0.62 + 0.38 * vn(i / 18, j / 18) * 0.7 + 0.3 * vn(i / 6, j / 6) * 0.3 + 0.06 * (rnd() - 0.5);
+              const k = (j * N + i) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = Math.round(255 * Math.min(1, n));
+              img.data[k + 3] = Math.round(255 * m * (D.a ?? 0.9));
+            }
+            x.putImageData(img, 0, 0);
+            const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+            this._blobs.set(key, t);
+            return t;
+          },
+          buildDecals(g, list) {
+            const byKind = new Map();
+            list.forEach((d, i) => { const k = d[0] + (i % 3); if (!byKind.has(k)) byKind.set(k, []); byKind.get(k).push(d); });
+            const o = new THREE.Object3D();
+            for (const [k, items] of byKind) {
+              const kind = items[0][0], D = this.DECALS[kind] || this.DECALS.mud;
+              const mat = new THREE.MeshStandardMaterial({ color: D.col, map: this.blobTex(+k.slice(-1) + 1, kind), roughness: D.rough, metalness: 0, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+              const m = new THREE.InstancedMesh(VisualArt.geometries.plane, mat, items.length);
+              items.forEach(([, x, y, z, w, d, ry], i) => {
+                o.position.set(x, (MapManager.groundAt?.(x, z, 0.3, 1) ?? 0) + y, z); o.rotation.set(-Math.PI / 2, 0, ry); o.scale.set(w * 1.25, d * 1.25, 1); o.updateMatrix(); m.setMatrixAt(i, o.matrix);
+              });
+              m.instanceMatrix.needsUpdate = true; m.receiveShadow = true; m.renderOrder = 1; m.frustumCulled = false;
+              g.add(m);
             }
           },
           // Chemical spills: irregular glossy puddles (noisy outline), emissive tint, soft glow halo.
@@ -8661,6 +8710,10 @@ body.netgame #revivetouch{display:flex}
           hard(kind, pos, size, rot = null, density = 1) {
             PropKit.add(WorldProps.hard, kind, pos, size, rot, density);
           },
+          // Ground decal: a soft-edged, irregular patch (no hard rectangle edges), instanced per kind.
+          decal(kind, x, z, w, d, ry = 0, y = 0.012) {
+            (MapManager.decals ||= []).push([kind, x, y, z, w, d, ry]);
+          },
           soft(kind, pos, size, rot = null, density = 1) {
             PropKit.add(WorldProps.soft, kind, pos, size, rot, density);
           },
@@ -9286,7 +9339,7 @@ body.netgame #revivetouch{display:flex}
                 K.soft("signRed", [cx, CEIL - 0.7, z1 - 0.2], [3, 0.6, 0.06], null, 0);
               }
               stretcher(cx + 2, cz + 2, 0.4);
-              for (const [x, z] of [[cx - 3, cz + 3], [cx + 1, cz + 4]]) K.soft("blood", [x, 0.012, z], [1.2, 0.01, 0.8], [0, K.r(0, 3), 0], 0);
+              for (const [x, z] of [[cx - 3, cz + 3], [cx + 1, cz + 4]]) K.decal("blood", x, z, 1.2, 0.8, K.r(0, 3));
             } else if (b.type === "exam" || b.type === "surgery") {
               const surgery = b.type === "surgery";
               K.hard("white", [cx, 0.85, cz], [1.0, 0.12, 2.2]);
@@ -9301,7 +9354,7 @@ body.netgame #revivetouch{display:flex}
               cabinet(x0 + 0.4, cz, Math.PI / 2, 1.6);
               cabinet(x1 - 0.4, cz + 2, -Math.PI / 2, 1.6);
               desk(cx + 3, z0 + 1.2, 0);
-              if (surgery) K.soft("blood", [cx + 0.3, 0.012, cz + 1.3], [1.4, 0.01, 1], [0, 0.4, 0], 0);
+              if (surgery) K.decal("blood", cx + 0.3, cz + 1.3, 1.4, 1, 0.4);
             } else if (b.type === "waiting") {
               for (let r = 0; r < 3; r++)
                 for (let i = 0; i < 5; i++) if (K.rnd() < 0.85) chair(x0 + 3 + i * 1.1, z0 + 3 + r * 2.4, 0);
@@ -9335,7 +9388,7 @@ body.netgame #revivetouch{display:flex}
               bed(x0 + 2, z0 + 2, 0.5, true);
               K.hard("plaster", [cx + 2, 1.5, cz + 2], [3, 0.12, 2.2], [0.9, 0.3, 0.2]);
               K.col(cx + 2, cz + 2, 2.4, 2, 1.8);
-              for (const [x, z] of [[cx - 3, cz - 3], [cx + 1, cz + 3.5]]) K.soft("blood", [x, 0.012, z], [1.4, 0.01, 1], [0, K.r(0, 3), 0], 0);
+              for (const [x, z] of [[cx - 3, cz - 3], [cx + 1, cz + 3.5]]) K.decal("blood", x, z, 1.4, 1, K.r(0, 3));
             }
           }
           // Lobby: reception desk + nurse station at the main crossing, benches, signs.
@@ -9361,7 +9414,7 @@ body.netgame #revivetouch{display:flex}
           }
           stretcher(-34, 1.2, Math.PI / 2 + 0.3);
           wheelchair(12, -RING + 0.8, 1);
-          for (const [x, z] of [[-4, 12], [20, -1], [-28, RING], [4, -30], [38, 2]]) K.soft("blood", [x, 0.012, z], [K.r(0.8, 1.6), 0.01, K.r(0.5, 1)], [0, K.r(0, 3), 0], 0);
+          for (const [x, z] of [[-4, 12], [20, -1], [-28, RING], [4, -30], [38, 2]]) K.decal("blood", x, z, K.r(0.8, 1.6), K.r(0.5, 1), K.r(0, 3));
           M.designProps.push(["trash", -20, 1.5], ["trash", 18, -RING + 1], ["cone", 26, -RING + 1.2]);
           // Ceiling lights: cold panels on the corridors; some dead, some flickering, red emergency.
           for (let t = -H + 5; t < H - 3; t += 8) {
@@ -9397,8 +9450,8 @@ body.netgame #revivetouch{display:flex}
           for (let x = -H + 1; x < H - 1; x += 2.4) {
             const z = road(x),
               ry = Math.atan(Math.cos(x * 0.06) * 0.3);
-            K.soft("dirt", [x, 0.015, z], [2.6, 0.02, 5.2], [0, ry, 0], 0.6);
-            for (const s of [-1.1, 1.1]) K.soft("mud", [x, 0.022, z + s], [2.5, 0.01, 0.35], [0, ry, 0], 0.6);
+            K.decal("dirt", x, z, 3.4, 6.2, ry, 0.012);
+            for (const s of [-1.1, 1.1]) K.decal("rut", x, z + s, 4.2, 0.55, ry, 0.016);
           }
           // Terrain: low mounds (terraced, walkable) and small hollows (dark mud patches), leaf litter.
           const mound = (x, z, r, h) => {
@@ -9414,7 +9467,7 @@ body.netgame #revivetouch{display:flex}
             K.col(x, z, r * 1.2, r, Math.min(h, 0.45));
           };
           for (const [x, z, r, h] of [[-30, -12, 4, 0.9], [18, -30, 5, 1.2], [36, 8, 3.5, 0.6], [-14, 34, 4, 0.9], [-40, 16, 3, 0.6], [30, -8, 3, 0.9]]) mound(x, z, r, h);
-          for (let i = 0; i < 22; i++) K.soft(K.pick(["mud", "mossy", "mud"]), [K.r(-H + 4, H - 4), 0.012, K.r(-H + 4, H - 4)], [K.r(1.2, 3), 0.01, K.r(1, 2.4)], [0, K.r(0, 3), 0], 0.8);
+          for (let i = 0; i < 22; i++) K.decal(K.pick(["mud", "mossy", "mud"]), K.r(-H + 4, H - 4), K.r(-H + 4, H - 4), K.r(1.6, 3.4), K.r(1.4, 2.8), K.r(0, 3));
           // Survivors' camp: three cabins around a campfire, logs to sit on, a tent, crates.
           // Small abandoned log cabins: plank walls on a stone footing, a proper A-frame roof with
           // overhang and filled gables, a stone chimney, a porch with posts, a boarded window and a
@@ -9529,7 +9582,7 @@ body.netgame #revivetouch{display:flex}
           WorldProps.tree(cx + 3, cz - 0.6, 1.1, "leafDark");
           M.fires.push([cx, cz, true]);
           K.rubble(cx - 2.6, cz + 0.8, 0.8);
-          for (let i = 0; i < 4; i++) K.soft("blood", [cx - 3 - i * 1.6, 0.013, cz + 1 + i * 0.4], [0.4, 0.01, 0.3], [0, K.r(0, 3), 0], 0);
+          for (let i = 0; i < 4; i++) K.decal("blood", cx - 3 - i * 1.6, cz + 1 + i * 0.4, 0.4, 0.3, K.r(0, 3));
           M.lights.push([cx, cz, 0xff7a30, 1.6, 14]);
           // Fallen logs, rocks and bushes.
           for (const [x, z, len, ry] of [[-22, -26, 4, 0.4], [26, 36, 3.5, 1.9], [-36, 4, 3, 1.2], [8, -38, 4, 2.8], [40, -20, 3, 0.2]]) {
@@ -10150,7 +10203,8 @@ body.netgame #revivetouch{display:flex}
             this.plants = [];
             const gm = this.plantMat(1.0), fm = this.plantMat(0.7);
             this.scatter(this.plants, this.grassGeo(frozen), gm, Math.round((frozen ? 2600 : 9000) * q), test(0.3), frozen ? [0.7, 1.1] : [0.8, 1.5]);
-            this.scatter(this.plants, this.fernGeo(frozen), fm, Math.round((frozen ? 120 : 900) * q), test(0.4), [0.8, 1.6]);
+            // (no ferns in the snowfield: frozen fern fronds read as white birds lying on the snow)
+            if (!frozen) this.scatter(this.plants, this.fernGeo(frozen), fm, Math.round(900 * q), test(0.4), [0.8, 1.6]);
             // leaf litter / twigs on the forest floor (flat, no wind)
             if (!frozen) {
               const lit = new THREE.MeshStandardMaterial({ color: 0x3b2c18, roughness: 1, map: VisualArt.texture("stain"), transparent: true, opacity: 0.8, depthWrite: false });
@@ -10377,6 +10431,7 @@ body.netgame #revivetouch{display:flex}
             this.lightY = null;
             this.panels = [];
             this.puddles = [];
+            this.decals = [];
             WorldProps.begin();
             this.spawns = this.spawnSets[index].map((p) => p.slice());
             this.spawnCursor = 0;
