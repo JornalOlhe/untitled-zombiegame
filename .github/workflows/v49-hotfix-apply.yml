@@ -1,0 +1,165 @@
+name: Apply v49 wallet hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release/v49-hotfix-trigger.txt'
+
+concurrency:
+  group: v49-wallet-hotfix
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch authoritative final wallet and prepare v49
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index_path = Path("android/app/src/main/assets/index.html")
+          text = index_path.read_text(encoding="utf-8")
+          old = '''              .then((r) => {
+                if (r.profile) this.acknowledgeServerWallet(r.profile, confirmedBefore, displaySnapshot);
+                this.applyNonSpending(r.profile);UIManager.hudClock=0;UIManager.hud(0);
+                if (r.story) StoryMode.setServer(r.story);
+                DR.MissionManager.set(r.missions);
+              })'''
+          new = '''              .then((r) => {
+                if (r.profile) {
+                  if (ended) {
+                    // A final run report is authoritative. The live HUD may have estimated
+                    // per-event rewards that differ slightly from the server's aggregate
+                    // calculation (rounding/multipliers). Once the run is closed, retire
+                    // every optimistic reward included in this final snapshot and render the
+                    // exact server wallet. Rewards earned after the snapshot, if any, stay pending.
+                    for (const key of ["coins", "normal", "lucky"]) {
+                      const ack = Math.max(0, Number(this.rewardDisplay.acknowledged[key] || 0));
+                      this.rewardDisplay.acknowledged[key] = Math.max(
+                        ack,
+                        Number(displaySnapshot[key] || 0),
+                      );
+                    }
+                    this.apply(r.profile);
+                  } else {
+                    this.acknowledgeServerWallet(r.profile, confirmedBefore, displaySnapshot);
+                    this.applyNonSpending(r.profile);
+                  }
+                }
+                UIManager.hudClock=0;UIManager.hud(0);
+                if (r.story) StoryMode.setServer(r.story);
+                DR.MissionManager.set(r.missions);
+              })'''
+          if text.count(old) != 1:
+              raise SystemExit(f"wallet checkpoint anchor count={text.count(old)}")
+          text = text.replace(old, new)
+          if 'const GAME_VERSION = "0.43.0";' not in text:
+              raise SystemExit("GAME_VERSION 0.43.0 not found")
+          text = text.replace('const GAME_VERSION = "0.43.0";', 'const GAME_VERSION = "0.44.0";', 1)
+          index_path.write_text(text, encoding="utf-8")
+
+          test_path = Path("tests/wallet-reconciliation-smoke.cjs")
+          test = test_path.read_text(encoding="utf-8")
+          old = '''        // A real spending response remains authoritative and is allowed to reduce the wallet.
+        A.apply({...A.profile,coins:1000});
+        const spent={live:P.data.coins,confirmed:A.profile.coins,pending:A.pendingReward('coins')};
+        return {initial,partial,stale,settled,spent};'''
+          new = '''        // A final report is authoritative even if its persisted total differs from the
+        // optimistic per-event HUD estimate (for example due to aggregate reward rounding).
+        for(const side of ['earned','acknowledged'])
+          for(const key of ['coins','normal','lucky']) A.rewardDisplay[side][key]=0;
+        A.apply({...A.profile,coins:4000});
+        A.run={id:'wallet-final',offline:false};
+        P.reward(2000); // HUD immediately estimates 6000.
+        DR.RunRepository.report=async()=>({profile:{...A.profile,coins:5900},missions:[]});
+        await A.checkpoint(true,'quit');
+        const finalAuthoritative={
+          live:P.data.coins,confirmed:A.profile.coins,pending:A.pendingReward('coins'),
+          ack:A.rewardDisplay.acknowledged.coins,run:A.run
+        };
+
+        // A real spending response remains authoritative and is allowed to reduce the wallet.
+        A.apply({...A.profile,coins:1000});
+        const spent={live:P.data.coins,confirmed:A.profile.coins,pending:A.pendingReward('coins')};
+        return {initial,partial,stale,settled,finalAuthoritative,spent};'''
+          if test.count(old) != 1:
+              raise SystemExit(f"wallet test return anchor count={test.count(old)}")
+          test = test.replace(old, new)
+          old = '''    assert.deepEqual(result.settled,{live:6000,confirmed:6000,pending:0,ack:2000},
+      'once server confirms the remainder, pending overlay must settle without changing the wallet');
+    assert.deepEqual(result.spent,{live:1000,confirmed:1000,pending:0},'''
+          new = '''    assert.deepEqual(result.settled,{live:6000,confirmed:6000,pending:0,ack:2000},
+      'once server confirms the remainder, pending overlay must settle without changing the wallet');
+    assert.deepEqual(result.finalAuthoritative,{live:5900,confirmed:5900,pending:0,ack:2000,run:null},
+      'final run response must retire the optimistic overlay and show the exact server wallet');
+    assert.deepEqual(result.spent,{live:1000,confirmed:1000,pending:0},'''
+          if test.count(old) != 1:
+              raise SystemExit(f"wallet test assert anchor count={test.count(old)}")
+          test = test.replace(old, new)
+          test = test.replace(
+              "PASS wallet reconciliation across gameplay -> lobby and partial server confirmation",
+              "PASS wallet reconciliation including authoritative final-run settlement",
+          )
+          test_path.write_text(test, encoding="utf-8")
+
+          gradle = Path("android/app/build.gradle")
+          g = gradle.read_text(encoding="utf-8")
+          g = g.replace("versionCode 48", "versionCode 49").replace("versionName '0.43.0'", "versionName '0.44.0'")
+          gradle.write_text(g, encoding="utf-8")
+
+          pkg = Path("desktop/package.json")
+          p = pkg.read_text(encoding="utf-8").replace('"version": "0.43.0"', '"version": "0.44.0"', 1)
+          pkg.write_text(p, encoding="utf-8")
+
+          src = Path(".github/workflows/publish-v48.yml").read_text(encoding="utf-8")
+          out = src.replace("v48", "v49").replace("0.43.0", "0.44.0")
+          out = out.replace("versionCode='48'", "versionCode='49'")
+          out = out.replace(r"versionCode\s+48", r"versionCode\s+49")
+          if "0.43.0" in out or "versionCode='48'" in out or "tag v48" in out:
+              raise SystemExit("v49 publish workflow still contains a v48 version gate")
+          Path(".github/workflows/publish-v49.yml").write_text(out, encoding="utf-8")
+
+          Path("release/v49-notes.md").write_text("""# Dead Recoil 0.44.0 — v49
+
+Hotfix de saldo e consolidação da atualização de modos/Story.
+
+- **Saldo corrigido:** ao encerrar uma partida, o resultado final do servidor passa a ser a fonte autoritativa do saldo. Moedas otimistas do HUD não ficam mais presas no menu quando há diferença de arredondamento ou confirmação.
+- **HUD imediato preservado:** durante a partida as moedas continuam subindo na hora; checkpoints parciais continuam protegidos contra respostas antigas.
+- **Regressão nova:** simula 4.000 confirmadas + 2.000 exibidas pelo HUD, com servidor fechando em 5.900; após o fim da partida, menu/loadout ficam exatamente em 5.900 e o pendente zera.
+- **Inclui tudo da v48:** fluxo Modo → Mapa → Dificuldade, Story com 10 levels por mapa/20 waves/3 estrelas, Infinity, Contra o Tempo, dificuldades Normal/Médio/Hard/Hardcore, multiplicadores e o personagem base remodelado conforme a referência enviada.
+
+### Versões
+- Android: versionCode 49 / versionName 0.44.0.
+- Windows: 0.44.0.
+""", encoding="utf-8")
+          PY
+
+      - name: Static syntax gate
+        run: |
+          node tests/js-syntax.cjs
+          node tests/story-modes-smoke.cjs
+          node tests/v48-survivor-smoke.cjs
+
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f release/v49-hotfix-trigger.txt
+          git config user.name "Dead Recoil Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add android/app/src/main/assets/index.html tests/wallet-reconciliation-smoke.cjs android/app/build.gradle desktop/package.json .github/workflows/publish-v49.yml release/v49-notes.md release/v49-hotfix-trigger.txt
+          git diff --cached --check
+          git commit -m "fix: settle final wallet and prepare v49"
+          git push origin HEAD:main
