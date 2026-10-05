@@ -47,7 +47,7 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
     }
     const gunP=r.gun.getWorldPosition(new V());
     const hand=(a)=>a.localToWorld(new V(0,-0.62,0));
-    const lh=hand(r.arms[1]),rh=hand(r.arms[0]);
+    const lh=r.elbows[1].localToWorld(new V(0,-0.385,0)),rh=r.elbows[0].localToWorld(new V(0,-0.385,0)); // palm centre
     if(![lh.x,lh.y,lh.z,rh.x,rh.y,rh.z,gunP.x].every(Number.isFinite))rec.nan=true;
     // distance from left hand to the weapon's long axis (local +/-Z through gun origin)
     const axis=(r.spearHold?new V(0,1,0):new V(0,0,1)).applyQuaternion(r.gun.getWorldQuaternion(new THREE.Quaternion()));

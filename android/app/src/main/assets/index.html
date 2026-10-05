@@ -5465,7 +5465,7 @@ body.netgame #revivetouch{display:flex}
             // in front of the chest.
             specter: { fp: { r: null, l: null }, tp: { hold: [0, 0.18, -0.16], grip: [0, 0, 0], rot: [0, Math.PI, 0], mode: "conduct" } },
             bow: { fp: null, tp: { hold: [-0.22, 0.3, 0.15], grip: [0, 0, -0.5], rot: [0, Math.PI, 0], mode: "bow" } },
-            firearm: { fp: null, tp: { hold: [-0.05, 0.23, 0.34], grip: [0, -0.08, 0], leftGrip: [0, 0.015, -0.46], rot: [0, Math.PI, 0], mode: "rifle" } },
+            firearm: { fp: null, tp: { hold: [-0.08, 0.33, 0.45], grip: [0.05, -0.16, 0.01], leftGrip: [-0.02, -0.08, -0.22], scale: 0.86, rot: [0, Math.PI, 0], mode: "rifle" } },
           },
           get(w) {
             return this.P[this.of(w)];
@@ -23506,7 +23506,8 @@ body.netgame #revivetouch{display:flex}
               legs.push(leg);knees.push(knee);
               const arm=A.pivot(chest,side*.29,.4,0),elbow=A.pivot(arm,0,-.29,0);
               TemplateBody.box(arm,[0,-.13,0],[.16,.3,.18],"arm"+L,0,.5);
-              TemplateBody.box(elbow,[0,-.13,0],[.15,.3,.17],"arm"+L,.5,1);
+              TemplateBody.box(elbow,[0,-.16,0],[.135,.3,.15],"arm"+L,.5,.86);
+              TemplateBody.box(elbow,[0,-.37,.005],[.115,.12,.125],"arm"+L,.86,1); // hand
               arms.push(arm);elbows.push(elbow);
             }
             const tactical = [1, 4, 7, 8, 9].includes(cls);
@@ -23624,7 +23625,7 @@ body.netgame #revivetouch{display:flex}
             if(s.backpack==="field_pack"){A.block(chest,[0,.19,-.25],[.39,.47,.2],0x343c35,"cloth");A.block(chest,[0,.09,-.36],[.22,.20,.07],0x292f2b,"cloth")}
             if(s.outerwear==="field_jacket"){A.block(chest,[0,.22,.16],[.49,.46,.07],0x3b433c,"cloth");for(const side of[-1,1])A.block(chest,[side*.15,.13,.215],[.12,.14,.045],0x2e3530,"cloth")}
             if(s.outerwear==="ballistic_vest"){A.block(chest,[0,.24,.175],[.5,.44,.10],0x252d2a,"cloth");A.block(chest,[0,.30,.235],[.28,.22,.035],0x485047,"polymer");for(let x=-1;x<=1;x++)A.block(chest,[x*.13,.11,.235],[.10,.15,.05],0x353d36,"cloth")}
-            if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.30,0],[.086,.095,.095],0x1f2422,"cloth");
+            if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.37,0],[.07,.075,.075],0x1f2422,"cloth");
             if(s.footwear==="reinforced_boots")for(const knee of knees)A.block(knee,[0,-.36,.065],[.25,.2,.36],0x191d1c,"polymer");
             let secretAccessories = null;
             if (cls === 22) {
@@ -23758,6 +23759,7 @@ body.netgame #revivetouch{display:flex}
             parts.leftHand.visible = false;
             parts.flash.visible = false;
             gun.scale.setScalar(0.73);
+            if (GripProfiles.get(weapon).tp.scale) gun.scale.setScalar(GripProfiles.get(weapon).tp.scale);
             // One profile owns position, orientation and actual model-space hand sockets.
             const gp = GripProfiles.get(weapon).tp,
               oneHand = gp.mode === "oneHand",
@@ -23863,6 +23865,15 @@ body.netgame #revivetouch{display:flex}
               const q = S.c.clone();
               q[S.ax] = S.lo + ((S.hi - S.lo) * i) / 14;
               q.applyMatrix4(r.gun.matrixWorld).applyMatrix4(inv);
+              if (forwardOnly) {
+                // Shouldered weapons: only the real chest front (half depth .13 + skin) matters,
+                // and the penetration is measured along the push direction (forward).
+                if (q.y > hp.y - 0.1 && q.y < ch.y + 0.52 && Math.abs(q.x - ch.x) < 0.25) {
+                  const pen = ch.z + 0.15 - q.z;
+                  if (pen > need) need = pen;
+                }
+                continue;
+              }
               if (q.y > hp.y - 0.24 && q.y < ch.y + 0.38 && Math.abs(q.z - ch.z) < 0.235) {
                 const pen = 0.34 - Math.abs(q.x - ch.x);
                 if (pen > need) { need = pen; side = Math.sign(q.x - ch.x) || -1; }
@@ -23872,7 +23883,7 @@ body.netgame #revivetouch{display:flex}
               if (forwardOnly) {
                 // Firearms/bows stay shouldered: resolve torso penetration by moving the weapon
                 // forward, not sideways through an arm.
-                r.gun.position.z += need + 0.035;
+                r.gun.position.z += need + 0.01;
               } else {
                 // Add a small safety margin instead of resolving exactly to the skin boundary;
                 // otherwise fast scythe keyframes can cross back into the torso on the next frame.
@@ -23887,7 +23898,7 @@ body.netgame #revivetouch{display:flex}
           // Two-bone hand IK in chest space: puts the hand on `target` (weapon socket) with the
           // elbow dropping below the shoulder-hand line, so hands stay on the weapon in every pose.
           ik(arm, elbow, target) {
-            const L1 = 0.29, L2 = 0.33, down = new V(0, -1, 0),
+            const L1 = 0.29, L2 = 0.385, down = new V(0, -1, 0),
               sh = arm.position,
               v = target.clone().sub(sh),
               raw = v.length();
@@ -24429,6 +24440,10 @@ body.netgame #revivetouch{display:flex}
                 // Draw hand moves back toward the face in chest space; the bow itself stays forward.
                 this.ik(r.arms[1], r.elbows[1], gp.clone().add(new V(0.18, 0.08, -0.08 - draw * 0.32)));
               } else if (r.rifleHold) {
+                // Shouldered stance: both shoulders protract toward the weapon (left more), as a
+                // real shooter does, so the support hand reaches the handguard with a bent elbow.
+                r.arms[0].position.set(-0.27, 0.395, 0.05);
+                r.arms[1].position.set(0.2, 0.385, 0.13);
                 this.ik(r.arms[0], r.elbows[0], gp);
                 const left = r.leftGripOff ? socket(r.leftGripOff) : gp.clone().add(new V(0, 0.04, 0.32));
                 this.ik(r.arms[1], r.elbows[1], left);
