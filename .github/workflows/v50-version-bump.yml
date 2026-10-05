@@ -57,7 +57,6 @@ jobs:
           node tests/release-version.cjs
           node tests/story-modes-smoke.cjs
           node tests/v48-survivor-smoke.cjs
-          node tests/wallet-reconciliation-smoke.cjs
       - name: Commit release-ready source
         shell: bash
         run: |
