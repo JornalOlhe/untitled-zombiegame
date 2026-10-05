@@ -3164,7 +3164,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.45.0";
+        const GAME_VERSION = "0.46.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -11156,6 +11156,7 @@ body.netgame #revivetouch{display:flex}
             this.updateFlow({x:start[0],z:start[1]});
             this.validateSpawns();
             WorldArt.build(index);
+            try { ImpactFX.clear(); } catch (e) {}
             LightPool.adopt(this.group);
             Nature.build(index);
           },
@@ -18717,14 +18718,58 @@ body.netgame #revivetouch{display:flex}
           hitSyncAt = simulationTime;
           for (const z of ZombieManager.list) z.group.updateMatrixWorld(true);
         }
+        // Bullet hits on world geometry: hot sparks, a dust puff tinted by the surface, and a
+        // persistent bullet hole oriented to the face normal. Everything is pooled (fixed counts).
+        const ImpactFX = {
+          holes: [], puffs: [], hi: 0, pi: 0,
+          init() {
+            if (this.ready) return; this.ready = true;
+            const c = document.createElement("canvas"); c.width = c.height = 32; const x = c.getContext("2d");
+            let g = x.createRadialGradient(16, 16, 1, 16, 16, 15); g.addColorStop(0, "rgba(5,4,3,1)"); g.addColorStop(0.35, "rgba(20,18,16,.9)"); g.addColorStop(0.6, "rgba(40,36,32,.35)"); g.addColorStop(1, "rgba(0,0,0,0)");
+            x.fillStyle = g; x.fillRect(0, 0, 32, 32);
+            const holeTex = new THREE.CanvasTexture(c), geo = new THREE.PlaneGeometry(0.11, 0.11);
+            const holeMat = new THREE.MeshBasicMaterial({ map: holeTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+            for (let i = 0; i < 48; i++) { const m = new THREE.Mesh(geo, holeMat); m.visible = false; m.renderOrder = 1; scene.add(m); this.holes.push(m); }
+            const d = document.createElement("canvas"); d.width = d.height = 32; const y = d.getContext("2d");
+            g = y.createRadialGradient(16, 16, 1, 16, 16, 15); g.addColorStop(0, "rgba(255,255,255,.7)"); g.addColorStop(1, "rgba(255,255,255,0)"); y.fillStyle = g; y.fillRect(0, 0, 32, 32);
+            const puffTex = new THREE.CanvasTexture(d);
+            for (let i = 0; i < 16; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, opacity: 0 })); sp.visible = false; scene.add(sp); this.puffs.push({ sp, t: 9, v: new THREE.Vector3() }); }
+          },
+          wall(hit, dir, w) {
+            if (SettingsManager.data.vfx === "off" || !hit.face) return;
+            this.init();
+            const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+            const p = hit.point.clone().addScaledVector(n, 0.012);
+            const energy = ["laser", "rail", "quantum", "fire", "ice", "cryo", "missile"].includes(w.kind);
+            // sparks: reflected off the surface
+            const refl = dir.clone().reflect(n).multiplyScalar(0.5).add(n).normalize();
+            ParticleSystem.emit(p.clone().addScaledVector(refl, 0.05), energy ? (rarityColors[w.tier] || 0x9fdcff) : 0xffc070, energy ? 8 : 6, 4.2);
+            if (energy) return;
+            const h = this.holes[this.hi++ % this.holes.length];
+            h.position.copy(p); h.lookAt(p.clone().add(n)); h.rotateZ(Math.random() * 6.28); h.scale.setScalar(w.kind === "shotgun" ? 0.7 : 0.9 + Math.random() * 0.3); h.visible = true;
+            const q = this.puffs[this.pi++ % this.puffs.length];
+            const col = hit.object.material?.color;
+            q.sp.material.color.set(col ? col : 0xb8ad9e).lerp(new THREE.Color(0xb8ad9e), 0.5);
+            q.sp.position.copy(p).addScaledVector(n, 0.08); q.v.copy(n).multiplyScalar(0.8); q.t = 0; q.sp.visible = true;
+          },
+          update(dt) {
+            for (const q of this.puffs) {
+              if (q.t > 0.9) { if (q.sp.visible) q.sp.visible = false; continue; }
+              q.t += dt; const k = q.t / 0.9;
+              q.sp.position.addScaledVector(q.v, dt); q.v.multiplyScalar(0.92); q.sp.position.y += dt * 0.15;
+              q.sp.scale.setScalar(0.18 + k * 0.55); q.sp.material.opacity = 0.55 * (1 - k);
+            }
+          },
+          clear() { for (const h of this.holes) h.visible = false; },
+        };
         function fireHitscanShot(w, origin, shot, damage, first = true) {
           raycaster.set(origin, shot);
           raycaster.far = w.range;
           syncHitMatrices();
-          let wallDistance = w.range;
+          let wallDistance = w.range, wallHit = null;
           if (!w.walls) {
             const wall = raycaster.intersectObjects(MapManager.walls);
-            if (wall.length) wallDistance = wall[0].distance;
+            if (wall.length) { wallDistance = wall[0].distance; wallHit = wall[0]; }
           }
           let hits = raycaster.intersectObjects(ZombieManager.hitMeshes),
             end = origin.clone().addScaledVector(shot, wallDistance),
@@ -18750,6 +18795,7 @@ body.netgame #revivetouch{display:flex}
             end = propHit[0].point;
           }
           const gunOrigin = origin.distanceTo(player.pos) > 0.05 ? origin : WeaponSystem.muzzleWorld(origin);
+          if (wallHit && end.distanceTo(wallHit.point) < 0.02) ImpactFX.wall(wallHit, shot, w);
           WeaponSystem.lastImpact = end.clone();
           WeaponSystem.lastTracer = [gunOrigin.clone(), end.clone()];
           ParticleSystem.line(
@@ -27511,6 +27557,7 @@ body.netgame #revivetouch{display:flex}
             WorldArt.update(dt);
             LightPool.update(dt);
             FireFX.update(dt);
+            ImpactFX.update(dt);
             if (
               selectedMap === 4 &&
               state === GameState.PLAYING &&
@@ -27599,6 +27646,7 @@ body.netgame #revivetouch{display:flex}
             Perf,
             LightPool,
             FireFX,
+            ImpactFX,
             Nature,
             WindManager,
             CameraRig,
