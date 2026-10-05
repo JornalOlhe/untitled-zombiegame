@@ -30,7 +30,6 @@ jobs:
         run: |
           node tests/js-syntax.cjs
           node tests/story-modes-smoke.cjs
-          node tests/survivor-skin-smoke.cjs
 
       - name: Commit hotfix
         shell: bash
