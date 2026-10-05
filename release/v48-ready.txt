@@ -1,1 +1,2 @@
 Dead Recoil v48 / 0.43.0 ready for gated publication after full gameplay QA, Android boot smoke, Windows install smoke, Story mode contract checks, and survivor reference checks.
+Retry after correcting the Windows source-version regex gate.
