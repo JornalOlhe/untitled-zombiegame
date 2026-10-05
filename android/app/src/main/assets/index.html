@@ -23041,30 +23041,53 @@ body.netgame #revivetouch{display:flex}
             });
           },
         };
-        // Atlas coordinates reference the supplied sheet directly; no generated skin substitute.
+        // Survivor skin: textures/survivor-skin.png is a 256x256 block skin (Minecraft 64-unit layout
+        // at 4x) built from the supplied model sheet by tools/skin/build_skin.py and checked on the
+        // Blender model (tools/skin/blender_preview.py). Every face is stored as seen from outside;
+        // split limbs (thigh/shin, upper arm/forearm) read their own rows of the same strip.
         const TemplateBody = {
-          cache:new Map(), material:null,
-          rects:{torso:[272,662,350,776],skin:[62,515,109,558],head:[62,515,109,558],pants:[208,797,261,911],shoe:[435,883,493,947]},
-          box(parent,pos,size,part){
-            if(!this.material){
-              const map=new THREE.TextureLoader().load("textures/survivor-reference.png");
-              map.encoding=THREE.sRGBEncoding;map.magFilter=THREE.NearestFilter;
-              map.minFilter=THREE.LinearMipmapLinearFilter;
-              this.material=new THREE.MeshStandardMaterial({map,roughness:.92});
-            }
-            const key=part+size.join('/');
-            if(!this.cache.has(key)){
-              const geo=new THREE.BoxGeometry(...size),uv=geo.attributes.uv;
-              for(let f=0;f<6;f++){
-                let rect=this.rects[part];
-                if(part==='head' && f!==4) rect=f===5?[432,50,490,112]:[242,51,291,116];
-                if(part==='torso' && f===5) rect=[410,160,467,243];
-                for(let v=0;v<4;v++){const i=f*4+v;uv.setXY(i,(rect[0]+uv.getX(i)*(rect[2]-rect[0]))/1536,1-(rect[3]-uv.getY(i)*(rect[3]-rect[1]))/1024);}
+          cache: new Map(), material: null, hatMaterial: null,
+          // part -> [originX, originY, w, h, d] in 64 units
+          L: { head: [0, 0, 8, 8, 8], hat: [32, 0, 8, 8, 8], body: [16, 16, 8, 12, 4], armR: [40, 16, 4, 12, 4], armL: [32, 48, 4, 12, 4], legR: [0, 16, 4, 12, 4], legL: [16, 48, 4, 12, 4] },
+          mats() {
+            if (this.material) return;
+            const map = new THREE.TextureLoader().load("textures/survivor-skin.png");
+            map.encoding = THREE.sRGBEncoding; map.magFilter = THREE.NearestFilter; map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
+            this.material = new THREE.MeshStandardMaterial({ map, roughness: 0.88, metalness: 0 });
+            this.hatMaterial = new THREE.MeshStandardMaterial({ map, roughness: 0.92, metalness: 0, alphaTest: 0.5, side: THREE.DoubleSide });
+          },
+          // faces of BoxGeometry: +x (character's left), -x (right), +y, -y, +z (front), -z (back)
+          rects(part, v0, v1) {
+            const [ox, oy, w, h, d] = this.L[part], cut = (y0, y1) => [y0 + (y1 - y0) * v0, y0 + (y1 - y0) * v1];
+            const [sy0, sy1] = cut(oy + d, oy + d + h);
+            return [
+              [ox + d + w, sy0, ox + 2 * d + w, sy1], // left
+              [ox, sy0, ox + d, sy1], // right
+              [ox + d, oy, ox + d + w, oy + d], // top
+              [ox + d + w, oy, ox + d + 2 * w, oy + d], // bottom
+              [ox + d, sy0, ox + d + w, sy1], // front
+              [ox + 2 * d + w, sy0, ox + 2 * d + 2 * w, sy1], // back
+            ];
+          },
+          box(parent, pos, size, part, v0 = 0, v1 = 1) {
+            this.mats();
+            const key = part + size.join("/") + v0 + "/" + v1;
+            if (!this.cache.has(key)) {
+              const geo = new THREE.BoxGeometry(...size), uv = geo.attributes.uv, R = this.rects(part === "neck" ? "head" : part, v0, v1);
+              for (let f = 0; f < 6; f++) {
+                const r = part === "neck" ? R[3] : R[f];
+                for (let v = 0; v < 4; v++) {
+                  const i = f * 4 + v;
+                  uv.setXY(i, (r[0] + uv.getX(i) * (r[2] - r[0])) / 64, 1 - (r[3] - uv.getY(i) * (r[3] - r[1])) / 64);
+                }
               }
-              this.cache.set(key,geo);
+              this.cache.set(key, geo);
             }
-            const mesh=new THREE.Mesh(this.cache.get(key),this.material);mesh.position.set(...pos);mesh.castShadow=true;parent.add(mesh);return mesh;
-          }
+            const mesh = new THREE.Mesh(this.cache.get(key), part === "hat" ? this.hatMaterial : this.material);
+            mesh.position.set(...pos); mesh.castShadow = true; mesh.receiveShadow = part !== "hat";
+            parent.add(mesh);
+            return mesh;
+          },
         };
         const Survivor = {
           dispose(g) {
@@ -23093,78 +23116,24 @@ body.netgame #revivetouch{display:flex}
             // Reference-sheet survivor v48: shirtless block body, shaggy black fringe, dark multi-pocket cargo pants,
             // segmented belt/buckles and black high-top sneakers
             // with pale toe/sole/laces. The class gear is still layered on top of this base.
-            TemplateBody.box(chest,[0,.22,0],[.47,.57,.26],"torso");
-            TemplateBody.box(hips,[0,.025,0],[.44,.17,.28],"pants");
-            TemplateBody.box(head,[0,.12,0],[.37,.38,.34],"head");
-            TemplateBody.box(head,[0,-.08,0],[.13,.12,.13],"skin");
-
-            // Large square eyes and tiny neutral mouth from the supplied front/head close-up.
-            for(const side of [-1,1]){
-              A.block(head,[side*.078,.15,.174],[.060,.060,.008],0xf0efea);
-              A.block(head,[side*.067,.148,.181],[.034,.052,.008],0x101217);
-              A.block(head,[side*.058,.166,.186],[.010,.014,.006],0xffffff);
-            }
-            A.block(head,[0,.033,.174],[.038,.006,.008],0x9b6c57);
-
-            // Dense layered black hair: crown/back volume plus irregular front bangs hanging
-            // over the forehead, matching the asymmetrical Minecraft-style reference silhouette.
-            for (let x=-3;x<=3;x++) for (let z=-2;z<=2;z++) {
-              const y=.31+((x*x+z*z)%3)*.016;
-              const shade=((x+z)&1)?0x111317:0x17191d;
-              A.block(head,[x*.058,y,z*.063],[.066,.105,.074],shade,"cloth");
-              if (Math.abs(x)===3 || z===-2)
-                A.block(head,[x*.058,.16,z*.063],[.068,.22,.077],0x121418,"cloth");
-            }
-            const bangs=[
-              [-.158,.250,.177,.064,.145],[-.095,.225,.181,.062,.185],[-.032,.205,.183,.066,.220],
-              [.034,.235,.182,.064,.172],[.100,.214,.181,.062,.202],[.158,.248,.176,.060,.140]
-            ];
-            for(const [x,y,z,w,h] of bangs) A.block(head,[x,y,z],[w,h,.068],0x15171b,"cloth");
-            A.block(head,[-.184,.145,.070],[.055,.245,.090],0x121418,"cloth");
-            A.block(head,[ .184,.158,.050],[.052,.220,.086],0x15171b,"cloth");
-
-            // Shirtless torso definition is deliberately subtle so it reads as skin, not armor.
-            const skinLine=0xb97f68;
-            A.block(chest,[0,.245,.134],[.012,.225,.009],skinLine,"skin");
-            A.block(chest,[0,.310,.136],[.215,.010,.009],skinLine,"skin");
-            A.block(chest,[-.072,.160,.136],[.060,.010,.009],skinLine,"skin");
-            A.block(chest,[ .072,.160,.136],[.060,.010,.009],skinLine,"skin");
-
+            // Skin-mapped block body (face, hair, abs, belt, cargo pants and high-tops all live in the
+            // skin texture); the hat layer adds the shaggy hair volume around the head.
+            TemplateBody.box(chest,[0,.22,0],[.47,.57,.26],"body",0,.86);
+            TemplateBody.box(hips,[0,.025,0],[.44,.17,.28],"body",.86,1);
+            TemplateBody.box(head,[0,.12,0],[.38,.38,.36],"head");
+            TemplateBody.box(head,[0,.13,0],[.43,.43,.41],"hat");
+            TemplateBody.box(head,[0,-.075,0],[.15,.1,.15],"neck");
             for (const side of [-1,1]) {
-              const leg=A.pivot(hips,side*.125,-.03,0), knee=A.pivot(leg,0,-.38,0);
-              TemplateBody.box(leg,[0,-.17,0],[.225,.38,.27],"pants");
-              TemplateBody.box(knee,[0,-.16,0],[.22,.34,.26],"pants");
-
-              // Cargo pocket + flap + thigh strap. The outer pocket sits proud of the leg like
-              // the model sheet instead of being painted flat into the trouser texture.
-              A.block(leg,[side*.119,-.165,.018],[.052,.160,.190],0x202328,"cloth");
-              A.block(leg,[side*.124,-.085,.020],[.058,.035,.196],0x2b2e34,"cloth");
-              A.block(leg,[0,-.300,.118],[.220,.038,.032],0x16191d,"cloth");
-              A.block(leg,[side*.080,-.300,.139],[.040,.052,.014],0x989b9e,"metal");
-              A.block(leg,[side*.080,-.300,.148],[.021,.032,.008],0x161719,"polymer");
-
-              // Black high-top with bright sole/toe and three white lace bars.
-              TemplateBody.box(knee,[0,-.335,.055],[.235,.16,.34],"shoe");
-              A.block(knee,[0,-.400,.055],[.245,.046,.355],0xe6e5df,"polymer");
-              A.block(knee,[0,-.338,.224],[.188,.060,.030],0xe2e1dc,"polymer");
-              for(let ly=0;ly<3;ly++)
-                A.block(knee,[0,-.305+ly*.035,.228],[.138,.012,.010],0xe9e8e2,"cloth");
-
+              const L = side > 0 ? "L" : "R";
+              const leg=A.pivot(hips,side*.115,-.03,0), knee=A.pivot(leg,0,-.38,0);
+              TemplateBody.box(leg,[0,-.18,0],[.225,.4,.27],"leg"+L,0,.47);
+              TemplateBody.box(knee,[0,-.2,.012],[.23,.42,.29],"leg"+L,.47,1);
               legs.push(leg);knees.push(knee);
               const arm=A.pivot(chest,side*.29,.4,0),elbow=A.pivot(arm,0,-.29,0);
-              TemplateBody.box(arm,[0,-.13,0],[.16,.29,.18],"skin");
-              TemplateBody.box(elbow,[0,-.13,0],[.15,.29,.17],"skin");
-              // Thin black wrist cuff visible in the side/front reference.
-              A.block(elbow,[0,-.258,.005],[.154,.032,.174],0x17191d,"cloth");
+              TemplateBody.box(arm,[0,-.13,0],[.16,.3,.18],"arm"+L,0,.5);
+              TemplateBody.box(elbow,[0,-.13,0],[.15,.3,.17],"arm"+L,.5,1);
               arms.push(arm);elbows.push(elbow);
             }
-
-            // Layered black belt, loops and silver square buckle.
-            A.block(hips,[0,.105,.148],[.44,.065,.026],0x15171a,"cloth");
-            for(const bx of [-.165,-.082,.082,.165])
-              A.block(hips,[bx,.105,.168],[.026,.083,.015],0x24272b,"cloth");
-            A.block(hips,[0,.105,.174],[.078,.060,.014],0xb4b7b8,"metal");
-            A.block(hips,[0,.105,.184],[.047,.033,.008],0x121416,"polymer");
             const tactical = [1, 4, 7, 8, 9].includes(cls);
             if (tactical) {
               A.block(
