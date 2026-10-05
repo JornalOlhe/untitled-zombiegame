@@ -3466,7 +3466,7 @@ body.netgame #revivetouch{display:flex}
               ["graphics", ["low", "medium", "high", "ultra"]],
               ["shadows", ["off", "low", "medium", "high"]],
               ["vfx", ["off", "low", "high"]],
-              ["reflections", ["off", "low", "high"]],
+              ["reflections", ["off", "low", "medium", "high", "ultra"]],
             ])
               if (!opts.includes(this.data[k])) this.data[k] = this.defaults[k];
           },
@@ -6881,50 +6881,163 @@ body.netgame #revivetouch{display:flex}
             this.reflectionClock = 0;
             this.buildWeather();
           },
+          // Rain puddles: irregular height-field masks that fill up while it rains (wetness ramps
+          // over the first ~70 s of a match), animated raindrop ripples, Fresnel reflection of the
+          // planar mirror (medium+), the cube environment (low) or a dark wet sheen (off).
+          puddleMask() {
+            if (this._puddleMask) return this._puddleMask;
+            const N = 128, c = document.createElement("canvas"); c.width = c.height = N;
+            const x = c.getContext("2d"), img = x.createImageData(N, N);
+            const lobes = Array.from({ length: 6 }, () => [rand(0, 6.28), rand(0.05, 0.14), 1 + Math.floor(rand(0, 4))]);
+            for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+              const u = (i / (N - 1)) * 2 - 1, v = (j / (N - 1)) * 2 - 1, a = Math.atan2(v, u), r = Math.hypot(u, v);
+              let edge = 0.8; for (const [ph, amp, f] of lobes) edge += Math.sin(a * f + ph) * amp;
+              const hgt = Math.max(0, Math.min(1, (edge - r) / edge)) ** 0.8; // 1 = deepest point
+              const k = (j * N + i) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = Math.round(hgt * 255); img.data[k + 3] = 255;
+            }
+            x.putImageData(img, 0, 0);
+            return (this._puddleMask = new THREE.CanvasTexture(c));
+          },
+          puddleMaterial() {
+            if (this.weatherPuddleMaterial) return this.weatherPuddleMaterial;
+            const U = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+              tMask: { value: this.puddleMask() }, tRefl: { value: null }, envMap: { value: null }, textureMatrix: { value: new THREE.Matrix4() },
+              uTime: { value: 0 }, uWet: { value: 0.5 }, uMode: { value: 0 }, uRain: { value: 1 }, uDark: { value: new THREE.Color(0x0b0f12) },
+            }]);
+            const m = new THREE.ShaderMaterial({
+              uniforms: U, transparent: true, depthWrite: false, fog: true,
+              polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+              vertexShader: `
+                uniform mat4 textureMatrix; varying vec4 vRefl; varying vec2 vUv; varying vec3 vWorld; varying vec2 vSeed;
+                #include <fog_pars_vertex>
+                void main(){
+                  vUv = uv;
+                  vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+                  vWorld = wp.xyz; vSeed = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
+                  vRefl = textureMatrix * wp;
+                  vec4 mvPosition = viewMatrix * wp;
+                  gl_Position = projectionMatrix * mvPosition;
+                  #include <fog_vertex>
+                }`,
+              fragmentShader: `
+                uniform sampler2D tMask, tRefl; uniform samplerCube envMap; uniform float uTime, uWet, uMode, uRain; uniform vec3 uDark;
+                varying vec4 vRefl; varying vec2 vUv; varying vec3 vWorld; varying vec2 vSeed;
+                #include <fog_pars_fragment>
+                float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                // expanding raindrop rings: one drop per cell, random phase and centre
+                vec2 ripples(vec2 p, float t){
+                  vec2 c = floor(p), f = fract(p), n = vec2(0.0);
+                  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+                    vec2 o = vec2(float(i), float(j)), id = c + o;
+                    float ph = hash(id), k = fract(t * (0.9 + ph * 0.6) + ph * 7.0);
+                    vec2 d = o + vec2(hash(id + 3.1), hash(id + 7.7)) - f;
+                    float r = length(d), ring = k * 0.9;
+                    float w = exp(-pow((r - ring) * 14.0, 2.0)) * (1.0 - k) * (1.0 - k);
+                    n += normalize(d + 1e-4) * w;
+                  }
+                  return n;
+                }
+                void main(){
+                  float h = texture2D(tMask, vUv).r;
+                  float fill = 1.0 - uWet;                       // water line moves out as it keeps raining
+                  float a = smoothstep(fill, fill + 0.08, h);
+                  if (a < 0.01) discard;
+                  vec2 rn = (ripples(vWorld.xz * 3.3, uTime) + 0.6 * ripples(vWorld.xz * 6.1 + 9.0, uTime * 1.3)) * uRain;
+                  vec3 V = normalize(cameraPosition - vWorld);
+                  vec3 N = normalize(vec3(rn.x * 0.35, 1.0, rn.y * 0.35));
+                  float fres = 0.04 + 0.96 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
+                  vec3 refl = uDark * 1.2;
+                  if (uMode > 1.5) { vec4 q = vRefl; q.xy += rn * 0.045 * q.w; refl = texture2DProj(tRefl, q).rgb; }
+                  else if (uMode > 0.5) { vec3 r = reflect(-V, N); refl = textureCube(envMap, vec3(-r.x, r.yz)).rgb * 0.5; }
+                  vec3 col = mix(uDark, refl, clamp((uMode > 0.5 ? 0.6 : 0.2) + 0.5 * fres, 0.0, 1.0));
+                  col += vec3(0.55, 0.6, 0.65) * pow(clamp(length(rn) * 1.4, 0.0, 1.0), 3.0) * 0.035; // ripple crests catch a little light
+                  gl_FragColor = vec4(col, a * 0.94);
+                  #include <tonemapping_fragment>
+                  #include <encodings_fragment>
+                  #include <fog_fragment>
+                }`,
+            });
+            return (this.weatherPuddleMaterial = m);
+          },
           buildWeatherPuddles(g, map) {
             if (this.weatherPuddles?.parent) this.weatherPuddles.parent.remove(this.weatherPuddles);
             this.weatherPuddles = null;
             if (map !== 0 && map !== 2) return;
-            if (!this.weatherPuddleMaterial) {
-              this.weatherPuddleMaterial = new THREE.MeshStandardMaterial({
-                color: 0x435762,
-                map: VisualArt.texture("stain"),
-                roughness: 0.09,
-                metalness: 0.58,
-                transparent: true,
-                opacity: 0.34,
-                depthWrite: false,
-                polygonOffset: true,
-                polygonOffsetFactor: -1,
-                envMapIntensity: 1.35,
-              });
-            }
-            const count = map === 0 ? 24 : 18,
-              mesh = new THREE.InstancedMesh(VisualArt.geometries.plane, this.weatherPuddleMaterial, count),
+            const mat = this.puddleMaterial();
+            const count = map === 0 ? 26 : 18,
+              mesh = new THREE.InstancedMesh(VisualArt.geometries.plane, mat, count),
               o = new THREE.Object3D();
             mesh.name = "WeatherPuddles";
             mesh.frustumCulled = false;
-            mesh.renderOrder = 1;
-            for (let i = 0; i < count; i++) {
+            mesh.renderOrder = 2;
+            let placed = 0;
+            for (let tries = 0; placed < count && tries < count * 20; tries++) {
               let x, z;
-              if (map === 0) {
-                x = rand(-17, 17);
-                z = rand(-MapManager.half + 5, MapManager.half - 5);
-              } else {
-                x = rand(-MapManager.half + 6, MapManager.half - 6);
-                z = rand(-MapManager.half + 6, MapManager.half - 6);
-              }
-              const y = (MapManager.groundAt?.(x, z, 0.18, 0) ?? 0) + 0.028;
-              o.position.set(x, y, z);
+              if (map === 0) { x = rand(-17, 17); z = rand(-MapManager.half + 5, MapManager.half - 5); }
+              else { x = rand(-MapManager.half + 6, MapManager.half - 6); z = rand(-MapManager.half + 6, MapManager.half - 6); }
+              // only on open, flat ground: never on props, roofs or inside buildings
+              const gy = MapManager.groundAt?.(x, z, 0.9, 0) ?? 0;
+              if (gy > 0.05 || MapManager.collides?.(x, z, 1.2)) continue;
+              o.position.set(x, gy + 0.03, z);
               o.rotation.set(-Math.PI / 2, 0, rand(0, Math.PI * 2));
-              const k = map === 0 ? rand(0.65, 1.8) : rand(0.45, 1.35);
-              o.scale.set(k * rand(0.8, 1.45), k * rand(0.65, 1.2), 1);
+              const k = map === 0 ? rand(1.2, 2.6) : rand(0.9, 2.0);
+              o.scale.set(k * rand(0.85, 1.4), k * rand(0.7, 1.15), 1);
               o.updateMatrix();
-              mesh.setMatrixAt(i, o.matrix);
+              mesh.setMatrixAt(placed++, o.matrix);
             }
+            mesh.count = placed;
             mesh.instanceMatrix.needsUpdate = true;
             g.add(mesh);
             this.weatherPuddles = mesh;
+            this.wetness = 0.25;
+          },
+          // Planar mirror for the puddles (all lie on the ground plane): the scene is re-rendered
+          // from the camera reflected across y = 0.03, clipped below the plane, into a reduced
+          // render target that the puddle shader samples projectively.
+          planarReflection(dt) {
+            const mode = this.reflectionMode, P = this.weatherPuddles;
+            const want = P && P.visible && P.count > 0 && ["medium", "high", "ultra"].includes(mode) && state !== GameState.MENU;
+            const M = this.puddleMaterial().uniforms;
+            M.uMode.value = want ? 2 : mode !== "off" && this.reflectionTarget ? 1 : 0;
+            M.envMap.value = this.reflectionTarget?.texture || null;
+            if (!want) return;
+            const scale = { medium: 0.25, high: 0.5, ultra: 0.7 }[mode];
+            const sz = renderer.getDrawingBufferSize(this._rsz || (this._rsz = new THREE.Vector2()));
+            const w = Math.max(64, Math.round(sz.x * scale)), h = Math.max(64, Math.round(sz.y * scale));
+            if (!this.mirrorRT) { this.mirrorRT = new THREE.WebGLRenderTarget(w, h, { type: renderer.capabilities.isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType }); this.mirrorCam = new THREE.PerspectiveCamera(); this.mirrorPlane = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.03)]; }
+            if (this.mirrorRT.width !== w || this.mirrorRT.height !== h) this.mirrorRT.setSize(w, h);
+            this.mirrorSkip = (this.mirrorSkip || 0) + 1;
+            if (mode === "medium" && this.mirrorSkip % 2) return; // medium: every other frame
+            const c = camera, mc = this.mirrorCam, Y = 0.03;
+            c.updateMatrixWorld();
+            mc.copy(c, false);
+            mc.position.set(c.position.x, 2 * Y - c.position.y, c.position.z);
+            const fwd = c.getWorldDirection(this._fwd || (this._fwd = new THREE.Vector3()));
+            const up = (this._up || (this._up = new THREE.Vector3())).set(0, 1, 0).applyQuaternion(c.quaternion);
+            mc.up.set(up.x, -up.y, up.z);
+            mc.lookAt(mc.position.x + fwd.x, mc.position.y - fwd.y, mc.position.z + fwd.z);
+            mc.projectionMatrix.copy(c.projectionMatrix);
+            mc.updateMatrixWorld();
+            const TM = M.textureMatrix.value;
+            TM.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mc.projectionMatrix).multiply(mc.matrixWorldInverse);
+            const prevClip = renderer.clippingPlanes, prevTarget = renderer.getRenderTarget(), prevAuto = renderer.autoClear;
+            P.visible = false;
+            const wv = this.weather?.visible; if (this.weather) this.weather.visible = false;
+            renderer.clippingPlanes = this.mirrorPlane;
+            renderer.setRenderTarget(this.mirrorRT); renderer.autoClear = true; renderer.clear();
+            renderer.render(scene, mc);
+            renderer.setRenderTarget(prevTarget); renderer.clippingPlanes = prevClip; renderer.autoClear = prevAuto;
+            if (this.weather) this.weather.visible = wv;
+            P.visible = true;
+            M.tRefl.value = this.mirrorRT.texture;
+          },
+          updatePuddles(dt, raining) {
+            if (!this.weatherPuddles) return;
+            this.wetness = Math.min(1, (this.wetness ?? 0.25) + dt * (raining ? 1 / 70 : -1 / 200));
+            const U = this.puddleMaterial().uniforms;
+            U.uTime.value += dt;
+            U.uWet.value = 0.18 + 0.62 * this.wetness;
+            U.uRain.value = raining ? 1 : 0.15;
           },
           disposeReflections() {
             if (scene.environment === this.reflectionTarget?.texture) scene.environment = null;
@@ -6934,15 +7047,15 @@ body.netgame #revivetouch{display:flex}
           },
           setReflectionQuality(value) {
             let mode = String(value || "off").toLowerCase();
-            if (!["off", "low", "high"].includes(mode)) mode = "off";
-            if (nativeAndroid && mode === "high") mode = "low";
+            if (!["off", "low", "medium", "high", "ultra"].includes(mode)) mode = "off";
+            if (nativeAndroid && (mode === "high" || mode === "ultra")) mode = "medium";
             if (mode === this.reflectionMode && (mode === "off" || this.reflectionTarget)) return;
             this.disposeReflections();
             this.reflectionMode = mode;
             this.reflectionDirty = mode !== "off";
             this.reflectionClock = 0;
             if (mode === "off") return;
-            const size = nativeAndroid ? 64 : mode === "high" ? 192 : 96;
+            const size = nativeAndroid ? 64 : mode === "ultra" ? 256 : mode === "high" ? 192 : 96;
             this.reflectionTarget = new THREE.WebGLCubeRenderTarget(size, {
               generateMipmaps: true,
               minFilter: THREE.LinearMipmapLinearFilter,
@@ -6952,12 +7065,12 @@ body.netgame #revivetouch{display:flex}
           },
           updateReflections(dt) {
             const requested = SettingsManager.data.reflections || "off",
-              effective = nativeAndroid && requested === "high" ? "low" : requested;
+              effective = nativeAndroid && (requested === "high" || requested === "ultra") ? "medium" : requested;
             if (effective !== this.reflectionMode || (effective !== "off" && !this.reflectionTarget))
               this.setReflectionQuality(effective);
             if (this.reflectionMode === "off" || !this.reflectionCamera || !this.reflectionTarget) return;
             this.reflectionClock -= dt;
-            const dynamic = this.reflectionMode === "high";
+            const dynamic = this.reflectionMode === "high" || this.reflectionMode === "ultra";
             if (!this.reflectionDirty && (!dynamic || this.reflectionClock > 0)) return;
             this.reflectionDirty = false;
             this.reflectionClock = dynamic ? 1.75 : Infinity;
@@ -7322,6 +7435,7 @@ body.netgame #revivetouch{display:flex}
             this.weather.visible = weatherOn && rainMap;
             if (this.snow) this.snow.visible = weatherOn && map === 4;
             this.updateReflections(dt);
+            this.updatePuddles(dt, weatherOn && rainMap);
             if (!weatherOn) return;
             if (map === 4) {
               // Snowfall: round flakes drifting in a box around the camera, cheap (one draw call).
@@ -26935,6 +27049,7 @@ body.netgame #revivetouch{display:flex}
           const perfT1 = performance.now();
           renderer.info.autoReset = false;
           renderer.info.reset();
+          if (inWorld) WorldArt.planarReflection(dt);
           if (!DepthOfField.render(dt)) renderer.render(scene, camera);
           if (inWorld && WeaponSystem.model.visible) {
             renderer.autoClear = false;
@@ -27034,6 +27149,7 @@ body.netgame #revivetouch{display:flex}
             UIManager,
             SettingsManager,
             GamepadInput,
+            WorldArt,
             classes,
             maps,
             get player() {

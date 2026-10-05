@@ -41,6 +41,7 @@ jobs:
           node tests/navigation-race.cjs
           node tests/survivor-skin-smoke.cjs
           node tests/gamepad-smoke.cjs
+          node tests/puddles-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
