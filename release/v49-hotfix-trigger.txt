@@ -1,1 +1,1 @@
-Apply v49 authoritative final-wallet hotfix and prepare 0.44.0.
+Apply v49 authoritative final-wallet hotfix and prepare 0.44.0. Retry after workflow YAML fix.
