@@ -61,10 +61,24 @@ const server = http.createServer((q,r)=>{
           ack:A.rewardDisplay.acknowledged.coins
         };
 
+        // A final report is authoritative even if its persisted total differs from the
+        // optimistic per-event HUD estimate (for example due to aggregate reward rounding).
+        for(const side of ['earned','acknowledged'])
+          for(const key of ['coins','normal','lucky']) A.rewardDisplay[side][key]=0;
+        A.apply({...A.profile,coins:4000});
+        A.run={id:'wallet-final',offline:false};
+        P.reward(2000); // HUD immediately estimates 6000.
+        DR.RunRepository.report=async()=>({profile:{...A.profile,coins:5900},missions:[]});
+        await A.checkpoint(true,'quit');
+        const finalAuthoritative={
+          live:P.data.coins,confirmed:A.profile.coins,pending:A.pendingReward('coins'),
+          ack:A.rewardDisplay.acknowledged.coins,run:A.run
+        };
+
         // A real spending response remains authoritative and is allowed to reduce the wallet.
         A.apply({...A.profile,coins:1000});
         const spent={live:P.data.coins,confirmed:A.profile.coins,pending:A.pendingReward('coins')};
-        return {initial,partial,stale,settled,spent};
+        return {initial,partial,stale,settled,finalAuthoritative,spent};
       } finally {
         DR.RunRepository.report=original.report;
         A.user=original.user;A.userId=original.userId;A.profile=original.profile;A.run=original.run;A.pending=original.pending;
@@ -81,9 +95,11 @@ const server = http.createServer((q,r)=>{
       'stale lobby/profile response must never roll the 6k wallet back');
     assert.deepEqual(result.settled,{live:6000,confirmed:6000,pending:0,ack:2000},
       'once server confirms the remainder, pending overlay must settle without changing the wallet');
+    assert.deepEqual(result.finalAuthoritative,{live:5900,confirmed:5900,pending:0,ack:2000,run:null},
+      'final run response must retire the optimistic overlay and show the exact server wallet');
     assert.deepEqual(result.spent,{live:1000,confirmed:1000,pending:0},
       'authoritative spending responses are still allowed to lower the wallet');
     assert.deepEqual(errors,[]);
-    console.log('PASS wallet reconciliation across gameplay -> lobby and partial server confirmation');
+    console.log('PASS wallet reconciliation including authoritative final-run settlement');
   } finally { await browser.close(); server.close(); }
 })().catch(e=>{console.error(e);server.close();process.exit(1);});

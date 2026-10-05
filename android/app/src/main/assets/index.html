@@ -3161,7 +3161,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.43.0";
+        const GAME_VERSION = "0.44.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -20719,8 +20719,27 @@ body.netgame #revivetouch{display:flex}
             this.pending = op.catch(() => {});
             return op
               .then((r) => {
-                if (r.profile) this.acknowledgeServerWallet(r.profile, confirmedBefore, displaySnapshot);
-                this.applyNonSpending(r.profile);UIManager.hudClock=0;UIManager.hud(0);
+                if (r.profile) {
+                  if (ended) {
+                    // A final run report is authoritative. The live HUD may have estimated
+                    // per-event rewards that differ slightly from the server's aggregate
+                    // calculation (rounding/multipliers). Once the run is closed, retire
+                    // every optimistic reward included in this final snapshot and render the
+                    // exact server wallet. Rewards earned after the snapshot, if any, stay pending.
+                    for (const key of ["coins", "normal", "lucky"]) {
+                      const ack = Math.max(0, Number(this.rewardDisplay.acknowledged[key] || 0));
+                      this.rewardDisplay.acknowledged[key] = Math.max(
+                        ack,
+                        Number(displaySnapshot[key] || 0),
+                      );
+                    }
+                    this.apply(r.profile);
+                  } else {
+                    this.acknowledgeServerWallet(r.profile, confirmedBefore, displaySnapshot);
+                    this.applyNonSpending(r.profile);
+                  }
+                }
+                UIManager.hudClock=0;UIManager.hud(0);
                 if (r.story) StoryMode.setServer(r.story);
                 DR.MissionManager.set(r.missions);
               })
