@@ -81,6 +81,7 @@
       resolution: pct,
       drawDistance: pct,
       adsSensitivity: pct,
+      padSensitivity: pct,
       sensitivity: (v) => Number(v).toFixed(1),
       fov: (v) => `${v}°`,
     },
@@ -131,6 +132,7 @@
       return `<div class="set-group"><h3>Mira e visão</h3>
         ${this.range("sensitivity", "Sensibilidade", 0.1, 5, 0.1, this.formats.sensitivity)}
         ${this.range("adsSensitivity", "Sensibilidade ao mirar", 0.1, 2, 0.05, pct, "Multiplica a sensibilidade durante a mira")}
+        ${this.range("padSensitivity", "Sensibilidade do controle", 0.3, 2.5, 0.05, pct, "Analógico direito (Xbox / PlayStation / genérico)")}
         ${this.range("fov", "Campo de visão (FOV)", 60, 120, 1, this.formats.fov)}
         ${this.check("invert", "Inverter eixo Y")}
       </div>`;
@@ -183,7 +185,7 @@
       const keysOf = {
         graphics: ["graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "fps", "numbers"],
         audio: ["master", "music", "ambient", "weapons", "sfx", "ui"],
-        camera: ["sensitivity", "adsSensitivity", "fov", "invert"],
+        camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "invert"],
       };
       if (this.tab === "controls") DR.Keybinds.reset();
       else for (const k of keysOf[this.tab]) s[k] = d[k];

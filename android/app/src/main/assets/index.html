@@ -117,7 +117,10 @@
       .rarity-line{min-height:40px!important}
       #armory-list{max-height:calc(100vh - 250px);overflow:auto}
       .spin-btn.normal .label,.spin-btn.normal .cost{color:#06261f!important;text-shadow:0 1px 0 #ffffff80!important}
-    </style>
+    
+      /* controller: visible focus ring for D-pad navigation */
+      body.gamepad :focus{outline:3px solid #8aff3d!important;outline-offset:3px;box-shadow:0 0 18px #8aff3d88!important}
+      </style>
 
     <style>
       :root {
@@ -3405,6 +3408,7 @@ body.netgame #revivetouch{display:flex}
             fov: 85,
             sensitivity: 1,
             adsSensitivity: 0.7,
+            padSensitivity: 1,
             drawDistance: 1,
             resolution: 1,
             keys: {},
@@ -3453,6 +3457,7 @@ body.netgame #revivetouch{display:flex}
               ["fov", 60, 120],
               ["sensitivity", 0.1, 5],
               ["adsSensitivity", 0.1, 2],
+              ["padSensitivity", 0.3, 2.5],
               ["drawDistance", 0.6, 1.4],
               ["resolution", 0.5, 1.5],
             ])
@@ -3599,7 +3604,8 @@ body.netgame #revivetouch{display:flex}
         document.body.classList.toggle("touch-ui", touchMode);
         const keys = new Set(),
           mouse = { down: false, aim: false },
-          touchMove = { x: 0, y: 0 };
+          touchMove = { x: 0, y: 0 },
+          padMove = { x: 0, y: 0 };
         let resetTouchControls = () => {};
         let yaw = 0,
           pitch = 0,
@@ -19448,11 +19454,11 @@ body.netgame #revivetouch{display:flex}
             let x =
                 (keys.has("KeyD") ? 1 : 0) -
                 (keys.has("KeyA") ? 1 : 0) +
-                touchMove.x,
+                touchMove.x + padMove.x,
               z =
                 (keys.has("KeyS") ? 1 : 0) -
                 (keys.has("KeyW") ? 1 : 0) +
-                touchMove.y;
+                touchMove.y + padMove.y;
             const length = Math.hypot(x, z);
             if (length > 1) {
               x /= length;
@@ -26007,6 +26013,112 @@ body.netgame #revivetouch{display:flex}
           if (c) return c;
           return defaultCodes.has(code) ? null : code;
         }
+        // ── Controller support (standard-mapping gamepads: Xbox / PlayStation / generic) ──────────
+        // Gameplay: left stick move (click = sprint), right stick look with a response curve and
+        // aim slow-down, RT fire, LT aim, A jump, B crouch, X reload, Y next weapon, LB grenade,
+        // RB class ability, R3 weapon ability, D-pad ↑ camera view, ↓ interact/revive, ←/→ weapon,
+        // Start pause, Back missions. Menus: D-pad / left stick moves focus, A selects, B goes back.
+        const GamepadInput = {
+          prev: [], held: new Set(), connected: false, nav: 0, sprintLatch: false,
+          DZ: 0.16,
+          pad() {
+            const list = navigator.getGamepads ? navigator.getGamepads() : [];
+            for (const p of list || []) if (p && p.connected && p.mapping === "standard") return p;
+            for (const p of list || []) if (p && p.connected) return p;
+            return null;
+          },
+          axis(v) { const a = Math.abs(v || 0); return a < this.DZ ? 0 : Math.sign(v) * Math.min(1, (a - this.DZ) / (1 - this.DZ)); },
+          hold(code, on) {
+            if (on && !this.held.has(code)) { this.held.add(code); keys.add(code); if (code === "Space") player.jumpQueuedAt = simulationTime; }
+            else if (!on && this.held.has(code)) { this.held.delete(code); keys.delete(code); }
+          },
+          release() {
+            for (const c of this.held) keys.delete(c);
+            this.held.clear(); padMove.x = padMove.y = 0;
+            if (this.firing) mouse.down = false;
+            if (this.aiming) mouse.aim = false;
+            this.firing = this.aiming = false;
+          },
+          focusables() {
+            return [...document.querySelectorAll("button, [role=button], a[href], input, select, .spin-btn, .slot-card, [data-map], [data-mode], [tabindex]:not([tabindex='-1'])")]
+              .filter((el) => {
+                if (el.disabled || el.closest("[hidden], .hidden")) return false;
+                const r = el.getBoundingClientRect();
+                if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return false;
+                const top = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2)));
+                return !!top && (el === top || el.contains(top) || top.contains(el));
+              });
+          },
+          moveFocus(dx, dy) {
+            const els = this.focusables();
+            if (!els.length) return;
+            const cur = document.activeElement && els.includes(document.activeElement) ? document.activeElement : null;
+            if (!cur) { els[0].focus({ preventScroll: false }); return; }
+            const a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+            let best = null, bestScore = Infinity;
+            for (const el of els) {
+              if (el === cur) continue;
+              const r = el.getBoundingClientRect(), vx = r.left + r.width / 2 - ax, vy = r.top + r.height / 2 - ay;
+              const along = vx * dx + vy * dy; if (along <= 4) continue;
+              const across = Math.abs(vx * dy - vy * dx), score = along + across * 2.2;
+              if (score < bestScore) { bestScore = score; best = el; }
+            }
+            best?.focus({ preventScroll: false });
+          },
+          update(dt) {
+            const p = this.pad();
+            if (!p) { if (this.connected) { this.connected = false; this.release(); document.body.classList.remove("gamepad"); } return; }
+            const B = (i) => !!p.buttons[i]?.pressed, V = (i) => p.buttons[i]?.value || 0, edge = (i) => B(i) && !this.prev[i];
+            const used = p.buttons.some((b) => b?.pressed) || p.axes.some((a) => Math.abs(a) > 0.35);
+            if (used && !this.connected) { this.connected = true; document.body.classList.add("gamepad"); }
+            const lx = this.axis(p.axes[0]), ly = this.axis(p.axes[1]), rx = this.axis(p.axes[2]), ry = this.axis(p.axes[3]);
+            const playing = state === GameState.PLAYING && !NetGame.menuOpen;
+            if (playing) {
+              padMove.x = lx; padMove.y = ly;
+              // look: squared response for fine aim, faster at full tilt; slower while aiming
+              const S = SettingsManager.data, sens = (S.padSensitivity ?? 1) * (mouse.aim ? S.adsSensitivity : 1);
+              yaw -= rx * Math.abs(rx) * 3.4 * sens * dt;
+              pitch = clamp(pitch - ry * Math.abs(ry) * 2.4 * sens * dt * (S.invert ? -1 : 1), -1.45, 1.45);
+              const fire = V(7) > 0.35, aim = V(6) > 0.35;
+              if (fire !== !!this.firing) { mouse.down = fire; this.firing = fire; }
+              if (aim !== !!this.aiming) { mouse.aim = aim; this.aiming = aim; }
+              if (edge(10)) this.sprintLatch = !this.sprintLatch;
+              if (Math.hypot(lx, ly) < 0.2) this.sprintLatch = false;
+              this.hold("ShiftLeft", this.sprintLatch);
+              this.hold("Space", B(0));
+              this.hold("KeyE", B(13));
+              if (edge(1)) { if (keys.has("ControlLeft")) keys.delete("ControlLeft"); else keys.add("ControlLeft"); }
+              if (edge(2)) PlayerController.reload();
+              if (edge(4)) PlayerController.grenade();
+              if (edge(5)) PlayerController.ability();
+              if (edge(11)) SecretWeaponSkills.use();
+              if (edge(12)) CameraRig.target = CameraRig.target > 0.5 ? 0 : 3;
+              if (edge(3) || edge(15) || edge(14)) {
+                const n = player.inventory.length, dir = edge(14) ? -1 : 1;
+                for (let i = 1; i <= n; i++) { const slot = (player.slot + dir * i + n * 2) % n; if (player.inventory[slot]) { PlayerController.switch(slot); break; } }
+              }
+              if (edge(9)) pause();
+              if (edge(8)) openGameMissions();
+            } else {
+              this.release();
+              if (state === GameState.DYING && (edge(0) || edge(9))) DeathFX.skip();
+              // menu navigation with auto-repeat
+              const ux = B(15) ? 1 : B(14) ? -1 : Math.abs(lx) > 0.5 ? Math.sign(lx) : 0,
+                uy = B(13) ? 1 : B(12) ? -1 : Math.abs(ly) > 0.5 ? Math.sign(ly) : 0;
+              if (ux || uy) {
+                this.nav -= dt;
+                if (this.nav <= 0) { this.moveFocus(ux && !uy ? ux : 0, uy); this.nav = this.navHeld ? 0.14 : 0.32; this.navHeld = true; }
+              } else { this.nav = 0; this.navHeld = false; }
+              if (edge(0)) { const el = document.activeElement; if (el && el !== document.body) el.click(); else this.moveFocus(0, 1); }
+              if (edge(1) || edge(9)) window.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", key: "Escape" }));
+              // right stick scrolls long panels
+              if (Math.abs(ry) > 0.2) (document.activeElement?.closest?.("[class*=list], [class*=scroll], .panel, section") || document.scrollingElement)?.scrollBy?.(0, ry * 900 * dt);
+            }
+            this.prev = p.buttons.map((b) => !!b?.pressed);
+          },
+        };
+        window.addEventListener("gamepadconnected", (e) => UIManager.toast?.(`Controle conectado: ${String(e.gamepad.id).split("(")[0].trim().slice(0, 40)}`));
+        window.addEventListener("gamepaddisconnected", () => { GamepadInput.release(); UIManager.toast?.("Controle desconectado"); });
         function gameInput(code, down, repeat = false) {
           const c = inputCode(code);
           if (!c) return false;
@@ -26552,6 +26664,7 @@ body.netgame #revivetouch{display:flex}
           const perfT0 = performance.now();
           lastFrame = now;
           menuTime += dt;
+          GamepadInput.update(dt);
           fpsFrames++;
           fpsTime += wallDt;
           if (fpsTime > 0.5) {
@@ -26865,6 +26978,7 @@ body.netgame #revivetouch{display:flex}
             MapManager,
             UIManager,
             SettingsManager,
+            GamepadInput,
             classes,
             maps,
             get player() {
