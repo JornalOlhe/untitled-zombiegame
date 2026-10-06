@@ -3164,7 +3164,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.46.0";
+        const GAME_VERSION = "0.47.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -5456,8 +5456,8 @@ body.netgame #revivetouch{display:flex}
           // tp.hold: weapon socket in chest space; tp.grip: where the palm sits on the model;
           // tp.mode: which IK chain drives the arms.
           P: {
-            sword: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.25, 0.31], grip: [0, -0.12, -0.23], rot: [0.2, Math.PI, -0.04], mode: "oneHand" } },
-            knife: { fp: { r: [0, -0.15, -0.2, 0.05], l: null }, tp: { hold: [-0.27, 0.26, 0.3], grip: [0, -0.1, -0.23], rot: [0.14, Math.PI, -0.04], mode: "oneHand" } },
+            sword: { fp: { r: [0, -0.15, -0.23, 0, 0, 0], l: null }, tp: { hold: [-0.32, 0.25, 0.31], grip: [0, -0.15, -0.23], rot: [0, Math.PI, 0], mode: "oneHand" } },
+            knife: { fp: { r: [0, -0.1, -0.23, 0, 0, 0], l: null }, tp: { hold: [-0.31, 0.26, 0.3], grip: [0, -0.1, -0.23], rot: [0, Math.PI, 0], mode: "oneHand" } },
             staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.23, 0.2], grip: [0, -0.1, -0.23], rot: [0.08, Math.PI, -0.02], mode: "oneHand" } },
             scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.52, 0.24, 0.24], grip: [0, -0.12, -0.23], rot: [0.08, Math.PI, -0.035], mode: "oneHand" } },
             spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], rot: [1.25, 0, 0], mode: "spear" } },
@@ -5745,7 +5745,11 @@ body.netgame #revivetouch{display:flex}
                       // HD melee (tools/blender/melee_hd.py): real PBR maps — linear filtering, mipmaps,
                       // authored metalness; the voxel models keep the crisp nearest-filtered pixels.
                       if (/^HD_/.test(o.name) || /^HD_/.test(o.parent?.name || "")) {
-                        for (const key of ["map", "emissiveMap", "normalMap"]) if (o.material[key]) o.material[key].anisotropy = 4;
+                        const maxAniso = renderer.capabilities.getMaxAnisotropy?.() || 4,
+                          texAniso = nativeAndroid
+                            ? Math.min(2, maxAniso)
+                            : Math.min(SettingsManager.data.graphics === "ultra" ? 8 : SettingsManager.data.graphics === "high" ? 6 : 4, maxAniso);
+                        for (const key of ["map", "emissiveMap", "normalMap"]) if (o.material[key]) o.material[key].anisotropy = texAniso;
                         if (o.material.emissiveMap) o.material.emissiveIntensity = 1.4;
                         o.userData.hd = true;
                         return;
@@ -6402,26 +6406,23 @@ body.netgame #revivetouch{display:flex}
                 0x2d3939,
                 "polymer",
               );
+              const squareGrip = w.kind === "melee" && !w.specter;
               for (let i = 0; i < 4; i++) {
-                A.link(
-                  h,
-                  [-0.042 + i * 0.027, -0.018, -0.04],
-                  [-0.043 + i * 0.027, -0.066, -0.095],
-                  0.015,
-                  0.016,
-                  0x626a5e,
-                  "polymer",
-                );
+                const xx = -0.042 + i * 0.027;
+                if (squareGrip) {
+                  A.block(h, [xx, -0.018, -0.027], [0.018, 0.05, 0.026], 0x626a5e, "polymer");
+                  A.block(h, [xx, -0.046, 0.005], [0.018, 0.026, 0.045], 0x626a5e, "polymer");
+                } else {
+                  A.link(h, [xx, -0.018, -0.04], [-0.043 + i * 0.027, -0.066, -0.095], 0.015, 0.016, 0x626a5e, "polymer");
+                }
               }
-              A.link(
-                h,
-                [left ? 0.055 : -0.055, 0, 0.01],
-                [left ? 0.072 : -0.072, -0.045, -0.035],
-                0.023,
-                0.022,
-                0x626a5e,
-                "polymer",
-              );
+              if (squareGrip) {
+                const sx = left ? 1 : -1;
+                A.block(h, [sx * 0.052, -0.012, 0.012], [0.026, 0.05, 0.026], 0x626a5e, "polymer");
+                A.block(h, [sx * 0.027, -0.036, 0.012], [0.045, 0.024, 0.026], 0x626a5e, "polymer");
+              } else {
+                A.link(h, [left ? 0.055 : -0.055, 0, 0.01], [left ? 0.072 : -0.072, -0.045, -0.035], 0.023, 0.022, 0x626a5e, "polymer");
+              }
               A.link(
                 h,
                 [0, 0.02, 0.055],
@@ -6440,7 +6441,7 @@ body.netgame #revivetouch{display:flex}
             if (prof) {
               for (const [hand, d] of [[parts.rightHand, prof.r], [parts.leftHand, prof.l]]) {
                 hand.visible = !!d;
-                if (d) { hand.position.set(d[0], d[1], d[2]); hand.rotation.set(d[3], 0, 0); }
+                if (d) { hand.position.set(d[0], d[1], d[2]); hand.rotation.set(d[3] || 0, d[4] || 0, d[5] || 0); }
               }
             }
             parts.leftBase = parts.leftHand.position.clone();
@@ -6657,7 +6658,7 @@ body.netgame #revivetouch{display:flex}
             for (const p of fx.smoke) {
               p.life += dt * 0.16; if (p.life > 1) p.life -= 1;
               const k = p.life, sc = S * (0.5 + k * 1.6);
-              p.s.position.set(Math.sin(t * 0.4 + p.life * 6) * 0.25 * k + (WindManager?.strength || 0) * k * 0.8, S * (0.8 + k * 2.6), 0);
+              p.s.position.set(Math.sin(t * 0.4 + p.life * 6) * 0.25 * k + (WindManager?.strength || 0) * k * 0.8, S * (0.8 + k * 2.6), Math.cos(t * 0.34 + p.life * 5.1) * 0.18 * k);
               p.s.scale.set(sc, sc, 1);
               p.s.material.opacity = 0.38 * Math.sin(Math.PI * Math.min(1, k * 1.2));
             }
@@ -9068,6 +9069,17 @@ body.netgame #revivetouch{display:flex}
                 color: c,
               });
           },
+          burst(pos, color, count = 18, speed = 6, life = 0.55, gravity = 6) {
+            if (SettingsManager.data.vfx === "off") return;
+            count = Math.round(count * (SettingsManager.data.vfx === "low" ? 0.35 : 1));
+            const c = new THREE.Color(color), limit = this.budget || this.max;
+            for (let i = 0; i < count && this.items.length < limit; i++) {
+              const dir = new V(rand(-1, 1), rand(-0.15, 1), rand(-1, 1));
+              if (dir.lengthSq() < 1e-5) dir.set(0, 1, 0);
+              dir.normalize().multiplyScalar(speed * rand(0.45, 1));
+              this.items.push({ pos: pos.clone(), vel: dir, life: rand(life * 0.55, life), color: c, gravity, drag: rand(0.7, 1.8) });
+            }
+          },
           line(a, b, color, life = 0.08) {
             if (SettingsManager.data.vfx === "off") return;
             const g = new THREE.BufferGeometry().setFromPoints([a, b]),
@@ -9089,7 +9101,8 @@ body.netgame #revivetouch{display:flex}
                 this.items.splice(i, 1);
                 continue;
               }
-              p.vel.y -= 3 * dt;
+              p.vel.y -= (p.gravity ?? 3) * dt;
+              if (p.drag) p.vel.multiplyScalar(Math.exp(-p.drag * dt));
               p.pos.addScaledVector(p.vel, dt);
             }
             this.items.forEach((p, i) => {
@@ -13197,7 +13210,15 @@ body.netgame #revivetouch{display:flex}
           weapon = null,
         ) {
           const fx = PhysicsProps.fxScale?.() ?? 1;
-          ParticleSystem.emit(pos, color, Math.round(44 * fx), 6);
+          if (fx > 0) {
+            const core = pos.clone().add(new V(0, 0.22, 0));
+            ParticleSystem.burst(core, 0xfff1b0, Math.round(14 * fx), Math.max(4, radius * 1.9), 0.3, 8);
+            ParticleSystem.burst(core, color, Math.round(38 * fx), Math.max(5, radius * 1.55), 0.58, 8);
+            ParticleSystem.emit(pos.clone().add(new V(0, 0.55, 0)), 0x3a3532, Math.round(20 * fx), Math.min(3, radius * 0.7));
+            PhysicsProps.blastRing?.(color, pos, radius);
+            const flash = PhysicsProps.flashLight?.(color, radius * 3.2, core);
+            if (flash) PhysicsProps.flashes.push({ light: flash, t: 0 });
+          }
           PhysicsProps.impulse(pos, radius * 1.8, 11);
           if (simulationTime - (PhysicsProps.lastBlastSoundAt || -99) > 0.09) {
             PhysicsProps.lastBlastSoundAt = simulationTime;
@@ -17650,6 +17671,7 @@ body.netgame #revivetouch{display:flex}
           debris: [],
           matrixAt: -1,
           lastBlastSoundAt: -99,
+          ringPool: null,
           debrisLimit() {
             const g = SettingsManager.data.graphics;
             if (nativeAndroid) return g === "low" ? 14 : g === "medium" ? 20 : 26;
@@ -17667,6 +17689,30 @@ body.netgame #revivetouch{display:flex}
             if (SettingsManager.data.vfx === "off") return 0;
             if (nativeAndroid) return SettingsManager.data.vfx === "low" ? 0.28 : 0.42;
             return SettingsManager.data.vfx === "low" ? 0.45 : 0.72;
+          },
+          blastRing(color, pos, radius) {
+            if (this.fxScale() <= 0) return;
+            if (!this.ringPool) {
+              const geo = new THREE.RingGeometry(0.72, 1, 32), n = nativeAndroid ? 2 : 4;
+              this.ringPool = Array.from({ length: n }, () => {
+                const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+                mesh.rotation.x = -Math.PI / 2; mesh.renderOrder = 4; mesh.visible = false; scene.add(mesh);
+                return { mesh, t: 99, radius: 1 };
+              });
+            }
+            let slot = this.ringPool.find((q) => !q.mesh.visible);
+            if (!slot) slot = this.ringPool.reduce((a, b) => (a.t > b.t ? a : b));
+            slot.t = 0; slot.radius = radius; slot.mesh.visible = true; slot.mesh.position.copy(pos);
+            slot.mesh.material.color.setHex(color); slot.mesh.material.opacity = 0.58; slot.mesh.scale.setScalar(0.2);
+          },
+          updateBlastRings(dt) {
+            for (const r of this.ringPool || []) {
+              if (!r.mesh.visible) continue;
+              r.t += dt;
+              const k = clamp(r.t / 0.42, 0, 1), sc = 0.2 + r.radius * (0.15 + k * 1.05);
+              r.mesh.scale.setScalar(sc); r.mesh.material.opacity = (1 - k) * (1 - k) * 0.58;
+              if (k >= 1) r.mesh.visible = false;
+            }
           },
           // Detach a mesh into world space and let it fly (headshot kills pop the head off).
           fling(mesh, vel, spin = 8, life = 4) {
@@ -17729,6 +17775,7 @@ body.netgame #revivetouch{display:flex}
               f.light.intensity = 0;
             }
             this.flashes = [];
+            for (const r of this.ringPool || []) { r.mesh.visible = false; r.t = 99; }
             this.items = [];
             this.meshCache.length = 0;
             this.matrixAt = -1;
@@ -17904,10 +17951,11 @@ body.netgame #revivetouch{display:flex}
               color = toxic ? 0x8dff3a : 0xff7a26;
             // Fire/smoke stay visible, but scale the one-frame allocation burst to the device.
             const fx = this.fxScale();
-            ParticleSystem.emit(at, color, Math.round(42 * fx), 7);
-            ParticleSystem.emit(at, 0xffe2a0, Math.round(18 * fx), 4);
+            ParticleSystem.burst(at, color, Math.round(34 * fx), 8, 0.62, 9);
+            ParticleSystem.burst(at, 0xffe2a0, Math.round(14 * fx), 5, 0.38, 7);
             ParticleSystem.emit(at.clone().add(new V(0, 0.6, 0)), 0x3a3a3a, Math.round(24 * fx), 2.2);
             ParticleSystem.emit(at.clone().add(new V(0, 1.2, 0)), 0x5a5a5a, Math.round(14 * fx), 1.4);
+            this.blastRing(color, at, radius);
             const pieces = nativeAndroid ? 2 : SettingsManager.data.graphics === "low" ? 2 : 4;
             for (let j = 0; j < pieces; j++) {
               const piece = new THREE.Mesh(this.geo("box"), PropKit.mat(p.d.tex));
@@ -17977,6 +18025,7 @@ body.netgame #revivetouch{display:flex}
             this.updateDebris(dt);
             this.updateFuses(dt);
             this.updateFlashes(dt);
+            this.updateBlastRings(dt);
             if (!this.items.length) return;
             const feet = player ? (player.ground || 0) + (player.jump || 0) : 0,
               pv = PlayerController.motion;
@@ -24081,6 +24130,17 @@ body.netgame #revivetouch{display:flex}
               holdRot = (gp.rot || [0, Math.PI, 0]).slice();
             gun.position.set(...hold);
             gun.rotation.set(...holdRot);
+            let gripDigits = null;
+            if (oneHand) {
+              gripDigits = A.pivot(elbows[0], 0, -0.37, 0.005);
+              const digitColor = s.gloves === "tactical_gloves" ? 0x1f2422 : 0x8b654f;
+              for (let i = 0; i < 4; i++) {
+                const xx = -0.038 + i * 0.025;
+                A.block(gripDigits, [xx, -0.015, -0.035], [0.018, 0.05, 0.026], digitColor, "cloth");
+                A.block(gripDigits, [xx, -0.042, 0.002], [0.018, 0.025, 0.05], digitColor, "cloth");
+              }
+              A.block(gripDigits, [-0.054, -0.008, 0.014], [0.026, 0.052, 0.026], digitColor, "cloth");
+            }
             const specterPreview = [];
             if (weapon?.specter) {
               // The loadout must always show the complete five-blade set, even on the first frame
@@ -24131,6 +24191,7 @@ body.netgame #revivetouch{display:flex}
               grip: GripProfiles.of(weapon),
               equipAt: simulationTime,
               oneHand,
+              gripDigits,
               spearHold: gp.mode === "spear",
               bowHold: gp.mode === "bow",
               rifleHold: gp.mode === "rifle",
