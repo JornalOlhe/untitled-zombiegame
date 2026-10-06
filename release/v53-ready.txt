@@ -1,2 +1,3 @@
 Dead Recoil v53 / 0.48.0 ready for gated publication after mode/Story contract QA, exact survivor-reference hash QA, full gameplay regression, Android real boot smoke, and Windows installer smoke.
 Retry after correcting the v53 Windows version validation to require Android 0.48.0.
+Retry full gate after an isolated CI timeout in deathkill-smoke; the identical visuals suite passed on the previous v53 attempt.
