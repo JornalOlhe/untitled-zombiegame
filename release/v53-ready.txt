@@ -1,0 +1,1 @@
+Dead Recoil v53 / 0.48.0 ready for gated publication after mode/Story contract QA, exact survivor-reference hash QA, full gameplay regression, Android real boot smoke, and Windows installer smoke.
