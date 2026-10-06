@@ -41,6 +41,7 @@ jobs:
           node tests/release-version.cjs
           node tests/navigation-race.cjs
           node tests/survivor-skin-smoke.cjs
+          node tests/v53-survivor-reference-lock.cjs
           node tests/gamepad-smoke.cjs
           node tests/puddles-smoke.cjs
       - uses: actions/upload-artifact@v4
