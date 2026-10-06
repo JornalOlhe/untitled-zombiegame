@@ -44,7 +44,7 @@ const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,S=T.Survi
         rec.specterBackCount=(r.specterPreview||[]).filter(entry=>entry.base.z<0).length;
       }
       if(def.scythe&&r.parts.model)rec.scytheVisualYaw=+r.parts.model.rotation.y.toFixed(3);
-      if(def.name==='Machete'||def.name==='Bloodfang')rec.idleBladeRot=[+r.gun.rotation.x.toFixed(3),+r.gun.rotation.z.toFixed(3)];
+      if(def.name==='Machete'||def.name==='Bloodfang')rec.idleBladeRot=[+r.holdRot[0].toFixed(3),+r.holdRot[2].toFixed(3)];
     }
     const gunP=r.gun.getWorldPosition(new V());
     const hand=(a)=>a.localToWorld(new V(0,-0.62,0));
