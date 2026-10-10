@@ -134,6 +134,7 @@
         ${this.range("adsSensitivity", "Sensibilidade ao mirar", 0.1, 2, 0.05, pct, "Multiplica a sensibilidade durante a mira")}
         ${this.range("padSensitivity", "Sensibilidade do controle", 0.3, 2.5, 0.05, pct, "Analógico direito (Xbox / PlayStation / genérico)")}
         ${this.range("fov", "Campo de visão (FOV)", 60, 120, 1, this.formats.fov)}
+        ${this.range("shake", "Tremor de tela", 0, 100, 5, undefined, "Reduza para conforto (acessibilidade)")}
         ${this.check("invert", "Inverter eixo Y")}
       </div>`;
     },
@@ -185,7 +186,7 @@
       const keysOf = {
         graphics: ["graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "fps", "numbers"],
         audio: ["master", "music", "ambient", "weapons", "sfx", "ui"],
-        camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "invert"],
+        camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "shake", "invert"],
       };
       if (this.tab === "controls") DR.Keybinds.reset();
       else for (const k of keysOf[this.tab]) s[k] = d[k];
