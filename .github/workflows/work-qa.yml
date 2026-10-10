@@ -45,6 +45,7 @@ jobs:
           node tests/gamepad-smoke.cjs
           node tests/puddles-smoke.cjs
           node tests/powerups-smoke.cjs
+          node tests/hitdir-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

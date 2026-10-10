@@ -725,6 +725,16 @@
       .crosshair i:nth-child(3) { bottom: var(--gap); }
       .crosshair i:nth-child(4) { top: var(--gap); }
       .crosshair.melee i { opacity: .55; }
+      #dmgdir { position:absolute; inset:0; pointer-events:none; }
+      #dmgdir i { position:absolute; left:50%; top:50%; width:150px; height:150px; margin:-75px 0 0 -75px; opacity:0;
+        background:conic-gradient(from -18deg, rgba(239,48,43,.85) 0deg, rgba(239,48,43,0) 36deg, transparent 36deg);
+        -webkit-mask:radial-gradient(circle, transparent 54%, #000 56%, #000 72%, transparent 74%); mask:radial-gradient(circle, transparent 54%, #000 56%, #000 72%, transparent 74%);
+        transform-origin:50% 50%; }
+      #dmgdir { --r: 0px; }
+      #killfeed { position:absolute; right:14px; top:120px; display:flex; flex-direction:column; gap:3px; align-items:flex-end; pointer-events:none; font:600 12px/1.2 var(--mono,monospace); }
+      #killfeed div { background:rgba(8,12,10,.62); border-right:3px solid #d7a64a; color:#e9efe6; padding:3px 8px; border-radius:2px; transition:opacity .4s; }
+      #killfeed div.hs { border-right-color:#ef302b; color:#ffd9c9; }
+      #killfeed div.boss { border-right-color:#b57cff; }
       #hitmark {
         position: absolute;
         left: 50%;
@@ -3052,6 +3062,8 @@ body.netgame #revivetouch{display:flex}
       <div class="crosshair"><i></i><i></i><i></i><i></i></div>
       <div id="scope" aria-hidden="true"><i class="scope-h"></i><i class="scope-v"></i><b></b></div>
       <div id="hitmark">+</div>
+      <div id="dmgdir"></div>
+      <div id="killfeed"></div>
       <div id="killmark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <div id="killpop" aria-hidden="true"><span>KILL</span><b></b></div>
       <div id="streakbanner" aria-live="polite"></div>
@@ -13630,6 +13642,7 @@ body.netgame #revivetouch{display:flex}
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               ZombiePing.lastKill = simulationTime;
               PowerUps.onKill(z);
+              HitDir.kill(z, head, w && w.name);
               if (!z.boss) {
                 const reward = EconomyRewards.enemy(z.type);
                 Progression.reward(reward);
@@ -14273,6 +14286,7 @@ body.netgame #revivetouch{display:flex}
             if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             player.hp -= amount;
+            HitDir.hit(HitDir.source(amount));
             player.lastDamage = simulationTime;
             hurtUntil = Math.max(hurtUntil, simulationTime + 0.16);
             if (player.hp <= 0) {
@@ -18273,6 +18287,44 @@ body.netgame #revivetouch{display:flex}
         //  - Insta-Kill: regular infected die in one hit (bosses take x1.5 instead).
         //  - Infinite Ammo: the magazine never drains, and it is refilled on pickup.
         //  - Double Damage: x2 damage on everything.
+        const HitDir = {
+          marks: [], feed: [],
+          source(amount) {
+            // Nearest living enemy is the attacker for melee hits; ranged hits fall back to the nearest within 40 m.
+            let best = null, bd = 1e9;
+            for (const z of ZombieManager.list) { if (z.dead || z.remote) continue; const d = z.group.position.distanceToSquared(player.pos); if (d < bd) { bd = d; best = z; } }
+            return best && bd < 1600 ? best.group.position : null;
+          },
+          hit(pos) {
+            if (!pos) return;
+            const root = document.getElementById("dmgdir"); if (!root) return;
+            const fx = pos.x - player.pos.x, fz = pos.z - player.pos.z;
+            if (fx * fx + fz * fz < 0.04) return;
+            const dir = new V(); camera.getWorldDirection(dir);
+            let ang = Math.atan2(fx, -fz) - Math.atan2(dir.x, -dir.z);
+            ang = Math.atan2(Math.sin(ang), Math.cos(ang));
+            let el = this.marks.find((m) => m.t <= 0);
+            if (!el) { if (this.marks.length >= 4) el = this.marks[0]; else { const i = document.createElement("i"); root.appendChild(i); el = { i, t: 0, a: 0 }; this.marks.push(el); } }
+            el.t = 1.4; el.a = ang; this.last = ang;
+          },
+          update(dt) {
+            for (const m of this.marks) {
+              if (m.t > 0) { m.t -= dt; m.i.style.opacity = Math.max(0, Math.min(1, m.t / 0.9)).toFixed(2); m.i.style.transform = `rotate(${m.a}rad) translateY(-95px)`; }
+              else if (m.i.style.opacity !== "0") m.i.style.opacity = "0";
+            }
+            for (let i = this.feed.length - 1; i >= 0; i--) { const f = this.feed[i]; f.t -= dt; if (f.t < 0.5) f.el.style.opacity = "0"; if (f.t <= 0) { f.el.remove(); this.feed.splice(i, 1); } }
+          },
+          kill(z, head, weapon) {
+            const box = document.getElementById("killfeed"); if (!box) return;
+            const name = z.boss ? "CHEFE" : (ENEMY_KEYS[z.type] || "Infectado");
+            const el = document.createElement("div");
+            el.className = (z.boss ? "boss " : "") + (head ? "hs" : "");
+            el.textContent = `${weapon || "Arma"} ▸ ${String(name).toUpperCase()}${head ? " ◎" : ""}`;
+            box.appendChild(el); this.feed.push({ el, t: 4 });
+            while (this.feed.length > 5) { this.feed.shift().el.remove(); }
+          },
+          clear() { for (const m of this.marks) { m.t = 0; m.i.style.opacity = "0"; } for (const f of this.feed) f.el.remove(); this.feed.length = 0; }
+        };
         const PowerUps = {
           kinds: {
             instakill: { label: "INSTA-KILL", sub: "Infectados comuns morrem com 1 tiro", color: "#ff3b3b", hex: 0xff3b3b, dur: 12 },
@@ -19811,6 +19863,7 @@ body.netgame #revivetouch{display:flex}
             MonsterFX.init();
             Medkits.clear();
             PowerUps.clear();
+            HitDir.clear();
             WaveManager.start();
             CameraRig.reset();fallback=false;document.body.classList.remove("mouse-captured");
           },
@@ -19821,6 +19874,7 @@ body.netgame #revivetouch{display:flex}
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             const resistance = classValue("damageTaken", 1);
             player.hp -= amount * resistance;
+            HitDir.hit(HitDir.source(amount));
             player.lastDamage = simulationTime;
             hurtUntil = simulationTime + 0.45;
             shake = 0.22;
@@ -27632,7 +27686,7 @@ body.netgame #revivetouch{display:flex}
                 sun.target.position.set(sx, 0, sz);
                 sun.position.set(sx + sunOffset.x, sunOffset.y, sz + sunOffset.z);
               }
-              if (state === GameState.PLAYING) { Medkits.update(sdt); PowerUps.update(sdt); }
+              if (state === GameState.PLAYING) { Medkits.update(sdt); PowerUps.update(sdt); HitDir.update(sdt); }
               if (KillCam.active) KillCam.update(dt);
               if (BossDeath.active) BossDeath.update(dt);
               UIManager.hud(sdt);
@@ -27814,6 +27868,7 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             PowerUps,
+            HitDir,
             Nature,
             WindManager,
             CameraRig,
