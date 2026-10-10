@@ -23969,6 +23969,15 @@ body.netgame #revivetouch{display:flex}
               TemplateBody.box(elbow,[0,-.37,.005],[.115,.12,.125],"arm"+L,.86,1); // hand
               arms.push(arm);elbows.push(elbow);
             }
+            // Class identity at a glance: an armband in the class colour on both upper arms, one
+            // extra stripe per tier (rank). The reference skin itself is never modified.
+            {
+              const def = classes[cls], hex = def && /^#[0-9a-f]{6}$/i.test(def.color) ? parseInt(def.color.slice(1), 16) : 0x7b8588;
+              const stripes = Math.min(3, 1 + (def?.tier || 0));
+              for (const arm of arms)
+                for (let i = 0; i < stripes; i++)
+                  A.block(arm, [0, -0.06 - i * 0.055, 0], [0.178, 0.032, 0.198], hex, "cloth", i === 0 ? 0 : 0);
+            }
             const tactical = [1, 4, 7, 8, 9].includes(cls);
             if (tactical) {
               A.block(
