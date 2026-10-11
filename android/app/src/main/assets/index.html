@@ -14117,6 +14117,8 @@ body.netgame #revivetouch{display:flex}
               if (Math.random() < 0.3) CombatFX.mark(hitPoint, 0x582a26, 0.25);
             }
             if (!NetGame.attacker) {
+              // flesh impact: a short low thud (rate-limited so shotguns don't stack 8 of them)
+              if (AudioManager.ctx && performance.now() - (this.lastThud || 0) > 50) { this.lastThud = performance.now(); AudioManager.tone(head ? 190 : 150, 0.06, "triangle", head ? 0.09 : 0.07, 60, "weapons"); }
               hitUntil = simulationTime + 0.12;
               HitDir.marker(head ? "head" : "hit");
               UIManager.number(
@@ -19678,6 +19680,13 @@ body.netgame #revivetouch{display:flex}
             const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
             const p = hit.point.clone().addScaledVector(n, 0.012);
             const energy = ["laser", "rail", "quantum", "fire", "ice", "cryo", "missile"].includes(w.kind);
+            // impact audio (rate-limited): a dry chip on the surface, now and then a ricochet whine
+            if (!energy && AudioManager.ctx && performance.now() - (this.lastSnd || 0) > 45) {
+              this.lastSnd = performance.now();
+              const far = clamp(1 - hit.distance / 40, 0.15, 1);
+              AudioManager.tone(rand(1700, 2600), 0.025, "square", 0.035 * far, rand(700, 1100), "weapons");
+              if (Math.random() < 0.14) AudioManager.tone(rand(2600, 3400), 0.2, "sine", 0.03 * far, rand(800, 1100), "weapons");
+            }
             // sparks: reflected off the surface
             const refl = dir.clone().reflect(n).multiplyScalar(0.5).add(n).normalize();
             ParticleSystem.emit(p.clone().addScaledVector(refl, 0.05), energy ? (rarityColors[w.tier] || 0x9fdcff) : 0xffc070, energy ? 8 : 6, 4.2);
@@ -25779,6 +25788,39 @@ body.netgame #revivetouch{display:flex}
               g.rotation.z += (1.4 - g.rotation.z) * (1 - Math.exp(-dt * 3));
           },
         };
+        // Lobby character: your survivor (current class + equipped weapon) stands in the menu scene,
+        // idling and turning toward the drifting camera, lit by a key light that only exists at
+        // intensity > 0 in the menu (the light itself is permanent, so no shader recompiles).
+        const menuKeyLight = new THREE.PointLight(0xffd8b0, 0, 10, 2);
+        scene.add(menuKeyLight);
+        const MenuAvatar = {
+          model: null, key: "",
+          update(dt, on) {
+            if (!on) { if (this.model) this.model.visible = false; menuKeyLight.intensity = 0; return; }
+            try {
+              const w = WeaponSystem.weapons?.[Progression.data?.weaponId] || WeaponSystem.current?.();
+              const key = `${selectedClass}|${w?.name}|${JSON.stringify(CharacterStyle?.data || {})}`;
+              if (!this.model || this.key !== key) {
+                if (this.model) Survivor.dispose(this.model);
+                this.model = Survivor.create(selectedClass, w); this.key = key;
+                this.model.userData.menuOnly = true;
+                scene.add(this.model);
+              }
+              // Stand ~6.5 m in front of the drifting menu camera, right of the menu list, like a lobby.
+              const fw = camera.getWorldDirection(this._f || (this._f = new V())); fw.y = 0; fw.normalize();
+              const rt = (this._r || (this._r = new V())).set(-fw.z, 0, fw.x);
+              const x = camera.position.x + fw.x * 6.2 + rt.x * 2.0, z = camera.position.z + fw.z * 6.2 + rt.z * 2.0;
+              const m = this.model, gy = MapManager.groundAt?.(x, z, 0.3, 2) || 0;
+              m.visible = true; m.position.set(x, gy, z);
+              const toCam = Math.atan2(camera.position.x - x, camera.position.z - z);
+              const face = toCam - 0.45; // three-quarter view toward the camera
+              m.rotation.y += Math.atan2(Math.sin(face - m.rotation.y), Math.cos(face - m.rotation.y)) * Math.min(1, dt * 2);
+              Survivor.animate(m, dt, menuTime, 0, false, 0, 99, false);
+              menuKeyLight.position.set(x + Math.sin(toCam + 0.6) * 1.8, gy + 2.0, z + Math.cos(toCam + 0.6) * 1.8);
+              menuKeyLight.intensity = 9;
+            } catch (e) { if (this.model) this.model.visible = false; }
+          },
+        };
         const CameraRig = {
           target: 0,
           distance: 0,
@@ -28574,6 +28616,7 @@ body.netgame #revivetouch{display:flex}
               true,
             );
           }
+          MenuAvatar.update(dt, !inWorld && state === GameState.MENU);
           if (!inWorld) {
             camera.position.set(
               11 + Math.sin(menuTime * 0.055) * 5,
@@ -28733,6 +28776,7 @@ body.netgame #revivetouch{display:flex}
             explosion,
             Nature,
             Lightning,
+            MenuAvatar,
             AmbientMotes,
             WindManager,
             CameraRig,
