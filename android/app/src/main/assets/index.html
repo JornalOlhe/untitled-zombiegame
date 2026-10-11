@@ -6813,6 +6813,50 @@ body.netgame #revivetouch{display:flex}
             }
           },
         };
+        // Storm lightning on the rainy maps: a 2-3 strike flicker that lights clouds (sky uniform)
+        // and the scene (one permanent directional light, intensity 0 at rest, so adding it never
+        // changes the light count mid-game), then thunder after the distance delay.
+        const lightningLight = new THREE.DirectionalLight(0xb8c8ff, 0);
+        lightningLight.position.set(-20, 60, -30);
+        scene.add(lightningLight);
+        const Lightning = {
+          next: 14, t: -1, seq: [], dist: 1,
+          update(dt, on, map) {
+            if (!on) { if (this.t >= 0) this.end(); return; }
+            if (this.t < 0) {
+              this.next -= dt;
+              if (this.next <= 0) this.strike(map);
+              return;
+            }
+            this.t += dt;
+            let v = 0;
+            for (const [at, len, amp] of this.seq) if (this.t >= at && this.t < at + len) v = Math.max(v, amp * (1 - (this.t - at) / len));
+            Nature.flashU.value = v;
+            lightningLight.intensity = v * (map === 2 ? 0.9 : 1.3) * (1.2 - this.dist * 0.5);
+            if (this.t > 0.9) this.end();
+          },
+          strike(map) {
+            this.t = 0; this.dist = Math.random();
+            this.next = 14 + Math.random() * 26;
+            const n = 2 + (Math.random() < 0.5 ? 1 : 0);
+            this.seq = Array.from({ length: n }, (_, i) => [i * (0.07 + Math.random() * 0.12), 0.08 + Math.random() * 0.1, i ? 0.55 + Math.random() * 0.45 : 1]);
+            lightningLight.position.set(rand(-60, 60), 70, rand(-60, 60));
+            const delay = 600 + this.dist * 3400;
+            setTimeout(() => this.thunder(this.dist), delay);
+          },
+          end() { this.t = -1; Nature.flashU.value = 0; lightningLight.intensity = 0; },
+          thunder(dist) {
+            const A = AudioManager, ctx = A.ctx; if (!ctx || state !== GameState.PLAYING) return;
+            const t = ctx.currentTime, dur = 2.6 + dist * 2, key = "thunder";
+            let b = A.noiseBuffers.get(key);
+            if (!b) { const n = Math.floor(ctx.sampleRate * 4.6), a = (b = ctx.createBuffer(1, n, ctx.sampleRate)).getChannelData(0); let br = 0; for (let i = 0; i < n; i++) { br = br * 0.995 + (Math.random() * 2 - 1) * 0.05; const env = Math.pow(1 - i / n, 1.6) * (0.6 + 0.4 * Math.sin(i / n * 23) ** 2); a[i] = br * 6 * env; } A.noiseBuffers.set(key, b); }
+            const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+            src.buffer = b; f.type = "lowpass"; f.frequency.value = 900 - dist * 650;
+            g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.75 * (1.1 - dist * 0.6), t + 0.06 + dist * 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            src.connect(f); f.connect(g); g.connect(A.out("ambient")); src.start(t); src.stop(t + dur + 0.1);
+            src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
+          },
+        };
         const WorldArt = {
           weather: null,
           weatherPositions: null,
@@ -7331,11 +7375,46 @@ body.netgame #revivetouch{display:flex}
             if (this.weatherPuddles) this.weatherPuddles.visible = puddlesVisible;
             scene.environment = this.reflectionTarget.texture;
           },
+          // Raindrop splashes: a pooled point cloud; each splash is a few droplets that hop out and
+          // fade (vertex colour fades with additive blending, so no per-point alpha is needed).
+          splashes: null,
+          splash(x, z) {
+            if (!this.splashes) {
+              const n = 360, geo = new THREE.BufferGeometry();
+              this.splashPos = new Float32Array(n * 3); this.splashCol = new Float32Array(n * 3);
+              geo.setAttribute("position", new THREE.BufferAttribute(this.splashPos, 3));
+              geo.setAttribute("color", new THREE.BufferAttribute(this.splashCol, 3));
+              this.splashes = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+              this.splashes.frustumCulled = false; this.splashes.renderOrder = 3; scene.add(this.splashes);
+              this.splashLife = new Float32Array(n); this.splashVel = new Float32Array(n * 3); this.splashNext = 0;
+            }
+            const y = (MapManager.groundAt?.(x, z, 0.05, 60) ?? 0) + 0.02;
+            for (let k = 0; k < 3; k++) {
+              const i = this.splashNext; this.splashNext = (i + 1) % this.splashLife.length;
+              const a = Math.random() * 6.283, sp = 0.5 + Math.random() * 0.7;
+              this.splashPos[i * 3] = x; this.splashPos[i * 3 + 1] = y; this.splashPos[i * 3 + 2] = z;
+              this.splashVel[i * 3] = Math.cos(a) * sp; this.splashVel[i * 3 + 1] = 0.9 + Math.random() * 0.8; this.splashVel[i * 3 + 2] = Math.sin(a) * sp;
+              this.splashLife[i] = 0.22 + Math.random() * 0.1;
+            }
+          },
+          updateSplashes(dt) {
+            if (!this.splashes) return;
+            const P = this.splashPos, C = this.splashCol, V3 = this.splashVel, L = this.splashLife;
+            for (let i = 0; i < L.length; i++) {
+              if (L[i] <= 0) { if (C[i * 3]) C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = 0; continue; }
+              L[i] -= dt; V3[i * 3 + 1] -= 9.8 * dt;
+              P[i * 3] += V3[i * 3] * dt; P[i * 3 + 1] += V3[i * 3 + 1] * dt; P[i * 3 + 2] += V3[i * 3 + 2] * dt;
+              const k = Math.max(0, L[i] / 0.3) * 0.55;
+              C[i * 3] = 0.62 * k; C[i * 3 + 1] = 0.72 * k; C[i * 3 + 2] = 0.8 * k;
+            }
+            this.splashes.geometry.attributes.position.needsUpdate = true;
+            this.splashes.geometry.attributes.color.needsUpdate = true;
+          },
           buildWeather() {
             // Weather is scene-global and map-independent. Reuse its buffers across map rebuilds
             // instead of reallocating geometry/materials every time the player changes arena.
             if (this.weather) return;
-            const count = 450;
+            const count = 1400;
             this.weatherPositions = new Float32Array(count * 6);
             this.weatherSeed = Array.from({ length: count }, () => [
               rand(-20, 20),
@@ -7716,14 +7795,17 @@ body.netgame #revivetouch{display:flex}
               weatherOn = SettingsManager.data.vfx !== "off",
               rainMap = map === 0 || map === 2;
             this.weather.visible = weatherOn && rainMap;
+            if (this.splashes) this.splashes.visible = weatherOn && rainMap;
+            Lightning.update(dt, weatherOn && rainMap && state === GameState.PLAYING, map);
             if (this.snow) this.snow.visible = weatherOn && map === 4;
+            if (this.snowBig) this.snowBig.visible = weatherOn && map === 4 && SettingsManager.data.graphics !== "low";
             this.updateReflections(dt);
             this.updatePuddles(dt, weatherOn && rainMap);
             if (!weatherOn) return;
             if (map === 4) {
               // Snowfall: round flakes drifting in a box around the camera, cheap (one draw call).
               if (!this.snow) {
-                const n = 900;
+                const n = 1600;
                 this.snowSeed = Array.from({ length: n }, () => [rand(-24, 24), rand(0, 16), rand(-24, 24), rand(0.5, 1.2), rand(0, 6)]);
                 this.snowPos = new Float32Array(n * 3);
                 const geo = new THREE.BufferGeometry();
@@ -7731,9 +7813,17 @@ body.netgame #revivetouch{display:flex}
                 this.snow = new THREE.Points(geo, new THREE.PointsMaterial({ map: VisualArt.texture("glow"), color: 0xf2f8ff, size: 0.16, transparent: true, opacity: 0.85, depthWrite: false }));
                 this.snow.frustumCulled = false;
                 scene.add(this.snow);
+                // Near-field big flakes: few, slow, tumbling close to the lens (depth cue).
+                const nb = 140, gb = new THREE.BufferGeometry();
+                this.snowBigSeed = Array.from({ length: nb }, () => [rand(-7, 7), rand(0, 6), rand(-7, 7), rand(0.35, 0.7), rand(0, 6)]);
+                this.snowBigPos = new Float32Array(nb * 3);
+                gb.setAttribute("position", new THREE.BufferAttribute(this.snowBigPos, 3));
+                this.snowBig = new THREE.Points(gb, new THREE.PointsMaterial({ map: VisualArt.texture("glow"), color: 0xffffff, size: 0.34, transparent: true, opacity: 0.55, depthWrite: false }));
+                this.snowBig.frustumCulled = false;
+                scene.add(this.snowBig);
               }
               const o = camera.position,
-                n = { low: 300, medium: 500, high: 750, ultra: 900 }[SettingsManager.data.graphics] || 500;
+                n = Math.min(nativeAndroid ? 520 : 1600, { low: 350, medium: 650, high: 1000, ultra: 1500 }[SettingsManager.data.graphics] || 650);
               for (let i = 0; i < n; i++) {
                 const f = this.snowSeed[i];
                 f[1] -= dt * 1.4 * f[3];
@@ -7748,33 +7838,50 @@ body.netgame #revivetouch{display:flex}
               }
               this.snow.geometry.setDrawRange(0, n);
               this.snow.geometry.attributes.position.needsUpdate = true;
+              if (this.snowBig) {
+                const wv = WindManager.vec();
+                for (let i = 0; i < this.snowBigSeed.length; i++) {
+                  const f = this.snowBigSeed[i];
+                  f[1] -= dt * 0.9 * f[3]; if (f[1] < 0) f[1] = 6;
+                  f[0] += (wv.x * 2.4 + Math.sin(menuTime * 1.3 + f[4]) * 0.4) * dt; f[2] += (wv.z * 2.4 + Math.cos(menuTime * 1.1 + f[4]) * 0.4) * dt;
+                  const j = i * 3;
+                  this.snowBigPos[j] = o.x + ((((f[0] + 7) % 14) + 14) % 14) - 7;
+                  this.snowBigPos[j + 1] = o.y - 2 + f[1];
+                  this.snowBigPos[j + 2] = o.z + ((((f[2] + 7) % 14) + 14) % 14) - 7;
+                }
+                this.snowBig.geometry.attributes.position.needsUpdate = true;
+              }
               return;
             }
             if (!rainMap) return;
-            const count =
-                SettingsManager.data.vfx === "low"
-                  ? 100
-                  : { low: 100, medium: 200, high: 330, ultra: 450 }[
-                      SettingsManager.data.graphics
-                    ],
-              origin = camera.position;
-            this.weather.material.opacity = map === 0 ? 0.15 : 0.18;
-            this.weather.material.color.set(map === 2 ? 0x96a16b : 0x97b8c3);
+            // Rain: wind-slanted streaks whose length follows the fall speed (motion blur), denser on
+            // higher settings, plus pooled splashes where drops land near the camera.
+            const q = SettingsManager.data.vfx === "low" ? "low" : SettingsManager.data.graphics;
+            const count = Math.min(nativeAndroid ? 420 : 1400, { low: 220, medium: 520, high: 900, ultra: 1300 }[q] || 520),
+              origin = camera.position, wv = WindManager.vec(), fall = map === 0 ? 11 : 8.5;
+            this.weather.material.opacity = map === 0 ? 0.17 : 0.2;
+            this.weather.material.color.set(map === 2 ? 0x9aa58a : 0x9dbdc8);
+            let splashBudget = 18;
             for (let i = 0; i < count; i++) {
               const s = this.weatherSeed[i];
-              s[1] -= dt * (map === 0 ? 11 : 8.5) * s[3];
-              if (s[1] < 0) s[1] = 14;
-              const x = origin.x + s[0] + Math.sin(menuTime * 0.3 + i) * 0.1,
+              const v = fall * s[3];
+              s[1] -= dt * v;
+              if (s[1] < 0) {
+                if (splashBudget > 0 && (s[0] * s[0] + s[2] * s[2]) < 200) { splashBudget--; this.splash(origin.x + s[0], origin.z + s[2]); }
+                s[1] = 14;
+              }
+              const x = origin.x + s[0] + wv.x * (14 - s[1]) * 0.12,
                 y = s[1],
-                z = origin.z + s[2];
-              const j = i * 6;
+                z = origin.z + s[2] + wv.z * (14 - s[1]) * 0.12;
+              const len = (map === 0 ? 0.045 : 0.035) * v, j = i * 6;
               this.weatherPositions[j] = x;
               this.weatherPositions[j + 1] = y;
               this.weatherPositions[j + 2] = z;
-              this.weatherPositions[j + 3] = x + (map === 0 ? 0.08 : 0.015);
-              this.weatherPositions[j + 4] = y + (map === 0 ? 0.45 : 0.025);
-              this.weatherPositions[j + 5] = z;
+              this.weatherPositions[j + 3] = x - wv.x * len * 0.35;
+              this.weatherPositions[j + 4] = y + len;
+              this.weatherPositions[j + 5] = z - wv.z * len * 0.35;
             }
+            this.updateSplashes(dt);
             this.weather.geometry.setDrawRange(0, count * 2);
             this.weather.geometry.attributes.position.needsUpdate = true;
           },
@@ -10628,6 +10735,7 @@ body.netgame #revivetouch{display:flex}
         };
         const Nature = {
           group: null,
+          flashU: { value: 0 },
           quality() {
             return { low: 0.3, medium: 0.6, high: 1, ultra: 1.4 }[SettingsManager.data.graphics] || 0.6;
           },
@@ -10648,39 +10756,78 @@ body.netgame #revivetouch{display:flex}
               uniforms: {
                 zen: { value: new THREE.Color(P.zen) }, hor: { value: fogCol.clone().lerp(new THREE.Color(P.hor), 0.5) },
                 cloudCol: { value: new THREE.Color(P.cloud) }, glowCol: { value: new THREE.Color(P.glow) }, moonCol: { value: new THREE.Color(P.moonCol) },
-                moonDir: { value: new V(...P.moon).normalize() }, stars: { value: P.stars }, cover: { value: P.cover }, day: { value: P.day || 0 },
+                moonDir: { value: new V(...P.moon).normalize() }, stars: { value: P.stars }, cover: { value: P.cover }, day: { value: P.day || 0 }, flash: Nature.flashU,
                 time: PropKit.windTime, windDir: WindManager.uniforms.windDir, windStrength: WindManager.uniforms.windStrength,
               },
               vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
               fragmentShader: `
-                uniform vec3 zen, hor, cloudCol, glowCol, moonCol, moonDir; uniform float stars, cover, day, time, windStrength; uniform vec2 windDir;
+                uniform vec3 zen, hor, cloudCol, glowCol, moonCol, moonDir; uniform float stars, cover, day, time, windStrength, flash; uniform vec2 windDir;
                 varying vec3 vDir;
                 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+                float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
                 float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
                 float fbm(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<5;i++){ s+=a*n(p); p=p*2.03+vec2(1.7,9.2); a*=0.5; } return s; }
+                // Stars on a 3-D lattice of the view direction: no stretching at the horizon.
+                vec3 starLayer(vec3 d, float k, float thr, float size){
+                  vec3 q = d * k, c = floor(q); float r = h3(c);
+                  if (r < thr) return vec3(0.0);
+                  vec3 o = vec3(h3(c + 1.3), h3(c + 4.7), h3(c + 9.1)) * 0.6 + 0.2;
+                  float dd = length(fract(q) - o);
+                  float b = smoothstep(size, 0.0, dd) * (r - thr) / (1.0 - thr);
+                  float tw = 0.65 + 0.35 * sin(time * (2.0 + r * 5.0) + r * 60.0);
+                  vec3 tint = mix(vec3(0.75, 0.84, 1.0), vec3(1.0, 0.86, 0.68), h3(c + 2.2));
+                  return tint * b * tw;
+                }
                 void main(){
                   vec3 d = normalize(vDir); float el = max(d.y, 0.0);
                   vec3 col = mix(hor, zen, pow(el, 0.55));
-                  // horizon glow (city light / cold haze) low on the sky
                   col += glowCol * 0.35 * exp(-el * 9.0);
-                  // stars: hashed cells, twinkling, fading into the horizon haze
-                  vec2 sp = d.xz / (d.y + 0.35) * 180.0; vec2 cell = floor(sp); float r = h(cell);
-                  float star = step(0.985, r) * smoothstep(0.5, 0.0, length(fract(sp) - 0.5)) * (0.6 + 0.4 * sin(time * (1.0 + r * 3.0) + r * 40.0));
-                  col += vec3(0.85, 0.9, 1.0) * star * stars * smoothstep(0.05, 0.35, el);
-                  // moon + halo
+                  // stars: a dense faint field + sparse bright ones, plus a dusty Milky Way band
+                  vec3 st = starLayer(d, 260.0, 0.93, 0.32) * 0.7 + starLayer(d, 95.0, 0.975, 0.22) * 1.6;
+                  vec3 bandN = normalize(vec3(0.32, 0.55, 0.77));
+                  float band = exp(-pow(dot(d, bandN) / 0.2, 2.0));
+                  vec2 bp = vec2(atan(d.x, d.z), d.y) * 6.0;
+                  float dust = fbm(bp * 1.7) ; float lanes = smoothstep(0.45, 0.75, fbm(bp * 3.3 + 7.0));
+                  vec3 milky = vec3(0.55, 0.6, 0.75) * band * (0.25 + 0.75 * dust) * (1.0 - 0.7 * lanes);
+                  float starVis = stars * smoothstep(0.04, 0.3, el) * (1.0 - day);
+                  col += (st + milky * 0.09) * starVis;
+                  // moon: shaded sphere (gibbous phase), limb darkening, maria and craters
                   float md = dot(d, moonDir);
-                  col += moonCol * smoothstep(0.9993, 0.9996, md) * (1.0 - day * 0.6);
-                  col += moonCol * pow(max(md, 0.0), 180.0) * 0.35 + moonCol * pow(max(md, 0.0), 12.0) * 0.06 * (1.0 - day);
-                  // clouds drifting with the wind, lit on the moon side
+                  vec3 t1 = normalize(cross(moonDir, vec3(0.0, 1.0, 0.0))), t2 = cross(t1, moonDir);
+                  float R = day > 0.5 ? 0.05 : 0.034;
+                  vec2 ml = vec2(dot(d, t1), dot(d, t2)) / R; float mr = length(ml);
+                  float disc = smoothstep(1.0, 0.94, mr) * step(0.0, md);
+                  vec3 N = vec3(ml, sqrt(max(0.0, 1.0 - mr * mr)));
+                  float lam = smoothstep(-0.05, 0.35, dot(N, normalize(vec3(0.82, 0.22, 0.53))));
+                  float maria = smoothstep(0.48, 0.66, fbm(ml * 1.6 + 3.0));
+                  float crater = smoothstep(0.62, 0.8, n(ml * 9.0 + 11.0)) * 0.25;
+                  float alb = (0.95 - maria * 0.45 - crater) * (0.6 + 0.4 * N.z);
+                  vec3 moonLit = moonCol * (lam * alb * 1.25 + 0.035);
+                  if (day > 0.5) moonLit = moonCol * 1.6; // pale sun disc behind the overcast
+                  col = mix(col, moonLit, disc * (day > 0.5 ? 0.55 : 1.0));
+                  // halo: tight glow, wide scatter and a faint 22-degree ice ring
+                  float ang = acos(clamp(md, -1.0, 1.0));
+                  col += moonCol * (pow(max(md, 0.0), 220.0) * 0.45 + pow(max(md, 0.0), 14.0) * 0.07) * (day > 0.5 ? 1.8 : 1.0);
+                  col += moonCol * 0.03 * exp(-pow((ang - 0.384) / 0.02, 2.0)) * cover * (1.0 - day);
+                  // clouds drifting with the wind; self-shadowed, with silver linings toward the moon
                   vec2 cp = d.xz / (d.y + 0.12) * 1.6 + windDir * time * (0.006 + windStrength * 0.02);
-                  float c = smoothstep(1.0 - cover, 1.0 - cover + 0.35, fbm(cp) + 0.12 * fbm(cp * 3.1 - time * 0.01));
+                  float dens = fbm(cp) + 0.12 * fbm(cp * 3.1 - time * 0.01);
+                  float c = smoothstep(1.0 - cover, 1.0 - cover + 0.35, dens);
+                  vec2 toMoon = normalize(moonDir.xz - d.xz + 1e-4) * 0.08;
+                  float densM = fbm(cp + toMoon);
+                  float shade = clamp(0.55 + (dens - densM) * 2.4, 0.25, 1.15);
                   float lit = pow(max(md, 0.0), 6.0);
-                  vec3 cc = cloudCol + moonCol * lit * 0.25;
-                  col = mix(col, cc, c * smoothstep(0.0, 0.18, el) * 0.92);
+                  float rim = smoothstep(0.0, 0.5, 1.0 - c) * c * pow(max(md, 0.0), 40.0) * 2.2;
+                  vec3 cc = cloudCol * shade + moonCol * (lit * 0.25 + rim) + vec3(0.75, 0.8, 0.95) * flash * 0.9;
+                  col = mix(col, cc, c * smoothstep(0.0, 0.18, el) * 0.94);
+                  col += vec3(0.5, 0.55, 0.7) * flash * 0.12 * (1.0 - c);
+                  // overcast day: the sun still burns a soft bright patch through the cloud deck
+                  col += moonCol * (pow(max(md, 0.0), 10.0) * 0.32 + pow(max(md, 0.0), 90.0) * 0.5) * day;
                   col = mix(col, hor, smoothstep(0.08, 0.0, el));
                   gl_FragColor = vec4(col, 1.0);
                 }`,
             });
+            this.skyMat = mat;
             const dome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), mat);
             dome.renderOrder = -10;
             dome.frustumCulled = false;
@@ -28350,6 +28497,7 @@ body.netgame #revivetouch{display:flex}
             WallCast,
             explosion,
             Nature,
+            Lightning,
             WindManager,
             CameraRig,
             classBurst: () => classBurst(),
