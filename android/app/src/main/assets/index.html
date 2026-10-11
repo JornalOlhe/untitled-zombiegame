@@ -9406,20 +9406,55 @@ body.netgame #revivetouch{display:flex}
               this.items.push({ pos: pos.clone(), vel: dir, life: rand(life * 0.55, life), color: c, gravity, drag: rand(0.7, 1.8) });
             }
           },
+          // Tracers: pooled camera-facing ribbons (no per-shot geometry/material allocation). Short
+          // lives play as a streak that races from the muzzle to the impact; long ones (rails,
+          // beams) stay as a fading glowing beam.
           line(a, b, color, life = 0.08) {
             if (SettingsManager.data.vfx === "off") return;
-            const g = new THREE.BufferGeometry().setFromPoints([a, b]),
-              m = new THREE.LineBasicMaterial({
-                color,
-                transparent: true,
-                opacity: 0.85,
-                blending: THREE.AdditiveBlending,
-              });
-            const line = new THREE.Line(g, m);
-            scene.add(line);
-            this.lines.push({ mesh: line, life });
+            const T = this.tracers || this.initTracers();
+            const t = T.list[T.next]; T.next = (T.next + 1) % T.list.length;
+            t.a.copy(a); t.b.copy(b); t.life = t.max = life; t.mesh.material.color.setHex(color); t.mesh.visible = true;
+            t.streak = life <= 0.1; t.w = life >= 0.14 ? 0.05 : 0.03;
+          },
+          initTracers() {
+            const c = document.createElement("canvas"); c.width = 4; c.height = 32;
+            const g = c.getContext("2d"), gr = g.createLinearGradient(0, 0, 0, 32);
+            gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(0.35, "rgba(255,255,255,.35)"); gr.addColorStop(0.5, "rgba(255,255,255,1)"); gr.addColorStop(0.65, "rgba(255,255,255,.35)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+            g.fillStyle = gr; g.fillRect(0, 0, 4, 32);
+            const tex = new THREE.CanvasTexture(c), geo = new THREE.PlaneGeometry(1, 1);
+            this.tracers = { next: 0, list: Array.from({ length: nativeAndroid ? 24 : 48 }, () => {
+              const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 1, fog: false }));
+              mesh.visible = false; mesh.frustumCulled = false; mesh.renderOrder = 6; scene.add(mesh);
+              return { mesh, a: new V(), b: new V(), life: 0, max: 1, streak: true, w: 0.03 };
+            }), d: new V(), y: new V(), z: new V(), p0: new V(), p1: new V(), m: new THREE.Matrix4() };
+            return this.tracers;
+          },
+          updateTracers(dt) {
+            const T = this.tracers; if (!T) return;
+            const cam = camera.getWorldPosition(T.p0.set(0, 0, 0)), camPos = T.camPos || (T.camPos = new V());
+            camPos.copy(cam);
+            for (const t of T.list) {
+              if (!t.mesh.visible) continue;
+              t.life -= dt;
+              if (t.life <= 0) { t.mesh.visible = false; continue; }
+              const k = 1 - t.life / t.max;
+              let s0 = 0, s1 = 1;
+              if (t.streak) { s1 = Math.min(1, k * 2.2 + 0.25); s0 = Math.max(0, s1 - 0.45); }
+              const a = T.p0.copy(t.a).lerp(t.b, s0), b = T.p1.copy(t.a).lerp(t.b, s1);
+              const len = a.distanceTo(b); if (len < 1e-3) { t.mesh.visible = false; continue; }
+              T.d.subVectors(b, a).divideScalar(len);
+              const mid = a.add(b).multiplyScalar(0.5);
+              T.z.subVectors(camPos, mid).normalize();
+              T.y.crossVectors(T.z, T.d).normalize(); T.z.crossVectors(T.d, T.y);
+              T.m.makeBasis(T.d, T.y, T.z);
+              t.mesh.quaternion.setFromRotationMatrix(T.m);
+              t.mesh.position.copy(mid);
+              t.mesh.scale.set(len, t.w * (1 + Math.min(2, mid.distanceTo(camPos) * 0.04)), 1);
+              t.mesh.material.opacity = t.streak ? Math.min(1, (1 - k) * 1.6) : (1 - k) * (1 - k);
+            }
           },
           update(dt) {
+            this.updateTracers(dt);
             for (let i = this.items.length - 1; i >= 0; i--) {
               const p = this.items[i];
               p.life -= dt;
