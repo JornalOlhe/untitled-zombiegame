@@ -317,7 +317,6 @@ form.busy { opacity: .7; }
 .slot { border-radius: 0; background: rgba(12,10,8,.86); clip-path: var(--cut-s); }
 .slot.active { background: rgba(40,14,12,.92); }
 .feed { font-family: var(--mono); font-size: 12px; }
-.crosshair i { background: #f3ede4cc; box-shadow: 0 0 2px #000; }
 #revivetouch { position: absolute; right: calc(var(--safe-r) + 140px); bottom: calc(var(--safe-b) + 150px); }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */

@@ -26,6 +26,7 @@
     ["graphics", "Gráficos"],
     ["audio", "Áudio"],
     ["camera", "Câmera"],
+    ["hud", "Interface"],
     ["controls", "Controles"],
   ];
   const pct = (v) => `${Math.round(v * 100)}%`;
@@ -84,6 +85,8 @@
       padSensitivity: pct,
       sensitivity: (v) => Number(v).toFixed(1),
       fov: (v) => `${v}°`,
+      crossSize: (v) => `${v}px`,
+      crossThick: (v) => `${v}px`,
     },
     fmt(k) {
       return this.formats[k] || ((v) => `${v}%`);
@@ -100,12 +103,27 @@
       body.scrollTop = 0;
       body.querySelectorAll("[data-setting]").forEach((el) => (el.oninput = () => this.change(el)));
       body.querySelectorAll('input[type="range"]').forEach(paintRange);
+      this.sample();
       const fs = body.querySelector("[data-fullscreen]");
       if (fs) fs.onchange = () => this.hooks.fullscreen(fs.checked).finally(() => (fs.checked = !!document.fullscreenElement));
+    },
+    // Live crosshair preview in the Interface tab mirrors the HUD crosshair settings.
+    sample() {
+      const el = $("settingsfields").querySelector(".ch-sample");
+      if (!el) return;
+      const s = this.s;
+      el.style.setProperty("--gap", s.crossDynamic ? "6px" : "4px");
+      el.style.setProperty("--ch-len", s.crossSize + "px");
+      el.style.setProperty("--ch-th", s.crossThick + "px");
+      el.style.setProperty("--ch-color", s.crossColor);
+      el.style.setProperty("--ch-op", String(s.crossOpacity / 100));
+      el.style.setProperty("--ch-ol", s.crossOutline ? "0 0 0 1px rgba(0,0,0,.85)" : "none");
+      el.className = "crosshair ch-sample st-" + s.crossStyle;
     },
     graphics() {
       const canFullscreen = !window.DeadRecoilRuntime?.native && !!document.documentElement.requestFullscreen;
       return `<div class="set-group"><h3>Qualidade</h3>
+        ${this.select("profile", "Perfil rápido", [["custom", "Personalizado"], ["performance", "Desempenho (mais FPS)"], ["balanced", "Equilibrado"], ["quality", "Qualidade"], ["competitive", "Competitivo"]], "Aplica um conjunto pronto de gráficos; qualquer ajuste manual vira Personalizado")}
         ${this.select("graphics", "Predefinição", [["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Ajusta sombras, partículas e distância juntos")}
         ${this.select("shadows", "Sombras", [["off", "Desligadas"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"]])}
         ${this.select("vfx", "Partículas e efeitos", [["off", "Desligados"], ["low", "Baixo"], ["high", "Alto"]])}
@@ -113,9 +131,9 @@
       </div><div class="set-group"><h3>Tela</h3>
         ${this.range("resolution", "Escala de resolução", 0.5, 1.5, 0.05, pct, "Abaixo de 100% ganha desempenho")}
         ${this.range("drawDistance", "Distância de visão", 0.6, 1.4, 0.05, pct)}
+        ${this.range("brightness", "Brilho", 70, 140, 1, undefined, "Ajuste até enxergar bem as áreas escuras")}
+        ${this.select("fpsCap", "Limite de FPS", [[0, "Sem limite"], [30, "30"], [60, "60"], [90, "90"], [120, "120"], [144, "144"]], "Limitar economiza bateria e esquenta menos")}
         ${canFullscreen ? `<label class="set-row set-check"><span class="set-name">Tela cheia</span><input type="checkbox" data-fullscreen ${document.fullscreenElement ? "checked" : ""} /></label>` : ""}
-        ${this.check("fps", "Mostrar FPS")}
-        ${this.check("numbers", "Números de dano")}
       </div>`;
     },
     audio() {
@@ -135,7 +153,26 @@
         ${this.range("padSensitivity", "Sensibilidade do controle", 0.3, 2.5, 0.05, pct, "Analógico direito (Xbox / PlayStation / genérico)")}
         ${this.range("fov", "Campo de visão (FOV)", 60, 120, 1, this.formats.fov)}
         ${this.range("shake", "Tremor de tela", 0, 100, 5, undefined, "Reduza para conforto (acessibilidade)")}
+        ${this.range("viewBob", "Balanço da arma", 0, 100, 5, undefined, "Movimento da arma ao andar")}
         ${this.check("invert", "Inverter eixo Y")}
+      </div>`;
+    },
+    hud() {
+      const colors = [["#ffffff", "Branco"], ["#7dff5a", "Verde"], ["#39e6ff", "Ciano"], ["#ffe23d", "Amarelo"], ["#ff4d4d", "Vermelho"], ["#ff5cf0", "Magenta"]];
+      return `<div class="set-group"><h3>Mira</h3>
+        <div class="set-row ch-preview-row"><span class="set-name">Prévia</span><span class="ch-preview"><div class="crosshair ch-sample"><i></i><i></i><i></i><i></i><b class="ch-dot"></b><b class="ch-ring"></b></div></span></div>
+        ${this.select("crossStyle", "Estilo", [["crossdot", "Cruz com ponto"], ["cross", "Cruz"], ["dot", "Ponto"], ["circle", "Círculo"], ["t", "Em T"]])}
+        ${this.select("crossColor", "Cor", colors)}
+        ${this.range("crossSize", "Tamanho", 3, 16, 1)}
+        ${this.range("crossThick", "Espessura", 1, 4, 1)}
+        ${this.range("crossOpacity", "Opacidade", 30, 100, 5)}
+        ${this.check("crossOutline", "Contorno escuro", "Mantém a mira visível sobre neve e luzes")}
+        ${this.check("crossDynamic", "Mira dinâmica", "Abre com o espalhamento real da arma")}
+      </div><div class="set-group"><h3>HUD</h3>
+        ${this.range("hudScale", "Tamanho do HUD", 70, 130, 5)}
+        ${this.check("minimap", "Minimapa")}
+        ${this.check("numbers", "Números de dano")}
+        ${this.check("fps", "Mostrar FPS")}
       </div>`;
     },
     controls() {
@@ -161,7 +198,13 @@
     change(el) {
       const s = this.s,
         k = el.dataset.setting;
-      s[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? Number(el.value) : el.value;
+      s[k] = el.type === "checkbox" ? el.checked : el.type === "range" || k === "fpsCap" ? Number(el.value) : el.value;
+      if (k === "profile") {
+        if (s.profile !== "custom") this.hooks.profile?.(s.profile);
+        this.render();
+        return;
+      }
+      if (["graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance"].includes(k)) s.profile = "custom";
       const out = $("settingsfields").querySelector(`[data-out="${k}"]`);
       if (out) out.textContent = this.fmt(k)(s[k]);
       if (el.type === "range") paintRange(el);
@@ -175,6 +218,8 @@
         this.hooks.apply();
         if (k === "graphics") this.render();
       } else {
+        this.hooks.hud?.();
+        this.sample();
         DR.Audio.volumes();
         $("fps").classList.toggle("hidden", !s.fps);
         this.hooks.camera?.();
@@ -184,9 +229,10 @@
       const d = DR.Settings.defaults,
         s = this.s;
       const keysOf = {
-        graphics: ["graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "fps", "numbers"],
+        graphics: ["profile", "graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "brightness", "fpsCap"],
+        hud: ["crossStyle", "crossColor", "crossSize", "crossThick", "crossOpacity", "crossOutline", "crossDynamic", "hudScale", "minimap", "numbers", "fps"],
         audio: ["master", "music", "ambient", "weapons", "sfx", "ui"],
-        camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "shake", "invert"],
+        camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "shake", "viewBob", "invert"],
       };
       if (this.tab === "controls") DR.Keybinds.reset();
       else for (const k of keysOf[this.tab]) s[k] = d[k];

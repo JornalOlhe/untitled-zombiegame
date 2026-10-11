@@ -614,6 +614,8 @@
         left: 28px;
         top: 15px;
       }
+      .hud-top, .hud-bottom, #minimap, #feed, #missiontracker, #bossbar { zoom: var(--hud-zoom, 1); }
+      body.no-minimap #minimap { display: none !important; }
       .hud-bottom {
         position: absolute;
         bottom: 28px;
@@ -713,18 +715,29 @@
         --gap: 4px;
         transform: translate(-50%, -50%);
       }
-      .crosshair i {
+      .crosshair { --ch-len: 7px; --ch-th: 2px; --ch-color: #fff; --ch-op: .9; --ch-ol: 0 0 0 1px rgba(0,0,0,.85); opacity: var(--ch-op); }
+      .crosshair i, .crosshair b {
         position: absolute;
-        background: #fff9;
+        background: var(--ch-color);
+        box-shadow: var(--ch-ol);
         transition: transform 60ms linear;
       }
-      .crosshair i:nth-child(1), .crosshair i:nth-child(2) { width: 7px; height: 2px; top: -1px; }
-      .crosshair i:nth-child(3), .crosshair i:nth-child(4) { width: 2px; height: 7px; left: -1px; }
+      .crosshair i:nth-child(1), .crosshair i:nth-child(2) { width: var(--ch-len); height: var(--ch-th); top: calc(var(--ch-th) / -2); }
+      .crosshair i:nth-child(3), .crosshair i:nth-child(4) { width: var(--ch-th); height: var(--ch-len); left: calc(var(--ch-th) / -2); }
       .crosshair i:nth-child(1) { right: var(--gap); }
       .crosshair i:nth-child(2) { left: var(--gap); }
       .crosshair i:nth-child(3) { bottom: var(--gap); }
       .crosshair i:nth-child(4) { top: var(--gap); }
+      .crosshair .ch-dot { width: calc(var(--ch-th) + 1px); height: calc(var(--ch-th) + 1px); left: calc((var(--ch-th) + 1px) / -2); top: calc((var(--ch-th) + 1px) / -2); border-radius: 50%; display: none; }
+      .crosshair .ch-ring { background: none; border: var(--ch-th) solid var(--ch-color); border-radius: 50%; width: calc(var(--gap) * 2 + var(--ch-len)); height: calc(var(--gap) * 2 + var(--ch-len)); left: 50%; top: 50%; transform: translate(-50%, -50%); box-shadow: var(--ch-ol), inset var(--ch-ol); display: none; }
+      .crosshair.st-crossdot .ch-dot, .crosshair.st-dot .ch-dot, .crosshair.st-circle .ch-dot { display: block; }
+      .crosshair.st-dot i { display: none; }
+      .crosshair.st-circle i { display: none; }
+      .crosshair.st-circle .ch-ring { display: block; }
+      .crosshair.st-t i:nth-child(3) { display: none; }
       .crosshair.melee i { opacity: .55; }
+      .ch-preview { position: relative; width: 120px; height: 56px; background: linear-gradient(135deg,#5b6b74,#c9d3d8 55%,#2a3036); border: 1px solid #ffffff22; display: inline-block; }
+      .ch-preview .crosshair { top: 50%; left: 50%; }
       #dmgdir { position:absolute; inset:0; pointer-events:none; }
       #dmgdir i { position:absolute; left:50%; top:50%; width:300px; height:300px; margin:-150px 0 0 -150px; opacity:0; }
       #dmgdir svg { width:100%; height:100%; overflow:visible; filter:drop-shadow(0 0 6px rgba(255,30,20,.8)); }
@@ -2969,6 +2982,7 @@ body.netgame #revivetouch{display:flex}
             <button type="button" role="tab" data-settings-tab="graphics">Gráficos</button>
             <button type="button" role="tab" data-settings-tab="audio">Áudio</button>
             <button type="button" role="tab" data-settings-tab="camera">Câmera</button>
+            <button type="button" role="tab" data-settings-tab="hud">Interface</button>
             <button type="button" role="tab" data-settings-tab="controls">Controles</button>
           </nav>
         </header>
@@ -3053,7 +3067,7 @@ body.netgame #revivetouch{display:flex}
       </div>
       <div id="feed" class="feed"></div>
       <div id="bossbar" class="hidden"></div>
-      <div class="crosshair"><i></i><i></i><i></i><i></i></div>
+      <div class="crosshair"><i></i><i></i><i></i><i></i><b class="ch-dot"></b><b class="ch-ring"></b></div>
       <div id="scope" aria-hidden="true"><i class="scope-h"></i><i class="scope-v"></i><b></b></div>
       <div id="hitmark">+</div>
       <div id="dmgdir"></div>
@@ -3398,6 +3412,38 @@ body.netgame #revivetouch{display:flex}
           },
         ];
         // SettingsManager: validated local preferences. Storage may be blocked on file://.
+        // HUD / accessibility preferences that are pure presentation: crosshair look, HUD scale,
+        // minimap, brightness. Applied on load and whenever a setting changes.
+        const HudPrefs = {
+          apply() {
+            const s = SettingsManager.data, ch = document.querySelector("#hud .crosshair");
+            if (ch) {
+              ch.style.setProperty("--ch-len", s.crossSize + "px");
+              ch.style.setProperty("--ch-th", s.crossThick + "px");
+              ch.style.setProperty("--ch-color", s.crossColor);
+              ch.style.setProperty("--ch-op", String(s.crossOpacity / 100));
+              ch.style.setProperty("--ch-ol", s.crossOutline ? "0 0 0 1px rgba(0,0,0,.85)" : "none");
+              for (const st of ["cross", "crossdot", "dot", "circle", "t"]) ch.classList.toggle("st-" + st, s.crossStyle === st);
+            }
+            document.documentElement.style.setProperty("--hud-zoom", String(s.hudScale / 100));
+            document.body.classList.toggle("no-minimap", !s.minimap);
+            try { if (MapManager.baseExposure) renderer.toneMappingExposure = MapManager.baseExposure * s.brightness / 100; } catch {}
+          },
+          // One-click profiles. They only touch presentation/performance settings, never controls.
+          profiles: {
+            performance: { graphics: "low", shadows: "off", vfx: "low", reflections: "off", resolution: 0.85, drawDistance: 0.8, fpsCap: 0 },
+            balanced: { graphics: "medium", shadows: "low", vfx: "high", reflections: "low", resolution: 1, drawDistance: 1, fpsCap: 0 },
+            quality: { graphics: "high", shadows: "medium", vfx: "high", reflections: "medium", resolution: 1, drawDistance: 1.2, fpsCap: 0 },
+            competitive: { graphics: "low", shadows: "off", vfx: "low", reflections: "off", resolution: 1, drawDistance: 1, fov: 100, shake: 25, viewBob: 30, crossOutline: true, crossStyle: "crossdot", fpsCap: 0 },
+          },
+          useProfile(id) {
+            const p = this.profiles[id]; if (!p) return false;
+            Object.assign(SettingsManager.data, p, { profile: id });
+            if (nativeAndroid && (id === "quality")) Object.assign(SettingsManager.data, { graphics: "medium", reflections: "low" });
+            SettingsManager.save(); SettingsManager.apply();
+            return true;
+          },
+        };
         const SettingsManager = {
           defaults: {
             graphics: window.DeadRecoilRuntime?.platform === "android" ? "medium" : "high",
@@ -3421,6 +3467,19 @@ body.netgame #revivetouch{display:flex}
             fps: false,
             invert: false,
             shake: 100,
+            brightness: 100,
+            fpsCap: 0,
+            viewBob: 100,
+            hudScale: 100,
+            minimap: true,
+            crossStyle: "crossdot",
+            crossColor: "#ffffff",
+            crossSize: 7,
+            crossThick: 2,
+            crossOpacity: 90,
+            crossOutline: true,
+            crossDynamic: true,
+            profile: "custom",
           },
           data: {},
           load() {
@@ -3462,6 +3521,12 @@ body.netgame #revivetouch{display:flex}
               ["music", 0, 100],
               ["fov", 60, 120],
               ["shake", 0, 100],
+              ["brightness", 70, 140],
+              ["viewBob", 0, 100],
+              ["hudScale", 70, 130],
+              ["crossSize", 3, 16],
+              ["crossThick", 1, 4],
+              ["crossOpacity", 30, 100],
               ["sensitivity", 0.1, 5],
               ["adsSensitivity", 0.1, 2],
               ["padSensitivity", 0.3, 2.5],
@@ -3474,8 +3539,12 @@ body.netgame #revivetouch{display:flex}
               ["shadows", ["off", "low", "medium", "high"]],
               ["vfx", ["off", "low", "high"]],
               ["reflections", ["off", "low", "medium", "high", "ultra"]],
+              ["crossStyle", ["cross", "crossdot", "dot", "circle", "t"]],
+              ["crossColor", ["#ffffff", "#7dff5a", "#39e6ff", "#ffe23d", "#ff4d4d", "#ff5cf0"]],
+              ["profile", ["custom", "performance", "balanced", "quality", "competitive"]],
             ])
               if (!opts.includes(this.data[k])) this.data[k] = this.defaults[k];
+            if (![0, 30, 60, 90, 120, 144].includes(this.data.fpsCap)) this.data.fpsCap = 0;
           },
           save() {
             try {
@@ -3487,6 +3556,7 @@ body.netgame #revivetouch{display:flex}
           },
           apply() {
             const s = this.data;
+            HudPrefs.apply();
             renderScale = Math.min(devicePixelRatio,
               (nativeAndroid ? { low: .68, medium: .85, high: 1.05, ultra: 1.25 }
                              : { low: .8, medium: 1, high: 1.5, ultra: 2 })[s.graphics]) * s.resolution;
@@ -10922,7 +10992,8 @@ body.netgame #revivetouch{display:flex}
             ambient.color.setHex([0xb0c8dd, 0xbecbb1, 0xa8b8bb, 0xa8bed8, 0xd2e7f0][index]);
             ambient.groundColor.setHex([0x303a36, 0x36392b, 0x272f25, 0x282c3b, 0x505d65][index]);
             sun.color.setHex([0xc4daf1, 0xe9d4a0, 0xa8c6d1, 0xa9bde4, 0xe1efff][index]);
-            renderer.toneMappingExposure = index === 2 ? 1.08 : index === 4 ? 0.93 : 1.04;
+            this.baseExposure = index === 2 ? 1.08 : index === 4 ? 0.93 : 1.04;
+            renderer.toneMappingExposure = this.baseExposure * (SettingsManager.data.brightness ?? 100) / 100;
             ambient.intensity = index === 4 ? 0.54 : 0.4;
             sun.intensity = index === 4 ? 0.8 : index === 2 ? 0.26 : 0.42;
             const H = this.half;
@@ -11932,7 +12003,7 @@ body.netgame #revivetouch{display:flex}
           // Crosshair gap in CSS px = the projected spread cone at the current FOV, so what you
           // see is what the gun does (min 3 px so it stays readable when perfectly accurate).
           crosshair(w) {
-            const el = this.crosshairEl || (this.crosshairEl = document.querySelector(".crosshair"));
+            const el = this.crosshairEl || (this.crosshairEl = document.querySelector("#hud .crosshair"));
             if (!el) return;
             const P = this.accuracyProfile(w);
             let gap = 4;
@@ -11943,6 +12014,7 @@ body.netgame #revivetouch{display:flex}
                 half = (camera.fov * Math.PI) / 360;
               gap = Math.max(3, (Math.tan(cone) / Math.tan(half)) * (innerHeight / 2));
             }
+            if (SettingsManager.data.crossDynamic === false) gap = 4;
             gap = Math.round(Math.min(gap, 140) * 2) / 2;
             if (gap !== this.crosshairGap) {
               this.crosshairGap = gap;
@@ -12120,9 +12192,9 @@ body.netgame #revivetouch{display:flex}
                 Math.hypot(touchMove.x, touchMove.y) > 0.1;
             const sprinting = moving && PlayerController.motion.sprint > 0.3 && !aiming,
               phase = PlayerController.motion.phase * (sprinting ? 1.3 : 1),
-              bob = moving
+              bob = (moving
                 ? Math.sin(phase) * 0.008
-                : Math.sin(simulationTime * 1.6) * 0.002;
+                : Math.sin(simulationTime * 1.6) * 0.002) * (SettingsManager.data.viewBob ?? 100) / 100;
             const ads = this.adsPose(w);
             this.aimBlend = (this.aimBlend || 0) + ((aiming ? 1 : 0) - (this.aimBlend || 0)) * Math.min(1, dt * 12);
             this.scoped = !!ads.scope && aiming && this.aimBlend > 0.82;
@@ -27689,6 +27761,8 @@ body.netgame #revivetouch{display:flex}
         $("error-ok").onclick = () => $("errorscreen").classList.add("hidden");
         DR.SettingsUI.init({
           apply: () => SettingsManager.apply(),
+          hud: () => HudPrefs.apply(),
+          profile: (id) => HudPrefs.useProfile(id),
           fullscreen: (on) => (on ? enterFullscreen() : document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : Promise.resolve()),
         });
         DR.LoginUI.init(App);
@@ -27739,6 +27813,9 @@ body.netgame #revivetouch{display:flex}
         };
         function frame(now, background = false) {
           if (!background) requestAnimationFrame(frame);
+          // Optional frame cap (settings): skip a vsync tick when we're ahead of the budget.
+          const fpsCap = SettingsManager.data.fpsCap;
+          if (fpsCap && !background && now - lastFrame < 1000 / fpsCap - 1.5) return;
           // Never cap 60 Hz gameplay at 58: that drops alternate vsync frames.
           if (nativeAndroid && state !== GameState.PLAYING && now - lastFrame < 1000 / 30 - 1) return;
           const wallDt = Math.max(0.001, (now - lastFrame) / 1000);
