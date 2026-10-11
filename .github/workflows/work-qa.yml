@@ -49,6 +49,7 @@ jobs:
           node tests/director-smoke.cjs
           node tests/explosion-smoke.cjs
           node tests/settings-hud-smoke.cjs
+          node tests/floor-gloss-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

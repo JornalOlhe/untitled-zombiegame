@@ -127,7 +127,7 @@
         ${this.select("graphics", "Predefinição", [["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Ajusta sombras, partículas e distância juntos")}
         ${this.select("shadows", "Sombras", [["off", "Desligadas"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"]])}
         ${this.select("vfx", "Partículas e efeitos", [["off", "Desligados"], ["low", "Baixo"], ["high", "Alto"]])}
-        ${this.select("reflections", "Reflexos", [["off", "Desligados"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Baixo: ambiente capturado uma vez. Médio/Alto/Ultra: poças da chuva com espelho real (¼, ½ e 0,7 da resolução) e ambiente atualizado")}
+        ${this.select("reflections", "Reflexos", [["off", "Desligados"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Baixo: ambiente capturado uma vez. Médio: poças com espelho real. Alto/Ultra: também chão polido refletindo luzes, zumbis e paredes em tempo real")}
       </div><div class="set-group"><h3>Tela</h3>
         ${this.range("resolution", "Escala de resolução", 0.5, 1.5, 0.05, pct, "Abaixo de 100% ganha desempenho")}
         ${this.range("drawDistance", "Distância de visão", 0.6, 1.4, 0.05, pct)}

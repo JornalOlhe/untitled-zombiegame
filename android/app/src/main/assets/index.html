@@ -7053,6 +7053,7 @@ body.netgame #revivetouch{display:flex}
               });
             }
             this.buildWeatherPuddles(g, map);
+            this.buildFloorGloss(g, map);
             this.reflectionDirty = true;
             this.reflectionClock = 0;
             this.buildWeather();
@@ -7167,12 +7168,70 @@ body.netgame #revivetouch{display:flex}
             this.weatherPuddles = mesh;
             this.wetness = 0.25;
           },
+          // Glossy-floor reflections (Reflexos Alto/Ultra): the same ground-plane mirror the puddles
+          // use is laid over polished floors (hospital tile, lab steel, wet asphalt) with Fresnel,
+          // a roughness blur that grows with distance and scuff noise, so floors pick up lights,
+          // zombies and walls like screen-space reflections without a depth/normal pre-pass.
+          floorGlossStrength: [0.2, 0.55, 0, 0.4, 0.07],
+          floorGlossMaterial() {
+            if (this._glossMat) return this._glossMat;
+            const U = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { tRefl: { value: null }, uStrength: { value: 0 }, uTexel: { value: new THREE.Vector2(1 / 512, 1 / 512) } }]);
+            U.textureMatrix = { value: this.puddleMaterial().uniforms.textureMatrix.value };
+            return (this._glossMat = new THREE.ShaderMaterial({
+              uniforms: U, transparent: true, depthWrite: false, fog: true,
+              polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
+              vertexShader: `
+                uniform mat4 textureMatrix; varying vec4 vRefl; varying vec3 vWorld;
+                #include <fog_pars_vertex>
+                void main(){
+                  vec4 wp = modelMatrix * vec4(position, 1.0);
+                  vWorld = wp.xyz; vRefl = textureMatrix * wp;
+                  vec4 mvPosition = viewMatrix * wp;
+                  gl_Position = projectionMatrix * mvPosition;
+                  #include <fog_vertex>
+                }`,
+              fragmentShader: `
+                uniform sampler2D tRefl; uniform float uStrength; uniform vec2 uTexel;
+                varying vec4 vRefl; varying vec3 vWorld;
+                #include <fog_pars_fragment>
+                float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+                void main(){
+                  vec3 toCam = cameraPosition - vWorld; float dist = length(toCam); vec3 V = toCam / dist;
+                  float fres = 0.32 + 0.68 * pow(1.0 - clamp(V.y, 0.0, 1.0), 3.0);
+                  float scuff = 0.45 + 0.55 * vnoise(vWorld.xz * 0.45) * (0.7 + 0.3 * vnoise(vWorld.xz * 2.7));
+                  float fade = smoothstep(70.0, 18.0, dist);
+                  float a = uStrength * fres * scuff * fade;
+                  if (a < 0.004) discard;
+                  vec2 uv = vRefl.xy / vRefl.w, r = uTexel * (1.5 + dist * 0.08);
+                  vec3 c = texture2D(tRefl, uv).rgb * 0.36
+                    + texture2D(tRefl, uv + vec2(r.x, r.y)).rgb * 0.16 + texture2D(tRefl, uv + vec2(-r.x, r.y)).rgb * 0.16
+                    + texture2D(tRefl, uv + vec2(r.x, -r.y)).rgb * 0.16 + texture2D(tRefl, uv + vec2(-r.x, -r.y)).rgb * 0.16;
+                  gl_FragColor = vec4(c, a);
+                  #include <tonemapping_fragment>
+                  #include <encodings_fragment>
+                  #include <fog_fragment>
+                }`,
+            }));
+          },
+          buildFloorGloss(g, map) {
+            this.floorGloss = null;
+            const k = this.floorGlossStrength[map] || 0;
+            if (k <= 0) return;
+            const H = MapManager.half || 40, mesh = new THREE.Mesh(new THREE.PlaneGeometry(H * 2, H * 2), this.floorGlossMaterial());
+            mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.012; mesh.renderOrder = 1; mesh.name = "FloorGloss";
+            mesh.userData.disposableGeometry = true; mesh.userData.strength = k; mesh.visible = false;
+            g.add(mesh); this.floorGloss = mesh;
+          },
           // Planar mirror for the puddles (all lie on the ground plane): the scene is re-rendered
           // from the camera reflected across y = 0.03, clipped below the plane, into a reduced
           // render target that the puddle shader samples projectively.
           planarReflection(dt) {
             const mode = this.reflectionMode, P = this.weatherPuddles;
-            const want = P && P.visible && P.count > 0 && ["medium", "high", "ultra"].includes(mode) && state !== GameState.MENU;
+            const G = this.floorGloss, glossOn = !!G && ["high", "ultra"].includes(mode) && state !== GameState.MENU;
+            if (G) G.visible = glossOn;
+            const want = ((P && P.visible && P.count > 0) || glossOn) && ["medium", "high", "ultra"].includes(mode) && state !== GameState.MENU;
             const M = this.puddleMaterial().uniforms;
             M.uMode.value = want ? 2 : mode !== "off" && this.reflectionTarget ? 1 : 0;
             M.envMap.value = this.reflectionTarget?.texture || null;
@@ -7197,15 +7256,21 @@ body.netgame #revivetouch{display:flex}
             const TM = M.textureMatrix.value;
             TM.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(mc.projectionMatrix).multiply(mc.matrixWorldInverse);
             const prevClip = renderer.clippingPlanes, prevTarget = renderer.getRenderTarget(), prevAuto = renderer.autoClear;
-            P.visible = false;
+            const pv = P?.visible; if (P) P.visible = false; if (G) G.visible = false;
             const wv = this.weather?.visible; if (this.weather) this.weather.visible = false;
             renderer.clippingPlanes = this.mirrorPlane;
             renderer.setRenderTarget(this.mirrorRT); renderer.autoClear = true; renderer.clear();
             renderer.render(scene, mc);
             renderer.setRenderTarget(prevTarget); renderer.clippingPlanes = prevClip; renderer.autoClear = prevAuto;
             if (this.weather) this.weather.visible = wv;
-            P.visible = true;
+            if (P) P.visible = pv;
             M.tRefl.value = this.mirrorRT.texture;
+            if (G && glossOn) {
+              G.visible = true;
+              const GU = this.floorGlossMaterial().uniforms;
+              GU.tRefl.value = this.mirrorRT.texture; GU.uStrength.value = G.userData.strength * (mode === "ultra" ? 1.1 : 1) * (0.85 + 0.4 * (this.wetness ?? 0.3) * (selectedMap === 0 ? 1 : 0));
+              GU.uTexel.value.set(1 / w, 1 / h);
+            }
           },
           updatePuddles(dt, raining) {
             if (!this.weatherPuddles) return;
