@@ -30,12 +30,14 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     out.skyOk = !!T.Nature.skyMat && T.renderer.info.programs.every(p => p.diagnostics === undefined || p.diagnostics.runnable);
     T.setMap(4); T.PlayerController.start(); T.setPlaying(); await frames(4);
     out.snowBig = !!W.snowBig && W.snowBig.visible; out.snowN = W.snow.geometry.drawRange.count;
+    T.setMap(2); T.PlayerController.start(); T.setPlaying(); await frames(4);
+    out.motes = T.AmbientMotes.pts?.visible ? T.AmbientMotes.pts.geometry.drawRange.count : 0;
     return out;
   });
   assert.ok(r.rainUltra > r.rainLow * 2, JSON.stringify(r));
   assert.ok(r.splashLive >= 60 && r.splashAfter === 0, JSON.stringify(r));
   assert.ok(r.flash > 0.5 && r.flashEnd === 0 && r.idle === -1, JSON.stringify(r));
-  assert.ok(r.skyOk && r.snowBig && r.snowN >= 600, JSON.stringify(r));
+  assert.ok(r.skyOk && r.snowBig && r.snowN >= 600 && r.motes > 30, JSON.stringify(r));
   assert.deepEqual(errs, []);
   console.log('PASS weather/sky', JSON.stringify(r));
   await b.close(); server.close();

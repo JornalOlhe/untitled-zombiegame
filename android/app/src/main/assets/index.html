@@ -6871,6 +6871,48 @@ body.netgame #revivetouch{display:flex}
             src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
           },
         };
+        // Ambient motes around the camera: dust floating in the hospital/lab light, fireflies in the
+        // forest, wind-blown ice glitter on the snow base, drifting ash in the city. One draw call.
+        const AmbientMotes = {
+          pts: null, seed: null, N: 220,
+          cfg: {
+            0: { color: 0x8a8070, size: 0.05, n: 90, rise: 0.05, drift: 0.6, blink: 0, opacity: 0.5 },
+            1: { color: 0xd8e2dc, size: 0.035, n: 200, rise: 0.02, drift: 0.12, blink: 0, opacity: 0.55 },
+            2: { color: 0xc8ff6a, size: 0.09, n: 70, rise: 0.0, drift: 0.35, blink: 1, opacity: 0.95, additive: true },
+            3: { color: 0x9fd8ff, size: 0.035, n: 180, rise: 0.03, drift: 0.15, blink: 0, opacity: 0.5 },
+            4: { color: 0xffffff, size: 0.04, n: 120, rise: 0.0, drift: 1.4, blink: 0.4, opacity: 0.8, additive: true },
+          },
+          update(dt, map, on) {
+            if (!on) { if (this.pts) this.pts.visible = false; return; }
+            const C = this.cfg[map]; if (!C) { if (this.pts) this.pts.visible = false; return; }
+            if (!this.pts) {
+              const g = new THREE.BufferGeometry();
+              this.pos = new Float32Array(this.N * 3); this.col = new Float32Array(this.N * 3);
+              g.setAttribute("position", new THREE.BufferAttribute(this.pos, 3)); g.setAttribute("color", new THREE.BufferAttribute(this.col, 3));
+              this.seed = Array.from({ length: this.N }, () => [rand(-12, 12), rand(0, 5), rand(-12, 12), rand(0, 6.28), rand(0.5, 1.5)]);
+              this.pts = new THREE.Points(g, new THREE.PointsMaterial({ map: VisualArt.texture("glow"), vertexColors: true, transparent: true, depthWrite: false, size: 0.05 }));
+              this.pts.frustumCulled = false; this.pts.renderOrder = 3; scene.add(this.pts);
+            }
+            const M = this.pts.material;
+            if (this.map !== map) { this.map = map; M.size = C.size; M.opacity = C.opacity; M.blending = C.additive ? THREE.AdditiveBlending : THREE.NormalBlending; M.needsUpdate = true; this.base = new THREE.Color(C.color); }
+            const n = Math.round(C.n * ({ low: 0.4, medium: 0.7, high: 1, ultra: 1.2 }[SettingsManager.data.graphics] || 0.7));
+            const o = camera.position, wv = WindManager.vec(), t = menuTime;
+            for (let i = 0; i < Math.min(n, this.N); i++) {
+              const f = this.seed[i];
+              f[0] += (wv.x * C.drift + Math.sin(t * 0.3 + f[3]) * 0.12) * dt; f[2] += (wv.z * C.drift + Math.cos(t * 0.27 + f[3]) * 0.12) * dt;
+              f[1] += (C.rise + Math.sin(t * 0.5 + f[3] * 2) * 0.05) * dt; if (f[1] > 5) f[1] = 0; if (f[1] < 0) f[1] = 5;
+              const j = i * 3;
+              this.pos[j] = o.x + ((((f[0] + 12) % 24) + 24) % 24) - 12;
+              this.pos[j + 1] = Math.max(0.15, o.y - 1.6 + f[1]);
+              this.pos[j + 2] = o.z + ((((f[2] + 12) % 24) + 24) % 24) - 12;
+              const k = C.blink ? Math.max(0, Math.sin(t * (1.2 + f[4]) + f[3] * 7)) ** (C.blink > 0.5 ? 3 : 1) : 1;
+              this.col[j] = this.base.r * k; this.col[j + 1] = this.base.g * k; this.col[j + 2] = this.base.b * k;
+            }
+            this.pts.geometry.setDrawRange(0, Math.min(n, this.N));
+            this.pts.geometry.attributes.position.needsUpdate = true; this.pts.geometry.attributes.color.needsUpdate = true;
+            this.pts.visible = true;
+          },
+        };
         const WorldArt = {
           weather: null,
           weatherPositions: null,
@@ -7811,6 +7853,7 @@ body.netgame #revivetouch{display:flex}
             this.weather.visible = weatherOn && rainMap;
             if (this.splashes) this.splashes.visible = weatherOn && rainMap;
             Lightning.update(dt, weatherOn && rainMap && state === GameState.PLAYING, map);
+            AmbientMotes.update(dt, map, weatherOn && SettingsManager.data.graphics !== "low" && state === GameState.PLAYING);
             if (this.snow) this.snow.visible = weatherOn && map === 4;
             if (this.snowBig) this.snowBig.visible = weatherOn && map === 4 && SettingsManager.data.graphics !== "low";
             this.updateReflections(dt);
@@ -11487,7 +11530,7 @@ body.netgame #revivetouch{display:flex}
             LightPool.adopt(this.group);
             Nature.build(index);
             WallCast.src = null; // rebuild the wall triangle grid once the map is final
-            ShaderWarmup.run();
+            if (this.warmShaders) ShaderWarmup.run();
           },
           solid(x, y, z, w, h, d, color) {
             const m = box(this.group, x, y, z, w, h, d, color);
@@ -20420,7 +20463,9 @@ body.netgame #revivetouch{display:flex}
             damageNumbers.length = 0;
 
             selectedMap = Number(selectedMap);
+            MapManager.warmShaders = true; // match start only: menus and previews skip the compile pass
             MapManager.build(selectedMap);
+            MapManager.warmShaders = false;
             ZombiePing.reset();
             CyborgRockets.clear();
             RunStats.reset(); // per-match counters (bosses, weapon families, Index kills) must not leak into the next match
@@ -21647,12 +21692,24 @@ body.netgame #revivetouch{display:flex}
             $("announcement").style.opacity = 1;
             announcementEnd = simulationTime + duration;
           },
+          // Kill feed: newest on top, max 5, each line fades out after a few seconds so stale kills
+          // don't sit on screen for the whole wave.
           feed(text, color) {
-            this.kills.unshift({ text, color });
+            this.kills.unshift({ text, color, t: performance.now() });
             this.kills = this.kills.slice(0, 5);
+            this.paintFeed();
+          },
+          paintFeed() {
+            const now = performance.now();
             $("feed").innerHTML = this.kills
-              .map((k) => `<div style="color:${k.color}">${k.text}</div>`)
+              .map((k) => { const age = (now - k.t) / 1000; return `<div style="color:${k.color};opacity:${age > 4.5 ? Math.max(0, 1 - (age - 4.5) / 1.5).toFixed(2) : 1}">${k.text}</div>`; })
               .join("");
+          },
+          ageFeed() {
+            if (!this.kills.length) return;
+            const now = performance.now(), before = this.kills.length;
+            this.kills = this.kills.filter((k) => now - (k.t || now) < 6000);
+            if (this.kills.length !== before || this.kills.some((k) => now - k.t > 4500)) this.paintFeed();
           },
           number(value, pos, color) {
             if (!SettingsManager.data.numbers) return;
@@ -21766,6 +21823,7 @@ body.netgame #revivetouch{display:flex}
             this.hudClock -= dt;
             if (this.hudClock > 0) return;
             this.hudClock = touchMode ? 0.16 : 0.075;
+            this.ageFeed();
             const w = WeaponSystem.current();
             const mutation = MutationManager.current;
             this.hudHTML("wavehud", `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`);
@@ -27488,7 +27546,7 @@ body.netgame #revivetouch{display:flex}
           }
           fullscreenWasActive = active;
         });
-        const updatePrepSummary=()=>{const m=modeConfig[$("mode").value]||modeConfig.classic,d=diff[$("difficulty").value]||diff.easy,total=m.coins*d.coins;if($("mode-summary"))$("mode-summary").textContent=`${m.label} · ×${String(m.coins).replace(".",",")} moedas · escolha a zona.`;if($("chosenmap"))$("chosenmap").textContent=`${m.label} · ${maps[selectedMap].name}`;if($("reward-mult-summary"))$("reward-mult-summary").textContent=`Multiplicador final: ×${String(total).replace(".",",")} moedas · modo × dificuldade`;$("deploy").textContent=$("mode").value==="classic"?"Continuar · níveis":"Entrar na zona"};
+        const updatePrepSummary=()=>{const m=modeConfig[$("mode").value]||modeConfig.classic,d=diff[$("difficulty").value]||diff.easy,total=m.coins*d.coins;if($("mode-summary"))$("mode-summary").textContent=`${m.label} · ×${String(m.coins).replace(".",",")} moedas · escolha a zona.`;if($("chosenmap"))$("chosenmap").textContent=`${m.label} · ${maps[selectedMap].name}`;if($("reward-mult-summary")){const f=v=>String(Math.round(v*100)/100).replace(".",","),C=Balance.CAP;$("reward-mult-summary").textContent=`Moedas ×${f(total)} · Inimigos: vida ×${f(Math.min(C.hp,d.enemyHp*m.hp))} · velocidade ×${f(Math.min(C.speed,d.speed*m.speed))} · dano ×${f(Math.min(C.damage,d.damage*m.damage))} · sua vida ${d.hp}`;}$("deploy").textContent=$("mode").value==="classic"?"Continuar · níveis":"Entrar na zona"};
         const openModeSelect=()=>{state=GameState.MAP_SELECT;document.querySelectorAll('[data-choice="mode"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.value===$("mode").value)));UIManager.screen("modescreen")};
         $("classcontinue").onclick=()=>{if(!Progression.busy)openModeSelect()};
         $("backplay").onclick=()=>DR.LobbyUI.openPlay();
@@ -28530,6 +28588,7 @@ body.netgame #revivetouch{display:flex}
             explosion,
             Nature,
             Lightning,
+            AmbientMotes,
             WindManager,
             CameraRig,
             classBurst: () => classBurst(),

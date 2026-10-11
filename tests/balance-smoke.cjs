@@ -30,6 +30,11 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     const z = T.ZombieManager.spawn(0, null, new V(0, 0, -8)); out.baseHp = z.maxhp; out.baseSpeed = +z.speed.toFixed(3); T.ZombieManager.clear();
     out.maxSpeed = +maxSpeed.toFixed(2); out.maxHp = maxHp; out.maxDmg = +maxDmg.toFixed(3);
     out.inf80 = Math.round(B.infiniteHp(80)); out.limit = +B.RUN_LIMIT.toFixed(2);
+    // Kill feed lines expire; the difficulty screen shows the effective (capped) threat.
+    const U = T.UIManager; U.kills = []; U.feed('A', '#fff'); U.kills[0].t -= 7000; U.feed('B', '#fff'); U.ageFeed();
+    out.feed = U.kills.map(k => k.text).join('');
+    document.getElementById('mode').value = 'timed'; document.getElementById('difficulty').value = 'nightmare';
+    document.getElementById('nextmode').click(); out.summary = document.getElementById('reward-mult-summary').textContent;
     return out;
   });
   assert.deepEqual(r.rewards, r.rewards.map(Number)); // numeric, deterministic
@@ -37,6 +42,8 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   assert.ok(r.maxHp <= 2.0001 && r.maxDmg <= 2.0001, JSON.stringify(r));
   assert.equal(r.baseHp, 50); assert.equal(r.baseSpeed, 1.85);
   assert.ok(r.inf80 < 1000, JSON.stringify(r));
+  assert.equal(r.feed, 'B');
+  assert.match(r.summary, /vida ×2 · velocidade ×1,55 · dano ×2/);
   assert.deepEqual(errs, []);
   console.log('PASS balance', JSON.stringify(r));
   await b.close(); server.close();
