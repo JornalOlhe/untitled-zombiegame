@@ -11578,11 +11578,12 @@ body.netgame #revivetouch{display:flex}
             LightPool.adopt(this.group);
             Nature.build(index);
             WallCast.src = null; // rebuild the wall triangle grid once the map is final
+            ContactAO.build(this);
             if (this.warmShaders) ShaderWarmup.run();
           },
           solid(x, y, z, w, h, d, color) {
             const m = box(this.group, x, y, z, w, h, d, color);
-            this.obstacles.push({ x, z, w: w / 2, d: d / 2, h, top: y + h / 2, base: y - h / 2 });
+            this.obstacles.push({ x, z, w: w / 2, d: d / 2, h, top: y + h / 2, base: y - h / 2, structural: true });
             this.walls.push(m);
             return m;
           },
@@ -13629,6 +13630,53 @@ body.netgame #revivetouch{display:flex}
           }
           projectiles.splice(i, 1);
         }
+        // Contact ambient occlusion: a soft dark footprint under everything that stands on the floor
+        // (walls, props, cars, furniture) — the darkening real light gets where surfaces meet.
+        // One merged mesh per map (a single draw call), alpha from a rounded-rect falloff texture.
+        const ContactAO = {
+          tex: null,
+          texture() {
+            if (this.tex) return this.tex;
+            const N = 64, c = document.createElement("canvas"); c.width = c.height = N;
+            const g = c.getContext("2d"), img = g.createImageData(N, N);
+            for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+              const u = Math.abs((x + 0.5) / N * 2 - 1), v = Math.abs((y + 0.5) / N * 2 - 1);
+              // rounded-rect distance: 0 inside the inner box, 1 at the edge of the quad
+              const du = Math.max(0, u - 0.55) / 0.45, dv = Math.max(0, v - 0.55) / 0.45, d = Math.min(1, Math.hypot(du, dv));
+              const a = Math.pow(1 - d, 2.2) * 255, i = (y * N + x) * 4;
+              img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = a;
+            }
+            g.putImageData(img, 0, 0);
+            return (this.tex = new THREE.CanvasTexture(c));
+          },
+          build(M) {
+            M.contactAO = 0;
+            if (SettingsManager.data.graphics === "low" || window.__aoOff) return;
+            const pos = [], uv = [], idx = [];
+            for (const o of M.obstacles) {
+              const base = o.base || 0;
+              if (base > 0.12 || o.top < 0.25) continue;
+              const h = o.top - base, spread = Math.min(0.9, 0.22 + 0.16 * Math.min(h, 3.5));
+              const hw = o.w + spread, hd = o.d + spread;
+              if (hw * hd > 900) continue; // giant boundary volumes
+              const y = Math.max(base, M.groundAt?.(o.x, o.z, 0.05, base + 0.05) ?? 0) + 0.018, k = pos.length / 3;
+              pos.push(o.x - hw, y, o.z - hd, o.x + hw, y, o.z - hd, o.x + hw, y, o.z + hd, o.x - hw, y, o.z + hd);
+              uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+              idx.push(k, k + 2, k + 1, k, k + 3, k + 2);
+            }
+            if (!idx.length) return;
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+            geo.setIndex(idx);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: this.texture(), transparent: true, opacity: M.closed ? 0.42 : 0.34, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.name = "ContactAO"; mesh.renderOrder = 1; mesh.frustumCulled = false;
+            mesh.userData.disposableGeometry = mesh.userData.disposableMaterial = true;
+            M.group.add(mesh);
+            M.contactAO = idx.length / 6;
+          },
+        };
         // Shader warm-up: three.js compiles a program the first time a material/light combination
         // is drawn, which used to freeze the first explosion (10 programs, incl. a recompile of every
         // standard material because the blast-flash light pool appeared mid-fight). After each map
@@ -17803,8 +17851,24 @@ body.netgame #revivetouch{display:flex}
               default:
                 fill([128, 128, 128], 20);
             }
-            const t = new THREE.CanvasTexture(canvas);
-            t.magFilter = THREE.NearestFilter;
+            // Detail pass: the 16px design is blown up 8× (crisp blocks) and given per-pixel grain,
+            // soft block bevels and a grime gradient, then filtered linearly with full mipmaps +
+            // anisotropy — reads as a real surface up close instead of flat pixel squares.
+            const big = document.createElement("canvas"), S = 128, k = S / N;
+            big.width = big.height = S;
+            const g2 = big.getContext("2d");
+            g2.imageSmoothingEnabled = false;
+            g2.drawImage(canvas, 0, 0, S, S);
+            const img = g2.getImageData(0, 0, S, S), D = img.data, glowKind = /^(light|lamp|fire|lava|screen|sign|window)/.test(kind);
+            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+              const i = (y * S + x) * 4, bx = x % k, by = y % k;
+              let f = 1 + (R() - 0.5) * (glowKind ? 0.04 : 0.13);
+              if (!glowKind) { if (bx === 0 || by === 0) f *= 1.05; else if (bx === k - 1 || by === k - 1) f *= 0.93; }
+              D[i] = Math.min(255, D[i] * f); D[i + 1] = Math.min(255, D[i + 1] * f); D[i + 2] = Math.min(255, D[i + 2] * f);
+            }
+            g2.putImageData(img, 0, 0);
+            const t = new THREE.CanvasTexture(big);
+            t.magFilter = THREE.LinearFilter;
             t.minFilter = THREE.LinearMipmapLinearFilter;
             t.generateMipmaps = true;
             t.anisotropy = Math.min(matchMedia("(pointer:coarse)").matches ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
@@ -17847,8 +17911,8 @@ body.netgame #revivetouch{display:flex}
             if (kind === "wardWall" && VisualArt.photo("hospital_paint_diff")) {
               // painted plaster with roller stipple, scuffs and hairline cracks
               const wm = VisualArt.surface("hospital_paint", 0xe4e9e4, "concrete", { roughness: 0.78, normal: 0.45 }).clone();
-              wm.map = VisualArt.photoCopy(wm.map); wm.map.repeat.set(0.3, 0.3);
-              if (wm.normalMap) { wm.normalMap = VisualArt.photoCopy(wm.normalMap); wm.normalMap.repeat.set(0.3, 0.3); }
+              wm.map = VisualArt.photoCopy(wm.map); wm.map.repeat.set(0.55, 0.55);
+              if (wm.normalMap) { wm.normalMap = VisualArt.photoCopy(wm.normalMap); wm.normalMap.repeat.set(0.55, 0.55); }
               this.materials.set(kind, wm);
               return wm;
             }
@@ -18216,6 +18280,170 @@ body.netgame #revivetouch{display:flex}
               if (p) fn(p[0], p[1]);
             }
           },
+          // Wall dressing: every long wall face that looks onto open floor gets themed details mounted
+          // on it (extinguishers, panels, pipes, posters, vents, radiators, lanterns…) and a little
+          // low clutter at its foot. Mounted items stick out ≤ 0.25 m and floor clutter has no
+          // collider, so nothing here can narrow or block a route. Deterministic per map.
+          dressWalls(index) {
+            const M = MapManager, ceil = M.ceiling ?? Infinity;
+            let seed = 9137 + index * 7919; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+            const pick = (a) => a[Math.floor(rnd() * a.length)];
+            const S = (kind, pos, size, ry) => PropKit.add(this.soft, kind, pos, size, [0, ry, 0], 0);
+            const themes = {
+              0: ["ac", "pipe", "meter", "poster", "sign", "vent"],
+              1: ["extinguisher", "panel", "poster", "radiator", "vent", "sanitizer", "clock"],
+              2: ["lantern", "tools", "planksBoard", "poster"],
+              3: ["pipe", "panel", "hazardSign", "vent", "extinguisher", "cable"],
+              4: ["pipe", "vent", "hazardSign", "shovel", "panel"],
+            };
+            const items = themes[index] || themes[0];
+            const mount = (type, x, z, ry, nx, nz, top) => {
+              const at = (out, y) => [x + nx * out, y, z + nz * out];
+              const hMax = Math.min(top, ceil) - 0.2;
+              switch (type) {
+                case "extinguisher": S("metal", at(0.05, 1.05), [0.22, 0.05, 0.08], ry); S("barrel", at(0.12, 0.75), [0.16, 0.5, 0.16], ry); S("metal", at(0.12, 1.03), [0.08, 0.08, 0.08], ry); break;
+                case "panel": S("metal", at(0.08, 1.45), [0.55, 0.75, 0.14], ry); S(pick(["lightGreen", "lightRed", "lightAmber"]), at(0.16, 1.7), [0.06, 0.06, 0.02], ry); S("hazard", at(0.16, 1.18), [0.4, 0.06, 0.02], ry); break;
+                case "poster": S(pick(["signRed", "signYellow", "signCyan", "signGreen", "awningRed", "awningBlue", "white"]), at(0.02, 1.55 + rnd() * 0.4), [0.6, 0.85, 0.015], ry); break;
+                case "radiator": S("white", at(0.07, 0.45), [1.0, 0.55, 0.1], ry); break;
+                case "vent": if (hMax > 2.2) S("fence", at(0.04, hMax - 0.35), [0.6, 0.35, 0.06], ry); break;
+                case "sanitizer": S("white", at(0.05, 1.25), [0.14, 0.24, 0.08], ry); break;
+                case "clock": if (hMax > 2.4) { S("white", at(0.03, 2.3), [0.34, 0.34, 0.04], ry); S("metal", at(0.055, 2.3), [0.02, 0.12, 0.01], ry); } break;
+                case "pipe": if (hMax > 2.0) { const y = Math.min(hMax - 0.25, 2.2 + rnd() * 1.2); S("metal", at(0.12, y), [2.6, 0.12, 0.12], ry); S("metal", at(0.08, y), [0.1, 0.2, 0.1], ry); } break;
+                case "cable": if (hMax > 2.0) S("tire", at(0.06, Math.min(hMax - 0.3, 2.5)), [2.8, 0.05, 0.05], ry); break;
+                case "meter": S("metal", at(0.08, 1.4), [0.35, 0.5, 0.15], ry); S("screen", at(0.16, 1.5), [0.2, 0.1, 0.01], ry); break;
+                case "ac": if (top > 3.4) { S("metal", at(0.3, 2.9), [0.9, 0.6, 0.55], ry); S("fence", at(0.58, 2.9), [0.7, 0.45, 0.02], ry); } break;
+                case "sign": S(pick(["streetSign", "signRed", "signYellow"]), at(0.03, 2.2), [0.9, 0.35, 0.03], ry); break;
+                case "hazardSign": S("signYellow", at(0.02, 1.7), [0.45, 0.45, 0.015], ry); S("hazard", at(0.02, 1.38), [0.45, 0.1, 0.015], ry); break;
+                case "lantern": S("metal", at(0.12, 1.85), [0.06, 0.25, 0.06], ry); S("lamp", at(0.14, 1.65), [0.14, 0.2, 0.14], ry); break;
+                case "tools": S("planks", at(0.04, 1.5), [0.8, 0.06, 0.05], ry); S("metal", at(0.08, 1.25), [0.05, 0.5, 0.03], ry); S("planks", at(0.08, 1.15), [0.04, 0.7, 0.04], ry); break;
+                case "planksBoard": S("planks", at(0.03, 1.2), [1.1, 0.25, 0.05], ry + 0.08); break;
+                case "shovel": S("planks", at(0.1, 0.75), [0.05, 1.3, 0.05], ry); S("metal", at(0.12, 0.15), [0.25, 0.3, 0.03], ry); break;
+              }
+            };
+            const clutter = (x, z, ry) => {
+              const k = rnd();
+              if (k < 0.35) S("white", [x, 0.012, z], [0.3, 0.01, 0.42], ry + rnd() * 2);
+              else if (k < 0.55) S(index === 2 ? "leaves" : "rubble", [x, 0.04, z], [0.4, 0.08, 0.3], ry + rnd() * 3);
+              else if (k < 0.75) S("crate", [x, 0.13, z], [0.26, 0.26, 0.26], ry + rnd());
+              else S("trash", [x, 0.2, z], [0.3, 0.4, 0.3], ry);
+            };
+            let placed = 0;
+            const walls = M.obstacles.filter((o) => (o.structural || (o.top - (o.base || 0)) >= 2.4) && (o.base || 0) < 0.3 && o.top >= 2.2);
+            for (const o of walls) {
+              for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const len = nx ? o.d * 2 : o.w * 2;
+                if (len < 1.6) continue;
+                const fx = o.x + nx * o.w, fz = o.z + nz * o.d, ry = Math.atan2(nx, nz);
+                const n = Math.floor(len / 3.2);
+                for (let i = 0; i < n; i++) {
+                  if (rnd() < 0.35) continue;
+                  const t = (i + 0.5) / n - 0.5 + (rnd() - 0.5) * 0.15, x = fx + (nx ? 0 : t * len), z = fz + (nz ? 0 : t * len);
+                  // only faces that look onto real, walkable floor (not into another wall or outside)
+                  if (Math.abs(x + nx * 0.8) > M.half - 1.5 || Math.abs(z + nz * 0.8) > M.half - 1.5) continue;
+                  if (M.collides(x + nx * 0.8, z + nz * 0.8, 0.35) || M.collides(x + nx * 1.6, z + nz * 1.6, 0.35)) continue;
+                  mount(pick(items), x, z, ry, nx, nz, o.top);
+                  placed++;
+                  if (rnd() < 0.45) { const s = (rnd() - 0.5) * 1.2; clutter(x + nx * 0.35 + (nx ? 0 : s), z + nz * 0.35 + (nz ? 0 : s), ry); }
+                }
+              }
+            }
+            M.wallDressing = placed;
+            return placed;
+          },
+          // Passage clean-up (runs on every build, before the prop batches become meshes): small
+          // dressing clusters (desks, crates, rocks, barricade bits) are removed when they seal off
+          // a walkable pocket or force a detour on the routes between spawns and the player start.
+          // Structural walls/buildings are never touched. Measured on a 0.5 m walk grid.
+          clearPassages(index) {
+            const M = MapManager;
+            M.clearedPassages = []; M.passageStats = null;
+            if (window.__noClearPassages) return 0;
+            const t0 = performance.now();
+            const O = M.obstacles, H = M.half - 1.3, C = Math.max(0.5, Math.ceil((2 * H) / 400 * 10) / 10), n = Math.floor((2 * H) / C);
+            if (!O.length || n < 8 || n > 400) return 0;
+            const isWall = (o) => o.structural || (o.top - (o.base || 0)) >= 2.6 || Math.max(o.w, o.d) * 2 >= 4 || o.top < 0.6 || (o.base || 0) > 1.6;
+            // cluster touching non-wall obstacles
+            // Only dressing built from kit boxes can be removed cleanly (mesh + collider); rocks and
+            // GLB props are already meshes by now, so their colliders are never candidates.
+            const pieces = [...this.hard.values()].flat();
+            const kitBacked = (o) => pieces.some((p) => Math.abs(p.pos[0] - o.x) <= o.w + 0.1 && Math.abs(p.pos[2] - o.z) <= o.d + 0.1 && p.pos[1] <= o.top + 0.1 && p.pos[1] >= (o.base || 0) - 0.1);
+            const cand = O.filter((o) => !isWall(o) && kitBacked(o)), parent = cand.map((_, i) => i);
+            const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+            for (let i = 0; i < cand.length; i++) for (let j = i + 1; j < cand.length; j++) {
+              const a = cand[i], b = cand[j];
+              if (Math.abs(a.x - b.x) - (a.w + b.w) < 0.06 && Math.abs(a.z - b.z) - (a.d + b.d) < 0.06) parent[find(i)] = find(j);
+            }
+            const clusters = new Map();
+            cand.forEach((o, i) => { const r = find(i); if (!clusters.has(r)) clusters.set(r, []); clusters.get(r).push(o); });
+            const R = 0.42, idx = (gx, gz) => gz * n + gx, cx = (g) => -H + (g + 0.5) * C;
+            const blockedBy = (x, z, skip) => {
+              for (const o of M.near(x, z, R)) {
+                if (skip && skip.has(o)) continue;
+                if (o.top > 0.55 && (o.base || 0) < 1.7 && Math.abs(x - o.x) < o.w + R && Math.abs(z - o.z) < o.d + R) return true;
+              }
+              return false;
+            };
+            const base = new Uint8Array(n * n);
+            for (let gz = 0; gz < n; gz++) for (let gx = 0; gx < n; gx++) base[idx(gx, gz)] = blockedBy(cx(gx), cx(gz), null) ? 1 : 0;
+            const start = M.playerStart || [0, 10], cell = (x, z) => [clamp(Math.floor((x + H) / C), 0, n - 1), clamp(Math.floor((z + H) / C), 0, n - 1)];
+            const [sx, sz] = cell(start[0], start[1]);
+            const goals = (M.spawns || []).map(([x, z]) => idx(...cell(x, z)));
+            const dist = new Int32Array(n * n), queue = new Int32Array(n * n);
+            const bfs = (grid) => {
+              dist.fill(-1); let h = 0, t = 0, reach = 0;
+              const s0 = idx(sx, sz); if (grid[s0]) return { reach: 0, d: Infinity };
+              dist[s0] = 0; queue[t++] = s0;
+              while (h < t) {
+                const c = queue[h++], gx = c % n, gz = (c / n) | 0; reach++;
+                for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                  const x = gx + dx, z = gz + dz; if (x < 0 || z < 0 || x >= n || z >= n) continue;
+                  const k = idx(x, z); if (grid[k] || dist[k] >= 0) continue;
+                  dist[k] = dist[c] + 1; queue[t++] = k;
+                }
+              }
+              let d = 0, cnt = 0; for (const g of goals) if (dist[g] >= 0) { d += dist[g]; cnt++; }
+              return { reach, d: cnt ? d / cnt : Infinity, cnt };
+            };
+            let ref = bfs(base), dist0 = Int32Array.from(dist);
+            M.passageStats = { cand: cand.length, clusters: clusters.size, reach: ref.reach, d: ref.d, goals: ref.cnt, of: goals.length, cells: n * n };
+            const removed = [], work = new Uint8Array(n * n);
+            for (const list of clusters.values()) {
+              const set = new Set(list);
+              let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, top = 0;
+              for (const o of list) { x0 = Math.min(x0, o.x - o.w); x1 = Math.max(x1, o.x + o.w); z0 = Math.min(z0, o.z - o.d); z1 = Math.max(z1, o.z + o.d); top = Math.max(top, o.top); }
+              if ((x1 - x0) * (z1 - z0) > 14) continue; // big set pieces stay
+              work.set(base);
+              const [ax, az] = cell(x0 - R - C, z0 - R - C), [bx, bz] = cell(x1 + R + C, z1 + R + C);
+              let freed = 0, touches = false;
+              for (let gz = az; gz <= bz; gz++) for (let gx = ax; gx <= bx; gx++) {
+                const k = idx(gx, gz);
+                if (work[k] && !blockedBy(cx(gx), cx(gz), set)) {
+                  work[k] = 0; freed++;
+                  if (!touches) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = gx + dx, z = gz + dz; if (x >= 0 && z >= 0 && x < n && z < n && dist0[idx(x, z)] >= 0) { touches = true; break; } }
+                }
+              }
+              if (!freed || !touches) continue; // nothing reachable borders it: removing changes no route
+              const before = dist0;
+              const r = bfs(work);
+              // local detour: how many reachable cells got ≥ 3 m closer once the cluster is gone
+              let closer = 0; for (let k = 0; k < dist.length; k++) if (before[k] >= 0 && dist[k] >= 0 && before[k] - dist[k] >= Math.round(3 / C)) closer++;
+              const area = 0.25 / (C * C), pocket = r.reach - ref.reach >= 6 * area + freed, detour = (isFinite(ref.d) && r.cnt >= ref.cnt && (ref.d - r.d) / ref.d > 0.06) || closer >= 60 * area;
+              if (!pocket && !detour) continue;
+              removed.push({ x0, x1, z0, z1, top, list, why: pocket ? "pocket" : "detour" });
+              base.set(work); ref = r; dist0 = Int32Array.from(dist);
+            }
+            M.passageStats.ms = Math.round(performance.now() - t0);
+            if (!removed.length) return 0;
+            const gone = new Set(removed.flatMap((c) => c.list));
+            for (let i = O.length - 1; i >= 0; i--) if (gone.has(O[i])) O.splice(i, 1);
+            const inside = (p, c, pad) => p[0] > c.x0 - pad && p[0] < c.x1 + pad && p[2] > c.z0 - pad && p[2] < c.z1 + pad && p[1] < c.top + 0.7;
+            for (const batch of [this.hard, this.soft]) for (const [kind, pieces] of batch) {
+              for (let i = pieces.length - 1; i >= 0; i--) if (removed.some((c) => inside(pieces[i].pos, c, 0.12))) pieces.splice(i, 1);
+            }
+            M.clearedPassages = removed.map((c) => ({ x: +((c.x0 + c.x1) / 2).toFixed(1), z: +((c.z0 + c.z1) / 2).toFixed(1), why: c.why }));
+            M.passageStats.ms = Math.round(performance.now() - t0);
+            return removed.length;
+          },
           finish(index) {
             // Every map: low rocks to hop across and crate stairs up onto cover.
             if (MapDesigns[index]) {
@@ -18271,6 +18499,8 @@ body.netgame #revivetouch{display:flex}
                   this.collider(center.x,center.z,size.x,size.z,bounds.max.y,bounds.min.y);
               }
             }
+            this.dressWalls(index);
+            this.clearPassages(index);
             const hard = PropKit.build(this.hard, MapManager.group);
             MapManager.walls.push(...hard);
             PropKit.build(this.soft, MapManager.group);
@@ -28750,6 +28980,7 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            PropKit,
             Viewmodel,
             MeleeAnim,
             Survivor,
