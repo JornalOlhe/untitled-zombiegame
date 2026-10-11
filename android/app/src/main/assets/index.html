@@ -26004,6 +26004,28 @@ body.netgame #revivetouch{display:flex}
           // Preferred item per category (click a rarity, then an item): +50% weight inside its
           // rarity on the next spins — a small boost, never a guarantee. Validated by the server.
           pref: { weapon: null, class: null },
+          // Loadout slot locks + explicit spin target (Fortnite/CoD-style "lock what you want to keep").
+          // Locks are a local preference: a locked slot (red, closed padlock) is never replaced by a
+          // spin; open slots (green) can be. Clicking a slot card picks it as the spin target.
+          spinTarget: { weapon: null, class: null },
+          locks: (() => { try { const v = JSON.parse(localStorage.getItem("deadrecoil.slotLocks") || "{}"); return { weapon: Array.isArray(v.weapon) ? v.weapon : [], class: Array.isArray(v.class) ? v.class : [] }; } catch { return { weapon: [], class: [] }; } })(),
+          isLocked(kind, slot) { return !!this.locks[kind]?.[slot]; },
+          toggleLock(kind, slot) {
+            if (Progression.busy || this.roll) return;
+            const L = this.locks[kind]; L[slot] = !L[slot];
+            try { localStorage.setItem("deadrecoil.slotLocks", JSON.stringify(this.locks)); } catch {}
+            if (L[slot] && this.spinTarget[kind] === slot) this.spinTarget[kind] = null;
+            SpinSFX.press?.();
+            AudioManager.tone(L[slot] ? 320 : 760, 0.07, "square", 0.06, L[slot] ? 220 : 980, "ui");
+            UIManager.toast(L[slot] ? `Slot ${slot + 1} travado: o giro não substitui esta arma/classe.` : `Slot ${slot + 1} destravado: pode receber o próximo giro.`);
+            this.render();
+          },
+          chooseTarget(kind, slot) {
+            if (Progression.busy || this.roll) return;
+            if (this.isLocked(kind, slot)) { UIManager.toast(`Slot ${slot + 1} está travado. Toque no cadeado para destravar.`); return; }
+            this.spinTarget[kind] = slot;
+            this.render();
+          },
           preference(kind) {
             const id = this.pref[kind],
               item = Progression.economy.catalogs[kind]?.[id];
@@ -26093,12 +26115,28 @@ body.netgame #revivetouch{display:flex}
             if (!this.roll || this.roll.revealed) SpinStage3D.setAura(rarityColors[item.tier]);
             el.style.setProperty("--t1", t1);
             el.style.setProperty("--t2", t2);
-            el.innerHTML = `<h2 data-text="${item.name}">${item.name}</h2><p>${this.itemDesc(kind, item)}</p>`;
+            el.innerHTML = `<h2 data-text="${item.name}">${item.name}</h2><p>${this.itemDesc(kind, item)}</p>${kind === "weapon" ? this.statBars(id) : ""}`;
+          },
+          // CoD-style stat strip for weapons: per-shot damage, fire rate, range, magazine — each bar is
+          // relative to the strongest weapon in the catalog (log scale so pistols and launchers fit).
+          statBars(id) {
+            const W = WeaponSystem.weapons, w = W[id]; if (!w) return "";
+            const dmg = (x) => x.damage * (x.pellets || 1), rate = (x) => 1 / Math.max(0.03, x.rate || 1);
+            const max = (f) => Math.max(...W.map(f)), lg = (v, m) => Math.max(0.06, Math.min(1, Math.log1p(v) / Math.log1p(m)));
+            const rows = [
+              ["DANO", lg(dmg(w), max(dmg)), Math.round(dmg(w))],
+              ["CADÊNCIA", lg(rate(w), max(rate)), `${(rate(w)).toFixed(1)}/s`],
+              ["ALCANCE", lg(w.range || 1, max((x) => x.range || 1)), `${Math.round(w.range || 0)} m`],
+              ["PENTE", w.mag ? lg(w.mag, max((x) => x.mag || 1)) : 1, w.mag ? w.mag : "∞"],
+            ];
+            return `<div class="stat-bars">${rows.map(([n, v, t]) => `<div class="stat-row"><span class="sb-name">${n}</span><span class="sb-track"><span class="sb-fill" style="width:${Math.round(v * 100)}%"></span></span><em>${t}</em></div>`).join("")}</div>`;
           },
           arrowIcon: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M35.5 12.5A17 17 0 1 0 41 25" fill="none" stroke="#141414" stroke-width="10" stroke-linecap="round"/><path d="M35.5 12.5A17 17 0 1 0 41 25" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/><path d="M28 4.5 44 8.5 37.5 23Z" fill="#fff" stroke="#141414" stroke-width="2.6" stroke-linejoin="round"/></svg>`,
-          lockIcon(open) {
-            const c = open ? "#ff1f2e" : "#2dff3a", s = open ? "#7a0010" : "#0b6a12";
-            return `<svg viewBox="0 0 44 44" aria-hidden="true"><path d="${open ? "M12 20V12a9 9 0 0 1 18 0" : "M13 20v-7a9 9 0 0 1 18 0v7"}" fill="none" stroke="${s}" stroke-width="8"/><path d="${open ? "M12 20V12a9 9 0 0 1 18 0" : "M13 20v-7a9 9 0 0 1 18 0v7"}" fill="none" stroke="${c}" stroke-width="4.5"/><rect x="6" y="19" width="32" height="23" rx="3" fill="${c}" stroke="${s}" stroke-width="2.5"/><rect x="19.5" y="25" width="5" height="10" rx="2" fill="${s}"/></svg>`;
+          // locked → red, closed shackle; open → green, shackle swung up (can receive a spin)
+          lockIcon(locked) {
+            const c = locked ? "#ff2a35" : "#3dff4a", s = locked ? "#6a0010" : "#0b5a12";
+            const shackle = locked ? "M13 20v-7a9 9 0 0 1 18 0v7" : "M13 20V9a9 9 0 0 1 18 0v2";
+            return `<svg viewBox="0 0 44 44" aria-hidden="true"><path d="${shackle}" fill="none" stroke="${s}" stroke-width="8" stroke-linecap="round"/><path d="${shackle}" fill="none" stroke="${c}" stroke-width="4.5" stroke-linecap="round"/><rect x="6" y="19" width="32" height="23" rx="3" fill="${c}" stroke="${s}" stroke-width="2.5"/><rect x="19.5" y="25" width="5" height="10" rx="2" fill="${s}"/></svg>`;
           },
           hudNumbers() {
             const d = Progression.data, kind = this.tab === "weapon" ? "weapon" : "class", mode = this.oddsMode, dev = DevMode.active;
@@ -26179,7 +26217,14 @@ body.netgame #revivetouch{display:flex}
             document.querySelectorAll("[data-armory-tab]").forEach((b) => { if (!b.querySelector(".t")) b.innerHTML = `<span class="t">${b.textContent.trim()}</span>`; });
             // LEFT column — loadout slots (lock = which slot the next spin replaces) + slot purchase.
             $("armory-list").innerHTML = this.slotCards(kind);
-            $("armory-list").querySelectorAll("[data-slot-equip]").forEach((b) => b.onclick = () => { if (!Progression.busy && !b.classList.contains("selected")) Progression.slotEquip(kind, +b.dataset.slotEquip); });
+            $("armory-list").querySelectorAll("[data-slot-target]").forEach((b) => b.onclick = (ev) => {
+              if (ev.target.closest(".slot-lock") || Progression.busy) return;
+              const slot = +b.dataset.slotTarget;
+              if (!this.isLocked(kind, slot)) this.spinTarget[kind] = slot;
+              if (b.dataset.slotEquip != null && !b.classList.contains("selected")) Progression.slotEquip(kind, slot);
+              else this.render();
+            });
+            $("armory-list").querySelectorAll("[data-lock-slot]").forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); this.toggleLock(kind, +b.dataset.lockSlot); });
             $("armory-list").querySelectorAll("[data-buy-slot]").forEach((b) => b.onclick = () => (kind === "weapon" ? Progression.buyWeaponSlot() : Progression.buyClassSlot()));
             $("roll-controls").querySelectorAll("[data-reroll]").forEach((b) => b.onclick = () => this.pressSpin(kind, b.dataset.reroll === "true", b.dataset.pay));
             $("roll-controls").querySelectorAll("[data-buy-spins]").forEach((b) => b.onclick = () => this.buySpinsInfo());
@@ -26221,13 +26266,16 @@ body.netgame #revivetouch{display:flex}
               slots[at] = devId;
             }
             const short = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v));
-            // The slot the next spin writes into gets the green frame + open red lock (video).
-            const target = kind === "weapon" ? clamp(d.weaponSlot || 0, 0, owned - 1) : slots.indexOf(null) >= 0 ? slots.indexOf(null) : slots.indexOf(current);
+            // Spin target = the slot the next spin writes into (green "GIRO" frame); padlock per slot.
+            const target = Progression.spinTargetSlot(kind);
+            const lockBtn = (slot) => `<button type="button" class="slot-lock" data-lock-slot="${slot}" aria-label="${this.isLocked(kind, slot) ? "Destravar" : "Travar"} slot ${slot + 1}" title="${this.isLocked(kind, slot) ? "Travado: o giro não substitui este slot" : "Aberto: pode receber o giro"}">${this.lockIcon(this.isLocked(kind, slot))}</button>`;
+            const flags = (slot) => `${slot === target ? "spin-target" : ""} ${this.isLocked(kind, slot) ? "slot-locked" : "slot-open"}`;
+            const tag = (slot) => (slot === target ? `<span class="slot-target-tag">GIRO</span>` : "");
             const cards = slots.map((id, slot) => {
-              if (id === null) return `<article class="slot-card owned empty" data-slot="${slot}"><i class="slot-lock">${this.lockIcon(slot === target)}</i><h3 class="slot-name">VAZIO</h3></article>`;
+              if (id === null) return `<article class="slot-card owned empty ${flags(slot)}" data-slot="${slot}" data-slot-target="${slot}">${lockBtn(slot)}${tag(slot)}<h3 class="slot-name">VAZIO</h3></article>`;
               const item = Progression.economy.catalogs[kind][id],
                 selected = kind === "weapon" ? d.weaponSlot === slot : current === id;
-              return `<article class="slot-card owned ${selected ? "selected" : ""}" data-slot-equip="${slot}" style="--rarity:${rarityColors[item.tier]}" title="${rarityNames[item.tier]}"><i class="slot-lock">${this.lockIcon(slot === target)}</i><h3 class="slot-name ${item.name.length > 8 ? "long" : ""}" ${item.name.length > 8 && !item.name.includes(" ") ? `style="font-size:calc(var(--u)*${Math.max(12, Math.min(19, Math.floor(160 / item.name.length)))})!important"` : ""}>${item.name}</h3><span class="slot-eq">Equipped</span></article>`;
+              return `<article class="slot-card owned ${selected ? "selected" : ""} ${flags(slot)}" data-slot-equip="${slot}" data-slot-target="${slot}" style="--rarity:${rarityColors[item.tier]}" title="${rarityNames[item.tier]}">${lockBtn(slot)}${tag(slot)}<h3 class="slot-name ${item.name.length > 8 ? "long" : ""}" ${item.name.length > 8 && !item.name.includes(" ") ? `style="font-size:calc(var(--u)*${Math.max(12, Math.min(19, Math.floor(160 / item.name.length)))})!important"` : ""}>${item.name}</h3><span class="slot-eq">Equipped</span></article>`;
             }).join("");
             let locked = "";
             for (let n = owned + 1; n <= max; n++) {
@@ -26378,7 +26426,7 @@ body.netgame #revivetouch{display:flex}
             ShopPortraits.fill($("cosmetic-fields"));
           },
           confirmReroll(kind, lucky, payment) {
-            const current = Progression.economy.catalogs[kind][Progression.data[kind + "Id"]];
+            const current = Progression.economy.catalogs[kind][Progression.targetItemId(kind)];
             if (!current || !requiresRerollConfirm(current.tier)) return false;
             this.awaitingConfirm = { type: "reroll", kind, lucky, payment };
             const color = rarityColors[current.tier];
@@ -26452,7 +26500,9 @@ body.netgame #revivetouch{display:flex}
         Progression.render = () => Armory.render();
         Progression.roll = async function (kind, lucky, payment, confirmed = false) {
           if (state !== GameState.CLASS_SELECT || this.busy) return;
-          const current = this.economy.catalogs[kind]?.[this.data[kind + "Id"]];
+          if (this.spinTargetSlot(kind) < 0) { UIManager.toast("Todos os slots estão travados. Toque num cadeado vermelho para abrir um slot (verde)."); return; }
+          // Confirm against the item that the spin will actually replace (the target slot).
+          const current = this.economy.catalogs[kind]?.[this.targetItemId(kind)];
           if (!confirmed && !DevMode.active && current && requiresRerollConfirm(current.tier)) {
             Armory.confirmReroll(kind, lucky, payment);
             return;
@@ -26475,23 +26525,33 @@ body.netgame #revivetouch{display:flex}
             Armory.reveal(kind, result, lucky);
           } catch (e) { this.busy = false; Armory.previewSpin = null; Armory.render(); UIManager.toast(e.message); }
         };
+        Progression.targetItemId = function (kind) {
+          const slot = this.spinTargetSlot(kind);
+          const id = slot >= 0 ? this.data[loadoutSlotKey(kind)]?.[slot] : null;
+          return slot >= 0 ? id : this.data[kind + "Id"];
+        };
         Progression.spinTargetSlot = function (kind, id) {
           normalizeLoadoutState(this.data);
           // A spin can only land in an owned slot — never auto-fill a slot the player
           // hasn't bought yet.
           const owned = kind === "weapon" ? this.data.weaponSlotsOwned : this.data.classSlotsOwned;
           const slots = this.data[loadoutSlotKey(kind)].slice(0, owned);
+          const open = (i) => i >= 0 && i < owned && !Armory.isLocked(kind, i);
+          // Classes never duplicate: re-rolling an owned class just re-equips its slot.
+          if (kind === "class" && id != null && slots.indexOf(id) >= 0) return slots.indexOf(id);
+          const chosen = Armory.spinTarget?.[kind];
+          if (Number.isInteger(chosen) && open(chosen)) return chosen;
           if (kind === "weapon") {
-            return Number.isInteger(this.data.weaponSlot)
-              ? clamp(this.data.weaponSlot, 0, owned - 1)
-              : 0;
+            const eq = Number.isInteger(this.data.weaponSlot) ? clamp(this.data.weaponSlot, 0, owned - 1) : 0;
+            if (open(eq)) return eq;
+          } else {
+            const empty = slots.findIndex((v, i) => v === null && open(i));
+            if (empty >= 0) return empty;
+            const equipped = slots.indexOf(this.data[kind + "Id"]);
+            if (open(equipped)) return equipped;
           }
-          const existing = slots.indexOf(id);
-          if (existing >= 0) return existing;
-          const empty = slots.indexOf(null);
-          if (empty >= 0) return empty;
-          const equipped = slots.indexOf(this.data[kind + "Id"]);
-          return equipped >= 0 ? equipped : 0;
+          for (let i = 0; i < owned; i++) if (open(i)) return i;
+          return -1; // every owned slot is locked
         };
         Progression.applySpin = async function (kind, id) {
           if (DevMode.active) {

@@ -117,7 +117,9 @@
 #classscreen.spin-hud .slot-card .slot-name{margin:0!important;font:900 calc(var(--u)*26)/1.02 Montserrat,sans-serif!important;letter-spacing:calc(var(--u)*-.3);color:var(--rarity)!important;-webkit-text-stroke:calc(var(--u)*6) #0a0a12;paint-order:stroke fill;text-shadow:none!important;overflow-wrap:normal;word-break:normal;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:calc(var(--u)*105);text-transform:none!important}
 #classscreen.spin-hud .slot-card .slot-name.long{font-size:calc(var(--u)*19)!important;line-height:calc(var(--u)*21)!important}
 #classscreen.spin-hud .slot-eq{position:absolute;left:50%;bottom:calc(var(--u)*-13);transform:translateX(-50%) scaleX(.87);font:800 calc(var(--u)*19)/1 Montserrat,sans-serif;color:#8dff2a;-webkit-text-stroke:calc(var(--u)*5) #0c0c0c;paint-order:stroke fill;white-space:nowrap;pointer-events:none}
-#classscreen.spin-hud .slot-lock{position:absolute;right:calc(var(--u)*-22);top:calc(var(--u)*-23);width:calc(var(--u)*44);height:calc(var(--u)*44);pointer-events:none}
+#classscreen.spin-hud .slot-lock{position:absolute;right:calc(var(--u)*-22);top:calc(var(--u)*-23);width:calc(var(--u)*44);height:calc(var(--u)*44);pointer-events:auto;cursor:pointer;padding:0!important;margin:0!important;border:0!important;background:none!important;box-shadow:none!important;min-height:0!important;z-index:3;transition:transform .12s ease}
+#classscreen.spin-hud .slot-lock:hover{transform:scale(1.12)}
+#classscreen.spin-hud .slot-lock:active{transform:scale(.92)}
 #classscreen.spin-hud .slot-lock svg{width:100%;height:100%;overflow:visible}
 #classscreen.spin-hud .slot-card.locked{margin:0 0 calc(var(--u)*12) calc(var(--u)*106)!important;width:calc(var(--u)*103)!important;height:calc(var(--u)*117)!important;background:linear-gradient(180deg,#2f2f31 0%,#1e1e20 100%)!important;cursor:default}
 #classscreen.spin-hud .slot-price{margin:0!important;transform:scaleX(.9);font:italic 900 var(--pf,calc(var(--u)*54))/1 Montserrat,sans-serif!important;letter-spacing:calc(var(--u)*-1.5);color:#fff!important;-webkit-text-stroke:calc(var(--u)*8) #0e0e0e;paint-order:stroke fill;text-shadow:none!important}
@@ -176,3 +178,21 @@
   #classscreen.spin-hud #armory-list{height:calc((100vh - (calc(var(--u)*120) + calc(var(--u)*200)) * var(--m)) / var(--m))!important}
   #classscreen.spin-hud .rarity-items{max-height:calc((100vh - var(--u) * (var(--lt,530) + 200) * var(--m)) / var(--m))}
 }
+
+/* Spin target + per-slot padlocks (red closed = locked, green open = can receive the spin) */
+#classscreen.spin-hud .slot-card.spin-target{border-color:#3dff4a!important;box-shadow:0 0 0 calc(var(--u)*2) #0b5a12,0 0 calc(var(--u)*22) #3dff4a88!important;animation:slotTargetPulse 1.1s ease-in-out infinite alternate}
+#classscreen.spin-hud .slot-card.slot-locked{border-color:#ff2a35!important;filter:saturate(.75) brightness(.86)}
+#classscreen.spin-hud .slot-card.slot-locked.selected{border-color:#ff2a35!important}
+#classscreen.spin-hud .slot-target-tag{position:absolute;left:calc(var(--u)*-14);top:calc(var(--u)*-14);transform:rotate(-8deg);padding:calc(var(--u)*3) calc(var(--u)*9);background:#3dff4a;color:#06240a;font:900 calc(var(--u)*13)/1 Montserrat,sans-serif;letter-spacing:.08em;border:calc(var(--u)*2) solid #0b5a12;border-radius:calc(var(--u)*4);pointer-events:none;white-space:nowrap}
+@keyframes slotTargetPulse{from{box-shadow:0 0 0 calc(var(--u)*2) #0b5a12,0 0 calc(var(--u)*10) #3dff4a55}to{box-shadow:0 0 0 calc(var(--u)*2) #0b5a12,0 0 calc(var(--u)*26) #3dff4aaa}}
+@media(prefers-reduced-motion:reduce){#classscreen.spin-hud .slot-card.spin-target{animation:none}}
+
+/* Only the equipped slot says Equipped */
+#classscreen.spin-hud .slot-card:not(.selected) .slot-eq{display:none}
+
+/* Weapon stat strip under the item title */
+#classscreen.spin-hud #armory-identity .stat-bars{display:grid;grid-template-columns:repeat(4,calc(var(--u)*230));gap:calc(var(--u)*6) calc(var(--u)*26);justify-content:center;margin:calc(var(--u)*14) auto 0}
+#classscreen.spin-hud #armory-identity .stat-row{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto calc(var(--u)*14);column-gap:calc(var(--u)*8);row-gap:calc(var(--u)*5);align-items:end;font:900 calc(var(--u)*19)/1 Montserrat,sans-serif;color:#fff;-webkit-text-stroke:calc(var(--u)*4) #14132a;paint-order:stroke fill;letter-spacing:.05em;text-align:left}
+#classscreen.spin-hud #armory-identity .stat-row em{grid-column:2;grid-row:1;justify-self:end;font-style:normal;color:var(--t1,#fff)}
+#classscreen.spin-hud #armory-identity .sb-track{grid-column:1/3;grid-row:2;display:block;height:calc(var(--u)*14);background:#0d0c1fd9;border:calc(var(--u)*3) solid #14132a;border-radius:calc(var(--u)*4);overflow:hidden}
+#classscreen.spin-hud #armory-identity .sb-fill{display:block;height:100%;background:linear-gradient(90deg,var(--t2,#999),var(--t1,#fff));transition:width .25s ease}
