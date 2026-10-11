@@ -11317,6 +11317,8 @@ body.netgame #revivetouch{display:flex}
             try { ImpactFX.clear(); } catch (e) {}
             LightPool.adopt(this.group);
             Nature.build(index);
+            WallCast.src = null; // rebuild the wall triangle grid once the map is final
+            ShaderWarmup.run();
           },
           solid(x, y, z, w, h, d, color) {
             const m = box(this.group, x, y, z, w, h, d, color);
@@ -11992,7 +11994,7 @@ body.netgame #revivetouch{display:flex}
             const toMuzzle = muzzle.clone().sub(eye);
             raycaster.set(eye, toMuzzle.clone().normalize());
             raycaster.far = toMuzzle.length() + 0.05;
-            if (raycaster.intersectObjects(MapManager.walls).length) return { from: eye, dir: camDir.clone() };
+            if (WallCast.hits(raycaster).length) return { from: eye, dir: camDir.clone() };
             const dir = target.sub(muzzle);
             if (dir.lengthSq() < 0.25) return { from: eye, dir: camDir.clone() };
             return { from: muzzle, dir: dir.normalize() };
@@ -12871,7 +12873,7 @@ body.netgame #revivetouch{display:flex}
           raycaster.set(player.pos.clone(), aimDir());
           raycaster.far = max;
           let d = max;
-          const wall = raycaster.intersectObjects(MapManager.walls);
+          const wall = WallCast.hits(raycaster);
           if (wall.length) d = Math.min(d, wall[0].distance);
           const zh = raycaster.intersectObjects(ZombieManager.hitMeshes);
           if (zh.length) d = Math.min(d, zh[0].distance);
@@ -12883,7 +12885,7 @@ body.netgame #revivetouch{display:flex}
           if (FreeAim.active()) return FreeAim.point(100);
           raycaster.set(player.pos.clone(), forward());
           raycaster.far = 100;
-          const hits = raycaster.intersectObjects(MapManager.walls);
+          const hits = WallCast.hits(raycaster);
           const floor = new THREE.Plane(new V(0, 1, 0), 0),
             p = new V();
           const ground = raycaster.ray.intersectPlane(floor, p);
@@ -13094,7 +13096,7 @@ body.netgame #revivetouch{display:flex}
               const move = p.vel.clone().multiplyScalar(dt);
               raycaster.set(prev, move.clone().normalize());
               raycaster.far = move.length() + 0.2;
-              const wall = raycaster.intersectObjects(MapManager.walls).length > 0;
+              const wall = WallCast.hits(raycaster).length > 0;
               if (!wall) p.pos.add(move);
               p.travelled += move.length();
               this.sweep(p, prev, p.pos, p.hitOut);
@@ -13347,6 +13349,51 @@ body.netgame #revivetouch{display:flex}
           }
           projectiles.splice(i, 1);
         }
+        // Shader warm-up: three.js compiles a program the first time a material/light combination
+        // is drawn, which used to freeze the first explosion (10 programs, incl. a recompile of every
+        // standard material because the blast-flash light pool appeared mid-fight). After each map
+        // build every pooled effect is created up front and the whole scene is compiled once.
+        const ShaderWarmup = {
+          last: 0,
+          run() {
+            try {
+              const far = new V(0, -80, 0);
+              if (!PhysicsProps.flashPool) PhysicsProps.flashLight(0xffffff, 1, far);
+              for (const l of PhysicsProps.flashPool || []) if (!PhysicsProps.flashes.some((f) => f.light === l)) l.intensity = 0;
+              if (!PhysicsProps.ringPool) { PhysicsProps.blastRing(0xffffff, far, 1); for (const r of PhysicsProps.ringPool || []) r.mesh.visible = false; }
+              ExplosionFX.init();
+              if (!this.samples) {
+                // One hidden sample per FX material family that is otherwise created on first use.
+                this.samples = new THREE.Group(); this.samples.name = "ShaderWarmup"; this.samples.visible = false;
+                const plane = new THREE.PlaneGeometry(0.1, 0.1);
+                for (const m of [
+                  new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+                  new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: VisualArt.texture?.("blood") || null }),
+                  new THREE.MeshBasicMaterial({ color: 0xffffff }),
+                  new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 }),
+                  new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }),
+                ]) this.samples.add(new THREE.Mesh(plane, m));
+                scene.add(this.samples);
+              }
+              const t = performance.now();
+              this.samples.visible = true;
+              // Real actors/effects for the remaining first-use programs (zombie skins, blood points,
+              // power-up beacons). Single-player only: the host must not broadcast warm-up actors.
+              const temp = [], solo = !NetGame.active && ZombieManager.list.length === 0, at = new V(0, -60, 0);
+              if (solo) {
+                try {
+                  zombieTypes.forEach((zt, i) => { if (zt.wave < 9999) { const z = ZombieManager.spawn(i, null, at.clone()); if (z) { z.group.position.copy(at); temp.push(z); } } });
+                  BloodFX.emit?.(at.clone(), 2); ParticleSystem.emit(at.clone(), 0xffffff, 2, 1);
+                  PowerUps.spawn?.("ammo", 0, 0);
+                } catch (e) {}
+              }
+              renderer.compile(scene, camera);
+              if (solo) { ZombieManager.clear(); PowerUps.clear?.(); BloodFX.clear?.(); ParticleSystem.items.length = 0; }
+              this.samples.visible = false;
+              this.last = performance.now() - t;
+            } catch (e) { console.warn("shader warmup skipped", e); }
+          },
+        };
         // Volumetric-looking explosions from a fixed sprite pool (no per-blast allocations, no new
         // lights): white-hot core -> expanding fireball puffs -> dark smoke column that rises and
         // spreads, plus a ground dust ring and a scorch mark. Scaled by the VFX setting.
@@ -18123,7 +18170,7 @@ body.netgame #revivetouch{display:flex}
             const delta=to.clone().sub(from),length=delta.length();
             if(length<.0001)return;
             const ray=new THREE.Raycaster(from,delta.divideScalar(length),0,length+.08);
-            const wall=ray.intersectObjects(MapManager.walls)[0];
+            const wall=WallCast.hits(ray)[0];
             const hit=ray.intersectObjects(this.meshes())[0];
             if(hit && (!wall||hit.distance<wall.distance))this.shove(hit.object.userData.prop,ray.ray.direction,hit.point,damage);
           },
@@ -18940,13 +18987,114 @@ body.netgame #revivetouch{display:flex}
         // Damage occlusion: a solid wall between the source and a target means NO damage. Three
         // probes (feet / torso / head) so a target only counts as reachable when some part of it is
         // actually visible from the source.
+        // Wall raycasts are the hottest path in the game (zombie line-of-sight every ~0.25 s each,
+        // bullets, blast occlusion). Drop-in replacement for WallCast.hits(ray):
+        // a cached world AABB per wall rejects most walls with one slab test, and only the walls
+        // whose box the ray actually crosses (within ray.far) get the exact triangle test. Same
+        // sorted hit list as before.
+        const WallCast = {
+          src: null, n: -1, cell: 4,
+          a: new V(), b: new V(), c: new V(), p: new V(), e1: new V(), e2: new V(), inv: new THREE.Matrix4(),
+          // World-space triangle soup of every wall mesh, bucketed on an XZ grid. A ray only tests
+          // the triangles in the cells it crosses (2-D DDA) instead of every triangle of every wall.
+          sync() {
+            const W = MapManager.walls;
+            if (this.src === W && this.n === W.length) return;
+            this.src = W; this.n = W.length;
+            const tris = [], owner = [], side = [], inst = [];
+            let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+            W.forEach((w, wi) => {
+              w.updateWorldMatrix(true, false);
+              const g = w.geometry, pos = g?.attributes?.position; if (!pos) return;
+              const idx = g.index, mats = Array.isArray(w.material) ? w.material : null;
+              const groups = mats && g.groups.length ? g.groups : [{ start: 0, count: idx ? idx.count : pos.count, materialIndex: 0 }];
+              const v = [new V(), new V(), new V()], IM = new THREE.Matrix4();
+              const copies = w.isInstancedMesh ? w.count : 1;
+              for (let ci = 0; ci < copies; ci++) {
+              const M = w.isInstancedMesh ? (w.getMatrixAt(ci, IM), IM.premultiply(w.matrixWorld)) : w.matrixWorld;
+              for (const gr of groups) {
+                const mat = mats ? mats[gr.materialIndex] : w.material; if (!mat) continue;
+                const sd = mat.side === THREE.DoubleSide ? 2 : mat.side === THREE.BackSide ? 1 : 0;
+                const endI = Math.min(gr.start + gr.count, idx ? idx.count : pos.count);
+                for (let i = gr.start; i + 2 < endI + 0.5 && i + 2 < (idx ? idx.count : pos.count); i += 3) {
+                  for (let k = 0; k < 3; k++) { const vi = idx ? idx.getX(i + k) : i + k; v[k].fromBufferAttribute(pos, vi).applyMatrix4(M); }
+                  for (const q of v) { tris.push(q.x, q.y, q.z); if (q.x < minX) minX = q.x; if (q.x > maxX) maxX = q.x; if (q.z < minZ) minZ = q.z; if (q.z > maxZ) maxZ = q.z; }
+                  owner.push(wi); side.push(sd); inst.push(w.isInstancedMesh ? ci : -1);
+                }
+              }
+              }
+            });
+            this.inst = inst;
+            this.tris = new Float32Array(tris); this.owner = owner; this.side = side;
+            const C = this.cell, nT = owner.length;
+            if (!nT) { this.cols = 0; return; }
+            this.minX = minX - 0.01; this.minZ = minZ - 0.01;
+            this.cols = Math.max(1, Math.ceil((maxX - this.minX) / C) + 1); this.rows = Math.max(1, Math.ceil((maxZ - this.minZ) / C) + 1);
+            const buckets = Array.from({ length: this.cols * this.rows }, () => []);
+            const T = this.tris;
+            for (let t = 0; t < nT; t++) {
+              const o = t * 9;
+              const x0 = Math.min(T[o], T[o + 3], T[o + 6]), x1 = Math.max(T[o], T[o + 3], T[o + 6]);
+              const z0 = Math.min(T[o + 2], T[o + 5], T[o + 8]), z1 = Math.max(T[o + 2], T[o + 5], T[o + 8]);
+              const cx0 = Math.floor((x0 - this.minX) / C), cx1 = Math.floor((x1 - this.minX) / C);
+              const cz0 = Math.floor((z0 - this.minZ) / C), cz1 = Math.floor((z1 - this.minZ) / C);
+              for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) buckets[cz * this.cols + cx].push(t);
+            }
+            this.buckets = buckets; this.stamp = new Uint32Array(nT); this.tick = 0;
+          },
+          testCell(cx, cz, rc, out) {
+            if (cx < 0 || cz < 0 || cx >= this.cols || cz >= this.rows) return;
+            const list = this.buckets[cz * this.cols + cx], T = this.tris, r = rc.ray;
+            for (let k = 0; k < list.length; k++) {
+              const t = list[k]; if (this.stamp[t] === this.tick) continue; this.stamp[t] = this.tick;
+              const o = t * 9, sd = this.side[t];
+              this.a.set(T[o], T[o + 1], T[o + 2]); this.b.set(T[o + 3], T[o + 4], T[o + 5]); this.c.set(T[o + 6], T[o + 7], T[o + 8]);
+              const hit = sd === 1 ? r.intersectTriangle(this.c, this.b, this.a, true, this.p) : r.intersectTriangle(this.a, this.b, this.c, sd !== 2, this.p);
+              if (!hit) continue;
+              const d = r.origin.distanceTo(this.p);
+              if (d < rc.near || d > rc.far) continue;
+              const obj = this.src[this.owner[t]];
+              const normal = this.e1.subVectors(this.c, this.b).cross(this.e2.subVectors(this.a, this.b)).normalize().clone();
+              // three.js reports face.normal in object space; convert back for callers that transform it.
+              const ii = this.inst[t];
+              if (ii >= 0) { obj.getMatrixAt(ii, this.inv); this.inv.premultiply(obj.matrixWorld).invert(); normal.transformDirection(this.inv); }
+              else if (!obj.matrixWorld.equals(IDENTITY_M4)) normal.transformDirection(this.inv.copy(obj.matrixWorld).invert());
+              const h = { distance: d, point: this.p.clone(), object: obj, face: { a: 0, b: 1, c: 2, normal, materialIndex: 0 }, faceIndex: t };
+              if (ii >= 0) h.instanceId = ii;
+              out.push(h);
+            }
+          },
+          hits(rc, out = []) {
+            this.sync();
+            if (!this.cols) return out;
+            if (++this.tick > 4e9) { this.tick = 1; this.stamp.fill(0); }
+            const r = rc.ray, C = this.cell, far = Math.min(rc.far, 1e4);
+            const ox = (r.origin.x - this.minX) / C, oz = (r.origin.z - this.minZ) / C;
+            const dx = r.direction.x, dz = r.direction.z;
+            let cx = Math.floor(ox), cz = Math.floor(oz);
+            const lenXZ = Math.hypot(dx, dz) * far / C;
+            const stepX = dx > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
+            const tdx = Math.abs(dx) > 1e-9 ? C / Math.abs(dx) : Infinity, tdz = Math.abs(dz) > 1e-9 ? C / Math.abs(dz) : Infinity;
+            let tmx = Math.abs(dx) > 1e-9 ? ((dx > 0 ? cx + 1 - ox : ox - cx) * C) / Math.abs(dx) : Infinity;
+            let tmz = Math.abs(dz) > 1e-9 ? ((dz > 0 ? cz + 1 - oz : oz - cz) * C) / Math.abs(dz) : Infinity;
+            let guard = Math.ceil(lenXZ) * 2 + 4;
+            this.testCell(cx, cz, rc, out);
+            while (guard-- > 0 && Math.min(tmx, tmz) <= far) {
+              if (tmx < tmz) { cx += stepX; tmx += tdx; } else { cz += stepZ; tmz += tdz; }
+              this.testCell(cx, cz, rc, out);
+            }
+            if (out.length > 1) out.sort((p, q) => p.distance - q.distance);
+            return out;
+          },
+        };
+        const IDENTITY_M4 = new THREE.Matrix4();
         function wallBetween(from, to, tolerance = 0.05) {
           const v = to.clone().sub(from),
             d = v.length();
           if (d < 0.001) return false;
           raycaster.set(from, v.divideScalar(d));
           raycaster.far = d;
-          return raycaster.intersectObjects(MapManager.walls).some((h) => h.distance < d - tolerance);
+          return WallCast.hits(raycaster).some((h) => h.distance < d - tolerance);
         }
         function zombieBodyPoint(z) {
           const mesh = z.rig?.torso || z.rig?.hits?.[0];
@@ -19035,7 +19183,7 @@ body.netgame #revivetouch{display:flex}
             if (f.aimRay) {
               const far = 80;
               raycaster.set(eye, fw); raycaster.far = far;
-              const wh = raycaster.intersectObjects(MapManager.walls)[0], end = eye.clone().addScaledVector(fw, wh ? wh.distance : far);
+              const wh = WallCast.hits(raycaster)[0], end = eye.clone().addScaledVector(fw, wh ? wh.distance : far);
               this.seg(hand, end, wh ? 0xff6a3a : 0x59b6ff);
               if (wh) this.cross(end, 0.25, 0xff6a3a);
               for (const q of projectiles) if (q.pos && q.vel) this.seg(q.pos, q.pos.clone().addScaledVector(q.vel, 0.08), 0xffe14a);
@@ -19142,7 +19290,7 @@ body.netgame #revivetouch{display:flex}
             // the stream, so flames/ice and their hit volume end at the same surface.
             raycaster.set(origin, aim);
             raycaster.far = w.range;
-            const wall = raycaster.intersectObjects(MapManager.walls)[0],
+            const wall = WallCast.hits(raycaster)[0],
               propHit = raycaster.intersectObjects(PhysicsProps.meshes())[0],
               propBeforeWall = propHit && (!wall || propHit.distance < wall.distance),
               reach = Math.max(0, Math.min(w.range, propBeforeWall ? propHit.distance : wall ? wall.distance - 0.04 : w.range));
@@ -19236,7 +19384,7 @@ body.netgame #revivetouch{display:flex}
           syncHitMatrices();
           let wallDistance = w.range, wallHit = null;
           if (!w.walls) {
-            const wall = raycaster.intersectObjects(MapManager.walls);
+            const wall = WallCast.hits(raycaster);
             if (wall.length) { wallDistance = wall[0].distance; wallHit = wall[0]; }
           }
           let hits = raycaster.intersectObjects(ZombieManager.hitMeshes),
@@ -19818,7 +19966,7 @@ body.netgame #revivetouch{display:flex}
             raycaster.far = maxDistance;
             syncHitMatrices();
             const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
-              wh = raycaster.intersectObjects(MapManager.walls)[0];
+              wh = WallCast.hits(raycaster)[0];
             const ph = raycaster.intersectObjects(PhysicsProps.meshes())[0];
             if(ph && (!zh || ph.distance < zh.distance) && (!wh || ph.distance < wh.distance))
               return {origin,dir,point:ph.point.clone(),prop:ph.object.userData.prop,zombie:null,head:false};
@@ -20281,8 +20429,7 @@ body.netgame #revivetouch{display:flex}
               (from, to, distance) => {
                 raycaster.set(from, to.clone().sub(from).normalize());
                 raycaster.far = distance;
-                return raycaster
-                  .intersectObjects(MapManager.walls)
+                return WallCast.hits(raycaster)
                   .some((h) => h.distance < distance - 0.06);
               },
             ).slice(0, w.multiHit || 1);
@@ -20292,7 +20439,7 @@ body.netgame #revivetouch{display:flex}
             raycaster.set(player.pos, meleeDir);
             raycaster.far = reach;
             const propHit = raycaster.intersectObjects(PhysicsProps.meshes())[0],
-              wallHit = raycaster.intersectObjects(MapManager.walls)[0];
+              wallHit = WallCast.hits(raycaster)[0];
             if (propHit && (!wallHit || propHit.distance < wallHit.distance)) {
               PhysicsProps.shove(propHit.object.userData.prop, meleeDir, propHit.point, damage);
               if (!hits.length) AudioManager.meleeImpact();
@@ -20930,7 +21077,7 @@ body.netgame #revivetouch{display:flex}
                 step = p.vel.clone().multiplyScalar(dt);
               raycaster.set(previous, step.clone().normalize());
               raycaster.far = step.length() + 0.2;
-              const wall = raycaster.intersectObjects(MapManager.walls)[0],
+              const wall = WallCast.hits(raycaster)[0],
                 prop = p.kind === "rocket" ? raycaster.intersectObjects(PhysicsProps.meshes())[0] : null;
               p.pos.add(step);
               if (prop && (!wall || prop.distance < wall.distance)) {
@@ -20960,7 +21107,7 @@ body.netgame #revivetouch{display:flex}
               raycaster.set(previous, dirN);
               raycaster.far = len + 0.45;
               const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0],
-                wh = raycaster.intersectObjects(MapManager.walls)[0],
+                wh = WallCast.hits(raycaster)[0],
                 ph = raycaster.intersectObjects(PhysicsProps.meshes())[0];
               const floor = MapManager.groundAt(previous.x, previous.z, 0.05, previous.y);
               if (ph && (!wh || ph.distance < wh.distance) && (!zh || ph.distance < zh.distance)) {
@@ -21038,7 +21185,7 @@ body.netgame #revivetouch{display:flex}
             if (movement.lengthSq() > 0) {
               raycaster.set(previous, movement.clone().normalize());
               raycaster.far = movement.length() + 0.15;
-              const wall = raycaster.intersectObjects(MapManager.walls),
+              const wall = WallCast.hits(raycaster),
                 prop = p.kind !== "enemy" ? raycaster.intersectObjects(PhysicsProps.meshes())[0] : null;
               if (prop && (!wall.length || prop.distance < wall[0].distance)) {
                 PhysicsProps.shove(prop.object.userData.prop, movement.clone().normalize(), prop.point, p.damage || 1);
@@ -21184,7 +21331,7 @@ body.netgame #revivetouch{display:flex}
                   .add(new V(0, target.size, 0));
               raycaster.set(from, to.clone().sub(from).normalize());
               raycaster.far = from.distanceTo(to);
-              if (!raycaster.intersectObjects(MapManager.walls).length) {
+              if (!WallCast.hits(raycaster).length) {
                 t.group.lookAt(to.x, 0, to.z);
                 ParticleSystem.line(from, to, 0xffd386);
                 ZombieManager.hit(target, 23, false, to, {
@@ -25345,7 +25492,7 @@ body.netgame #revivetouch{display:flex}
               ]) {
                 this.ray.set(anchor.clone().add(margin), back);
                 this.ray.far = distance + 0.25;
-                const hits = this.ray.intersectObjects(MapManager.walls);
+                const hits = WallCast.hits(this.ray);
                 if (hits.length)
                   distance = Math.max(
                     0,
@@ -26251,11 +26398,11 @@ body.netgame #revivetouch{display:flex}
             return list;
           },
           visible(from, to) {
-            const ray = new THREE.Raycaster(),
-              d = to.clone().sub(from);
+            const ray = this._ray || (this._ray = new THREE.Raycaster()),
+              d = (this._d || (this._d = new V())).subVectors(to, from);
+            ray.far = d.length();
             ray.set(from, d.normalize());
-            ray.far = from.distanceTo(to);
-            return !ray.intersectObjects(MapManager.walls).length;
+            return !WallCast.hits(ray, this._hits ? (this._hits.length = 0, this._hits) : (this._hits = [])).length;
           },
           decorate(z) {
             const r = z.rig,
@@ -28153,6 +28300,8 @@ body.netgame #revivetouch{display:flex}
             HitDir,
             Director,
             ExplosionFX,
+            ShaderWarmup,
+            WallCast,
             explosion,
             Nature,
             WindManager,
