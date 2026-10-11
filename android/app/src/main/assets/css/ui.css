@@ -309,6 +309,9 @@ form.busy { opacity: .7; }
 
 /* ── HUD re-skin ──────────────────────────────────────────────────────── */
 #hud { font-family: var(--head); text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 8px rgba(0,0,0,.35); }
+/* Soft scrims behind the top and bottom HUD rows: text stays readable over snow, white hospital
+   walls and lightning flashes without boxing every widget. */
+#hud::after { background: linear-gradient(180deg, rgba(4,6,8,.42) 0, rgba(4,6,8,0) 115px), linear-gradient(0deg, rgba(4,6,8,.45) 0, rgba(4,6,8,0) 150px); }
 .hud-top { top: var(--safe-t); left: var(--safe-l); right: var(--safe-r); }
 .wave { font-family: var(--display); letter-spacing: .1em; }
 .health .value { font-family: var(--display); font-weight: 400; letter-spacing: .04em; }
@@ -340,6 +343,9 @@ form.busy { opacity: .7; }
   #minimap { bottom: calc(var(--safe-b, 0px) + 132px) !important; }
 }
 .feed { font-family: var(--mono); font-size: 12px; }
+.feed div { filter: brightness(1.45) saturate(1.1); }
+#classhud { color: #e9e4d8; opacity: .92; letter-spacing: .08em; }
+.wave small { color: #d9d4c8; }
 #revivetouch { position: absolute; right: calc(var(--safe-r) + 140px); bottom: calc(var(--safe-b) + 150px); }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
