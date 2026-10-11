@@ -3647,7 +3647,7 @@ body.netgame #revivetouch{display:flex}
         sun.shadow.normalBias = 0.018;
         scene.add(sun);
         const flashlight = new THREE.SpotLight(
-          0xd9e9db,
+          0xe6ecdc,
           1.1,
           30,
           Math.PI / 5,
@@ -3660,7 +3660,7 @@ body.netgame #revivetouch{display:flex}
         flashlight.intensity = 2;
         flashlight.distance = 25;
         flashlight.angle = Math.PI / 6;
-        flashlight.penumbra = 0.8;
+        flashlight.penumbra = 0.92;
         const muzzleLight = new THREE.PointLight(0xffba64, 0, 8, 2);
         muzzleLight.position.set(0.3, -0.25, -0.7);
         camera.add(muzzleLight);
@@ -3953,13 +3953,21 @@ body.netgame #revivetouch{display:flex}
             if (!uri) return null;
             const img = new Image();
             const t = new THREE.Texture(img);
-            img.onload = () => (t.needsUpdate = true);
+            img.onload = () => { t.needsUpdate = true; for (const c of t._copies || []) c.needsUpdate = true; };
             img.src = uri;
             t.wrapS = t.wrapT = THREE.RepeatWrapping;
             t.anisotropy = Math.min(matchMedia("(pointer:coarse)").matches ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
             if (!name.endsWith("_nor")) t.encoding = THREE.sRGBEncoding;
             this.textures.set(key, t);
             return t;
+          },
+          // Clone that also refreshes when the shared data-URI image finishes decoding (a plain
+          // clone() made before onload would never upload).
+          photoCopy(t) {
+            const c = t.clone();
+            (t._copies ||= []).push(c);
+            if (t.image?.complete && t.image.naturalWidth) c.needsUpdate = true;
+            return c;
           },
           surface(name, color, fallback = "concrete", opts = {}) {
             const key = `surface:${name}/${color}/${opts.roughness ?? 0.9}/${opts.metalness ?? 0}`;
@@ -10277,7 +10285,7 @@ body.netgame #revivetouch{display:flex}
           K.soft("labWall", [0, CEIL + 0.3, 0], [H * 2, 0.6, H * 2], null, 0.25);
           for (const [x, z, w, d] of [[0, -H, H * 2 + 2, 2], [0, H, H * 2 + 2, 2], [-H, 0, 2, H * 2], [H, 0, 2, H * 2]]) {
             const m = M.solid(x, CEIL / 2, z, w, CEIL, d, 0x4a5260);
-            m.material = VisualArt.surface("concrete_wall_008", 0x6d7482, "concrete");
+            m.material = VisualArt.photo("lab_panel_diff") ? VisualArt.surface("lab_panel", 0x7a8292, "concrete", { roughness: 0.5, metalness: 0.5, normal: 0.8 }) : VisualArt.surface("concrete_wall_008", 0x6d7482, "concrete");
             VisualArt.tileUV(m, 4);
             // Hazard band and a pipe run along every wall.
             const inX = x === 0 ? 0 : -Math.sign(x) * 1.05,
@@ -12881,6 +12889,26 @@ body.netgame #revivetouch{display:flex}
           if(prop) d = Math.min(d, prop.distance);
           return player.pos.clone().addScaledVector(aimDir(), Math.max(.1, d));
         }
+        // Flashlight exposure: a real torch blows out a wall 1 m away. Dim it smoothly as the beam
+        // lands closer (10 Hz probe along the view), keeping the blackout mutation's boost.
+        const FlashlightCtl = {
+          k: 1, t: 0, d: 20, rc: new THREE.Raycaster(), hits: [],
+          update(dt) {
+            if ((this.t -= dt) <= 0) {
+              this.t = 0.1;
+              const dir = camera.getWorldDirection(this._dir || (this._dir = new V()));
+              this.rc.set(camera.getWorldPosition(this._pos || (this._pos = new V())), dir); this.rc.far = 20; this.hits.length = 0;
+              const h = WallCast.hits(this.rc, this.hits)[0];
+              let d = h ? h.distance : 20;
+              if (dir.y < -0.05) d = Math.min(d, this.rc.ray.origin.y / -dir.y);
+              this.d = d;
+            }
+            const want = 0.32 + 0.68 * clamp((this.d - 0.8) / 5.5, 0, 1);
+            this.k += (want - this.k) * Math.min(1, dt * 6);
+            const base = MutationManager.current?.id === "blackout" ? 3.1 : 2;
+            flashlight.intensity = base * this.k;
+          },
+        };
         function aimPoint() {
           if (FreeAim.active()) return FreeAim.point(100);
           raycaster.set(player.pos.clone(), forward());
@@ -17521,11 +17549,28 @@ body.netgame #revivetouch{display:flex}
               signCyan: 0x4ae8ff, signGreen: 0x4aff8a, lightRed: 0xff2a20, lightBlue: 0x2a6aff, lightAmber: 0xffa020,
               lightGreen: 0x30ff70, lightWhite: 0xfff2d0, fire: 0xff7a20, screen: 0x40e0d0,
             }[kind];
-            if (kind === "wardWall" && VisualArt.photo("concrete_wall_008_diff")) {
-              // painted plaster: the concrete photo, tinted and scaled up, with a faint relief
-              const wm = VisualArt.surface("concrete_wall_008", 0xe9ede9, "concrete", { roughness: 0.82, normal: 0.35 }).clone();
-              wm.map = wm.map.clone(); wm.map.repeat.set(0.3, 0.3); wm.map.needsUpdate = true;
-              wm.normalMap = wm.normalMap?.clone(); if (wm.normalMap) { wm.normalMap.repeat.set(0.3, 0.3); wm.normalMap.needsUpdate = true; }
+            // 512px procedural surfaces (tools/map_textures_gen.py) for the big interior walls and the
+            // city skyline; the 16px pixel textures stay for small props.
+            const photoWall = { labWall: ["lab_panel", 0x8d96a6, 0.5, { roughness: 0.48, metalness: 0.55, normal: 0.8 }] }[kind];
+            if (photoWall && VisualArt.photo(photoWall[0] + "_diff")) {
+              const pm = VisualArt.surface(photoWall[0], photoWall[1], "concrete", photoWall[3]).clone();
+              pm.map = VisualArt.photoCopy(pm.map); pm.map.repeat.set(photoWall[2], photoWall[2]);
+              if (pm.normalMap) { pm.normalMap = VisualArt.photoCopy(pm.normalMap); pm.normalMap.repeat.set(photoWall[2], photoWall[2]); }
+              this.materials.set(kind, pm);
+              return pm;
+            }
+            if (kind === "skyline" && VisualArt.photo("facade_night_diff")) {
+              const map = VisualArt.photoCopy(VisualArt.photo("facade_night_diff")), emit = VisualArt.photoCopy(VisualArt.photo("facade_night_emit")), nor = VisualArt.photoCopy(VisualArt.photo("facade_night_nor"));
+              for (const t of [map, emit, nor]) t.repeat.set(0.2, 0.2);
+              const sm = new THREE.MeshStandardMaterial({ map, normalMap: nor, emissive: new THREE.Color(0xffd9a8), emissiveMap: emit, emissiveIntensity: 1.15, roughness: 0.85 });
+              this.materials.set(kind, sm);
+              return sm;
+            }
+            if (kind === "wardWall" && VisualArt.photo("hospital_paint_diff")) {
+              // painted plaster with roller stipple, scuffs and hairline cracks
+              const wm = VisualArt.surface("hospital_paint", 0xe4e9e4, "concrete", { roughness: 0.78, normal: 0.45 }).clone();
+              wm.map = VisualArt.photoCopy(wm.map); wm.map.repeat.set(0.3, 0.3);
+              if (wm.normalMap) { wm.normalMap = VisualArt.photoCopy(wm.normalMap); wm.normalMap.repeat.set(0.3, 0.3); }
               this.materials.set(kind, wm);
               return wm;
             }
@@ -28204,6 +28249,7 @@ body.netgame #revivetouch{display:flex}
             CombatFX.update(dt);
             BloodFX.update(dt);
             WorldArt.update(dt);
+            if (state === GameState.PLAYING) FlashlightCtl.update(dt);
             LightPool.update(dt);
             FireFX.update(dt);
             ImpactFX.update(dt);
@@ -28421,6 +28467,7 @@ body.netgame #revivetouch{display:flex}
               }
             },
             setYaw(v) { yaw = v; },
+            setPitch(v) { pitch = v; },
             getYaw() { return yaw; },
             queueJump() { player.jumpQueuedAt = simulationTime; },
             get simulationTime() { return simulationTime; },
