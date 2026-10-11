@@ -5569,6 +5569,18 @@ body.netgame #revivetouch{display:flex}
           get(w) {
             return this.P[this.of(w)];
           },
+          // Target held length (m) for the third-person model; null = keep the authored size.
+          length(w) {
+            if (!w || w.specter) return null;
+            const g = this.of(w), n = w.name || "";
+            if (g === "knife") return 0.45;
+            if (g === "sword") return 0.7;
+            if (g === "staff") return 1.5;
+            if (g === "scythe") return null; // authored size already reads right; longer collides with the off hand
+            if (g === "spear") return 1.9;
+            if (g === "bow") return 1.3;
+            return { auto: /mp5|smg|uzi|vector/i.test(n) ? 0.72 : 0.92, shotgun: 1.02, antimaterial: 1.45, rail: 1.25, laser: 0.95, fire: 1.0, cryo: 1.0, quantum: 1.0, missile: 1.3, double: 1.0 }[w.kind] ?? null;
+          },
         };
         // Heavenly / Infernal Flight cast: one shared timeline for body, camera, wings, tail and FX.
         // ANTICIPATION (gather: crouch, wings rise / tail coils) → LAUNCH (explosive rise, burst,
@@ -24986,6 +24998,19 @@ body.netgame #revivetouch{display:flex}
             parts.flash.visible = false;
             gun.scale.setScalar(0.73);
             if (GripProfiles.get(weapon).tp.scale) gun.scale.setScalar(GripProfiles.get(weapon).tp.scale);
+            // Real-world proportions: scale each model so its longest side matches a believable
+            // length next to the 1.88 m survivor (MP5 ≈ 0.72 m, AK ≈ 0.9 m, Barrett ≈ 1.45 m,
+            // bazooka ≈ 1.3 m, bow ≈ 1.3 m, spear ≈ 1.9 m, knife ≈ 0.45 m).
+            {
+              const want = GripProfiles.length(weapon);
+              if (want) {
+                const box = new THREE.Box3(), g0 = gun.scale.x;
+                gun.updateMatrixWorld(true);
+                gun.traverse((o) => { if (o.isMesh) { let v = true; for (let q = o; q && q !== gun; q = q.parent) if (!q.visible) v = false; if (v) box.expandByObject(o); } });
+                const size = box.getSize(new V()), len = Math.max(size.x, size.y, size.z);
+                if (len > 0.05) gun.scale.setScalar(clamp(g0 * want / len, g0 * 0.6, g0 * 1.7));
+              }
+            }
             // One profile owns position, orientation and actual model-space hand sockets.
             const gp = GripProfiles.get(weapon).tp,
               oneHand = gp.mode === "oneHand",
