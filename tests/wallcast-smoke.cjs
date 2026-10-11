@@ -18,6 +18,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     for (let m = 0; m < 5; m++) {
       T.setMap(m); T.PlayerController.start(); T.ZombieManager.clear();
       const W = T.MapManager.walls, H = T.MapManager.half, rc = new THREE.Raycaster();
+      T.WallCast.sync(); // build the grid outside the timed loop
       let diff = 0, hits = 0, tA = 0, tB = 0;
       for (let i = 0; i < 600; i++) {
         const a = new V((rnd() * 2 - 1) * H, rnd() * 3, (rnd() * 2 - 1) * H), b = new V((rnd() * 2 - 1) * H, rnd() * 3, (rnd() * 2 - 1) * H);
