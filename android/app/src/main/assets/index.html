@@ -21282,10 +21282,16 @@ body.netgame #revivetouch{display:flex}
             }
             shake = Math.max(0, shake - dt);
             const sk = shake * (SettingsManager.data.shake ?? 100) / 100;
+            // Strafe lean: the view rolls a little into lateral movement (scaled by "Balanço").
+            {
+              const rx = Math.cos(yaw), rz = -Math.sin(yaw), lateral = (this.motion.vx || 0) * rx + (this.motion.vz || 0) * rz;
+              const want = reducedMotion ? 0 : clamp(-lateral / 7, -1, 1) * 0.016 * (SettingsManager.data.viewBob ?? 100) / 100 * (mouse.aim ? 0.4 : 1);
+              this.leanRoll = (this.leanRoll || 0) + (want - (this.leanRoll || 0)) * Math.min(1, dt * 8);
+            }
             camera.rotation.set(
               pitch + rand(-sk, sk) * 0.045,
               yaw + rand(-sk, sk) * 0.025,
-              rand(-sk, sk) * 0.025,
+              rand(-sk, sk) * 0.025 + this.leanRoll,
               "YXZ",
             );
             const drawPower = w?.kind === "bow" && this.chargeHeldSince != null ? clamp((simulationTime - this.chargeHeldSince) / (w.chargeTime || 0.9), 0, 1) : 0;
@@ -25802,20 +25808,30 @@ body.netgame #revivetouch{display:flex}
           scroll(delta) {
             this.target = clamp(this.target + Math.sign(delta) * 1, 0, 4);
           },
+          side: 1, sideNow: 1, aimK: 0,
+          swapShoulder() {
+            this.side = -this.side;
+            if (this.distance > 0.3) UIManager.toast(this.side > 0 ? "Câmera: ombro direito" : "Câmera: ombro esquerdo");
+          },
           pinch(deltaPixels) {
             // Fingers moving apart zooms toward first person; pinching together backs into third person.
             this.target = clamp(this.target - deltaPixels * 0.018, 0, 4);
           },
           update(dt) {
             this.syncEquipped();
+            // Third person aims over the shoulder: holding aim pulls the camera in (×0.55) and further
+            // to the side so the crosshair clears the body; X swaps shoulders smoothly.
+            this.aimK += ((mouse.aim && this.target > 0.3 ? 1 : 0) - this.aimK) * Math.min(1, dt * 10);
+            this.sideNow += (this.side - this.sideNow) * Math.min(1, dt * 9);
+            const tgt = this.target * (1 - 0.45 * this.aimK);
             this.distance +=
-              (this.target - this.distance) * (1 - Math.exp(-dt * 9));
+              (tgt - this.distance) * (1 - Math.exp(-dt * 9));
             const anchor = camera.position.clone(),
               blend = clamp(this.distance / 1.2, 0, 1),
               offset = forward()
                 .multiplyScalar(-this.distance)
                 .add(
-                  new V(0.45 * blend, 0.13 * blend, 0).applyAxisAngle(
+                  new V((0.45 + 0.12 * this.aimK) * blend * this.sideNow, (0.13 + 0.04 * this.aimK) * blend, 0).applyAxisAngle(
                     new V(0, 1, 0),
                     yaw,
                   ),
@@ -27941,6 +27957,7 @@ body.netgame #revivetouch{display:flex}
           const action = DR.Keybinds.action(e.code);
           if (action === "freeMouse") { e.preventDefault(); if (!e.repeat) freeMouse(); return; }
           if (action === "missions") { e.preventDefault(); if (!e.repeat) openGameMissions(); return; }
+          if (action === "shoulder") { e.preventDefault(); if (!e.repeat) CameraRig.swapShoulder(); return; }
           const c = inputCode(e.code);
           if (c && (["Space", "Tab", "ControlLeft", "AltLeft"].includes(e.code) || e.code.startsWith("Arrow") || /^Digit[1-5]$/.test(e.code) || action))
             e.preventDefault();

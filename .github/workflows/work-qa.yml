@@ -55,6 +55,7 @@ jobs:
           node tests/hitbox-smoke.cjs
           node tests/balance-smoke.cjs
           node tests/loadout-locks-smoke.cjs
+          node tests/camera-feel-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

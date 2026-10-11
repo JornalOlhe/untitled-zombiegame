@@ -27,6 +27,7 @@
     { id: "menu", label: "Menu da partida", def: "Escape", group: "Interface", locked: true },
     { id: "freeMouse", label: "Liberar o mouse", def: "KeyJ", group: "Interface" },
     { id: "missions", label: "Missões", def: "KeyM", group: "Interface" },
+    { id: "shoulder", label: "Trocar ombro (3ª pessoa)", def: "KeyX", group: "Interface" },
   ];
   const byId = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
   const NAMES = {
