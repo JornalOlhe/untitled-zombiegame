@@ -28,10 +28,13 @@ has(html, 'difficulty = "easy"', 'Normal must be the internal default');
 has(html, 'hardcore-skull', 'Hardcore must render the animated skull');
 
 // Difficulty and mode affect actual enemy combat, not only labels/rewards.
-has(html, '* diff[difficulty].enemyHp * modeRules().hp', 'enemy HP must scale with difficulty and mode');
-has(html, 'diff[difficulty].speed *\n                modeRules().speed', 'enemy speed must scale with difficulty and mode');
-has(html, 'amount *= modeRules().damage;', 'special boss damage must scale with game mode');
-has(html, 'if (!fromNet) amount *= modeRules().damage;', 'regular incoming damage must scale with game mode');
+has(html, 'hpMult() { return Math.min(this.CAP.hp, diff[difficulty].enemyHp * modeRules().hp); }', 'enemy HP must scale with difficulty and mode (capped stacking)');
+has(html, '* Balance.hpMult();', 'spawned enemy HP must use the difficulty x mode multiplier');
+has(html, 'speedMult() { return Math.min(this.CAP.speed, diff[difficulty].speed * modeRules().speed); }', 'enemy speed must scale with difficulty and mode (capped stacking)');
+has(html, 'Balance.speedMult() *', 'spawned enemy speed must use the difficulty x mode multiplier');
+has(html, 'amount *= Balance.modeDamage();', 'special boss damage must scale with game mode');
+has(html, 'modeDamage() { return Math.min(modeRules().damage, this.CAP.damage / diff[difficulty].damage); }', 'mode damage must follow the mode (capped stacking)');
+has(html, 'if (!fromNet) amount *= Balance.modeDamage();', 'regular incoming damage must scale with game mode');
 
 // Story: 10 levels, 20 waves, 3 stars/objectives.
 has(html, 'Array.from({length:10}', 'Story must render 10 levels');

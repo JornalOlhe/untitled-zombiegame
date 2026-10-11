@@ -49,7 +49,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     const T = DeadRecoilTest; document.getElementById('settingsscreen').classList.add('hidden');
     T.SettingsManager.data.minimap = true; T.SettingsManager.data.hudScale = 100; T.SettingsManager.apply();
     const w = T.WeaponSystem.current(); w.ammo = Math.max(1, Math.floor(w.mag * 0.2));
-    await new Promise(r => setTimeout(r, 400));
+    for (let i = 0; i < 50 && !document.querySelector('#slotshud .slot.active.low'); i++) await new Promise(r => setTimeout(r, 100));
     const slot = document.querySelector('#slotshud .slot.active'), a = slot.getBoundingClientRect(), m = document.getElementById('minimap').getBoundingClientRect();
     return { mq: matchMedia('(hover: hover) and (pointer: fine) and (min-width: 720px)').matches, iw: innerWidth, low: slot.classList.contains('low'), right: a.left > innerWidth / 2, overlap: !(a.bottom <= m.top || a.top >= m.bottom || a.right <= m.left || a.left >= m.right), h: Math.round(a.height) };
   });
