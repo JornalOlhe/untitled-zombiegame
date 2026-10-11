@@ -308,14 +308,37 @@ form.busy { opacity: .7; }
 .stat-grid strong { font-family: var(--display); font-weight: 400; letter-spacing: .04em; }
 
 /* ── HUD re-skin ──────────────────────────────────────────────────────── */
-#hud { font-family: var(--head); }
+#hud { font-family: var(--head); text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 8px rgba(0,0,0,.35); }
 .hud-top { top: var(--safe-t); left: var(--safe-l); right: var(--safe-r); }
 .wave { font-family: var(--display); letter-spacing: .1em; }
 .health .value { font-family: var(--display); font-weight: 400; letter-spacing: .04em; }
 .meter { height: 7px; background: #ffffff14; clip-path: polygon(0 0, 100% 0, calc(100% - 4px) 100%, 0 100%); }
 .meter > i { background: linear-gradient(90deg, #7a0a0f, var(--blood-2)); box-shadow: 0 0 10px #ff3b3055; }
-.slot { border-radius: 0; background: rgba(12,10,8,.86); clip-path: var(--cut-s); }
-.slot.active { background: rgba(40,14,12,.92); }
+.slot { border-radius: 0; background: linear-gradient(180deg, rgba(10,9,8,.42), rgba(10,9,8,.72)); clip-path: var(--cut-s); backdrop-filter: blur(2px); }
+.slot.active { background: linear-gradient(180deg, rgba(22,16,14,.55), rgba(22,12,10,.82)); }
+/* Weapon readout: big ammo on the active slot, colour warns at 25% and pulses when empty. */
+#slotshud .slot .ammo { font-family: var(--display); font-size: 30px; line-height: 1; letter-spacing: .03em; color: #f3ede4; text-shadow: 0 2px 0 #000; }
+#slotshud .slot .mag { font-family: var(--mono); color: #b5aaa0; }
+#slotshud .slot .tier { display: block; font-style: normal; font-family: var(--mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--rarity); margin-top: 3px; }
+#slotshud .slot.low .ammo { color: #ffb347; }
+#slotshud .slot.empty .ammo { color: #ff3b30; animation: pulse .7s infinite; }
+#slotshud .slot .reload { display: block; height: 2px; margin-top: 5px; background: #ffffff1a; }
+#slotshud .slot .reload i { display: block; height: 100%; background: #f3ede4; }
+@media (hover: hover) and (pointer: fine) and (min-width: 720px) {
+  /* Desktop: centre of the screen stays clear for the gun; weapons sit bottom-right next to the ability. */
+  .hud-bottom .slots { margin-left: auto; align-items: flex-end; }
+  #slotshud .slot { min-width: 0; max-width: none; padding: 6px 10px; opacity: .7; }
+  #slotshud .slot:not(.active) .ammo, #slotshud .slot:not(.active) .mag, #slotshud .slot:not(.active) .tier, #slotshud .slot:not(.active) .reload { display: none; }
+  #slotshud .slot:not(.active) b { margin: 3px 0 0; font-size: 10px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #slotshud .slot.active { min-width: 168px; min-height: 0; opacity: 1; transform: none; padding: 6px 12px 7px; display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "name name tier" "rl ammo mag"; align-items: baseline; column-gap: 6px; }
+  #slotshud .slot.active .slot-key { display: none; }
+  #slotshud .slot.active b { grid-area: name; font-size: 13px; margin: 0; text-align: left; }
+  #slotshud .slot.active .tier { grid-area: tier; margin: 0; }
+  #slotshud .slot.active .ammo { grid-area: ammo; margin-top: 3px; text-align: right; }
+  #slotshud .slot.active .mag { grid-area: mag; }
+  #slotshud .slot.active .reload { grid-area: rl; align-self: center; margin: 0; }
+  #minimap { bottom: calc(var(--safe-b, 0px) + 132px) !important; }
+}
 .feed { font-family: var(--mono); font-size: 12px; }
 #revivetouch { position: absolute; right: calc(var(--safe-r) + 140px); bottom: calc(var(--safe-b) + 150px); }
 

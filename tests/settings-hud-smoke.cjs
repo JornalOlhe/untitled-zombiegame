@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const http = require('http'), fs = require('fs'), path = require('path');
 const root = path.resolve('android/app/src/main/assets');
-const server = http.createServer((q, r) => { const f = path.join(root, decodeURIComponent(q.url.split('?')[0] === '/' ? 'index.html' : q.url.split('?')[0])); fs.readFile(f, (e, d) => { if (e) { r.writeHead(404).end(); return; } r.setHeader('Content-Type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); r.end(d); }); });
+const server = http.createServer((q, r) => { const f = path.join(root, decodeURIComponent(q.url.split('?')[0] === '/' ? 'index.html' : q.url.split('?')[0])); fs.readFile(f, (e, d) => { if (e) { r.writeHead(404).end(); return; } r.setHeader('Content-Type', f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : f.endsWith('.png') ? 'image/png' : 'text/html'); r.end(d); }); });
 (async () => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const b = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -43,6 +43,18 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   assert.equal(r.bright, 1.2); assert.equal(r.fpsCap, 60);
   assert.equal(r.perf, 'low/off/off/performance'); assert.equal(r.custom, 'custom');
   assert.equal(r.bob, 0); assert.equal(r.saved, 'circle'); assert.equal(r.resetStyle, 'crossdot');
+  // Weapon HUD: desktop layout keeps the centre clear, never overlaps the minimap, warns on low ammo.
+  await p.setViewportSize({ width: 1280, height: 720 });
+  const h = await p.evaluate(async () => {
+    const T = DeadRecoilTest; document.getElementById('settingsscreen').classList.add('hidden');
+    T.SettingsManager.data.minimap = true; T.SettingsManager.data.hudScale = 100; T.SettingsManager.apply();
+    const w = T.WeaponSystem.current(); w.ammo = Math.max(1, Math.floor(w.mag * 0.2));
+    await new Promise(r => setTimeout(r, 400));
+    const slot = document.querySelector('#slotshud .slot.active'), a = slot.getBoundingClientRect(), m = document.getElementById('minimap').getBoundingClientRect();
+    return { mq: matchMedia('(hover: hover) and (pointer: fine) and (min-width: 720px)').matches, iw: innerWidth, low: slot.classList.contains('low'), right: a.left > innerWidth / 2, overlap: !(a.bottom <= m.top || a.top >= m.bottom || a.right <= m.left || a.left >= m.right), h: Math.round(a.height) };
+  });
+  assert.ok(h.low && h.right && !h.overlap && h.h < 80, JSON.stringify(h));
+  r.hud = h;
   assert.deepEqual(errs, []);
   console.log('PASS settings/hud', JSON.stringify(r));
   await b.close(); server.close();

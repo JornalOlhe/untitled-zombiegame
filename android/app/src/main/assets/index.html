@@ -21406,7 +21406,7 @@ body.netgame #revivetouch{display:flex}
             this.hudHTML("slotshud", player.inventory
               .map(
                 (w, i) =>
-                  `<div class="slot ${i === player.slot ? "active" : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small>${i + 1} ${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</small><b>${w ? w.name : "Sem arma"}</b><span>${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small>${w && w.ammo !== Infinity ? "/ " + w.mag : ""}</small></div>`,
+                  `<div class="slot ${i === player.slot ? "active" : ""} ${w && w.ammo !== Infinity && w.mag ? (w.ammo === 0 ? "empty" : w.ammo <= Math.ceil(w.mag * 0.25) ? "low" : "") : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small class="slot-key">${i + 1}</small><b>${w ? w.name : "Sem arma"}</b><span class="ammo">${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small class="mag">${w && w.ammo !== Infinity ? "/ " + w.mag : ""}</small><em class="tier">${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</em>${i === player.slot && reloadEnd && w ? `<span class="reload"><i style="width:${Math.round(clamp(1 - (reloadEnd - simulationTime) / (w.reload || 1), 0, 1) * 100)}%"></i></span>` : ""}</div>`,
               )
               .join(""));
             const cd = Math.max(0, player.cooldown - simulationTime);
