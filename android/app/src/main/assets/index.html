@@ -3565,7 +3565,7 @@ body.netgame #revivetouch{display:flex}
             const quality = {
               low: { shadow: 0, particles: 180, far: 75 },
               medium: { shadow: 512, particles: 420, far: 110 },
-              high: { shadow: 1024, particles: 700, far: 150 },
+              high: { shadow: nativeAndroid ? 1024 : 2048, particles: 700, far: 150 },
               ultra: { shadow: 2048, particles: 900, far: 180 },
             }[s.graphics];
             renderer.shadowMap.enabled =
@@ -3573,8 +3573,9 @@ body.netgame #revivetouch{display:flex}
             ParticleSystem.budget = nativeAndroid ? Math.min(quality.particles, 240) : quality.particles;
             camera.far = (nativeAndroid ? Math.min(quality.far, 95) : quality.far) * s.drawDistance;
             camera.updateProjectionMatrix();
+            // Soft filtered shadows from High up (desktop); Android keeps the cheaper PCF.
             renderer.shadowMap.type =
-              s.graphics === "ultra"
+              s.graphics === "ultra" || (s.graphics === "high" && !nativeAndroid)
                 ? THREE.PCFSoftShadowMap
                 : THREE.PCFShadowMap;
             const size = { off: 256, low: 512, medium: 1024, high: 2048 }[
@@ -17819,7 +17820,14 @@ body.netgame #revivetouch{display:flex}
             }[kind];
             // 512px procedural surfaces (tools/map_textures_gen.py) for the big interior walls and the
             // city skyline; the 16px pixel textures stay for small props.
-            const photoWall = { labWall: ["lab_panel", 0x8d96a6, 0.5, { roughness: 0.48, metalness: 0.55, normal: 0.8 }] }[kind];
+            const photoWall = { labWall: ["lab_panel", 0x8d96a6, 0.5, { roughness: 0.48, metalness: 0.55, normal: 0.8 }], tile: ["ceiling_tile", 0xe6e9e4, 1.0, { roughness: 0.95, normal: 0.6 }] }[kind];
+            // Ceiling light fixtures: a troffer (frame, diffuser, louvers) whose diffuser glows.
+            if (kind === "lightWhite" && VisualArt.photo("light_panel_diff")) {
+              const map = VisualArt.photo("light_panel_diff"), emit = VisualArt.photo("light_panel_emit");
+              const lm = new THREE.MeshStandardMaterial({ map, emissive: new THREE.Color(glow), emissiveMap: emit, emissiveIntensity: 1.25, roughness: 0.4, metalness: 0.2 });
+              this.materials.set(kind, lm);
+              return lm;
+            }
             if (photoWall && VisualArt.photo(photoWall[0] + "_diff")) {
               const pm = VisualArt.surface(photoWall[0], photoWall[1], "concrete", photoWall[3]).clone();
               pm.map = VisualArt.photoCopy(pm.map); pm.map.repeat.set(photoWall[2], photoWall[2]);

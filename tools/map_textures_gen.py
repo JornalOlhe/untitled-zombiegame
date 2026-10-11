@@ -149,6 +149,66 @@ def facade():
     save("facade_night", rgb, h, strength=4)
     Image.fromarray(np.clip(emit, 0, 255).astype(np.uint8)).save(f"{OUT}/facade_night_emit.jpg", quality=80, optimize=True)
 
-for f in sys.argv[1:] or ["concrete", "hospital", "lab", "facade"]:
-    globals()[f]()
-print("ok")
+
+def hospital_floor():
+    # 2x2 vinyl tiles (light/dark checker) with speckle, grout, scuffs and polish wear
+    tiles = ((np.floor(xx*2) + np.floor(yy*2)) % 2)
+    speck = (vnoise(256, 61) > 0.9).astype(float) * 0.5 + (fbm(64, 3, 62) - 0.5)
+    base = np.where(tiles > 0.5, 196.0, 120.0) + speck*22 + (fbm(4, 5, 63)-0.5)*14
+    px = (xx*2) % 1; py = (yy*2) % 1
+    edge = np.minimum(np.minimum(px, 1-px), np.minimum(py, 1-py))
+    grout = np.clip(1 - edge/0.008, 0, 1)
+    scuff = np.clip(fbm(24, 4, 64) - 0.68, 0, 1)*3
+    v = base*(1-grout*0.45) - scuff*30
+    rgb = np.dstack([v*0.96, v*1.0, v*0.97])
+    h = -grout*0.9 + speck*0.05
+    save("floor_tiles_06", rgb, h, strength=5)
+
+def asphalt():
+    agg = vnoise(512, 71)
+    base = 150 + (fbm(8, 6, 72)-0.5)*34 + (agg-0.5)*40
+    stones = (agg > 0.86).astype(float)
+    cracks = np.zeros((N, N)); r = np.random.default_rng(73)
+    for _ in range(9):
+        x, y = r.random()*N, r.random()*N; ang = r.random()*6.28
+        for t in range(int(60 + r.random()*200)):
+            ang += (r.random()-0.5)*0.5; x = (x + np.cos(ang)) % N; y = (y + np.sin(ang)) % N
+            cracks[int(y), int(x)] = 1
+    cracks = np.array(Image.fromarray((cracks*255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))) / 255.0
+    oil = np.clip(fbm(3, 5, 74) - 0.62, 0, 1)*2.5
+    patch = (fbm(2, 3, 75) > 0.62).astype(float)
+    v = base + stones*28 - cracks*70 - oil*35 - patch*14
+    rgb = np.dstack([v*0.98, v*1.0, v*1.03])
+    h = agg*0.4 + stones*0.3 - cracks*1.0
+    save("asphalt_02", rgb, h, strength=6)
+
+def ceiling():
+    # 2x2 mineral-fibre ceiling tiles with fissures and a metal T-grid
+    fiss = (vnoise(256, 81) > 0.82).astype(float) * vnoise(64, 82)
+    v = 222 - fiss*40 + (fbm(16, 4, 83)-0.5)*12 - np.clip(fbm(3, 4, 84)-0.6, 0, 1)*50
+    px = (xx*2) % 1; py = (yy*2) % 1
+    edge = np.minimum(np.minimum(px, 1-px), np.minimum(py, 1-py))
+    grid = np.clip(1 - edge/0.012, 0, 1)
+    v = v*(1-grid) + 168*grid
+    rgb = np.dstack([v*0.99, v*1.0, v*0.98])
+    h = -fiss*0.5 + grid*0.6
+    save("ceiling_tile", rgb, h, strength=4)
+
+def light_panel():
+    # troffer: metal frame, white diffuser, parabolic louvers; emissive mask = diffuser only
+    px = xx; py = yy
+    edge = np.minimum(np.minimum(px, 1-px), np.minimum(py, 1-py))
+    frame = edge < 0.06
+    lou = ((np.abs(((px*4) % 1) - 0.5) < 0.03) | (np.abs(((py*2) % 1) - 0.5) < 0.04)) & ~frame
+    glow = 0.82 + 0.18*np.cos((px-0.5)*3.1)*np.cos((py-0.5)*3.1)
+    v = np.where(frame, 150.0, 250.0*glow)
+    v = np.where(lou, 200.0, v)
+    rgb = np.dstack([v*0.98, v*1.0, v*1.02])
+    emit = np.where(frame, 0.0, np.where(lou, 0.75, glow))
+    save("light_panel", rgb, None)
+    Image.fromarray((np.dstack([emit, emit, emit])*255).astype(np.uint8)).save(f"{OUT}/light_panel_emit.jpg", quality=82)
+
+if __name__ == "__main__":
+    for f in sys.argv[1:] or ["concrete", "hospital", "lab", "facade", "hospital_floor", "asphalt", "ceiling", "light_panel"]:
+        globals()[f]()
+    print("ok")
