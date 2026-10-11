@@ -13829,6 +13829,22 @@ body.netgame #revivetouch{display:flex}
           corpses: [],
           hitMeshes: [],
           flowClock: 0,
+          // Hitboxes = the visible model. Besides the six body boxes, every opaque accessory (helmets,
+          // armour, horns, wings, tails, boss plating) is hittable; anything mounted under the neck
+          // pivot counts as head. Measured before this: SWAT 84 %, Wendigo 86 % / head 62 %,
+          // Demon 77 % / head 52 % of visible pixels were shoot-through.
+          collectHits(z) {
+            const rig = z.rig; if (!rig) return;
+            const known = new Set(rig.hits), neck = rig.neck;
+            const under = (o) => { for (let q = o; q && q !== z.group; q = q.parent) if (q === neck) return true; return false; };
+            z.group.traverse((o) => {
+              if (!o.isMesh || known.has(o) || o.isInstancedMesh || o.userData.noHit) return;
+              const m = Array.isArray(o.material) ? o.material[0] : o.material;
+              if (!m || m.transparent || m.blending === THREE.AdditiveBlending || o.geometry?.type === "PlaneGeometry") return;
+              o.userData.zombie = z; o.userData.head = !!neck && under(o); o.userData.accessory = true;
+              this.hitMeshes.push(o); known.add(o);
+            });
+          },
           spawn(type = 0, boss = null, where = null) {
             // Multiplayer clients never create zombies on their own: the host owns the horde.
             if (NetGame.active && !NetGame.host && !NetGame.spawningRemote) return null;
@@ -13896,6 +13912,7 @@ body.netgame #revivetouch{display:flex}
               m.userData.head = !!m.userData.head;
               this.hitMeshes.push(m);
             }
+            this.collectHits(z);
             HordeAI.decorate(z);
             const shadow = new THREE.Mesh(
               VisualArt.geometries.plane,
