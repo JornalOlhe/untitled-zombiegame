@@ -3708,6 +3708,20 @@ body.netgame #revivetouch{display:flex}
         };
         let storyLevel = 1;
         const modeRules = () => modeConfig[mode] || modeConfig.classic;
+        // Balance guard-rails for difficulty × mode stacking (coins untouched): the worst combo
+        // (Hardcore + Contra o tempo) used to multiply damage ×2.23, enemy HP ×2.07 and speed ×1.65,
+        // and the per-wave speed ramp was unbounded, so late waves outran a sprinting player.
+        const Balance = {
+          CAP: { damage: 2.0, hp: 2.0, speed: 1.55 },
+          WAVE_SPEED_MAX: 1.4,
+          RUN_LIMIT: 5.6 * 1.4 * 0.92, // 92 % of a base sprint: you can always break away
+          modeDamage() { return Math.min(modeRules().damage, this.CAP.damage / diff[difficulty].damage); },
+          hpMult() { return Math.min(this.CAP.hp, diff[difficulty].enemyHp * modeRules().hp); },
+          speedMult() { return Math.min(this.CAP.speed, diff[difficulty].speed * modeRules().speed); },
+          waveSpeed(wave) { return Math.min(this.WAVE_SPEED_MAX, 1 + 0.02 * (wave - 1)); },
+          // Infinity: the classic ×1.085 per wave up to 30, then a gentler ×1.045 so the run stays winnable.
+          infiniteHp(wave) { return wave <= 30 ? Math.pow(1.085, wave - 1) : Math.pow(1.085, 29) * Math.pow(1.045, wave - 30); },
+        };
         const rewardMultiplier = () => (diff[difficulty]?.coins || 1) * modeRules().coins;
         const scaledCoinReward = (base) => Math.max(0, Math.round(Number(base || 0) * rewardMultiplier()));
         const isStoryRun = () => mode === "classic" && !NetGame.active;
@@ -13878,21 +13892,21 @@ body.netgame #revivetouch{display:flex}
             if (!boss) VoxelMonsters.dress(rig, DevMode.active && DevMode.zombieMap != null ? DevMode.zombieMap : selectedMap);
             const scaling =
                 mode === "infinite"
-                  ? Math.pow(1.085, WaveManager.wave - 1)
+                  ? Balance.infiniteHp(WaveManager.wave)
                   : 1 + 0.08 * (WaveManager.wave - 1),
-              hp = (boss ? boss.hp : t.hp * scaling) * diff[difficulty].enemyHp * modeRules().hp;
+              hp = (boss ? boss.hp : t.hp * scaling) * Balance.hpMult();
             const z = {
               group: g,
               type,
               boss,
               hp,
               maxhp: hp,
-              speed:
+              speed: Math.min(
+                boss ? Infinity : Balance.RUN_LIMIT,
                 (boss ? boss.speed : t.speed) *
-                (1 + 0.02 * (WaveManager.wave - 1)) *
-                diff[difficulty].speed *
-                modeRules().speed *
-                (typeof MutationManager !== "undefined" ? MutationManager.speedMultiplier(type) : 1),
+                Balance.waveSpeed(WaveManager.wave) *
+                Balance.speedMult() *
+                (typeof MutationManager !== "undefined" ? MutationManager.speedMultiplier(type) : 1)),
               phase: 1,
               attack: 0,
               special: simulationTime + rand(3, 6),
@@ -14758,7 +14772,7 @@ body.netgame #revivetouch{display:flex}
             return m;
           },
           damagePlayer(amount) {
-            amount *= modeRules().damage;
+            amount *= Balance.modeDamage();
             if (NetGame.hurtRemote(amount)) return;
             if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
@@ -20499,7 +20513,7 @@ body.netgame #revivetouch{display:flex}
             CameraRig.reset();fallback=false;document.body.classList.remove("mouse-captured");
           },
           hurt(amount, fromNet = false) {
-            if (!fromNet) amount *= modeRules().damage;
+            if (!fromNet) amount *= Balance.modeDamage();
             if (!fromNet && NetGame.hurtRemote(amount)) return;
             if (DevMode.on("god")) return;
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
@@ -28509,6 +28523,7 @@ body.netgame #revivetouch{display:flex}
             PowerUps,
             HitDir,
             Director,
+            Balance,
             ExplosionFX,
             ShaderWarmup,
             WallCast,
