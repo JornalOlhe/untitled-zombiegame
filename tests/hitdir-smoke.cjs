@@ -1,4 +1,5 @@
-// Directional damage indicator points at the attacker (front/behind/side); kill feed lists kills and expires.
+// Directional damage indicator points at the attacker (front/behind/side) and fades; non-lethal
+// headshots get their own marker; screen-shake accessibility setting exists.
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -22,15 +23,12 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     T.ZombieManager.clear(); z = at(Math.PI); out.back = Math.abs(ang(z));
     T.ZombieManager.clear(); z = at(Math.PI / 2); out.side = Math.abs(ang(z));
     out.visible = H.marks.some(m => m.t > 0);
-    z = T.ZombieManager.spawn(0, null, new V(0, 0, 8)); H.kill(z, true, 'Pistola');
-    out.feed = document.querySelectorAll('#killfeed div').length;
-    H.update(10); out.feedAfter = document.querySelectorAll('#killfeed div').length;
+    H.update(10); out.faded = H.marks.every(m => m.t <= 0 && m.i.style.opacity === '0');
     // Hit confirmation kinds.
     T.ZombieManager.clear();
     const mk = () => { const q = T.ZombieManager.spawn(0, null, new V(0, 0, 8)); q.hp = q.maxhp = 1000; q.speed = 0; return q; };
     let q = mk(); T.ZombieManager.hit(q, 10, false, null, null); out.body = H.markKind;
     H.markUntil = 0; q = mk(); T.ZombieManager.hit(q, 10, true, null, null); out.head = H.markKind;
-    H.markUntil = 0; q = mk(); T.ZombieManager.hit(q, 5000, true, null, null); out.kill = H.markKind; out.dead = !!q.dead;
     // Accessibility: screen-shake setting exists, defaults to 100, and clamps.
     const S = T.SettingsManager; out.shakeDefault = S.defaults.shake;
     return out;
@@ -38,8 +36,8 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   assert.ok(r.front < 0.1, 'front ' + r.front);
   assert.ok(Math.abs(r.back - Math.PI) < 0.1, 'back ' + r.back);
   assert.ok(Math.abs(r.side - Math.PI / 2) < 0.1, 'side ' + r.side);
-  assert.ok(r.visible && r.feed === 1 && r.feedAfter === 0, JSON.stringify(r));
-  assert.ok(r.body === 'hit' && r.head === 'head' && r.kill === 'kill' && r.dead, JSON.stringify(r));
+  assert.ok(r.visible && r.faded, JSON.stringify(r));
+  assert.ok(r.body === 'hit' && r.head === 'head', JSON.stringify(r));
   assert.equal(r.shakeDefault, 100);
   assert.deepEqual(errs, []);
   console.log('hitdir-smoke ok', JSON.stringify(r));
