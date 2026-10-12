@@ -4984,9 +4984,158 @@ body.netgame #revivetouch{display:flex}
             c.crawler = r.style === "crawler";
             c.boss = !!z.boss;
             c.life = z.boss ? 6 : 4;
-            c.max = c.life;
             c.lift = (r.shape.td * this.P) / 2;
+            c.liftW = (r.shape.tw * this.P) / 2;
+            // Every regular archetype has its own scripted death (blasts and the crawler keep the
+            // physics topple). Headshots on plain walkers sometimes snap straight back instead.
+            c.style = !blast && !c.crawler && !c.boss && r.style !== "constructor" ? this.DEATH_STYLE[z.type] || null : null;
+            if (c.style === "crumple" && c.head && Math.random() < 0.5) c.style = null;
+            if (c.style) {
+              c.t = 0;
+              c.side = Math.random() < 0.5 ? -1 : 1;
+              c.dur = this.DEATH_DUR[c.style];
+              c.life = Math.max(c.life, c.dur + 2.6);
+              const fwd = new V(Math.sin(yaw), 0, Math.cos(yaw));
+              if (c.style === "dive") c.vel = fwd.multiplyScalar(clamp((z.gSpeed || 3) * 1.1, 2.5, 6.5));
+              else if (c.style === "kneel" || c.style === "backfall") c.vel = away.clone().multiplyScalar(c.style === "kneel" ? 0.9 : 1.6);
+              else c.vel.multiplyScalar(0.3);
+            }
+            c.max = c.life;
             c.init = true;
+          },
+          // type index -> death style ("constructor" gibs, crawler has its own collapse)
+          DEATH_STYLE: { 0: "crumple", 1: "dive", 3: "backfall", 4: "scream", 6: "kneel", 7: "dive", 8: "glitch", 9: "spasm", 10: "kneel", 11: "dive" },
+          DEATH_DUR: { crumple: 1.3, dive: 0.9, backfall: 1.0, scream: 1.9, kneel: 2.2, glitch: 1.6, spasm: 1.9 },
+          // Scripted, eased death performances. Pivot conventions: root.rotation.x > 0 tips the body
+          // forward (face down), < 0 backward; root.rotation.z tips it sideways. root.position.y
+          // lifts the pivot by half the torso thickness as it lies down so nothing sinks into the floor.
+          deathPose(c, r, dt) {
+            const t = (c.t += dt), g = (a, b) => { const x = clamp((t - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); },
+              fallIn = (a, b) => { const x = clamp((t - a) / (b - a), 0, 1); return x * x; },
+              L = Math.PI / 2 - 0.04, P = c.group.position, hipY = r.hipY ?? r.body.position.y;
+            const impact = (big = 1) => {
+              if (c.landed) return;
+              c.landed = true;
+              ParticleSystem.emit(P.clone().add(new V(0, 0.12, 0)), 0x6a5a4a, Math.round(12 * big), 2 + big);
+              BloodFX.emit(P.clone().add(new V(0, 0.15, 0)), Math.round(6 * big));
+              MonsterAudio.play("land", { volume: 0.35 + 0.35 * big, rate: 1.25 - 0.2 * big });
+              if (big > 1 && P.distanceTo(player.pos) < 14) shake = Math.max(shake, 0.25);
+            };
+            const lie = (ax, az) => {
+              r.root.rotation.x = ax;
+              r.root.rotation.z = az;
+              r.root.position.y = Math.abs(Math.sin(ax)) * c.lift + Math.abs(Math.sin(az)) * c.liftW;
+            };
+            const parts = [r.upper, r.neck, r.body, ...r.arms, ...r.legs];
+            c.snap ??= parts.map((o) => [o.rotation.x, o.rotation.y, o.rotation.z]);
+            for (const o of parts) o.rotation.set(0, 0, 0);
+            r.body.position.y = hipY;
+            r.upper.position.y = 0;
+            r.root.position.z = 0;
+            let ax = 0, az = 0;
+            switch (c.style) {
+              case "crumple": { // knees give out, slumps, then folds forward onto the face
+                const buckle = g(0, 0.5), fall = fallIn(0.55, 1.05), flat = g(0.55, 1.1);
+                r.legs[0].rotation.x = -1.15 * buckle * (1 - flat) + 0.08 * flat;
+                r.legs[1].rotation.x = -0.85 * buckle * (1 - flat) + 0.12 * flat;
+                r.body.position.y = hipY * (1 - 0.42 * buckle * (1 - flat));
+                r.upper.rotation.x = 0.35 * buckle * (1 - flat);
+                r.neck.rotation.x = 0.45 * buckle - 0.5 * flat;
+                r.arms[0].rotation.set(-0.35 * buckle * (1 - flat) - 2.7 * flat, 0, 0.25 * c.side * flat);
+                r.arms[1].rotation.set(-0.25 * buckle * (1 - flat) - 2.4 * flat, 0, -0.35 * c.side * flat);
+                ax = L * fall; az = 0.12 * c.side * fall;
+                if (fall >= 1) impact(1);
+                break;
+              }
+              case "dive": { // runs out of life mid-sprint: pitches forward and skids along the ground
+                const fall = fallIn(0, 0.4), skid = g(0.3, 0.9);
+                ax = L * fall; az = 0.18 * c.side * skid;
+                r.arms[0].rotation.set(-1.2 - 1.7 * fall, 0, 0.2 * c.side);
+                r.arms[1].rotation.set(-0.9 - 1.9 * fall, 0, -0.3 * c.side);
+                r.legs[0].rotation.x = 0.35 * (1 - skid) + 0.15 * skid;
+                r.legs[1].rotation.x = -0.4 * (1 - skid) + 0.05 * skid;
+                r.neck.rotation.x = -0.35 * fall;
+                if (fall >= 1) impact(1);
+                break;
+              }
+              case "backfall": { // shot off his feet: flung backward, arms thrown wide
+                const fall = fallIn(0, 0.6), sprawl = g(0.1, 0.8);
+                ax = -L * fall; az = 0.15 * c.side * fall;
+                r.arms[0].rotation.set(-0.6 * sprawl, 0, -1.35 * sprawl);
+                r.arms[1].rotation.set(-0.4 * sprawl, 0, 1.25 * sprawl);
+                r.legs[0].rotation.set(-0.3 * sprawl, 0, -0.18 * sprawl);
+                r.legs[1].rotation.set(0.1 * sprawl, 0, 0.2 * sprawl);
+                r.neck.rotation.x = 0.5 * sprawl;
+                if (fall >= 1) impact(1.1);
+                break;
+              }
+              case "scream": { // a last shriek, arms clawing at the air, then drops sideways
+                const rear = g(0, 0.5) * (1 - g(0.9, 1.2)), buckle = g(0.9, 1.3), fall = fallIn(1.3, 1.75), shakeA = Math.sin(t * 34) * 0.12 * rear;
+                r.upper.rotation.x = -0.55 * rear + 0.35 * buckle * (1 - fall);
+                r.neck.rotation.set(-0.8 * rear + 0.5 * buckle, shakeA * 2, 0);
+                r.arms[0].rotation.set(-2.7 * rear - 0.3 * buckle + shakeA, 0, -0.4 * rear);
+                r.arms[1].rotation.set(-2.5 * rear - 0.2 * buckle - shakeA, 0, 0.4 * rear);
+                r.legs[0].rotation.x = -1.1 * buckle * (1 - fall);
+                r.legs[1].rotation.x = -0.45 * buckle * (1 - fall);
+                r.body.position.y = hipY * (1 - 0.4 * buckle * (1 - fall));
+                az = L * c.side * fall; ax = 0.15 * fall;
+                if (!c.cried && t > 0.05) { c.cried = true; MonsterAudio.play("roar", { volume: 0.45, rate: 1.9 }); }
+                if (fall >= 1) impact(1);
+                break;
+              }
+              case "kneel": { // heavy: staggers back, drops to one knee, hangs there, then slams down
+                const stag = g(0, 0.45) * (1 - g(0.45, 0.9)), knee = g(0.45, 0.95), fall = fallIn(1.45, 2.05), flat = g(1.45, 2.1);
+                r.upper.rotation.x = -0.35 * stag + 0.45 * knee * (1 - flat);
+                r.legs[0].rotation.x = 0.35 * stag - 1.4 * knee * (1 - flat);
+                r.legs[1].rotation.x = -0.2 * stag - 0.25 * knee * (1 - flat);
+                r.body.position.y = hipY * (1 - 0.4 * knee * (1 - flat));
+                r.arms[0].rotation.set(-0.5 * stag - 0.15 * knee - 2.2 * flat, 0, -0.3 * knee);
+                r.arms[1].rotation.set(-0.5 * stag + 0.1 * knee - 2.0 * flat, 0, 0.3 * knee);
+                r.neck.rotation.x = 0.5 * knee - 0.4 * flat;
+                if (!c.knelt && knee >= 1) { c.knelt = true; ParticleSystem.emit(P.clone().add(new V(0, 0.1, 0)), 0x6a5a4a, 10, 2); MonsterAudio.play("land", { volume: 0.6, rate: 0.9 }); }
+                ax = L * fall; az = 0.1 * c.side * fall;
+                if (fall >= 1) impact(2);
+                break;
+              }
+              case "glitch": { // servos seize: violent jitter, sparks, then stiff as a board backward
+                const jit = (1 - g(0.75, 0.95)) * (t < 0.95 ? 1 : 0), fall = fallIn(0.95, 1.4), J = () => (Math.random() - 0.5) * 2 * jit;
+                r.upper.rotation.set(0.3 * J(), 0.5 * J(), 0.3 * J());
+                r.neck.rotation.set(0.5 * J() + 0.3 * fall, 0.7 * J(), 0);
+                r.arms[0].rotation.set(-1.2 + J() * 0.9, 0, -0.2 + J() * 0.4);
+                r.arms[1].rotation.set(-1.0 + J() * 0.9, 0, 0.2 + J() * 0.4);
+                r.legs[0].rotation.x = J() * 0.3;
+                r.legs[1].rotation.x = J() * 0.3;
+                if (jit > 0 && Math.random() < 0.35) ParticleSystem.emit(P.clone().add(new V(rand(-0.3, 0.3), rand(0.8, 1.7), rand(-0.3, 0.3))), Math.random() < 0.5 ? 0xffd060 : 0x7fd0ff, 4, 4);
+                ax = -L * fall;
+                if (fall >= 1) { if (!c.landed) ParticleSystem.emit(P.clone().add(new V(0, 0.4, 0)), 0xffd060, 18, 5); impact(1.2); }
+                break;
+              }
+              case "spasm": { // the parasites inside thrash, the host bloats, ruptures and collapses
+                const conv = g(0, 0.25) * (1 - g(1.1, 1.25)), burst = t > 1.15, slump = g(1.15, 1.5), fall = fallIn(1.35, 1.8);
+                const pulse = 1 + 0.12 * Math.sin(t * 22) * conv + 0.18 * g(0.3, 1.15) * (1 - slump);
+                c.group.scale.set(c.baseScale * pulse, c.baseScale * (1 - 0.18 * slump), c.baseScale * pulse);
+                r.upper.rotation.set(Math.sin(t * 17) * 0.35 * conv + 0.4 * slump, Math.sin(t * 13) * 0.3 * conv, 0);
+                r.neck.rotation.x = Math.sin(t * 19) * 0.5 * conv + 0.6 * slump;
+                r.arms[0].rotation.set(-1.3 + Math.sin(t * 15) * 0.8 * conv, 0, -0.5 * conv);
+                r.arms[1].rotation.set(-1.3 + Math.cos(t * 14) * 0.8 * conv, 0, 0.5 * conv);
+                r.legs[0].rotation.x = -0.9 * slump * (1 - fall);
+                r.body.position.y = hipY * (1 - 0.35 * slump * (1 - fall));
+                if (burst && !c.burst) {
+                  c.burst = true;
+                  for (let i = 0; i < 3; i++) ParticleSystem.emit(P.clone().add(new V(rand(-0.3, 0.3), rand(0.9, 1.5), rand(-0.3, 0.3))), i % 2 ? 0x8fd03a : 0x5a1010, 20, 5);
+                  BloodFX.emit(P.clone().add(new V(0, 1.1, 0)), 22);
+                  MonsterAudio.play("mutant_fall", { volume: 0.5, rate: 1.4 });
+                }
+                az = L * c.side * fall;
+                if (fall >= 1) impact(1);
+                break;
+              }
+            }
+            lie(ax, az);
+            if (t < 0.18) { // blend out of whatever the walk cycle left on the rig
+              const k = t / 0.18;
+              parts.forEach((o, i) => { const q = c.snap[i]; o.rotation.set(q[0] + (o.rotation.x - q[0]) * k, q[1] + (o.rotation.y - q[1]) * k, q[2] + (o.rotation.z - q[2]) * k); });
+            }
           },
           corpse(c, z, dt) {
             if (!c.init) this.initCorpse(c, z || c.z);
@@ -5016,7 +5165,10 @@ body.netgame #revivetouch{display:flex}
               c.spin *= Math.exp(-6 * dt);
             }
             g.rotation.y += c.spin * dt;
-            if (c.crawler) {
+            if (c.style) {
+              c.baseScale ??= g.scale.x;
+              this.deathPose(c, r, c.dt);
+            } else if (c.crawler) {
               // The crawler goes limp and stretches out flat: arms thrown forward along the
               // ground, legs straight back, face in the dirt, with a last twitch.
               c.baseY ??= r.body.position.y;
@@ -7661,6 +7813,28 @@ body.netgame #revivetouch{display:flex}
               }
               const pool = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 7.5), new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
               pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.03, -6.4); pool.userData.disposableMaterial = pool.userData.disposableGeometry = true; car.add(pool); flick.pool = pool;
+              // Tail lights: red lenses with a soft additive glow and a faint red spill on the road.
+              const tail = new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }); tail.userData.perCar = true; flick.tail = tail;
+              const glowMat = new THREE.SpriteMaterial({ map: poolTex, color: 0xff3020, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }); flick.glows = [glowMat];
+              for (const ox of [-0.66, 0.66]) {
+                const l = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.1), tail); l.position.set(ox, 0.82, 2.21); l.userData.disposableGeometry = l.userData.disposableMaterial = true; car.add(l);
+                const gl = new THREE.Sprite(glowMat); gl.scale.set(0.7, 0.45, 1); gl.position.set(ox, 0.82, 2.3); gl.userData.disposableMaterial = true; car.add(gl);
+              }
+              const redPool = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.2), new THREE.MeshBasicMaterial({ map: poolTex, color: 0xff3020, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35, polygonOffset: true, polygonOffsetFactor: -2 }));
+              redPool.rotation.x = -Math.PI / 2; redPool.position.set(0, 0.03, 3.1); redPool.userData.disposableMaterial = redPool.userData.disposableGeometry = true; car.add(redPool); flick.redPool = redPool;
+              if (police) {
+                // Light bar: alternating red / blue strobes that wash the street around the car.
+                flick.bar = [];
+                for (const [ox, col] of [[-0.32, 0xff2030], [0.32, 0x2a6bff]]) {
+                  const m = new THREE.MeshBasicMaterial({ color: col, toneMapped: false });
+                  const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.11, 0.22), m); box.position.set(ox, 1.58, 0.15); box.userData.disposableGeometry = box.userData.disposableMaterial = true; car.add(box);
+                  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: poolTex, color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 })); sp.scale.set(1.6, 1.0, 1); sp.position.set(ox, 1.62, 0.15); sp.userData.disposableMaterial = true; car.add(sp);
+                  const wash = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), new THREE.MeshBasicMaterial({ map: poolTex, color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3, polygonOffset: true, polygonOffsetFactor: -2 }));
+                  wash.rotation.x = -Math.PI / 2; wash.position.set(ox * 6, 0.035, 0.15); wash.userData.disposableMaterial = wash.userData.disposableGeometry = true; car.add(wash);
+                  flick.bar.push({ m, sp, wash, col: new THREE.Color(col) });
+                  flick.glows.push(sp.material);
+                }
+              }
               this.decor.push({ type: "headlight", ...flick });
             }
           },
@@ -7814,6 +7988,17 @@ body.netgame #revivetouch{display:flex}
                 o.pool.material.opacity = 0.6 * k;
                 for (const b of o.beams) b.visible = k > 0.4;
                 o.lens.color.setScalar(Math.max(0.3, k));
+                if (o.tail) { o.tail.color.setRGB(Math.max(0.3, k), 0.16 * k, 0.1 * k); o.glows[0].opacity = 0.55 * k; o.redPool.material.opacity = 0.35 * k; }
+                if (o.bar) {
+                  // classic double-flash pattern, sides alternating
+                  const ph = (o.t * 1.6) % 1;
+                  o.bar.forEach((b, i) => {
+                    const local = (ph + i * 0.5) % 1, on = (local < 0.1 || (local > 0.16 && local < 0.26)) ? 1 : 0.08;
+                    b.m.color.copy(b.col).multiplyScalar(0.25 + 0.75 * on);
+                    b.sp.material.opacity = 0.9 * on;
+                    b.wash.material.opacity = 0.32 * on;
+                  });
+                }
                 continue;
               }
               if (o.type === "alarm") {
@@ -11265,7 +11450,7 @@ body.netgame #revivetouch{display:flex}
           spawns: [],
           spawnCursor: 0,
           gridSize: 35,
-          cell: 2,
+          cell: 1,
           // Half the side of the playable square, per map (the maps got much bigger in v24).
           half: 36,
           // Every map is a 100 m square (v27).
@@ -11681,17 +11866,25 @@ body.netgame #revivetouch{display:flex}
             const choice = pool[this.spawnCursor++ % Math.min(2, pool.length)];
             return choice.p;
           },
+          DIRS8: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]],
           makeGrid() {
             this.gridSize = Math.floor((this.half * 2) / this.cell) + 1;
             this.gridOffset = (this.gridSize - 1) / 2;
             const n = this.gridSize;
             this.blocked = new Uint8Array(n * n);
             this.openPenalty = new Float32Array(n * n);
+            // Each cell keeps a walkable anchor: its centre, or the first free point near it. Narrow,
+            // diagonal or off-grid gaps (igloo tunnels, doorways, gaps between cars) stay navigable.
+            this.anchorX = new Float32Array(n * n);
+            this.anchorZ = new Float32Array(n * n);
+            const offs = [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3], [0.3, 0.3], [-0.3, 0.3], [0.3, -0.3], [-0.3, -0.3]];
             for (let z = 0; z < n; z++)
               for (let x = 0; x < n; x++) {
                 const id = z * n + x,
                   [wx, wz] = this.cellToWorld(x, z);
-                this.blocked[id] = this.collides(wx, wz, 0.55) ? 1 : 0;
+                this.blocked[id] = 1;
+                for (const [ox, oz] of offs)
+                  if (!this.collides(wx + ox, wz + oz, 0.38)) { this.blocked[id] = 0; this.anchorX[id] = wx + ox; this.anchorZ[id] = wz + oz; break; }
                 if (!this.blocked[id]) {
                   let crowd = 0;
                   for (let oz = -1; oz <= 1; oz++)
@@ -11706,17 +11899,21 @@ body.netgame #revivetouch{display:flex}
             // between neighbouring cells is sampled along the way (x+1 edges and z+1 edges).
             this.passX = new Uint8Array(n * n);
             this.passZ = new Uint8Array(n * n);
-            const edgeClear = (ax, az, bx, bz) => {
-              for (const t of [0.2, 0.5, 0.8]) if (this.collides(ax + (bx - ax) * t, az + (bz - az) * t, 0.3)) return 0;
+            const edgeClear = (a, b) => {
+              const ax = this.anchorX[a], az = this.anchorZ[a], bx = this.anchorX[b], bz = this.anchorZ[b];
+              for (const t of [0.2, 0.4, 0.6, 0.8]) if (this.collides(ax + (bx - ax) * t, az + (bz - az) * t, 0.3)) return 0;
               return 1;
             };
+            this.passD = new Uint8Array(n * n); // (x, z) -> (x+1, z+1)
+            this.passE = new Uint8Array(n * n); // (x, z) -> (x+1, z-1)
             for (let z = 0; z < n; z++)
               for (let x = 0; x < n; x++) {
                 const id = z * n + x;
                 if (this.blocked[id]) continue;
-                const [ax, az] = this.cellToWorld(x, z);
-                if (x + 1 < n && !this.blocked[id + 1]) this.passX[id] = edgeClear(ax, az, ax + this.cell, az);
-                if (z + 1 < n && !this.blocked[id + n]) this.passZ[id] = edgeClear(ax, az, ax, az + this.cell);
+                if (x + 1 < n && !this.blocked[id + 1]) this.passX[id] = edgeClear(id, id + 1);
+                if (z + 1 < n && !this.blocked[id + n]) this.passZ[id] = edgeClear(id, id + n);
+                if (x + 1 < n && z + 1 < n && !this.blocked[id + n + 1]) this.passD[id] = edgeClear(id, id + n + 1);
+                if (x + 1 < n && z > 0 && !this.blocked[id - n + 1]) this.passE[id] = edgeClear(id, id - n + 1);
               }
             this.flow = new Int32Array(n * n);
           },
@@ -11729,6 +11926,10 @@ body.netgame #revivetouch{display:flex}
                 return sz > 0 ? this.passZ[cz * n + cx] : this.passZ[(cz - 1) * n + cx];
               };
             if (!dx || !dz) return !!ok(x, z, dx, dz);
+            if (dx > 0 && dz > 0 && this.passD[z * n + x]) return true;
+            if (dx < 0 && dz < 0 && this.passD[(z - 1) * n + x - 1]) return true;
+            if (dx > 0 && dz < 0 && this.passE[z * n + x]) return true;
+            if (dx < 0 && dz > 0 && this.passE[(z + 1) * n + x - 1]) return true;
             return (!!ok(x, z, dx, 0) && !!ok(x + dx, z, 0, dz)) || (!!ok(x, z, 0, dz) && !!ok(x, z + dz, dx, 0));
           },
           // Grid <-> world conversions. The grid covers [-half, half] on both axes with
@@ -11767,12 +11968,7 @@ body.netgame #revivetouch{display:flex}
               const id = queue[head++],
                 cx = id % n,
                 cz = Math.floor(id / n);
-              for (const [dx, dz] of [
-                [1, 0],
-                [-1, 0],
-                [0, 1],
-                [0, -1],
-              ]) {
+              for (const [dx, dz] of this.DIRS8) {
                 const nx = cx + dx,
                   nz = cz + dz,
                   ni = nz * n + nx;
@@ -11795,6 +11991,7 @@ body.netgame #revivetouch{display:flex}
             const [x, z] = this.cellAt(pos.x, pos.z),
               n = this.gridSize,
               currentFlow = this.flow[z * n + x];
+            const here = this.blocked[z * n + x];
             let bestScore = Infinity,
               tx = player.pos.x,
               tz = player.pos.z,
@@ -11808,11 +12005,15 @@ body.netgame #revivetouch{display:flex}
               if (nx < 0 || nz < 0 || nx >= n || nz >= n) continue;
               const ni = nz * n + nx;
               if (this.blocked[ni] || this.flow[ni] >= currentFlow) continue;
-              if (!this.blocked[z * n + x] && !this.canStep(x, z, dx, dz)) continue;
+              if (!here && !this.canStep(x, z, dx, dz)) continue;
+              // Standing in a cell whose centre is inside an obstacle (coarse grid next to a wall or a
+              // diagonal prop): only accept neighbours reachable in a straight line, otherwise the flow
+              // field happily points through the wall and the zombie pushes against an "invisible wall".
+              if (here && !this.lineFree(pos.x, pos.z, this.anchorX[ni], this.anchorZ[ni])) continue;
               const score = this.flow[ni] + (this.openPenalty?.[ni] || 0) + (dx && dz ? 0.2 : 0);
               if (score < bestScore) {
                 bestScore = score;
-                [tx, tz] = this.cellToWorld(nx, nz);
+                tx = this.anchorX[ni]; tz = this.anchorZ[ni];
                 found = true;
               }
             }
@@ -11823,11 +12024,33 @@ body.netgame #revivetouch{display:flex}
                 const ni=nz*n+nx;
                 if(this.blocked[ni]) continue;
                 const score=this.flow[ni]+(this.openPenalty?.[ni]||0);
-                if(score<bestScore){bestScore=score;[tx,tz]=this.cellToWorld(nx,nz);found=true;}
+                if(score<bestScore){bestScore=score;tx=this.anchorX[ni];tz=this.anchorZ[ni];found=true;}
               }
+            }
+            if (!found && (here || currentFlow >= 99999)) {
+              // Wider search: the nearest open, reachable cell (up to 3 cells away) in plain line of
+              // travel, preferring the lowest flow value — gets zombies out of notches and pockets.
+              for (let r = 1; r <= 5 && !found; r++)
+                for (let dz = -r; dz <= r; dz++)
+                  for (let dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+                    const nx = x + dx, nz = z + dz;
+                    if (nx < 0 || nz < 0 || nx >= n || nz >= n) continue;
+                    const ni = nz * n + nx;
+                    if (this.blocked[ni] || this.flow[ni] >= 99999) continue;
+                    const wx = this.anchorX[ni], wz = this.anchorZ[ni];
+                    if (!this.lineFree(pos.x, pos.z, wx, wz)) continue;
+                    const score = this.flow[ni] + Math.hypot(wx - pos.x, wz - pos.z) * 0.5;
+                    if (score < bestScore) { bestScore = score; tx = wx; tz = wz; found = true; }
+                  }
             }
             const out = new V(tx - pos.x, 0, tz - pos.z);
             return out.lengthSq() > 0.0001 ? out.normalize() : new V(0, 0, 1);
+          },
+          lineFree(ax, az, bx, bz, r = 0.3) {
+            const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.3));
+            for (let i = 1; i <= k; i++) if (this.collides(ax + ((bx - ax) * i) / k, az + ((bz - az) * i) / k, r)) return false;
+            return true;
           },
           escapeDirection(pos, preferred) {
             const options = [0, 0.55, -0.55, 1.05, -1.05, 1.57, -1.57];
@@ -12640,57 +12863,74 @@ body.netgame #revivetouch{display:flex}
               this.magazine.visible = w.kind !== "shotgun";
               this.magazine.rotation.x = 0;
               this.magazine.position.y = -0.07;
+              if (!reloadEnd) this.magazine.userData.z0 = this.magazine.position.z;
+              else this.magazine.position.z = this.magazine.userData.z0 ?? this.magazine.position.z;
             }
             if (reloadEnd) {
-              const t = clamp(
-                  1 - (reloadEnd - simulationTime) / w.reload,
-                  0,
-                  1,
-                ),
-                tilt = Math.sin(Math.PI * t);
-              this.model.rotation.z -= tilt * 0.48;
-              this.model.rotation.x -= tilt * 0.14;
-              this.model.position.y -= tilt * 0.06;
-              const hand = this.parts.leftHand;
+              // Phased reload (tilt in → mag out → fresh mag → seat → charge when empty → settle).
+              // Shotguns load shell by shell and rack the pump; bolt guns work the bolt.
+              const t = clamp(1 - (reloadEnd - simulationTime) / w.reload, 0, 1),
+                e = (a, b) => { const x = clamp((t - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); },
+                bump = (at, w0 = 0.05) => Math.max(0, 1 - Math.abs(t - at) / w0),
+                hand = this.parts.leftHand;
+              if (this.reloadSoundStep === 0 && t < 0.1) this.reloadEmpty = w.ammo === 0;
+              const empty = !!this.reloadEmpty, boltGun = w.kind === "antimaterial" || w.kind === "rail";
+              const tiltIn = e(0, 0.14), tiltOut = 1 - e(empty ? 0.86 : 0.74, 1), tilt = tiltIn * tiltOut;
+              let sounds;
               if (w.kind === "shotgun") {
-                hand.position.set(
-                  -0.06,
-                  -0.18 - Math.abs(Math.sin(t * Math.PI * 4)) * 0.12,
-                  -0.27,
-                );
+                // Rolled onto its side, port up: thumbs four shells in, then racks the pump.
+                this.model.rotation.z -= tilt * 0.75;
+                this.model.rotation.x += tilt * 0.08;
+                this.model.position.y -= tilt * 0.05;
+                const shells = 4, load = clamp((t - 0.14) / 0.62, 0, 0.999), k = (load * shells) % 1, inLoad = t > 0.14 && t < 0.76;
+                const push = inLoad ? (k < 0.55 ? k / 0.55 : 1 - (k - 0.55) / 0.45) : 0;
+                hand.position.set(-0.05 + push * 0.03, -0.2 + push * 0.13, -0.3);
+                hand.rotation.x = -0.3 + push * 0.3;
+                if (inLoad && k > 0.5 && k < 0.62) this.model.position.y += 0.008;
+                const rack = e(0.8, 0.88) * (1 - e(0.88, 0.95));
+                if (this.parts.pump) this.parts.pump.position.z = -0.52 + rack * 0.14;
+                if (rack > 0) { hand.position.set(-0.01, -0.06, -0.42 + rack * 0.14); this.model.rotation.x -= rack * 0.06; }
+                sounds = [0.14 + 0.62 * 0.55 / 4, 0.14 + 0.62 * 1.55 / 4, 0.14 + 0.62 * 2.55 / 4, 0.14 + 0.62 * 3.55 / 4, 0.84, 0.93];
               } else {
-                const drop =
-                  t < 0.5
-                    ? clamp((t - 0.12) / 0.25, 0, 1)
-                    : clamp((0.82 - t) / 0.28, 0, 1);
-                if (this.magazine) {
-                  this.magazine.position.y = -0.07 - drop * 0.42;
-                  this.magazine.rotation.x = drop * 0.22;
-                  this.magazine.visible = drop < 0.97;
+                this.model.rotation.z -= tilt * 0.55;
+                this.model.rotation.x += tilt * 0.12 - bump(0.6, 0.06) * 0.07;
+                this.model.position.y -= tilt * 0.045 - bump(0.6, 0.06) * 0.018;
+                this.model.position.x += tilt * 0.02;
+                if (boltGun) {
+                  // Bolt up and back, new round in, bolt home.
+                  const open = e(0.12, 0.24) * (1 - e(0.7, 0.82));
+                  if (this.parts.bolt) this.parts.bolt.position.z = -0.16 + open * 0.1;
+                  this.model.rotation.z -= open * 0.12;
                 }
-                hand.position.set(-0.04, -0.18 - drop * 0.3, -0.18);
-                hand.rotation.x = -drop * 0.4;
+                // Old magazine: released at 0.14, falls out with a tumble; new one rises from the
+                // pouch with the hand and seats with a small knock on the frame at 0.6.
+                const out = e(0.13, 0.3), back = e(0.36, 0.58);
+                if (this.magazine) {
+                  const falling = t < 0.33;
+                  this.magazine.visible = falling ? out < 0.98 : t > 0.36;
+                  this.magazine.position.y = falling ? -0.07 - out * 0.45 : -0.07 - (1 - back) * 0.32 + bump(0.6, 0.04) * 0.012;
+                  this.magazine.position.z += falling ? out * 0.05 : 0;
+                  this.magazine.rotation.x = falling ? out * 0.7 : (1 - back) * 0.25;
+                }
+                const pouch = e(0.18, 0.32) * (1 - e(0.38, 0.56));
+                hand.position.set(-0.03 - pouch * 0.05, -0.16 - pouch * 0.24 + (t > 0.4 && t < 0.62 ? 0.02 : 0), -0.2 - pouch * 0.04);
+                hand.rotation.x = -pouch * 0.5;
+                if (empty && !boltGun) {
+                  // Slap the charging handle / slide back and release.
+                  const reach = e(0.66, 0.74) * (1 - e(0.84, 0.9)), pull = e(0.74, 0.79) * (1 - e(0.79, 0.83));
+                  if (reach > 0) hand.position.lerp(new V(-0.1, 0.0, -0.12 + pull * 0.05), reach);
+                  if (this.parts.bolt) this.parts.bolt.position.z = -0.16 + pull * 0.085;
+                  this.model.rotation.z += pull * 0.1;
+                  this.model.position.z += pull * 0.012;
+                }
+                sounds = empty ? [0.15, 0.6, 0.76, 0.81] : [0.15, 0.6];
               }
-              if (t > 0.8) {
-                hand.position.lerp(
-                  new V(-0.1, -0.02, -0.1),
-                  Math.sin(((t - 0.8) / 0.2) * Math.PI),
-                );
-                if (this.parts.bolt)
-                  this.parts.bolt.position.z =
-                    -0.16 + Math.sin(((t - 0.8) / 0.2) * Math.PI) * 0.085;
-              }
-              const step = t > 0.82 ? 3 : t > 0.55 ? 2 : t > 0.16 ? 1 : 0;
+              const step = sounds.filter((at) => t >= at).length;
               if (step > this.reloadSoundStep) {
                 this.reloadSoundStep = step;
-                AudioManager.tone(
-                  step === 2 ? 320 : 170,
-                  0.06,
-                  "triangle",
-                  0.12,
-                  80,
-                );
-                AudioManager.noise(0.025, 0.06);
+                const last = step === sounds.length;
+                AudioManager.tone(last ? 320 : step === 1 ? 170 : 240, 0.06, "triangle", 0.12, 80, "weapons");
+                AudioManager.noise(0.025, last ? 0.09 : 0.06);
               }
             } else this.reloadSoundStep = 0;
             const mp = w.kind === "melee" && !w.specter ? MeleeAnim.sample(w, since, this.combo || 0) : null;
@@ -29182,6 +29422,20 @@ body.netgame #revivetouch{display:flex}
         if (loading) loading.classList.remove("hidden");
         if (text) text.textContent = "Falha ao iniciar o jogo. Reinicie o app; se continuar, instale a versão mais recente.";
       });
+    </script>
+    <script>
+      // UI tap ring: a short expanding ring at the press point on any interactive control (menus only;
+      // gameplay clicks land on the canvas and are ignored).
+      document.addEventListener("pointerdown", (e) => {
+        const t = e.target.closest && e.target.closest("button,.card,.mode-card,.story-level,.cosmetic-card,[role=button]");
+        if (!t || t.disabled || document.pointerLockElement) return;
+        const r = document.createElement("i");
+        r.className = "tap-ring";
+        r.style.left = e.clientX + "px";
+        r.style.top = e.clientY + "px";
+        document.body.appendChild(r);
+        setTimeout(() => r.remove(), 450);
+      }, { passive: true });
     </script>
   </body>
 </html>
