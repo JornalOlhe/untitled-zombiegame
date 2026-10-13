@@ -909,3 +909,18 @@ button[aria-pressed="true"],.mode-card.selected,#mapcards .card.selected,.story-
 #doorhint{position:fixed;left:50%;top:calc(50% + 46px);transform:translateX(-50%) scale(.96);padding:7px 14px;border:1px solid rgba(240,199,119,.55);border-radius:8px;background:rgba(8,10,12,.72);color:#f2f2ea;font:600 14px/1 var(--ui-font,system-ui,sans-serif);opacity:0;pointer-events:none;z-index:45;transition:opacity .15s ease-out,transform .15s ease-out}
 #doorhint.show{opacity:1;transform:translateX(-50%) scale(1);pointer-events:auto}
 #doorhint kbd{display:inline-block;min-width:22px;padding:3px 6px;margin-right:6px;border-radius:5px;background:#f0c777;color:#16130c;font:800 12px/1 var(--mono,monospace);text-align:center}
+
+/* Story screen, decluttered: compact level tiles, one-line objectives, slim reward rows. */
+#storyscreen .story-level{min-height:74px;display:flex;flex-direction:column;justify-content:space-between}
+#storyscreen .story-level b{font-size:22px;line-height:1}
+#storyscreen .story-level .boss-tag{position:absolute;right:8px;top:9px;margin:0;font-size:9px;letter-spacing:.08em;color:#ff6a5a}
+#storyscreen .story-detail-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+#storyscreen .story-threat{font-size:12px;color:#ffb36a;letter-spacing:.04em}
+#storyscreen .story-objective{grid-template-columns:24px 1fr auto;padding:7px 10px}
+#storyscreen .story-objective small{font-variant-numeric:tabular-nums;color:#9fb0bb}
+#storyscreen .story-objective.done small{color:#8dff76}
+#storyscreen .story-note{margin:4px 0 0;font-size:12px;color:#9fb0bb}
+#storyscreen .story-reward-card{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px}
+#storyscreen .story-reward-card small{margin:3px 0 0}
+#storyscreen .story-reward-card button{flex:none;padding:8px 12px}
+#storyscreen .container{padding-bottom:84px}
