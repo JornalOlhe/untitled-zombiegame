@@ -26082,11 +26082,14 @@ body.netgame #revivetouch{display:flex}
                   : state === GameState.CLASS_SELECT
                     ? t * 2.2
                     : PlayerController.motion.phase;
+            // Smooth crouch blend (no pop between standing and crouched poses).
+            r.crouchK = (r.crouchK || 0) + ((crouch ? 1 : 0) - (r.crouchK || 0)) * (1 - Math.exp(-dt * 11));
+            const ck = r.crouchK;
             r.hips.position.y +=
-              ((crouch ? 0.61 : 0.86) + jump + (r.ascDip || 0) - r.hips.position.y) *
+              (0.86 - 0.28 * ck + jump + (r.ascDip || 0) - r.hips.position.y) *
               (1 - Math.exp(-dt * 16));
             r.chest.position.y = 0.1 + Math.sin(t * 1.7) * 0.009;
-            r.chest.rotation.x = crouch ? 0.18 : b * 0.05;
+            r.chest.rotation.x = 0.26 * ck + b * 0.05 * (1 - ck);
             r.head.rotation.y = Math.sin(t * 0.6) * 0.05;
             r.head.rotation.x =
               state === GameState.CLASS_SELECT
@@ -26105,27 +26108,36 @@ body.netgame #revivetouch{display:flex}
             const dirF = vmag > 0.4 ? vf / vmag : 1, dirS = vmag > 0.4 ? vs / vmag : 0;
             r.dirF = (r.dirF ?? 1) + (dirF - (r.dirF ?? 1)) * (1 - Math.exp(-dt * 8));
             r.dirS = (r.dirS ?? 0) + (dirS - (r.dirS ?? 0)) * (1 - Math.exp(-dt * 8));
-            const run = clamp((speed - 5.2) / 3, 0, 1), air = jump > 0.06 && !crouch;
+            const run = clamp((speed - 5.2) / 3, 0, 1) * (1 - ck), air = jump > 0.06 && !crouch;
             r.airK = (r.airK || 0) + ((air ? 1 : 0) - (r.airK || 0)) * (1 - Math.exp(-dt * 12));
-            if (r.wasAir && !air) r.landAt = t;
+            // vertical speed from the jump height: a long drop straightens the legs and spreads them
+            // (bracing), and the landing compresses harder the faster the body hit the ground
+            const vy = dt > 0 ? (jump - (r._lastJump ?? jump)) / dt : 0;
+            r._lastJump = jump;
+            r.vyS = (r.vyS || 0) + (vy - (r.vyS || 0)) * Math.min(1, dt * 14);
+            const fallK = r.airK * clamp((-r.vyS - 2.5) / 5, 0, 1);
+            if (air) r.peakFall = Math.max(r.peakFall || 0, -r.vyS);
+            if (r.wasAir && !air) { r.landAt = t; r.landPow = clamp((r.peakFall || 0) / 7, 0.5, 1.8); r.peakFall = 0; }
             r.wasAir = air;
-            const land = Math.max(0, 1 - (t - (r.landAt ?? -9)) / 0.28), landK = Math.sin(land * Math.PI) * (land > 0 ? 1 : 0);
-            const amp = (0.55 + 0.25 * run) * b, ground = 1 - r.airK;
+            const landDur = 0.22 + 0.12 * (r.landPow || 1), land = Math.max(0, 1 - (t - (r.landAt ?? -9)) / landDur), landK = Math.sin(land * Math.PI) * (land > 0 ? 1 : 0) * (r.landPow || 1);
+            const amp = (0.55 + 0.25 * run) * b * (1 - 0.35 * ck), ground = 1 - r.airK;
             for (let i = 0; i < 2; i++) {
               const ph = phase + i * Math.PI, step = Math.sin(ph), swingUp = Math.max(0, Math.cos(ph)); // cos>0 while this leg swings forward
-              r.legs[i].rotation.x = (step * amp * r.dirF) * ground + (crouch ? -0.35 : 0) + r.airK * (i ? -0.25 : -0.62) - landK * 0.35;
+              r.legs[i].rotation.x = (step * amp * r.dirF) * ground - 0.55 * ck + r.airK * (1 - fallK) * (i ? -0.25 : -0.62) + fallK * (i ? 0.12 : -0.2) - landK * 0.35;
               r.legs[i].rotation.z = (i ? -1 : 1) * Math.abs(r.dirS) * 0.04 * b + step * r.dirS * 0.32 * b * ground; // strafing: legs swing sideways
-              r.knees[i].rotation.x = (0.08 * b + swingUp * (0.55 + 0.45 * run) * b) * ground + (crouch ? 0.75 : 0) + r.airK * (i ? 0.55 : 1.05) + landK * 0.7;
+              r.knees[i].rotation.x = (0.08 * b + swingUp * (0.55 + 0.45 * run + 0.25 * ck) * b) * ground + 1.0 * ck + r.airK * (1 - fallK) * (i ? 0.55 : 1.05) + fallK * 0.18 + landK * 0.7;
+              r.legs[i].rotation.z += fallK * (i ? -0.16 : 0.16);
               r.arms[i].rotation.x = i === 0 ? -0.6 : -0.45;
               r.elbows[i].rotation.x = i === 0 ? -0.75 : -0.95;
               r.arms[i].rotation.z = i === 0 ? 0.5 : -0.5;
             }
             const stance = 1 - Math.abs(Math.sin(phase));
-            r.hips.position.y += ((stance * 0.045 - 0.022) * b * (1 + run * 0.6)) * ground - landK * 0.09;
+            r.hips.position.y += ((stance * 0.045 - 0.022) * b * (1 + run * 0.6) * (1 - 0.5 * ck)) * ground - landK * 0.09;
             r.hips.rotation.y = Math.sin(phase) * 0.13 * b * r.dirF * ground;
             r.hips.rotation.z = Math.cos(phase) * 0.04 * b * ground;
             r.chest.rotation.y = -r.hips.rotation.y * 0.9;
-            r.chest.rotation.x += run * 0.16 + landK * 0.12 - r.airK * 0.05;
+            r.chest.rotation.x += run * 0.16 + landK * 0.12 - r.airK * 0.05 - fallK * 0.12;
+            r.head.rotation.x += fallK * 0.25; // looks down at the landing
             const baseRot = r.holdRot || [0, Math.PI, 0];
             r.gun.rotation.set(baseRot[0], baseRot[1], baseRot[2] + Math.sin(t * 1.7) * 0.006);
             const swing = Math.sin(phase) * 0.55 * b;
@@ -26435,8 +26447,24 @@ body.netgame #revivetouch{display:flex}
             if (r.secretAccessories && r.classId === selectedClass && state === GameState.PLAYING && player.abilityKind) ClassAscend.pose(r, ClassAscend.since());
             else r.ascDip = 0;
             if (reloading) {
-              r.elbows[0].rotation.x = -1.1 + Math.sin(t * 6) * 0.4;
-              r.gun.rotation.z = baseRot[2] + 0.18;
+              // Phased reload in third person (mirrors the first-person one): weapon rolls in, the
+              // support hand drops to the belt for a fresh mag, slaps it in (knock), then racks.
+              const rp = typeof reloading === "number" ? reloading : (t * 0.55) % 1,
+                e = (a0, b0) => { const x = clamp((rp - a0) / (b0 - a0), 0, 1); return x * x * (3 - 2 * x); },
+                tilt = e(0, 0.14) * (1 - e(0.8, 1)), pouch = e(0.16, 0.32) * (1 - e(0.38, 0.56)), seat = Math.max(0, 1 - Math.abs(rp - 0.6) / 0.05), rack = e(0.68, 0.75) * (1 - e(0.8, 0.86));
+              r.gun.rotation.z = baseRot[2] + tilt * 0.55;
+              r.gun.rotation.x = baseRot[0] - tilt * 0.12 + seat * 0.06;
+              r.chest.rotation.x += tilt * 0.08;
+              r.head.rotation.x += tilt * 0.28; // looks down at the weapon
+              if (!r.oneHand) {
+                r.arms[1].rotation.x = -1.25 + pouch * 1.05 - seat * 0.12 + rack * 0.2;
+                r.arms[1].rotation.z = -0.5 + pouch * 0.35 - rack * 0.25;
+                r.elbows[1].rotation.x = -0.95 + pouch * 0.55 - rack * 0.4;
+              } else {
+                r.arms[1].rotation.x = -0.5 - (1 - pouch) * tilt * 0.6;
+                r.elbows[1].rotation.x = -0.7 - (1 - pouch) * tilt * 0.6;
+              }
+              r.elbows[0].rotation.x += -0.15 * tilt;
             }
             const mp = r.weapon?.kind === "melee" && !r.specterWeapon ? MeleeAnim.sample(r.weapon, attack, WeaponSystem.combo || 0) : null;
             if (mp) {
@@ -26733,7 +26761,7 @@ body.netgame #revivetouch{display:flex}
                 keys.has("ControlLeft") || keys.has("ControlRight"),
                 player.jump,
                 simulationTime - lastShot,
-                !!reloadEnd,
+                reloadEnd ? clamp(1 - (reloadEnd - simulationTime) / (WeaponSystem.current()?.reload || 1), 0.0001, 1) : false,
                 state === GameState.GAMEOVER,
               );
               if (player.onLadder) Survivor.ladderPose(this.avatar, simulationTime, player.climb?.phase || "climb");
