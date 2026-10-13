@@ -3835,11 +3835,14 @@ body.netgame #revivetouch{display:flex}
         }
         // Shared procedural art resources: no downloaded textures or model files.
         const VisualArt = {
+          // Blocky art direction: every procedural part is built from boxes so accessories, props and
+          // fallback weapons match the square voxel survivor (spheres -> cubes, tubes -> square
+          // prisms, rings -> square frames). Extents are kept identical to the old round shapes.
           geometries: {
-            sphere: new THREE.SphereGeometry(1, 16, 12),
-            cylinder: new THREE.CylinderGeometry(1, 1, 1, 16),
-            tapered: new THREE.CylinderGeometry(0.85, 1, 1, 12),
-            ring: new THREE.TorusGeometry(1, 0.13, 6, 18),
+            sphere: new THREE.BoxGeometry(2, 2, 2),
+            cylinder: new THREE.CylinderGeometry(Math.SQRT2, Math.SQRT2, 1, 4).rotateY(Math.PI / 4),
+            tapered: new THREE.CylinderGeometry(0.85 * Math.SQRT2, Math.SQRT2, 1, 4).rotateY(Math.PI / 4),
+            ring: new THREE.TorusGeometry(1, 0.13, 4, 4).rotateZ(Math.PI / 4),
             plane: new THREE.PlaneGeometry(1, 1),
           },
           textures: new Map(),
@@ -5797,6 +5800,7 @@ body.netgame #revivetouch{display:flex}
           SETS: {
             machete: {
               dur: 0.42,
+              flipPitch: true,
               trail: 0xdfe6ea,
               moves: [
                 [[0.22, 0.1, 0.16, 0.06, -1.1, 0.2, -0.7], [0.46, -0.3, -0.14, -0.12, 0.75, -0.35, 0.9], [0.7, -0.34, -0.18, -0.08, 0.85, -0.4, 1.0]], // diagonal cut
@@ -5806,6 +5810,7 @@ body.netgame #revivetouch{display:flex}
             },
             knife: {
               dur: 0.28,
+              flipPitch: true,
               trail: 0xff4a4a,
               moves: [
                 [[0.2, 0.02, -0.03, 0.12, 0.15, 0, 0], [0.42, -0.1, 0.04, -0.36, -0.1, 0.1, 0], [0.62, -0.1, 0.04, -0.34, -0.1, 0.1, 0]], // stab
@@ -5843,6 +5848,7 @@ body.netgame #revivetouch{display:flex}
             },
             staff: {
               dur: 0.5,
+              flipPitch: true,
               trail: 0x9fe4ff,
               moves: [
                 [[0.25, 0.1, 0.2, 0.08, -1.2, 0, -0.3], [0.5, -0.05, -0.15, -0.3, 0.7, 0, -0.2], [0.7, -0.06, -0.17, -0.28, 0.75, 0, -0.2]],
@@ -5899,7 +5905,11 @@ body.netgame #revivetouch{display:flex}
             const v = [k];
             for (let c = 1; c < 7; c++) v.push(h00 * a[c] + h10 * h * tan(j - 1, c) * 0.85 + h01 * b[c] + h11 * h * tan(j, c) * 0.85);
             const hit = this.hitOf(set.moves[i]);
-            return { type, set, k, move: i, hit, p: new V(v[1], v[2], v[3]), r: [v[4], v[5], v[6]], striking: k > hit - 0.13 && k < hit + 0.1 };
+            // The blade sets were authored with the pitch sign inverted (tip swung back at the camera
+            // on the strike). Wind-up now lifts the tip back over the shoulder and the strike drives
+            // it forward/down through the target, like every first-person melee (CoD, Dying Light).
+            const rx = set.flipPitch ? -v[4] : v[4];
+            return { type, set, k, move: i, hit, p: new V(v[1], v[2], v[3]), r: [rx, v[5], v[6]], striking: k > hit - 0.13 && k < hit + 0.1 };
           },
         };
         // Ribbon trail that follows a blade tip (view-model or world space).
@@ -5984,6 +5994,100 @@ body.netgame #revivetouch{display:flex}
             this.mesh.material.uniforms.uTime.value = now;
           }
         }
+        // Runtime voxeliser for the smooth HD melee meshes: samples every triangle's surface into a
+        // grid (≈44 blocks along the longest side), colours each block from the base/emissive texture
+        // at that point, and emits only the exposed cube faces. Glowing blocks go to a second,
+        // unlit mesh so emissive edges keep glowing.
+        const WeaponVoxel = {
+          RES: 44,
+          sampler(tex) {
+            const im = tex?.image;
+            if (!im || !im.width) return null;
+            const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+            const x = c.getContext("2d"); x.drawImage(im, 0, 0);
+            const d = x.getImageData(0, 0, c.width, c.height).data, W = c.width, H = c.height, flip = tex.flipY;
+            return (u, v) => { u = ((u % 1) + 1) % 1; v = ((v % 1) + 1) % 1; const px = Math.min(W - 1, (u * W) | 0), py = Math.min(H - 1, ((flip ? 1 - v : v) * H) | 0), i = (py * W + px) * 4; return [d[i] / 255, d[i + 1] / 255, d[i + 2] / 255]; };
+          },
+          cache: new Map(),
+          // Voxelise every mesh of an accessory clone (shared result per source geometry).
+          group(root, res) {
+            if (!root) return root;
+            const list = [];
+            root.traverse((o) => { if (o.isMesh && !o.userData.voxel) list.push(o); });
+            for (const m of list) {
+              const key = m.geometry.uuid + "/" + (m.material?.uuid || "") + "/" + (res || this.RES), hit = this.cache.get(key);
+              if (hit) { m.geometry = hit.geo; m.material = hit.mat; m.userData.voxel = true; if (hit.glow) m.add(new THREE.Mesh(hit.glow, hit.glowMat)); continue; }
+              const old = this.RES; if (res) this.RES = res;
+              try { this.apply(m); } catch (e) {} finally { this.RES = old; }
+              const glowM = m.children.find((c) => c.name === m.name + "_glow");
+              this.cache.set(key, { geo: m.geometry, mat: m.material, glow: glowM?.geometry, glowMat: glowM?.material });
+            }
+            return root;
+          },
+          apply(mesh) {
+            const g = mesh.geometry, P = g.attributes.position, UV = g.attributes.uv, I = g.index, VC = mesh.material?.vertexColors ? g.attributes.color : null;
+            if (!P) return;
+            g.computeBoundingBox();
+            const bb = g.boundingBox, sz = bb.getSize(new V()), C = Math.max(sz.x, sz.y, sz.z) / this.RES;
+            const nx = Math.ceil(sz.x / C) + 1, ny = Math.ceil(sz.y / C) + 1, nz = Math.ceil(sz.z / C) + 1;
+            const mat = mesh.material, base = this.sampler(mat.map), emi = this.sampler(mat.emissiveMap), tint = mat.color || new THREE.Color(1, 1, 1), etint = mat.emissive || new THREE.Color(0, 0, 0);
+            const cells = new Map(), key = (i, j, k) => (i * ny + j) * nz + k;
+            const a = new V(), b = new V(), c = new V(), p = new V();
+            const tri = I ? I.count / 3 : P.count / 3;
+            for (let t = 0; t < tri; t++) {
+              const ia = I ? I.getX(t * 3) : t * 3, ib = I ? I.getX(t * 3 + 1) : t * 3 + 1, ic = I ? I.getX(t * 3 + 2) : t * 3 + 2;
+              a.fromBufferAttribute(P, ia); b.fromBufferAttribute(P, ib); c.fromBufferAttribute(P, ic);
+              const n = Math.max(1, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / (C * 0.5)));
+              for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+                const wa = i / n, wb = j / n, wc = 1 - wa - wb;
+                p.set(a.x * wa + b.x * wb + c.x * wc, a.y * wa + b.y * wb + c.y * wc, a.z * wa + b.z * wb + c.z * wc);
+                const gi = Math.floor((p.x - bb.min.x) / C), gj = Math.floor((p.y - bb.min.y) / C), gk = Math.floor((p.z - bb.min.z) / C), k2 = key(gi, gj, gk);
+                let cell = cells.get(k2);
+                if (!cell) cells.set(k2, (cell = [gi, gj, gk, 0, 0, 0, 0, 0, 0, 0]));
+                let col = [1, 1, 1], ec = [0, 0, 0];
+                if (VC) col = [VC.getX(ia) * wa + VC.getX(ib) * wb + VC.getX(ic) * wc, VC.getY(ia) * wa + VC.getY(ib) * wb + VC.getY(ic) * wc, VC.getZ(ia) * wa + VC.getZ(ib) * wb + VC.getZ(ic) * wc];
+                if (!emi && (etint.r + etint.g + etint.b) * (mat.emissiveIntensity ?? 1) > 0.9) ec = col; // flat emissive part glows in its own colour
+                if (UV) {
+                  const u = UV.getX(ia) * wa + UV.getX(ib) * wb + UV.getX(ic) * wc, v = UV.getY(ia) * wa + UV.getY(ib) * wb + UV.getY(ic) * wc;
+                  if (base) col = base(u, v);
+                  if (emi) ec = emi(u, v);
+                }
+                cell[3] += col[0]; cell[4] += col[1]; cell[5] += col[2]; cell[6] += ec[0]; cell[7] += ec[1]; cell[8] += ec[2]; cell[9]++;
+              }
+            }
+            const F = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+            const out = [{ pos: [], nrm: [], col: [] }, { pos: [], nrm: [], col: [] }], lin = new THREE.Color();
+            for (const cell of cells.values()) {
+              const [i, j, k] = cell, n = cell[9];
+              const er = (cell[6] / n) * etint.r, eg = (cell[7] / n) * etint.g, eb = (cell[8] / n) * etint.b, glow = Math.max(er, eg, eb) > 0.28;
+              lin.setRGB((cell[3] / n) * tint.r, (cell[4] / n) * tint.g, (cell[5] / n) * tint.b);
+              if (glow) lin.setRGB(Math.min(1, er * 1.3 + 0.1), Math.min(1, eg * 1.3 + 0.1), Math.min(1, eb * 1.3 + 0.1));
+              const o = out[glow ? 1 : 0], x0 = bb.min.x + i * C, y0 = bb.min.y + j * C, z0 = bb.min.z + k * C;
+              for (const [fx, fy, fz] of F) {
+                if (cells.has(key(i + fx, j + fy, k + fz))) continue; // hidden face
+                const ax = fx ? 0 : 1, ay = fy ? 0 : 1; // pick two tangent axes
+                const t1 = fx ? [0, 1, 0] : [1, 0, 0], t2 = fz ? [0, 1, 0] : fy ? [0, 0, 1] : [0, 0, 1];
+                const cx = x0 + C / 2 + (fx * C) / 2, cy = y0 + C / 2 + (fy * C) / 2, cz = z0 + C / 2 + (fz * C) / 2, h = C / 2;
+                const Q = (s1, s2) => [cx + (t1[0] * s1 + t2[0] * s2) * h, cy + (t1[1] * s1 + t2[1] * s2) * h, cz + (t1[2] * s1 + t2[2] * s2) * h];
+                const q = [Q(-1, -1), Q(1, -1), Q(1, 1), Q(-1, 1)];
+                const e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], e2 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
+                const dot = (e1[1] * e2[2] - e1[2] * e2[1]) * fx + (e1[2] * e2[0] - e1[0] * e2[2]) * fy + (e1[0] * e2[1] - e1[1] * e2[0]) * fz;
+                for (const vi of dot >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]) { o.pos.push(...q[vi]); o.nrm.push(fx, fy, fz); o.col.push(lin.r, lin.g, lin.b); }
+                void ax; void ay;
+              }
+            }
+            const mk = (o) => { const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(o.pos, 3)); gg.setAttribute("normal", new THREE.Float32BufferAttribute(o.nrm, 3)); gg.setAttribute("color", new THREE.Float32BufferAttribute(o.col, 3)); gg.computeBoundingSphere(); return gg; };
+            if (!out[0].pos.length && !out[1].pos.length) return;
+            mesh.geometry = mk(out[0]);
+            mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: Math.max(0.35, mat.roughness ?? 0.5), metalness: Math.min(0.55, mat.metalness ?? 0.2), flatShading: true });
+            mesh.userData.voxel = true;
+            if (out[1].pos.length) {
+              const glow = new THREE.Mesh(mk(out[1]), new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+              glow.name = mesh.name + "_glow"; glow.castShadow = false;
+              mesh.add(glow);
+            }
+          },
+        };
         const WeaponModels = {
           scenes: new Map(),
           ready: false,
@@ -6019,6 +6123,7 @@ body.netgame #revivetouch{display:flex}
                         for (const key of ["map", "emissiveMap", "normalMap"]) if (o.material[key]) o.material[key].anisotropy = texAniso;
                         if (o.material.emissiveMap) o.material.emissiveIntensity = 1.4;
                         o.userData.hd = true;
+                        (gltf.scene.userData.hdMeshes ||= []).push(o);
                         return;
                       }
                       for (const key of ["map", "emissiveMap"]) {
@@ -6032,6 +6137,9 @@ body.netgame #revivetouch{display:flex}
                       if (o.material.emissiveMap) o.material.emissiveIntensity = 1.6;
                       o.material.metalness = Math.min(o.material.metalness, 0.35);
                     });
+                    // Blocky art direction: the smooth HD melee meshes are voxelised once at load so every
+                    // weapon reads as pixel blocks like the rest of the survivor's kit.
+                    for (const m of gltf.scene.userData.hdMeshes || []) { try { WeaponVoxel.apply(m); } catch (e) {} }
                     this.scenes.set(name, gltf.scene);
                     done();
                   },
@@ -22830,7 +22938,19 @@ body.netgame #revivetouch{display:flex}
           {id:"reinforced_boots",name:"Botas reforçadas",slot:"footwear",tier:2,price:1150,icon:"⌙"},
           {id:"riot_helmet",name:"Capacete de choque",slot:"headgear",tier:3,price:2800,icon:"⬡"},
           {id:"ballistic_vest",name:"Colete balístico",slot:"outerwear",tier:3,price:3200,icon:"▦"},
-          {id:"reaper_hood",name:"Capuz do Ceifador",slot:"headgear",tier:4,price:8500,icon:"◆"}
+          {id:"reaper_hood",name:"Capuz do Ceifador",slot:"headgear",tier:4,price:8500,icon:"◆"},
+          {id:"beanie",name:"Gorro de lã",slot:"headgear",tier:0,price:300,icon:"▴"},
+          {id:"hard_hat",name:"Capacete de obra",slot:"headgear",tier:1,price:650,icon:"⛑"},
+          {id:"nv_goggles",name:"Óculos de visão noturna",slot:"headgear",tier:3,price:3600,icon:"◉"},
+          {id:"bandana",name:"Bandana tática",slot:"facewear",tier:0,price:350,icon:"▾"},
+          {id:"shades",name:"Óculos escuros",slot:"facewear",tier:1,price:550,icon:"▬"},
+          {id:"skull_mask",name:"Máscara de caveira",slot:"facewear",tier:4,price:7200,icon:"☠"},
+          {id:"radio_pack",name:"Rádio de campanha",slot:"backpack",tier:2,price:1400,icon:"⌸"},
+          {id:"sword_sheath",name:"Bainha de katana",slot:"backpack",tier:3,price:3000,icon:"⟋"},
+          {id:"hoodie",name:"Moletom com capuz",slot:"outerwear",tier:1,price:800,icon:"▤"},
+          {id:"medic_vest",name:"Colete de socorrista",slot:"outerwear",tier:2,price:1600,icon:"✚"},
+          {id:"fingerless",name:"Luvas sem dedos",slot:"gloves",tier:0,price:300,icon:"✋"},
+          {id:"hi_tops",name:"Tênis cano alto",slot:"footwear",tier:1,price:700,icon:"▙"}
         ];
         const cosmeticSlots={headgear:"Cabeça",facewear:"Rosto",backpack:"Costas",outerwear:"Torso",gloves:"Mãos",footwear:"Pés"};
         // ── Account: Supabase-backed profile + cross-progression; guest mode stays fully local ────
@@ -25458,14 +25578,54 @@ body.netgame #revivetouch{display:flex}
         const AngelWings = {
           BONES: [0, 0.19, 0.4, 0.58], // span positions (m, wing local, template scale 0.72)
           geo: null,
+          // Voxel wing (blocky, matching the square survivor): the template silhouette rebuilt as a
+          // grid of 6 cm blocks — gold arm bones along the top, banded feathers below, darker tips.
+          SIL: [[-1, -4, 5], [0, -10, 6], [1, -11, 8], [2, -9, 8], [3, -8, 11], [4, -7, 11], [5, -6, 11], [6, -7, 11], [7, -7, 12], [8, -5, 12], [9, -5, 13], [10, -2, 11], [11, -2, 12], [12, 3, 10]],
+          voxelGeo() {
+            const C = 0.06, pos = [], nrm = [], col = [], c = new THREE.Color();
+            const pal = { bone: 0xe8c66a, a: 0xf4fbff, b: 0xd6eef9, tip: 0xa9cfe3 };
+            const F = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+            const cube = (x0, y0, z0, sx, sy, sz, hex) => {
+              c.setHex(hex).convertSRGBToLinear();
+              for (const [nx, ny, nz] of F) {
+                // four corners of the face, two triangles
+                const u = nx ? [0, 1, 0] : [1, 0, 0], v = nz ? [0, 1, 0] : [0, 0, 1];
+                const cx = x0 + sx / 2 + (nx * sx) / 2, cy = y0 + sy / 2 + (ny * sy) / 2, cz = z0 + sz / 2 + (nz * sz) / 2;
+                const hu = [u[0] * sx / 2, u[1] * sy / 2, u[2] * sz / 2], hv = [v[0] * sx / 2, v[1] * sy / 2, v[2] * sz / 2];
+                const P = (a, b2) => [cx + a * hu[0] + b2 * hv[0], cy + a * hu[1] + b2 * hv[1], cz + a * hu[2] + b2 * hv[2]];
+                const q = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
+                // winding so the triangle normal matches the face normal
+                const e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], e2 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
+                const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+                const order = cr[0] * nx + cr[1] * ny + cr[2] * nz >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+                for (const i of order) { pos.push(...q[i]); nrm.push(nx, ny, nz); col.push(c.r, c.g, c.b); }
+              }
+            };
+            // Real volume, not a sheet: the arm is a thick 9 cm beam, each feather row is its own
+            // 4–6 cm slab and the rows step back like overlapping feathers (coverts → primaries),
+            // so the wing has depth from every angle.
+            for (const [k, y0, y1] of this.SIL) {
+              for (let yb = y0; yb <= y1; yb++) {
+                const fromTop = y1 - yb, bone = fromTop < 2 && k >= 0, tip = yb === y0;
+                const band = Math.floor((fromTop - 2) / 3);
+                const hex = bone ? pal.bone : tip ? pal.tip : band % 2 ? pal.b : pal.a;
+                const th = bone ? 0.09 : Math.max(0.035, 0.065 - band * 0.006);
+                const zoff = bone ? 0 : -0.012 * Math.min(4, band + 1); // rows stack backward
+                const x = Math.max(0, k * C), w = C - (k < 0 ? 0.02 : 0);
+                cube(x, yb * C, zoff - th / 2, w, C, th, hex);
+                // feather edge lip: each band's lowest block juts forward a little (layered look)
+                if (!bone && (fromTop - 2) % 3 === 2 && !tip) cube(x, yb * C, zoff + th / 2 - 0.004, w, C * 0.5, 0.016, pal.tip);
+              }
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+            g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+            g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+            return g;
+          },
           skinGeo() {
             if (this.geo) return this.geo;
-            const src = PropModels.group("acc_wing", 0.72);
-            if (!src) return null;
-            src.updateMatrixWorld(true);
-            const geos = [];
-            src.traverse((o) => { if (o.isMesh) geos.push({ g: o.geometry.clone().applyMatrix4(o.matrixWorld), m: o.material }); });
-            if (!geos.length) return null;
+            const geos = [{ g: this.voxelGeo(), m: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.05, emissive: new THREE.Color(0x2a3a44), emissiveIntensity: 0.25, flatShading: true }) }];
             const g = geos[0].g;
             const pos = g.attributes.position, n = pos.count, idx = new Uint16Array(n * 4), wts = new Float32Array(n * 4);
             const B = this.BONES, blend = 0.07;
@@ -25741,6 +25901,20 @@ body.netgame #revivetouch{display:flex}
             if(s.outerwear==="ballistic_vest"){A.block(chest,[0,.24,.175],[.5,.44,.10],0x252d2a,"cloth");A.block(chest,[0,.30,.235],[.28,.22,.035],0x485047,"polymer");for(let x=-1;x<=1;x++)A.block(chest,[x*.13,.11,.235],[.10,.15,.05],0x353d36,"cloth")}
             if(s.gloves==="tactical_gloves")for(const elbow of elbows)A.ellipsoid(elbow,[0,-.37,0],[.07,.075,.075],0x1f2422,"cloth");
             if(s.footwear==="reinforced_boots")for(const knee of knees)A.block(knee,[0,-.36,.065],[.25,.2,.36],0x191d1c,"polymer");
+            // v54 blocky cosmetics (all boxes, to match the square survivor)
+            const B=(p,pos,sc,c,k="cloth",g=0)=>A.block(p,pos,sc,c,k,g);
+            if(s.headgear==="beanie"){B(head,[0,.31,0],[.5,.14,.5],0x7a2a24);B(head,[0,.24,0],[.52,.05,.52],0x5d1f1b);B(head,[0,.4,0],[.12,.08,.12],0xd8d0c0)}
+            if(s.headgear==="hard_hat"){B(head,[0,.33,0],[.5,.14,.5],0xe0a91c,"polymer");B(head,[0,.27,.04],[.6,.03,.62],0xc99512,"polymer");B(head,[0,.41,0],[.08,.04,.46],0xf0c040,"polymer")}
+            if(s.headgear==="nv_goggles"){B(head,[0,.27,0],[.52,.06,.52],0x232826,"polymer");B(head,[0,.31,.2],[.18,.1,.08],0x2c3330,"polymer");for(const side of[-1,1]){B(head,[side*.07,.33,.27],[.07,.07,.12],0x1c201f,"steel");B(head,[side*.07,.33,.335],[.05,.05,.01],0x3cff7a,"glass",0x22ff66)}}
+            if(s.facewear==="bandana"){B(head,[0,-.02,.13],[.5,.2,.26],0xa3241f);B(head,[0,-.13,.2],[.2,.1,.08],0x8a1d19)}
+            if(s.facewear==="shades"){B(head,[0,.12,.255],[.46,.035,.02],0x111);for(const side of[-1,1])B(head,[side*.1,.1,.26],[.16,.08,.02],0x0b0d10,"glass")}
+            if(s.facewear==="skull_mask"){B(head,[0,.06,.255],[.46,.4,.03],0xe8e2d2,"polymer");for(const side of[-1,1])B(head,[side*.1,.12,.27],[.11,.09,.01],0x0a0a0a,"polymer");B(head,[0,.03,.27],[.05,.05,.01],0x0a0a0a,"polymer");for(let i=-2;i<=2;i++)B(head,[i*.055,-.07,.27],[.035,.06,.01],0x0a0a0a,"polymer")}
+            if(s.backpack==="radio_pack"){B(chest,[0,.17,-.26],[.36,.42,.18],0x3b4234,"polymer");B(chest,[.12,.47,-.3],[.03,.42,.03],0x1d1f1e,"steel");B(chest,[-.06,.2,-.36],[.16,.08,.03],0x2a2e2b,"polymer");B(chest,[-.06,.2,-.38],[.04,.03,.01],0xff3b30,"glass",0xff2a20)}
+            if(s.backpack==="sword_sheath"){const sh=A.pivot(chest,0,.2,-.2);sh.rotation.z=.7;B(sh,[0,0,0],[.07,.86,.06],0x1b1716,"polymer");B(sh,[0,.5,0],[.05,.2,.05],0x2b2320,"cloth");B(sh,[0,.39,0],[.16,.03,.08],0xb08a3a,"steel")}
+            if(s.outerwear==="hoodie"){B(chest,[0,.21,0],[.54,.5,.36],0x3d4a5c);B(chest,[0,.47,-.12],[.42,.14,.16],0x324050);B(chest,[0,.1,.19],[.3,.12,.03],0x324050)}
+            if(s.outerwear==="medic_vest"){B(chest,[0,.23,.17],[.5,.44,.09],0xd8d6cc,"cloth");B(chest,[0,.3,.225],[.14,.04,.01],0xd2201c,"cloth");B(chest,[0,.3,.225],[.04,.14,.01],0xd2201c,"cloth");for(const side of[-1,1])B(chest,[side*.17,.1,.22],[.12,.12,.05],0xbab7aa,"cloth")}
+            if(s.gloves==="fingerless")for(const elbow of elbows){B(elbow,[0,-.36,0],[.13,.1,.13],0x2a2622);B(elbow,[0,-.43,0],[.12,.03,.12],0xc9a283,"skin")}
+            if(s.footwear==="hi_tops")for(const knee of knees){B(knee,[0,-.33,.04],[.24,.26,.32],0xefefef,"polymer");B(knee,[0,-.44,.05],[.25,.05,.34],0xb3241e,"polymer");B(knee,[0,-.24,.0],[.25,.04,.25],0xb3241e,"polymer")}
             let secretAccessories = null;
             if (cls === 22) {
               const gold = 0xd6ad55, holy = 0x74dcff, feather = 0xf3fbff;
@@ -25766,8 +25940,15 @@ body.netgame #revivetouch{display:flex}
               const haloModel = PropModels.group("acc_halo", 0.62);
               if (haloModel) {
                 halo.clear();
-                haloModel.position.set(0, 0.35, -0.01);
-                halo.add(haloModel);
+                // Square pixel halo (blocky like the rest of the survivor): an 8x8 block outline.
+                const hm = new THREE.MeshStandardMaterial({ color: 0xffe9a0, emissive: new THREE.Color(0xffd36a), emissiveIntensity: 1.6, roughness: 0.4, metalness: 0.3 });
+                const ring = new THREE.Group(), C = 0.034, N = 8;
+                for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+                  if (i > 0 && i < N - 1 && j > 0 && j < N - 1) continue;
+                  const b = new THREE.Mesh(unitBox, hm); b.scale.set(C, C * 0.7, C); b.position.set((i - (N - 1) / 2) * C, 0, (j - (N - 1) / 2) * C); ring.add(b);
+                }
+                ring.position.set(0, 0.35, -0.01);
+                halo.add(ring);
                 wings.forEach((wing, i) => {
                   const side = i ? 1 : -1, model = AngelWings.build(side) || PropModels.group("acc_wing", 0.72);
                   if (!model) return;
@@ -25807,7 +25988,7 @@ body.netgame #revivetouch{display:flex}
               if (tailModel) {
                 horns.forEach((h, i) => {
                   // Horn size matched to the template's on-character preview (about a head tall).
-                  const side = i ? 1 : -1, model = PropModels.group("acc_horn", 0.72);
+                  const side = i ? 1 : -1, model = WeaponVoxel.group(PropModels.group("acc_horn", 0.72), 16);
                   if (!model) return;
                   h.clear();
                   model.scale.x *= side;
@@ -25836,7 +26017,7 @@ body.netgame #revivetouch{display:flex}
               tail.remove(rotor);
               rotor.position.set(0, 0, -segs[N - 1].userData.len - 0.02);
               segs[N - 1].add(rotor);
-              const rotorModel = PropModels.group("acc_rotor", 0.62);
+              const rotorModel = WeaponVoxel.group(PropModels.group("acc_rotor", 0.62), 22);
               if (rotorModel) rotor.add(rotorModel);
               else
                 for (let j = 0; j < 3; j++) {
