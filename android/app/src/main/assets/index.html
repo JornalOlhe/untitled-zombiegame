@@ -13511,9 +13511,16 @@ body.netgame #revivetouch{display:flex}
           load() {
             if (this.ready || !AudioManager.ctx) return;
             this.ready = true;
-            for (const list of Object.values(this.LINES))
-              for (const [id] of list)
-                fetch(`audio/vo/${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => AudioManager.ctx.decodeAudioData(b)).then((buf) => this.buffers.set(id, buf)).catch(() => this.missing.add(id));
+            // audio/vo/manifest.json lists the recorded ids (written by tools/gen_voice_lines.py), so
+            // lines without a recording are never requested (no 404s); they still get subtitles.
+            fetch("audio/vo/manifest.json").then((r) => (r.ok ? r.json() : [])).catch(() => []).then((have) => {
+              const set = new Set(Array.isArray(have) ? have : []);
+              for (const list of Object.values(this.LINES))
+                for (const [id] of list) {
+                  if (!set.has(id)) { this.missing.add(id); continue; }
+                  fetch(`audio/vo/${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => AudioManager.ctx.decodeAudioData(b)).then((buf) => this.buffers.set(id, buf)).catch(() => this.missing.add(id));
+                }
+            });
           },
           reset() { this.last = {}; this.until = 0; this.idleAt = simulationTime + 38 + Math.random() * 6; this.hide(); },
           say(cat, chance = 1) {

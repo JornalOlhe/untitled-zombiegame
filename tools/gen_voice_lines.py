@@ -52,7 +52,9 @@ def main():
         with urllib.request.urlopen(req) as r:
             dst.write_bytes(r.read())
         print(f"ok  {vid:24s} {text}")
-    print(f"{len(todo)} lines, files in {OUT}")
+    have = sorted(p.stem for p in OUT.glob("*.mp3"))
+    (OUT / "manifest.json").write_text(json.dumps(have, indent=0), encoding="utf-8")
+    print(f"{len(todo)} lines, {len(have)} recorded, manifest updated in {OUT}")
 
 
 if __name__ == "__main__":
