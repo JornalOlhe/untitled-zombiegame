@@ -10215,6 +10215,7 @@ body.netgame #revivetouch{display:flex}
               if (c0 < end && c1 > s0) {
                 // Door frame header.
                 const mid = (c0 + c1) / 2;
+                M.doorSpots.push({ x: alongX ? mid : ax, z: alongX ? az : mid, ry: alongX ? 0 : Math.PI / 2, width: c1 - c0 - 0.24, height: CEIL - 1, style: "hospital" });
                 const [x, z, w, d] = alongX ? [mid, az, c1 - c0, T] : [ax, mid, T, c1 - c0];
                 K.soft("wardWall", [x, CEIL - 0.5, z], [w, 1, d], null, 1);
                 // door frame: steel jambs and head trim, a kick-plate line and a room plate above
@@ -10529,10 +10530,7 @@ body.netgame #revivetouch{display:flex}
             }
             const [hx, hz] = K.at(x, z, ry, 0, d / 2);
             K.hard("planks", [hx, h - 0.15, hz], [1.2, 0.55, 0.28], [0, ry, 0], 1.2);
-            if (door) {
-              const [dx, dz] = K.at(x, z, ry, 0.95, d / 2 + 0.45);
-              K.soft("planks", [dx, 1.05, dz], [0.08, 1.9, 0.95], [0, ry + 0.25, 0], 1.4);
-            }
+            if (door) MapManager.doorSpots.push({ x: hx, z: hz, ry, width: 1.16, height: h - 0.42, style: "cabin" });
             // A-frame roof: two panels meeting at the ridge (outer edges lower), with overhang.
             const panel = Math.hypot(d / 2 + 0.45, rise);
             for (const sd of [-1, 1]) {
@@ -11480,6 +11478,8 @@ body.netgame #revivetouch{display:flex}
             this.index = null;
             this.half = this.halves[index] || 36;
             this.ladders = [];
+            this.doorSpots = [];
+            Doors.clear();
             this.fires = [];
             this.beacons = [];
             this.designProps = [];
@@ -11758,7 +11758,12 @@ body.netgame #revivetouch{display:flex}
             moon.castShadow = false;
             moon.userData.moon = true;
             WorldProps.finish(index);
+            Doors.build(this);
+            // Navigation sees every doorway as passable (zombies push doors open) but keeps clear of
+            // the space the open leaves sweep, so routes run through the middle of the doorway.
+            Doors.navPose(true);
             this.makeGrid();
+            Doors.navPose(false);
             const start=this.playerStart || [0,10];
             this.updateFlow({x:start[0],z:start[1]});
             this.validateSpawns();
@@ -11784,6 +11789,7 @@ body.netgame #revivetouch{display:flex}
             const stepTop = feet + this.STEP,
               bodyTop = feet + 1.7;
             for (const o of this.near(x, z, r)) {
+              if (o.door && (o.off || (o.leaf && this.horde))) continue; // swung-open leaves don't snag the horde
               const base = Number.isFinite(o.base) ? o.base : 0;
               if (o.top > stepTop && bodyTop > base + 0.03 && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return true;
             }
@@ -11799,7 +11805,7 @@ body.netgame #revivetouch{display:flex}
             const limit = feet + this.STEP;
             let g = 0;
             for (const o of this.near(x, z, r))
-              if (o.top <= limit && o.top > g && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) g = o.top;
+              if (!o.door && o.top <= limit && o.top > g && Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) g = o.top;
             return g;
           },
           // Spatial index over the obstacle boxes (4 m buckets). Rebuilt lazily whenever the
@@ -12015,11 +12021,23 @@ body.netgame #revivetouch{display:flex}
               // field happily points through the wall and the zombie pushes against an "invisible wall".
               if (here && !this.lineFree(pos.x, pos.z, this.anchorX[ni], this.anchorZ[ni])) continue;
               const score = this.flow[ni] + (this.openPenalty?.[ni] || 0) + (dx && dz ? 0.2 : 0);
-              if (score < bestScore) {
-                bestScore = score;
-                tx = this.anchorX[ni]; tz = this.anchorZ[ni];
-                found = true;
+              (this._cand ||= []).push(score, ni);
+            }
+            // Best neighbour that is actually reachable in a straight line from where the body is
+            // (dynamic blockers like an open door leaf are not in the grid); else the plain best.
+            const C = this._cand || [];
+            if (C.length) {
+              let pickI = -1, firstI = -1, fs = Infinity, ps = Infinity;
+              for (let i = 0; i < C.length; i += 2) {
+                if (C[i] < fs) { fs = C[i]; firstI = C[i + 1]; }
               }
+              const order = [];
+              for (let i = 0; i < C.length; i += 2) order.push([C[i], C[i + 1]]);
+              order.sort((a, b) => a[0] - b[0]);
+              for (const [sc, ni] of order) if (this.lineFree(pos.x, pos.z, this.anchorX[ni], this.anchorZ[ni], 0.33)) { pickI = ni; ps = sc; break; }
+              const ni = pickI >= 0 ? pickI : firstI;
+              bestScore = pickI >= 0 ? ps : fs; tx = this.anchorX[ni]; tz = this.anchorZ[ni]; found = true;
+              C.length = 0;
             }
             if (!found && currentFlow < 99999) {
               for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
@@ -14003,6 +14021,174 @@ body.netgame #revivetouch{display:flex}
             M.contactAO = idx.length / 6;
           },
         };
+        // ── Doors ───────────────────────────────────────────────────────────────────────────────
+        // Hinged doors in hospital doorways (double swing doors) and forest cabins (single plank door).
+        // E (or the touch USE button) opens/closes the nearest door you face; zombies push doors
+        // open on their way through. Colliders are short boxes along the leaf line, switched on/off
+        // with the state (closed line or the open leaf), so nothing walks or shoots through a door.
+        // The navigation grid treats doorways as open, so the horde always paths through them.
+        const Doors = {
+          list: [],
+          meshes: [],
+          spring: { k: 70, c: 11 },
+          build(M) {
+            this.list = []; this.meshes = [];
+            for (const sp of M.doorSpots || []) this.add(M, sp);
+          },
+          segBoxes(M, ax, az, bx, bz, top) {
+            const n = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.22)), out = [];
+            for (let i = 0; i <= n; i++) {
+              const o = { x: ax + ((bx - ax) * i) / n, z: az + ((bz - az) * i) / n, w: 0.08, d: 0.08, top, base: 0, door: true, off: true };
+              M.obstacles.push(o); out.push(o);
+            }
+            return out;
+          },
+          add(M, sp) {
+            const { x, z, ry, width: W, height: Hh, style } = sp, leaves = style === "hospital" ? 2 : 1;
+            const ux = Math.cos(ry), uz = -Math.sin(ry), nx = Math.sin(ry), nz = Math.cos(ry); // along / normal
+            const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; M.group.add(g);
+            const lw = (W - 0.04) / leaves, d = { sp, g, leaves: [], open: 0, vel: 0, target: 0, side: 1, W, Hh, x, z, ux, uz, nx, nz, push: 0 };
+            const mat = (k) => PropKit.mat(k);
+            for (let i = 0; i < leaves; i++) {
+              const hingeX = leaves === 2 ? (i === 0 ? -W / 2 : W / 2) : -W / 2, dir = hingeX < 0 ? 1 : -1;
+              const pivot = new THREE.Group(); pivot.position.set(hingeX, 0, 0); g.add(pivot);
+              const leaf = new THREE.Mesh(new THREE.BoxGeometry(lw, Hh - 0.04, 0.055), mat(style === "hospital" ? "white" : "planks"));
+              leaf.position.set(dir * lw / 2, (Hh - 0.04) / 2 + 0.02, 0); leaf.castShadow = leaf.receiveShadow = true;
+              leaf.userData.disposableGeometry = true; leaf.userData.door = d;
+              pivot.add(leaf); this.meshes.push(leaf);
+              const deco = (k, w, h, dd, px, py) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dd), mat(k)); m.position.set(dir * px, py, 0); m.userData.disposableGeometry = true; pivot.add(m); return m; };
+              if (style === "hospital") {
+                deco("glassCar", lw * 0.42, 0.55, 0.07, lw * 0.5, Hh * 0.68);        // vision panel
+                deco("metal", lw * 0.8, 0.28, 0.065, lw * 0.5, 0.2);                  // kick plate
+                deco("metal", 0.1, 0.32, 0.09, lw - 0.12, 1.15);                      // push plate
+              } else {
+                for (const py of [0.35, Hh * 0.5, Hh - 0.35]) deco("bark", lw * 0.92, 0.1, 0.075, lw * 0.5, py); // battens
+                deco("metal", 0.06, 0.06, 0.12, lw - 0.1, 1.0);                      // latch
+              }
+              d.leaves.push({ pivot, hingeX, dir, lw });
+            }
+            const top = Hh, along = (t) => [x + ux * t, z + uz * t];
+            const [ax, az] = along(-W / 2), [bx, bz] = along(W / 2);
+            d.closed = this.segBoxes(M, ax, az, bx, bz, top);
+            d.openBoxes = { 1: [], [-1]: [] };
+            for (const s of [1, -1])
+              for (const L of d.leaves) {
+                const [hx, hz] = along(L.hingeX + L.dir * 0.04);
+                d.openBoxes[s].push(...this.segBoxes(M, hx + nx * s * 0.08, hz + nz * s * 0.08, hx + nx * s * L.lw, hz + nz * s * L.lw, top).map((o) => ((o.leaf = true), o)));
+              }
+            this.setBoxes(d);
+            this.list.push(d);
+          },
+          navPose(on) {
+            for (const d of this.list) {
+              if (!on) { this.setBoxes(d); continue; }
+              for (const o of d.closed) o.off = true;
+              for (const s of [1, -1]) for (const o of d.openBoxes[s]) o.off = true;
+            }
+          },
+          setBoxes(d) {
+            const closedOn = d.open < 0.35 && d.target === 0, openOn = d.open > 0.6;
+            for (const o of d.closed) o.off = !closedOn;
+            for (const s of [1, -1]) for (const o of d.openBoxes[s]) o.off = !(openOn && s === d.side);
+          },
+          // Which side can the leaves swing into without hitting furniture?
+          freeSide(d, pref) {
+            const M = MapManager, test = (s) => {
+              let ok = 0;
+              for (const L of d.leaves) {
+                const hx = d.x + d.ux * L.hingeX, hz = d.z + d.uz * L.hingeX;
+                for (const k of [0.45, 0.85]) {
+                  const tx = hx + d.nx * s * L.lw * k, tz = hz + d.nz * s * L.lw * k;
+                  if (!this.solidAt(tx, tz)) ok++;
+                }
+              }
+              return ok;
+            };
+            const a = test(pref), b = test(-pref);
+            return b > a ? -pref : pref;
+          },
+          solidAt(x, z) {
+            for (const o of MapManager.near(x, z, 0.1)) if (!o.door && o.top > 0.3 && Math.abs(x - o.x) < o.w + 0.06 && Math.abs(z - o.z) < o.d + 0.06) return true;
+            return false;
+          },
+          toggle(d, from) {
+            if (d.target === 0) {
+              const s = (from.x - d.x) * d.nx + (from.z - d.z) * d.nz >= 0 ? -1 : 1; // swing away from whoever opens it
+              d.side = this.freeSide(d, s);
+              d.target = 1;
+              this.sound(d, true);
+            } else {
+              d.target = 0;
+              this.sound(d, false);
+            }
+            this.setBoxes(d);
+            return true;
+          },
+          sound(d, open) {
+            const near = Math.max(0.15, 1 - Math.hypot(player.pos.x - d.x, player.pos.z - d.z) / 22);
+            if (open) { AudioManager.tone(d.sp.style === "cabin" ? 120 : 210, 0.28, "sawtooth", 0.035 * near, 40, "effects"); AudioManager.noise(0.12, 0.07 * near); }
+            else d.slamPending = true;
+          },
+          nearest(maxD = 2.4) {
+            let best = null, bd = maxD;
+            const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+            for (const d of this.list) {
+              const dx = d.x - player.pos.x, dz = d.z - player.pos.z, dist = Math.hypot(dx, dz);
+              if (dist > bd) continue;
+              if (dist > 0.8 && (dx * fx + dz * fz) / dist < 0.2) continue; // must roughly face it
+              bd = dist; best = d;
+            }
+            return best;
+          },
+          interact() {
+            if (state !== GameState.PLAYING || NetGame.active) return false;
+            const d = this.nearest();
+            if (!d) return false;
+            return this.toggle(d, player.pos);
+          },
+          update(dt) {
+            if (!this.list.length) { this.hint(null); return; }
+            const zs = ZombieManager.list;
+            for (const d of this.list) {
+              // zombies shove closed doors open
+              if (d.target === 0 && !NetGame.active) {
+                let pusher = null;
+                for (const z of zs) { if (z.dead) continue; const p = z.group.position; const rx = p.x - d.x, rz = p.z - d.z; if (Math.abs(rx * d.ux + rz * d.uz) < d.W / 2 + 0.2 && Math.abs(rx * d.nx + rz * d.nz) < 0.75 + (z.size || 1) * 0.15) { pusher = z; break; } }
+                if (pusher) { d.push += dt; if (d.push > 0.35) { d.push = 0; this.toggle(d, pusher.group.position); AudioManager.noise(0.08, 0.12); } }
+                else d.push = 0;
+              }
+              // closing never traps anyone standing in the doorway: the door bounces back open
+              if (d.target === 0 && d.open > 0.05) {
+                const inWay = (p, r) => Math.abs((p.x - d.x) * d.nx + (p.z - d.z) * d.nz) < 1.45 && Math.abs((p.x - d.x) * d.ux + (p.z - d.z) * d.uz) < d.W / 2 + r;
+                if (d.open < 0.5 && (inWay(player.pos, 0.3) || zs.some((z) => !z.dead && inWay(z.group.position, 0.3)))) { d.target = 1; d.slamPending = false; }
+              }
+              const prev = d.open;
+              d.vel += (this.spring.k * (d.target - d.open) - this.spring.c * d.vel) * dt;
+              d.open = clamp(d.open + d.vel * dt, -0.04, 1.08);
+              if (d.slamPending && d.open < 0.04 && prev >= 0.04) { d.slamPending = false; const near = Math.max(0.15, 1 - Math.hypot(player.pos.x - d.x, player.pos.z - d.z) / 22); AudioManager.noise(0.07, 0.16 * near); AudioManager.tone(70, 0.12, "triangle", 0.12 * near, 30, "effects"); }
+              if (Math.abs(d.open - prev) > 1e-4) {
+                const ang = d.open * Math.PI * 0.5;
+                for (const L of d.leaves) L.pivot.rotation.y = -L.dir * d.side * ang;
+              }
+              this.setBoxes(d);
+            }
+            const n = state === GameState.PLAYING && !NetGame.active ? this.nearest() : null;
+            this.hint(n);
+          },
+          hint(d) {
+            let el = $("doorhint");
+            if (!d) { if (el) el.classList.remove("show"); return; }
+            if (!el) {
+              el = document.createElement("button"); el.id = "doorhint"; el.type = "button";
+              el.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); Doors.interact(); });
+              document.body.appendChild(el);
+            }
+            const txt = d.target ? "Fechar porta" : "Abrir porta";
+            if (el.dataset.t !== txt) { el.dataset.t = txt; el.innerHTML = `<kbd>${touchMode ? "TOQUE" : "E"}</kbd> ${txt}`; }
+            el.classList.add("show");
+          },
+          clear() { this.list = []; this.meshes = []; this.hint(null); },
+        };
         // Shader warm-up: three.js compiles a program the first time a material/light combination
         // is drawn, which used to freeze the first explosion (10 programs, incl. a recompile of every
         // standard material because the blast-flash light pool appeared mid-fight). After each map
@@ -14673,6 +14859,7 @@ body.netgame #revivetouch{display:flex}
           },
           update(dt) {
             this.animationFrame = (this.animationFrame || 0) + 1;
+            Doors.update(dt);
             this.flowClock -= dt;
             if (this.flowClock <= 0) {
               MapManager.updateFlow();
@@ -14783,6 +14970,7 @@ body.netgame #revivetouch{display:flex}
                   );
                 z.group.rotation.y += moveTurn * Math.min(1, dt * (z.type === 1 || z.type === 7 ? 9 : 6.5));
                 const before = pos.clone();
+                MapManager.horde = true;
                 MapManager.move(pos, dir.x * speed * dt, dir.z * speed * dt, 0.35);
                 if (before.distanceToSquared(pos) < 0.000001) {
                   z.stuckAt += dt;
@@ -14793,6 +14981,7 @@ body.netgame #revivetouch{display:flex}
                     if (before.distanceToSquared(pos) > 0.000001) z.stuckAt = 0;
                   }
                 } else z.stuckAt = 0;
+                MapManager.horde = false;
                 // No-progress detection: a zombie that is moving but not closing in (sliding along a
                 // wall, looping around a prop) takes a short detour to the side and re-plans.
                 z.progressClock = (z.progressClock || 0) + dt;
@@ -20000,6 +20189,7 @@ body.netgame #revivetouch{display:flex}
               if (tmx < tmz) { cx += stepX; tmx += tdx; } else { cz += stepZ; tmz += tdz; }
               this.testCell(cx, cz, rc, out);
             }
+            if (Doors.meshes.length) rc.intersectObjects(Doors.meshes, false, out);
             if (out.length > 1) out.sort((p, q) => p.distance - q.distance);
             return out;
           },
@@ -28560,6 +28750,7 @@ body.netgame #revivetouch{display:flex}
           keys.add(c);
           if (repeat) return true;
           if (c === "KeyR") PlayerController.reload();
+          if (c === "KeyE") Doors.interact();
           if (c === "F8" && DevMode.active) DevMode.toggle();
           if (c === "KeyQ") PlayerController.ability();
           if (c === "KeyF") SecretWeaponSkills.use();
@@ -29166,6 +29357,7 @@ body.netgame #revivetouch{display:flex}
               if (!cinematic) PlayerController.update(sdt);
               if (state === GameState.PLAYING) ZombieManager.update(sdt);
               if (state === GameState.PLAYING) VoiceLines.update();
+              if (state !== GameState.PLAYING) Doors.hint(null);
               if (state === GameState.PLAYING) {
                 updateProjectiles(sdt);
                 CyborgRockets.update(sdt);
@@ -29430,6 +29622,7 @@ body.netgame #revivetouch{display:flex}
             KillFX,
             KillCam,
             VoiceLines,
+            Doors,
             DeathFX,
             TimeFX,
             BossDeath,

@@ -23,7 +23,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
       for (let i = 0; i < 600; i++) {
         const a = new V((rnd() * 2 - 1) * H, rnd() * 3, (rnd() * 2 - 1) * H), b = new V((rnd() * 2 - 1) * H, rnd() * 3, (rnd() * 2 - 1) * H);
         const d = b.clone().sub(a), L = d.length(); rc.set(a, d.normalize()); rc.far = L * (0.3 + rnd() * 0.7); rc.near = 0;
-        let t = performance.now(); const A = rc.intersectObjects(W); tA += performance.now() - t;
+        let t = performance.now(); const A = rc.intersectObjects([...W, ...(T.Doors?.meshes || [])]); tA += performance.now() - t;
         t = performance.now(); const B = T.WallCast.hits(rc); tB += performance.now() - t;
         if (A.length) hits++;
         if ((A.length > 0) !== (B.length > 0) || (A[0] && Math.abs(A[0].distance - B[0].distance) > 2e-3) || (A[0] && A[0].object !== B[0].object)) diff++;
