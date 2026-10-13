@@ -144,6 +144,8 @@
         ${this.range("weapons", "Armas", 0, 100, 1, undefined, "Tiros, recarga e golpes")}
         ${this.range("sfx", "Efeitos", 0, 100, 1, undefined, "Monstros, explosões e impactos")}
         ${this.range("ui", "Interface", 0, 100, 1, undefined, "Menus, spins e recompensas")}
+        ${this.range("voice", "Voz do personagem", 0, 100, 1, undefined, "Falas de combate do sobrevivente")}
+        ${this.check("voiceSubs", "Legendas das falas")}
       </div>`;
     },
     camera() {
@@ -231,7 +233,7 @@
       const keysOf = {
         graphics: ["profile", "graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "brightness", "fpsCap"],
         hud: ["crossStyle", "crossColor", "crossSize", "crossThick", "crossOpacity", "crossOutline", "crossDynamic", "hudScale", "minimap", "numbers", "fps"],
-        audio: ["master", "music", "ambient", "weapons", "sfx", "ui"],
+        audio: ["master", "music", "ambient", "weapons", "sfx", "ui", "voice", "voiceSubs"],
         camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "shake", "viewBob", "invert"],
       };
       if (this.tab === "controls") DR.Keybinds.reset();

@@ -3455,6 +3455,8 @@ body.netgame #revivetouch{display:flex}
             weapons: 65,
             ambient: 65,
             ui: 65,
+            voice: 80,
+            voiceSubs: true,
             music: 25,
             fov: 85,
             sensitivity: 1,
@@ -3518,6 +3520,7 @@ body.netgame #revivetouch{display:flex}
               ["weapons", 0, 100],
               ["ambient", 0, 100],
               ["ui", 0, 100],
+              ["voice", 0, 100],
               ["music", 0, 100],
               ["fov", 60, 120],
               ["shake", 0, 100],
@@ -9147,7 +9150,7 @@ body.netgame #revivetouch{display:flex}
                 this.reverb = this.ctx.createConvolver(); this.reverb.buffer = this.impulse(2.4, 2.6);
                 this.reverbIn = this.ctx.createGain(); this.reverbIn.gain.value = 0.18;
                 this.reverbIn.connect(this.reverb); this.reverb.connect(this.masterGain);
-                for (const k of ["music", "ambient", "weapons", "effects", "ui"]) {
+                for (const k of ["music", "ambient", "weapons", "effects", "ui", "voice"]) {
                   this.buses[k] = this.ctx.createGain();
                   this.buses[k].connect(this.masterGain);
                   if (k === "weapons" || k === "effects") { const send = this.ctx.createGain(); send.gain.value = k === "weapons" ? 0.55 : 0.4; this.buses[k].connect(send); send.connect(this.reverbIn); }
@@ -9171,6 +9174,7 @@ body.netgame #revivetouch{display:flex}
             this.buses.ui.gain.value = (s.ui / 100) * 0.45;
             this.buses.ambient.gain.value = (s.ambient / 100) * 0.45;
             this.buses.music.gain.value = (s.music / 100) * 0.12;
+            this.buses.voice.gain.value = ((s.voice ?? 80) / 100) * 0.9;
           },
           out(bus) {
             return this.buses[bus || this.route] || this.sfxGain;
@@ -13434,6 +13438,88 @@ body.netgame #revivetouch{display:flex}
         }
         // Hand-grenade throw: raise it, pull the pin with the teeth, wind up and release. The
         // projectile leaves exactly on the release frame; the gun is blocked until the arm is back.
+        // ── Survivor voice (combat barks) ─────────────────────────────────────────────────────────
+        // Same structure the big co-op shooters use (L4D/Back 4 Blood/CoD "battle chatter"):
+        // event barks with a priority, a per-category cooldown, a global minimum gap so lines never
+        // stack, no immediate repeats, and an idle line roughly every 40 s when nothing else was said.
+        // Audio comes from audio/vo/<id>.mp3 (ElevenLabs, see tools/gen_voice_lines.py); a missing
+        // file still shows the subtitle, so the system works before the recordings are added.
+        const VoiceLines = {
+          LINES: {
+            idle: [["idle_bora", "Bora, bora! Vamos nessa!"], ["idle_letsgo", "Let's go!"], ["idle_esperto", "Fica esperto, tem mais vindo."], ["idle_silencio", "Silêncio demais... não gosto disso."], ["idle_cabeca", "Calma. Mira na cabeça."], ["idle_sobreviver", "A gente vai sair dessa."]],
+            wave: [["wave_vem", "Lá vêm eles!"], ["wave_horda", "Prepara! Vem horda!"]],
+            clear: [["clear_limpo", "Limpo! Respira."], ["clear_onda", "Mais uma onda no chão!"]],
+            reload: [["reload_recarregando", "Recarregando!"], ["reload_cobre", "Me cobre, tô recarregando!"]],
+            empty: [["empty_sem", "Sem munição!"]],
+            streak: [["streak_isso", "Isso aí!"], ["streak_chance", "Sem chance pra vocês!"], ["streak_fila", "Pode vir em fila!"]],
+            headshot: [["head_cabeca", "Na cabeça!"], ["head_limpo", "Tiro limpo!"]],
+            hurt: [["hurt_ferido", "Tô ferido!"], ["hurt_cura", "Preciso de cura, rápido!"]],
+            boss: [["boss_vista", "Chefe à vista! Foco nele!"], ["boss_grande", "Esse aí é grande..."]],
+            bossdown: [["bossdown_caiu", "Caiu! O grandão caiu!"]],
+            grenade: [["grenade_granada", "Granada!"], ["grenade_sai", "Sai de perto!"]],
+            door: [["door_porta", "Porta aberta."]],
+          },
+          PRIO: { boss: 5, bossdown: 5, hurt: 4, empty: 3, wave: 3, clear: 3, grenade: 3, streak: 2, headshot: 2, reload: 1, door: 0, idle: 0 },
+          COOLDOWN: { idle: 0, wave: 0, clear: 0, reload: 14, empty: 10, streak: 9, headshot: 12, hurt: 20, boss: 0, bossdown: 0, grenade: 10, door: 30 },
+          buffers: new Map(),
+          missing: new Set(),
+          last: {},
+          lastId: {},
+          until: 0,
+          idleAt: 40,
+          ready: false,
+          load() {
+            if (this.ready || !AudioManager.ctx) return;
+            this.ready = true;
+            for (const list of Object.values(this.LINES))
+              for (const [id] of list)
+                fetch(`audio/vo/${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => AudioManager.ctx.decodeAudioData(b)).then((buf) => this.buffers.set(id, buf)).catch(() => this.missing.add(id));
+          },
+          reset() { this.last = {}; this.until = 0; this.idleAt = simulationTime + 38 + Math.random() * 6; this.hide(); },
+          say(cat, chance = 1) {
+            const list = this.LINES[cat];
+            if (!list || state !== GameState.PLAYING || Math.random() > chance) return false;
+            const now = simulationTime, prio = this.PRIO[cat] ?? 0;
+            if (now < this.until && !(prio >= 4 && this.current && prio > (this.PRIO[this.current] ?? 0))) return false;
+            if (now - (this.last[cat] ?? -999) < (this.COOLDOWN[cat] ?? 8)) return false;
+            const pool = list.length > 1 ? list.filter(([id]) => id !== this.lastId[cat]) : list;
+            const [id, text] = pool[Math.floor(Math.random() * pool.length)];
+            this.last[cat] = now; this.lastId[cat] = id; this.current = cat;
+            const buf = this.buffers.get(id), dur = buf ? buf.duration : 0.6 + text.length * 0.055;
+            this.until = now + dur + 2.5; // global gap: never two lines back to back
+            this.idleAt = now + 38 + Math.random() * 6;
+            if (buf && AudioManager.ctx) {
+              try {
+                this.stop();
+                const A = AudioManager.ctx, src = A.createBufferSource(), g = A.createGain();
+                src.buffer = buf; g.gain.value = 1;
+                src.connect(g); g.connect(AudioManager.buses.voice || AudioManager.masterGain);
+                src.start(); this.src = src;
+                // duck the music under the line
+                const mg = AudioManager.buses.music?.gain, base = ((SettingsManager.data.music ?? 25) / 100) * 0.12;
+                if (mg) { mg.cancelScheduledValues(A.currentTime); mg.setTargetAtTime(base * 0.35, A.currentTime, 0.05); mg.setTargetAtTime(base, A.currentTime + buf.duration, 0.3); }
+              } catch {}
+            }
+            this.subtitle(text, dur);
+            this.lastLine = { cat, id, text, audio: !!buf, at: now };
+            return true;
+          },
+          stop() { try { this.src?.stop(); } catch {} this.src = null; },
+          subtitle(text, dur) {
+            if (SettingsManager.data.voiceSubs === false) return;
+            let el = $("vosub");
+            if (!el) { el = document.createElement("div"); el.id = "vosub"; document.body.appendChild(el); }
+            el.innerHTML = `<b>Você:</b> ${text}`;
+            el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+            clearTimeout(this.hideT); this.hideT = setTimeout(() => this.hide(), (dur + 0.8) * 1000);
+          },
+          hide() { $("vosub")?.classList.remove("show"); },
+          update() {
+            if (state !== GameState.PLAYING) return;
+            if (!this.ready) this.load();
+            if (simulationTime >= this.idleAt) { if (!this.say("idle")) this.idleAt = simulationTime + 4; }
+          },
+        };
         const GrenadeThrow = {
           active: false,
           t: 0,
@@ -15159,6 +15245,7 @@ body.netgame #revivetouch{display:flex}
             if (state !== GameState.PLAYING || KillCam.active || BossDeath.active || NetGame.down || NetGame.dead) return;
             player.hp -= amount;
             HitDir.hit(HitDir.source(amount));
+            if (player.hp > 0 && player.hp < (player.maxhp || 100) * 0.3) VoiceLines.say("hurt");
             Director.damage(amount);
             player.lastDamage = simulationTime;
             hurtUntil = Math.max(hurtUntil, simulationTime + 0.16);
@@ -19643,6 +19730,8 @@ body.netgame #revivetouch{display:flex}
               2.5,
             );
             AudioManager.tone(180, 0.8, "triangle", 0.4, 60);
+            if (this.wave === 1) VoiceLines.reset();
+            VoiceLines.say(this.bossPending ? "boss" : "wave", this.bossPending ? 1 : 0.7);
             RunStats.waveStarted();
             NetGame.hostEvent("wave", { n: this.wave, mut: MutationManager.current?.id || null });
           },
@@ -19794,6 +19883,7 @@ body.netgame #revivetouch{display:flex}
                 MutationManager.finishWave();
                 const waveCoins = RunStats.waveCleared(this.wave, true);
                 UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · Onda ${this.wave + 1} chegando…`, 2.4);
+                VoiceLines.say("clear", 0.8);
                 AudioManager.coin();
                 AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
               } else if (simulationTime - this.clearedAt >= 3) {
@@ -21162,6 +21252,7 @@ body.netgame #revivetouch{display:flex}
             }
             reloadEnd = simulationTime + w.reload;
             AudioManager.tone(180, 0.12, "square", 0.12, 80, "weapons");
+            VoiceLines.say(w.ammo === 0 ? "empty" : "reload", w.ammo === 0 ? 0.6 : 0.4);
           },
           switch(slot) {
             if (!player.inventory[slot] || slot === player.slot) return;
@@ -21240,6 +21331,7 @@ body.netgame #revivetouch{display:flex}
             }
             if (GrenadeThrow.active) return;
             if (!DevMode.on("infiniteGrenades")) player.grenades--;
+            VoiceLines.say("grenade", 0.5);
             GrenadeThrow.start(() => {
               if (state !== GameState.PLAYING && !NetGame.active) return;
               const dir = forward(),
@@ -22999,6 +23091,9 @@ body.netgame #revivetouch{display:flex}
             const now = performance.now() / 1000;
             this.streak = now - this.lastKill < 1.6 ? this.streak + 1 : 1;
             this.lastKill = now;
+            if (z.boss) VoiceLines.say("bossdown");
+            else if (this.streak >= 3) VoiceLines.say("streak", 0.7);
+            else if (head) VoiceLines.say("headshot", 0.25);
             const mark = $("killmark");
             mark.classList.remove("show", "head");
             void mark.offsetWidth; // restart the CSS animation
@@ -29070,6 +29165,7 @@ body.netgame #revivetouch{display:flex}
               const cinematic = !!KillCam.active || !!BossDeath.active;
               if (!cinematic) PlayerController.update(sdt);
               if (state === GameState.PLAYING) ZombieManager.update(sdt);
+              if (state === GameState.PLAYING) VoiceLines.update();
               if (state === GameState.PLAYING) {
                 updateProjectiles(sdt);
                 CyborgRockets.update(sdt);
@@ -29333,6 +29429,7 @@ body.netgame #revivetouch{display:flex}
             AudioManager,
             KillFX,
             KillCam,
+            VoiceLines,
             DeathFX,
             TimeFX,
             BossDeath,
