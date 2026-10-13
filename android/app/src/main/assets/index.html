@@ -10948,6 +10948,15 @@ body.netgame #revivetouch{display:flex}
               }
             }
             if (!model) K.hard("snow", [x, top + 0.05, z], [1.2, 0.35, 1.2], null, 1.4);
+            // Packed-snow shell inside the block courses: closes every seam between blocks so the
+            // dome reads as one solid igloo (no sky or light leaking through), doorway left open.
+            {
+              const sm = (M._iglooShellMat ||= (() => { const m = PropKit.mat("snow").clone(); m.side = THREE.DoubleSide; m.color = new THREE.Color(0xdfe8f2); m.userData = { ...(m.userData || {}), disposable: true }; return m; })());
+              const doorH = 0.25 + Math.sin((4 / courses) * Math.PI * 0.5) * (top - 0.3), th = Math.acos(clamp(doorH / top, 0, 1)), gap = 0.42;
+              const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 10, 0, Math.PI * 2, 0, th), sm);
+              const band = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 8, Math.PI - facing + gap, Math.PI * 2 - gap * 2, th, Math.PI / 2 - th), sm);
+              for (const m of [cap, band]) { m.position.set(x, 0, z); m.scale.set(R - 0.12, top - 0.08, R - 0.12); m.receiveShadow = true; m.userData.disposableGeometry = true; M.group.add(m); }
+            }
             // Entrance tunnel (2.1 m tall inside).
             const tr = tr0;
             for (const sd of [-1, 1]) {
