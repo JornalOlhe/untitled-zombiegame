@@ -29529,7 +29529,9 @@ body.netgame #revivetouch{display:flex}
           // Never cap 60 Hz gameplay at 58: that drops alternate vsync frames.
           if (nativeAndroid && state !== GameState.PLAYING && now - lastFrame < 1000 / 30 - 1) return;
           const wallDt = Math.max(0.001, (now - lastFrame) / 1000);
-          const dt = Math.min(0.05, wallDt);
+          // window.__fixedDt (test/recording only): advance the simulation a fixed step per rendered
+          // frame, so slow software renderers still produce smooth, retimable gameplay captures.
+          const dt = Math.min(0.05, window.__fixedDt || wallDt);
           const perfT0 = performance.now();
           lastFrame = now;
           menuTime += dt;
