@@ -22050,7 +22050,10 @@ body.netgame #revivetouch{display:flex}
               flyingNow = !!classBurst().flight || devFly;
             // Sprint builds up gradually (GroundMotion.sprintMultiplier); it only charges while
             // actually moving, not aiming and not crouched.
-            const sprintHeld = keys.has("ShiftLeft") && Math.hypot(x, z) > 0.1 && !mouse.aim && !crouched && !player.climb;
+            // Mobile auto-sprint (CoD Mobile / Fortnite style): pushing the stick to its rim mostly
+            // forward runs; no separate sprint button to hold with the movement thumb.
+            const touchSprint = touchMode && Math.hypot(touchMove.x, touchMove.y) > 0.9 && touchMove.y < -0.6;
+            const sprintHeld = (keys.has("ShiftLeft") || touchSprint) && Math.hypot(x, z) > 0.1 && !mouse.aim && !crouched && !player.climb;
             const sprintMult = this.motion.sprintMultiplier(sprintHeld, dt);
             let walkSpeed =
               5.6 *
@@ -29320,6 +29323,13 @@ body.netgame #revivetouch{display:flex}
         bindHoldButton("firetouch", () => { mouse.down = true; }, () => { mouse.down = false; });
         bindHoldButton("revivetouch", () => { touchRevive = true; }, () => { touchRevive = false; });
         bindHoldButton("sprinttouch", () => keys.add("ShiftLeft"), () => keys.delete("ShiftLeft"));
+        // Tap a weapon chip in the HUD to switch to it (touch); no extra "switch" thumb travel needed.
+        $("slotshud").addEventListener("pointerdown", (e) => {
+          const slot = e.target.closest(".slot");
+          if (!slot || state !== GameState.PLAYING) return;
+          const i = [...$("slotshud").children].indexOf(slot);
+          if (i >= 0 && player.inventory[i]) { e.preventDefault(); e.stopPropagation(); PlayerController.switch(i); }
+        });
         $("moretouch").onpointerdown = (e) => {
           if (state !== GameState.PLAYING) return;
           e.preventDefault();

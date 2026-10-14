@@ -924,3 +924,69 @@ button[aria-pressed="true"],.mode-card.selected,#mapcards .card.selected,.story-
 #storyscreen .story-reward-card small{margin:3px 0 0}
 #storyscreen .story-reward-card button{flex:none;padding:8px 12px}
 #storyscreen .container{padding-bottom:84px}
+
+/* ───────────────────────── Mobile HUD rework (v54) ─────────────────────────
+   Modelled on CoD Mobile / PUBG Mobile / Free Fire / Fortnite mobile:
+   · left thumb = movement only (floating stick, auto-sprint at the rim)
+   · right thumb = one big FIRE button with the frequent actions in an arc around it
+     (aim, reload, jump above, crouch), rarer actions one ring further out (skill, grenade, weapon skill)
+   · icons only, translucent, no overlapping; contextual buttons (revive, door) appear only when usable
+   · info lives at the edges: map + HP top-left, wave top-centre, coins/pause top-right,
+     weapon chips bottom-centre (tap to switch) */
+body.touch-ui{--tS:clamp(40px,11.5vh,52px);--tF:clamp(70px,21vh,90px);--tR:max(14px,calc(env(safe-area-inset-right) + 10px));--tB:max(12px,calc(env(safe-area-inset-bottom) + 8px));--tL:max(10px,calc(env(safe-area-inset-left) + 8px));--tT:max(8px,calc(env(safe-area-inset-top) + 6px))}
+body.touch-ui #touch .touch-btn{--size:var(--tS)!important;width:var(--size)!important;height:var(--size)!important;min-width:0!important;padding:0!important;border-radius:50%!important;background:rgba(14,18,22,.46)!important;border:1.5px solid rgba(255,255,255,.28)!important;box-shadow:0 2px 10px rgba(0,0,0,.45)!important;backdrop-filter:none!important;opacity:.9;display:flex;align-items:center;justify-content:center;left:auto!important;top:auto!important;transform:none!important}
+body.touch-ui #touch .touch-btn:active,body.touch-ui #touch .touch-btn.pressed{background:rgba(240,199,119,.35)!important;border-color:#f0c777!important;opacity:1}
+body.touch-ui #touch .touch-btn .touch-label{display:none!important}
+body.touch-ui #touch .touch-btn .touch-icon{font-size:calc(var(--size)*.42);line-height:1;margin:0}
+body.touch-ui #touch .touch-btn small{position:absolute;bottom:-3px;right:-3px;min-width:16px;padding:1px 4px;border-radius:8px;background:#0b0e11;border:1px solid #ffffff33;font:700 9px/1.2 var(--mono,monospace);color:#f0c777;display:block!important}
+/* right-hand arc */
+body.touch-ui #touch #firetouch{--size:var(--tF)!important;right:var(--tR)!important;bottom:var(--tB)!important;background:rgba(170,30,26,.62)!important;border-color:rgba(255,120,110,.6)!important}
+body.touch-ui #touch #firetouch .touch-icon{font-size:calc(var(--tF)*.4)}
+body.touch-ui #touch #aimtouch{right:calc(var(--tR) + var(--tF) + 10px)!important;bottom:calc(var(--tB) + var(--tF)*.38)!important}
+body.touch-ui #touch #rtouch{right:calc(var(--tR) + var(--tF)*.72 + 6px)!important;bottom:calc(var(--tB) + var(--tF) + 6px)!important}
+body.touch-ui #touch #jumptouch{right:var(--tR)!important;bottom:calc(var(--tB) + var(--tF) + var(--tS)*.55 + 16px)!important}
+body.touch-ui #touch #crouchtouch{right:calc(var(--tR) + var(--tF) + 10px)!important;bottom:calc(var(--tB) - 2px)!important;--size:calc(var(--tS)*.86)!important;display:flex!important}
+/* outer ring: rarer actions */
+body.touch-ui #touch #qtouch{right:calc(var(--tR) + var(--tF) + var(--tS) + 22px)!important;bottom:calc(var(--tB) + var(--tF)*.62)!important;display:flex!important;background:rgba(90,70,160,.42)!important;border-color:rgba(190,170,255,.5)!important}
+body.touch-ui #touch #grenadetouch{right:calc(var(--tR) + var(--tF) + var(--tS) + 22px)!important;bottom:calc(var(--tB) + 2px)!important;--size:calc(var(--tS)*.86)!important;display:flex!important}
+body.touch-ui #touch #weaponabilitytouch{right:calc(var(--tR) + var(--tF)*.72 + var(--tS) + 14px)!important;bottom:calc(var(--tB) + var(--tF) + var(--tS)*.65 + 12px)!important;--size:calc(var(--tS)*.8)!important;display:flex!important}
+body.touch-ui #touch #switchtouch,body.touch-ui #touch #sprinttouch,body.touch-ui #touch #moretouch{display:none!important}
+body.touch-ui #touch #revivetouch{display:none!important}
+body.touch-ui.netgame #touch #revivetouch{display:flex!important;right:calc(var(--tR) + var(--tF) + 2*var(--tS) + 36px)!important;bottom:calc(var(--tB) + var(--tF)*.5)!important;background:rgba(40,140,70,.5)!important}
+body.touch-ui #touch #pausetouch{--size:clamp(34px,9vh,42px)!important;right:var(--tR)!important;top:var(--tT)!important;bottom:auto!important}
+/* left thumb */
+body.touch-ui #movezone{left:0!important;top:30%!important;width:40%!important;height:70%!important}
+body.touch-ui #looktouch{left:40%!important;top:12%!important;bottom:0!important;right:0!important}
+body.touch-ui #stick{--stick-size:clamp(88px,27vh,116px)!important;left:calc(var(--tL) + 10vw)!important;top:74dvh!important;opacity:.75}
+body.touch-ui #pinchhint{display:none!important}
+/* information at the edges */
+body.touch-ui #minimap{display:block!important;left:var(--tL)!important;top:var(--tT)!important;right:auto!important;bottom:auto!important;width:clamp(64px,19vh,84px)!important;height:clamp(64px,19vh,84px)!important;opacity:.85}
+body.touch-ui .hud-top{left:calc(var(--tL) + clamp(64px,19vh,84px) + 10px)!important;right:calc(var(--tR) + 50px)!important;top:var(--tT)!important}
+body.touch-ui #classhud,body.touch-ui #missiontracker,body.touch-ui #abilityhud,body.touch-ui #statusline{display:none!important}
+body.touch-ui .wave{font-size:13px!important;line-height:1.15}
+body.touch-ui .wave small{font-size:10px!important}
+body.touch-ui .wave .mutation{display:none!important}
+body.touch-ui #wallethud{font-size:12px!important}
+body.touch-ui #wallethud small{display:none!important}
+body.touch-ui #feed{top:calc(var(--tT) + 44px)!important;right:calc(var(--tR) + 2px)!important;transform:scale(.82);transform-origin:top right;max-width:42vw}
+body.touch-ui .hud-bottom{left:50%!important;right:auto!important;bottom:var(--tB)!important;transform:translateX(-58%)!important;width:auto!important;display:flex!important;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+body.touch-ui #healthhud{order:2;transform:scale(.8);transform-origin:bottom center;margin:0!important}
+body.touch-ui #healthhud .hint{display:none!important}
+body.touch-ui #slotshud{order:1;display:flex!important;gap:4px;pointer-events:auto}
+body.touch-ui #slotshud .slot{min-width:0!important;width:auto!important;padding:4px 8px!important;font-size:10px!important;opacity:.62;transform:none!important}
+body.touch-ui #slotshud .slot.active{opacity:1;padding:5px 10px!important}
+body.touch-ui #slotshud .slot .tier,body.touch-ui #slotshud .slot .slot-key{display:none!important}
+body.touch-ui #announcement strong{font-size:clamp(22px,8vh,34px)!important}
+body.touch-ui #announcement span{font-size:11px!important}
+body.touch-ui #doorhint{top:calc(50% + 34px)}
+body.touch-ui #vosub{bottom:calc(var(--tB) + 70px);font-size:12px;max-width:44vw}
+@media (orientation:portrait){body.touch-ui{--tS:clamp(44px,12vw,56px);--tF:clamp(76px,21vw,96px)}body.touch-ui .hud-bottom{transform:translateX(-50%)!important;bottom:calc(var(--tB) + var(--tF) + 30px)!important}}
+body.touch-ui #slotshud .slot{display:flex;align-items:baseline;gap:6px}
+body.touch-ui #slotshud .slot b{font-size:10px!important}
+body.touch-ui #slotshud .slot .ammo{font-size:16px!important}
+body.touch-ui #slotshud .slot.active .ammo{font-size:22px!important}
+body.touch-ui #touch #qtouch small{font-size:8px;bottom:-6px;right:50%;transform:translateX(50%)}
+html.native-android body.touch-ui #slotshud{max-width:none!important;overflow:visible}
+html.native-android body.touch-ui #slotshud .slot{display:flex!important;min-width:0!important;max-width:none!important}
+body.touch-ui #slotshud .slot:not(.active) .ammo,body.touch-ui #slotshud .slot .mag,body.touch-ui #slotshud .slot .reload{display:none!important}
+body.touch-ui #slotshud .slot b{white-space:nowrap;max-width:72px;overflow:hidden;text-overflow:ellipsis}
