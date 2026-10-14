@@ -6042,7 +6042,8 @@ body.netgame #revivetouch{display:flex}
             UIManager.screen("seasonscreen");
             this.render();
             if (Account.signedIn() && DR.Backend.isOnline()) {
-              try { this.server = await DR.SeasonRepository.state(); } catch (e) { $("season-note").textContent = "Não foi possível carregar o passe do servidor: " + e.message; }
+              this.err = "";
+              try { this.server = await DR.SeasonRepository.state(); } catch (e) { this.err = "Passe da conta indisponível agora (servidor): " + e.message; }
               this.render();
             }
           },
@@ -6072,7 +6073,7 @@ body.netgame #revivetouch{display:flex}
             $("season-tier").textContent = `Nível ${tier}`;
             $("season-bar").style.width = `${(into / this.TIER_XP) * 100}%`;
             $("season-xp").textContent = tier >= this.TIERS ? "Passe completo!" : `${into} / ${this.TIER_XP} XP`;
-            $("season-note").textContent = Account.signedIn() ? "Progresso salvo na sua conta." : "Visitante: o progresso fica neste aparelho. Entre na conta para salvar na nuvem.";
+            $("season-note").textContent = Account.signedIn() ? (this.err || "Progresso salvo na sua conta.") : "Visitante: o progresso fica neste aparelho. Entre na conta para salvar na nuvem.";
             let html = "";
             for (let t = 1; t <= this.TIERS; t++) {
               const r = this.reward(t), got = st.claimed.includes(t), open = st.xp >= t * this.TIER_XP, big = t % 10 === 0;

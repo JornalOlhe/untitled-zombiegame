@@ -123,6 +123,7 @@
         l.status = "in_game";
         l.seed = Math.floor(Math.random() * 2e9);
         l.startedAt = Date.now();
+        for (const p of l.players) p.lastSeen = l.startedAt;
         return this.json(l);
       });
     },
@@ -132,12 +133,15 @@
         const p = l?.players.find((x) => x.userId === this.me.id);
         if (!p) this.fail("not_in_lobby");
         p.lastSeen = Date.now();
-        for (const x of [...l.players]) if (Date.now() - x.lastSeen > 45000) this.removeFrom(l, x.userId);
-        const host = l.players.find((x) => x.userId === l.hostId);
         // Host migration must use the same grace window as stale-player eviction. A short 15 s
         // threshold promotes a guest while the real host is still loading a heavy map / throttled
-        // by the browser, producing two competing hosts and reconnect loops mid-match.
-        const hostGrace = 45000;
+        // by the browser, producing two competing hosts and reconnect loops mid-match. The first
+        // 2.5 min after START (everyone compiling shaders / building the map, slow phones) get a
+        // longer window so a host that is merely busy loading is never evicted.
+        const loading = l.startedAt && Date.now() - l.startedAt < 150000;
+        const hostGrace = loading ? 150000 : 45000;
+        for (const x of [...l.players]) if (Date.now() - x.lastSeen > hostGrace) this.removeFrom(l, x.userId);
+        const host = l.players.find((x) => x.userId === l.hostId);
         if (!host || Date.now() - host.lastSeen > hostGrace) {
           const fresh = [...l.players].filter((x) => Date.now() - x.lastSeen < hostGrace).sort((a, b) => a.joinedAt - b.joinedAt)[0];
           if (fresh) l.hostId = fresh.userId;

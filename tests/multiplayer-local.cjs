@@ -22,10 +22,11 @@ const server = http.createServer((req, res) => {
 const shots = process.env.MONSTER_SHOTS !== '0';
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
+  const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] });
   try {
     fs.mkdirSync('test-results', { recursive: true });
-    const context = await browser.newContext({ viewport: { width: 960, height: 540 } });
+    const context = await browser.newContext({ viewport: { width: 640, height: 360 } });
+    context.setDefaultTimeout(150000);
     const base = `http://127.0.0.1:${server.address().port}/?test=1&net=local`;
     const open = async (name) => {
       const page = await context.newPage();
@@ -36,7 +37,11 @@ const shots = process.env.MONSTER_SHOTS !== '0';
       return page;
     };
     const host = await open('Henrique');
+    // Pause the host's render loop while the second client boots (2 game instances on a
+    // software GPU otherwise starve each other), then resume it.
+    await host.evaluate(() => { window.__manual = true; });
     const guest = await open('Miguel');
+    await host.evaluate(() => { window.__manual = false; });
     const T = (page, fn, arg) => page.evaluate(fn, arg);
 
     console.log('step:', 'Lobby: host creates, guest joins with the code.');

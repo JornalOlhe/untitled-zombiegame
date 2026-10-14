@@ -153,8 +153,15 @@
   };
 
   const RunRepository = {
+    // Falls back to the pre-v48 RPC when the server has not received the story migration yet,
+    // so co-op/arcade never break on a partially migrated backend.
     start: (mode, map, difficulty, lobbyId = null, requestId = uuid(), storyLevel = null) =>
-      Backend.rpc("run_start_v48", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId, p_story_level: Number.isInteger(storyLevel) ? storyLevel : null }),
+      Backend.rpc("run_start_v48", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId, p_story_level: Number.isInteger(storyLevel) ? storyLevel : null })
+        .catch((e) => {
+          if (!Number.isInteger(storyLevel) && /run_start_v48|PGRST202|could not find the function/i.test(String(e?.detail || e?.message || "")))
+            return Backend.rpc("run_start", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId });
+          throw e;
+        }),
     report: (runId, report, ended = false, result = null, requestId = uuid()) =>
       Backend.rpc("run_report", { p_run: runId, p_report: report, p_ended: ended, p_result: result, p_request: requestId }),
     submitOffline: (requestId, report) => Backend.rpc("run_submit_offline", { p_request: requestId, p_report: report }),
