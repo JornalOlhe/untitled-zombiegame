@@ -736,6 +736,9 @@
       .crosshair.st-circle .ch-ring { display: block; }
       .crosshair.st-t i:nth-child(3) { display: none; }
       .crosshair.melee i { opacity: .55; }
+      .crosshair.target { --ch-color: #ff3b30; }
+      .crosshair.target i:nth-child(1) { transform: translateX(-2px); } .crosshair.target i:nth-child(2) { transform: translateX(2px); }
+      .crosshair.target i:nth-child(3) { transform: translateY(-2px); } .crosshair.target i:nth-child(4) { transform: translateY(2px); }
       .ch-preview { position: relative; width: 120px; height: 56px; background: linear-gradient(135deg,#5b6b74,#c9d3d8 55%,#2a3036); border: 1px solid #ffffff22; display: inline-block; }
       .ch-preview .crosshair { top: 50%; left: 50%; }
       #dmgdir { position:absolute; inset:0; pointer-events:none; }
@@ -3349,9 +3352,9 @@ body.netgame #revivetouch{display:flex}
           { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
             ability:"Hellfire", cd:30, requiredKills:25, secretFlight:"demon",
             desc:"Poder bruto: +170% de dano, +60% de vida máxima, recebe 40% menos dano e cada eliminação rouba 4 HP. Chifres e cauda demoníaca exclusivos.",
-            active:"Com 25 eliminações: Erupção Infernal (900 de dano em 8 m) e 15 s de voo. Em voo, +230% de dano e chovem meteoros de enxofre a cada 0,85 s (220 de dano em área). A cauda estala como chicote na decolagem.",
+            active:"Com 25 eliminações: abre uma Poça Infernal de 7 m ao seu redor por 12 s (desacelera monstros comuns — não chefes/minibosses — e causa 10 de dano a cada 0,25 s) e voa por 15 s com +230% de dano. Em voo, com a Demonic Fury, o ataque vira arremesso: a foice gira, corta tudo no caminho e volta ao bater no chão, numa estrutura ou depois de 6 monstros.",
             effects:{ damage:2.70, maxHp:1.60, damageTaken:0.60, killHeal:4 },
-            burst:{ duration:15, flight:"demon", nova:900, novaRadius:8, damageTotal:3.30 } },
+            burst:{ duration:15, flight:"demon", hellPool:{ radius:7, duration:12 }, damageTotal:3.30 } },
         ];
         const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
         const classOf = () => classes[selectedClass] || classes[0];
@@ -5753,6 +5756,7 @@ body.netgame #revivetouch{display:flex}
           next: 0,
           meteors: [],
           update(dt) {
+            this.updatePools();
             for (let i = this.meteors.length - 1; i >= 0; i--) {
               const m = this.meteors[i];
               m.t += dt;
@@ -5767,15 +5771,64 @@ body.netgame #revivetouch{display:flex}
             const f = classBurst().flight;
             if (!f || state !== GameState.PLAYING) { this.next = 0; return; }
             if (ClassAscend.since() < ClassAscend.END || simulationTime < this.next) return;
-            const angel = f === "angel", p = player.pos, R = angel ? 20 : 16;
-            this.next = simulationTime + (angel ? 1.1 : 0.85);
+            if (f !== "angel") return; // Archdemon's flight power is the thrown scythe (ScytheThrow)
+            const p = player.pos, R = 20;
+            this.next = simulationTime + 1.1;
             const near = ZombieManager.list.filter((z) => !z.dead && Math.hypot(z.group.position.x - p.x, z.group.position.z - p.z) < R);
             if (!near.length) return;
-            if (angel) {
-              let best = near[0], bd = 1e9;
-              for (const z of near) { const d = z.group.position.distanceToSquared(p); if (d < bd) { bd = d; best = z; } }
-              this.smite(best);
-            } else this.meteor(near[(Math.random() * near.length) | 0]);
+            let best = near[0], bd = 1e9;
+            for (const z of near) { const d = z.group.position.distanceToSquared(p); if (d < bd) { bd = d; best = z; } }
+            this.smite(best);
+          },
+          // Archdemon cast: a circular hell pool left where he stood. Every 0.25 s it burns 10 HP
+          // off anything inside and slows ordinary monsters (bosses and minibosses are not slowed).
+          pools: [],
+          poolTex() {
+            if (this._poolTex) return this._poolTex;
+            const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d");
+            const g = x.createRadialGradient(128, 128, 10, 128, 128, 128);
+            g.addColorStop(0, "rgba(255,120,30,0.95)"); g.addColorStop(0.55, "rgba(200,30,10,0.8)"); g.addColorStop(0.9, "rgba(90,0,0,0.75)"); g.addColorStop(1, "rgba(40,0,0,0)");
+            x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+            // molten cracks
+            x.strokeStyle = "rgba(255,210,90,0.9)"; x.lineWidth = 2.2;
+            for (let k = 0; k < 14; k++) {
+              let a = (k / 14) * Math.PI * 2 + Math.random() * 0.3, r = 18 + Math.random() * 20, px = 128 + Math.cos(a) * r, py = 128 + Math.sin(a) * r;
+              x.beginPath(); x.moveTo(px, py);
+              for (let s = 0; s < 6; s++) { a += (Math.random() - 0.5) * 0.6; r += 12 + Math.random() * 8; px = 128 + Math.cos(a) * r; py = 128 + Math.sin(a) * r; x.lineTo(px, py); }
+              x.stroke();
+            }
+            return (this._poolTex = new THREE.CanvasTexture(c));
+          },
+          pool(radius, duration) {
+            const base = new V(player.pos.x, (player.ground || 0) + 0.06, player.pos.z);
+            const mesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 48), new THREE.MeshBasicMaterial({ map: this.poolTex(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3 }));
+            mesh.rotation.x = -Math.PI / 2; mesh.position.copy(base); scene.add(mesh);
+            const rim = new THREE.Mesh(new THREE.RingGeometry(radius * 0.96, radius, 64), new THREE.MeshBasicMaterial({ color: 0xff4a12, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+            rim.rotation.x = -Math.PI / 2; rim.position.copy(base).setY(base.y + 0.01); scene.add(rim);
+            this.pools.push({ pos: base, r: radius, t0: simulationTime, end: simulationTime + duration, next: simulationTime, mesh, rim });
+            MonsterFX.ring(base, radius, 0xff3a14, 0.6).mesh.position.y = base.y + 0.02;
+            shake = Math.max(shake, 0.3);
+            AudioManager.tone(70, 0.8, "sawtooth", 0.2, 40, "weapons");
+          },
+          updatePools() {
+            for (let i = this.pools.length - 1; i >= 0; i--) {
+              const P = this.pools[i], age = simulationTime - P.t0, left = P.end - simulationTime;
+              const fade = Math.min(1, age / 0.35) * Math.min(1, left / 0.8);
+              P.mesh.material.opacity = (0.62 + 0.12 * Math.sin(simulationTime * 5)) * fade;
+              P.mesh.rotation.z += 0.004;
+              P.rim.material.opacity = 0.75 * fade;
+              if (left <= 0) { for (const m of [P.mesh, P.rim]) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); } this.pools.splice(i, 1); continue; }
+              if (Math.random() < 0.5) { const a = rand(0, 6.28), r = Math.sqrt(Math.random()) * P.r; ParticleSystem.emit(P.pos.clone().add(new V(Math.cos(a) * r, 0.15, Math.sin(a) * r)), Math.random() < 0.5 ? 0xff5a14 : 0x3a0606, 1, 1.4); }
+              if (simulationTime < P.next || state !== GameState.PLAYING) continue;
+              P.next += 0.25;
+              for (const z of [...ZombieManager.list]) {
+                if (z.dead) continue;
+                const d = Math.hypot(z.group.position.x - P.pos.x, z.group.position.z - P.pos.z);
+                if (d > P.r + (z.size || 1) * 0.3) continue;
+                if (!z.boss) ZombieManager.applySlow(z, 0.6, 0.4);
+                ZombieManager.hit(z, 10, false, null, null, true);
+              }
+            }
           },
           smite(z) {
             const at = z.group.position.clone();
@@ -5814,7 +5867,124 @@ body.netgame #revivetouch{display:flex}
             PhysicsProps.impulse(base, radius, 9);
             shake = Math.max(shake, 0.4);
           },
-          clear() { for (const m of this.meteors) { scene.remove(m.sp); m.sp.material.dispose(); } this.meteors.length = 0; this.next = 0; },
+          clear() {
+            for (const m of this.meteors) { scene.remove(m.sp); m.sp.material.dispose(); } this.meteors.length = 0; this.next = 0;
+            for (const P of this.pools) for (const m of [P.mesh, P.rim]) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); } this.pools.length = 0;
+            ScytheThrow.reset();
+          },
+        };
+        // Archdemon in flight + Demonic Fury: the attack becomes a thrown scythe. It spins like a
+        // buzz-saw toward the crosshair, cuts every monster it passes (each once per leg), and turns
+        // back when it hits the ground, a structure, 6 monsters or its max range; then it homes to
+        // the hand. Only one scythe: no new throw (and no swing animation) until it is caught.
+        const ScytheThrow = {
+          out: null,
+          SPEED: 30, RANGE: 30, PIERCE: 6,
+          active() { return !!this.out; },
+          model() {
+            const src = WeaponModels.scenes.get("Demonic Fury");
+            const g = new THREE.Group();
+            if (src) {
+              const m = src.clone(true);
+              const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new V()), size = box.getSize(new V());
+              m.position.sub(c);
+              const k = 1.35 / Math.max(0.01, Math.max(size.x, size.y, size.z));
+              const pivot = new THREE.Group(); pivot.add(m); pivot.scale.setScalar(k);
+              pivot.rotation.x = Math.PI / 2; // lay the long axis flat: it spins like a disc
+              g.add(pivot);
+            } else {
+              VisualArt.link(g, [0, 0, -0.6], [0, 0, 0.6], 0.04, 0.035, 0x2a1416, "steel");
+              VisualArt.ellipsoid(g, [0.35, 0, -0.55], [0.4, 0.03, 0.09], 0xc8c0c0, "steel", 0xff2a14);
+            }
+            const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xff3a14, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+            halo.scale.setScalar(1.9); g.add(halo);
+            return g;
+          },
+          throw(w) {
+            if (this.out) return false;
+            const eye = player.pos.clone(), target = aimTarget(this.RANGE + 4);
+            const from = eye.clone().addScaledVector(aimDir(), 0.6).add(new V(0, -0.25, 0));
+            const dir = target.clone().sub(from);
+            if (dir.lengthSq() < 0.01) dir.copy(aimDir());
+            dir.normalize();
+            const g = this.model(); g.position.copy(from); scene.add(g);
+            this.out = { g, w, pos: from.clone(), prev: from.clone(), dir, back: false, dist: 0, hits: new Set(), count: 0, spin: 0, t0: simulationTime, trail: new BladeTrail(scene, 0xff3214, 1, 0.22), whoosh: 0 };
+            AudioManager.meleeSwing();
+            AudioManager.tone(140, 0.3, "sawtooth", 0.12, 260, "weapons");
+            return true;
+          },
+          turnBack(reason) {
+            const o = this.out; if (!o || o.back) return;
+            o.back = true; o.hits = new Set();
+            ParticleSystem.emit(o.pos.clone(), reason === "wall" ? 0xffc070 : 0xff3a14, 14, 4.5);
+            if (reason !== "count") { MonsterFX.ring(o.pos.clone().setY(Math.max(0.08, o.pos.y - 0.6)), 1.6, 0xff4a14, 0.4); AudioManager.tone(rand(900, 1300), 0.12, "square", 0.06, 400, "weapons"); }
+          },
+          hitAlong(a, b) {
+            const o = this.out, seg = new THREE.Line3(a.clone(), b.clone()), cp = new V();
+            PhysicsProps.damageSegment(a, b, weaponDamage(o.w));
+            for (const z of [...ZombieManager.list]) {
+              if (z.dead || o.hits.has(z)) continue;
+              const c = zombieBodyPoint(z);
+              seg.closestPointToPoint(c, true, cp);
+              if (cp.distanceTo(c) > 0.85 + (z.size || 1) * 0.4) continue;
+              o.hits.add(z);
+              ZombieManager.hit(z, weaponDamage(o.w) * 1.8, false, cp.clone(), o.w, true);
+              ParticleSystem.emit(cp.clone(), 0xff2a14, 8, 3.2);
+              ParticleSystem.emit(cp.clone(), 0x2a0606, 4, 2);
+              AudioManager.tone(rand(220, 300), 0.08, "sawtooth", 0.06, 120, "weapons");
+              if (!o.back && ++o.count >= this.PIERCE) { this.turnBack("count"); return; }
+            }
+          },
+          update(dt) {
+            const o = this.out;
+            const rig = CameraRig.avatar?.userData.rig;
+            if (rig?.gun && !player.onLadder) rig.gun.visible = !o;
+            if (!o) return;
+            o.prev.copy(o.pos);
+            if (!o.back) {
+              const step = this.SPEED * dt, next = o.pos.clone().addScaledVector(o.dir, step);
+              // structure: ray along this step against the walls
+              raycaster.set(o.pos, o.dir); raycaster.far = step + 0.35;
+              const wall = WallCast.hits(raycaster)[0];
+              if (wall) { o.pos.copy(wall.point).addScaledVector(o.dir, -0.3); this.hitAlong(o.prev, o.pos); this.turnBack("wall"); }
+              else {
+                o.pos.copy(next); o.dist += step;
+                this.hitAlong(o.prev, o.pos);
+                const floor = MapManager.groundAt(o.pos.x, o.pos.z, 0.2, o.pos.y + 0.5);
+                if (o.pos.y <= floor + 0.25) { o.pos.y = floor + 0.25; this.turnBack("ground"); }
+                else if (MapManager.collides(o.pos.x, o.pos.z, 0.25, o.pos.y)) this.turnBack("wall");
+                else if (o.dist >= this.RANGE) this.turnBack("range");
+              }
+            } else {
+              const hand = player.pos.clone().add(new V(0, -0.35, 0)), to = hand.clone().sub(o.pos), d = to.length();
+              const sp = this.SPEED * (1.1 + Math.min(1, (simulationTime - o.t0) * 0.3));
+              if (d <= Math.max(0.8, sp * dt)) { this.catch(); return; }
+              // homing that bends smoothly toward the hand
+              o.dir.lerp(to.normalize(), Math.min(1, dt * 9)).normalize();
+              o.pos.addScaledVector(o.dir, sp * dt);
+              this.hitAlong(o.prev, o.pos);
+            }
+            o.spin += dt * 26;
+            o.g.position.copy(o.pos);
+            o.g.rotation.set(0.25 * Math.sin(simulationTime * 3), 0, 0);
+            o.g.rotateY(o.spin);
+            o.g.updateMatrixWorld(true);
+            const r = new V(Math.cos(o.spin), 0, -Math.sin(o.spin));
+            o.trail.push(o.pos.clone().addScaledVector(r, 0.75), o.pos.clone().addScaledVector(r, 0.2), simulationTime);
+            o.trail.update(simulationTime);
+            if (Math.random() < dt * 30) ParticleSystem.emit(o.pos.clone(), Math.random() < 0.6 ? 0xff4a14 : 0x1a0404, 1, 1.2);
+            if ((o.whoosh -= dt) <= 0) { o.whoosh = 0.16; AudioManager.tone(rand(180, 240), 0.1, "triangle", 0.04, 120, "weapons"); }
+            if (simulationTime - o.t0 > 6) this.catch(); // safety: never lost
+          },
+          catch() {
+            const o = this.out; if (!o) return;
+            scene.remove(o.g); o.trail.dispose();
+            o.g.traverse((m) => { if (m.isSprite) m.material.dispose(); });
+            this.out = null;
+            AudioManager.tone(520, 0.12, "square", 0.08, 260, "weapons");
+            WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 2;
+          },
+          reset() { if (this.out) this.catch(); },
         };
         const ClassAscend = {
           ANT: 0.34, RISE: 0.5, END: 1.35,
@@ -13025,6 +13195,18 @@ body.netgame #revivetouch{display:flex}
               el.style.setProperty("--gap", gap + "px");
             }
             el.classList.toggle("melee", !P);
+            // On-target cue: the crosshair turns red over an enemy (throttled ray, ~12 Hz).
+            if (simulationTime - (this.targetAt || -9) > 0.08) {
+              this.targetAt = simulationTime;
+              let on = false;
+              if (state === GameState.PLAYING && ZombieManager.hitMeshes.length) {
+                const range = P ? Math.min(w.range || 80, 90) : Math.max(4, w.range || 4) + Math.max(0, CameraRig.distance);
+                raycaster.set(camera.position, forward()); raycaster.far = range;
+                const zh = raycaster.intersectObjects(ZombieManager.hitMeshes)[0];
+                if (zh && !zh.object.userData.zombie?.dead) { const wh = WallCast.hits(raycaster)[0]; on = !wh || wh.distance > zh.distance; }
+              }
+              if (on !== this.onTarget) { this.onTarget = on; el.classList.toggle("target", on); }
+            }
           },
           coneDir(dir, angle) {
             const out = dir.clone().normalize();
@@ -21035,6 +21217,21 @@ body.netgame #revivetouch{display:flex}
             end = h.point;
             remaining--;
           }
+          // Hitbox forgiveness: a single-projectile shot that grazes a body (within a few cm of the
+          // torso/limb envelope, e.g. through the gap between arm and chest) still counts as a body
+          // hit. Shotgun pellets and lasers keep the strict test. Touch screens get a bit more.
+          if (!seen.size && first && !w.pellets && w.kind !== "laser") {
+            const margin = touchMode ? 0.2 : 0.11, seg = new THREE.Line3(origin.clone(), origin.clone().addScaledVector(shot, wallDistance)), cp = new V();
+            let best = null, bd = 1e9;
+            for (const z of ZombieManager.list) {
+              if (z.dead || z.remote) continue;
+              const c = zombieBodyPoint(z), sz = z.size || 1;
+              seg.closestPointToPoint(c, true, cp);
+              const dh = Math.hypot(cp.x - c.x, cp.z - c.z), dy = Math.abs(cp.y - c.y), dist = origin.distanceTo(cp);
+              if (dh < 0.34 * sz + margin && dy < 0.8 * sz && dist < bd) { bd = dist; best = [z, cp.clone()]; }
+            }
+            if (best) { ZombieManager.hit(best[0], damage, false, best[1], w); end = best[1]; seen.add(best[0]); }
+          }
           const propHit = raycaster.intersectObjects(PhysicsProps.meshes());
           if (propHit.length && propHit[0].distance < Math.min(wallDistance, origin.distanceTo(end) + 0.01)) {
             PhysicsProps.shove(propHit[0].object.userData.prop, shot, propHit[0].point, damage);
@@ -21283,6 +21480,64 @@ body.netgame #revivetouch{display:flex}
             this.attacks.push(atk);
             this.gesture.dir.copy(f);
           },
+          // Archangel flight: launch the next blade that is home, straight and fast toward the
+          // crosshair. It pierces up to 4 monsters, and a structure, the ground or 32 m sends it
+          // back. Returns false when no blade is home (the player can't attack until one docks).
+          LAUNCH: { speed: 48, range: 32, pierce: 4 },
+          launch(w) {
+            this.ensure(w);
+            if (!this.active) return false;
+            const home = this.blades.filter((b) => b.state === "idle");
+            if (!home.length) return false;
+            const target = aimTarget(this.LAUNCH.range + 4);
+            // the blade closest to the crosshair line leaves first
+            const b = home.sort((p, q) => p.pos.distanceToSquared(target) - q.pos.distanceToSquared(target))[0];
+            const dir = target.clone().sub(b.pos);
+            if (dir.lengthSq() < 0.01) dir.copy(aimDir());
+            dir.normalize();
+            b.state = "launch";
+            b.act = { dir, dist: 0, hits: new Set(), count: 0, dmg: weaponDamage(w) * 1.25, w };
+            b.vel.copy(dir).multiplyScalar(this.LAUNCH.speed);
+            AudioManager.tone(1180, 0.12, "sine", 0.1, 1900, "weapons");
+            AudioManager.meleeSwing();
+            return true;
+          },
+          launchStep(b, a, dt, w) {
+            const L = this.LAUNCH, step = L.speed * dt, from = b.pos.clone();
+            let back = null;
+            raycaster.set(from, a.dir); raycaster.far = step + 0.3;
+            const wall = WallCast.hits(raycaster)[0];
+            const to = wall ? wall.point.clone().addScaledVector(a.dir, -0.2) : from.clone().addScaledVector(a.dir, step);
+            if (wall) back = "wall";
+            const seg = new THREE.Line3(from, to), cp = new V();
+            PhysicsProps.damageSegment(from, to, a.dmg);
+            for (const z of [...ZombieManager.list]) {
+              if (z.dead || a.hits.has(z)) continue;
+              const c = zombieBodyPoint(z);
+              seg.closestPointToPoint(c, true, cp);
+              if (cp.distanceTo(c) > 0.45 + (z.size || 1) * 0.38) continue;
+              a.hits.add(z);
+              ZombieManager.hit(z, a.dmg, false, cp.clone(), w, true);
+              this.impact(cp, 1.1);
+              ParticleSystem.emit(cp.clone(), 0xfff4d6, 5, 2.4);
+              AudioManager.tone(1500, 0.06, "sine", 0.06, 2300, "weapons");
+              if (++a.count >= L.pierce) { back = "count"; break; }
+            }
+            b.prev.copy(b.pos);
+            b.pos.copy(to);
+            a.dist += from.distanceTo(to);
+            const floor = MapManager.groundAt(b.pos.x, b.pos.z, 0.15, b.pos.y + 0.5);
+            if (!back && b.pos.y <= floor + 0.15) { b.pos.y = floor + 0.15; back = "ground"; }
+            if (!back && MapManager.collides(b.pos.x, b.pos.z, 0.15, b.pos.y)) back = "wall";
+            if (!back && a.dist >= L.range) back = "range";
+            if (back) {
+              if (back !== "range" && back !== "count") { this.impact(b.pos.clone(), 0.9); ParticleSystem.emit(b.pos.clone(), 0xffd98a, 10, 3); }
+              // homeward: a short arc back to its slot; time scales with the distance travelled
+              const mid = b.pos.clone().lerp(player.pos, 0.5).add(new V(0, 1.2, 0));
+              b.state = "return";
+              b.act = { rStart: simulationTime, rDur: clamp(b.pos.distanceTo(player.pos) / 34, 0.3, 1.0), pts: [b.pos.clone(), mid] };
+            }
+          },
           cr(p0, p1, p2, p3, t) {
             const t2 = t * t, t3 = t2 * t;
             return new V(
@@ -21389,6 +21644,10 @@ body.netgame #revivetouch{display:flex}
                     b.act = { rStart: t, rDur: 0.42 + b.i * 0.035, pts: [b.pos.clone(), behind] };
                   }
                 }
+              } else if (!orbit && b.state === "launch" && a) {
+                b.vel.copy(a.dir).multiplyScalar(this.LAUNCH.speed);
+                this.launchStep(b, a, dt, w);
+                flying = trailOn = true;
               } else if (!orbit && b.state === "return" && a) {
                 const k = (t - a.rStart) / a.rDur, s = k * k * (3 - 2 * k);
                 const pts = [...a.pts, this.slotWorld(b, run)];
@@ -21440,10 +21699,10 @@ body.netgame #revivetouch{display:flex}
               // own trail (idle: none; swing: strong; return: short)
               b.g.updateMatrixWorld(true);
               const tip = b.g.localToWorld(new V(0, 0.35, 0)), mid = b.g.localToWorld(new V(0, 0.08, 0));
-              b.trail.maxAge = b.state === "strike" ? 0.16 : orbit ? 0.22 : 0.08;
+              b.trail.maxAge = b.state === "strike" ? 0.16 : b.state === "launch" ? 0.2 : orbit ? 0.22 : 0.08;
               // glow: calm breathing at rest, bright and warm while striking, a pulse when docking
               const dock = Math.max(0, 1 - (t - (b.docked ?? -9)) / 0.35);
-              const gT = b.state === "strike" && flying ? 1 : orbit ? 0.8 : b.state === "return" ? 0.55 : 0.28 + 0.08 * Math.sin(t * 2.1 + b.ph[0]) + 0.5 * dock;
+              const gT = (b.state === "strike" || b.state === "launch") && flying ? 1 : orbit ? 0.8 : b.state === "return" ? 0.55 : 0.28 + 0.08 * Math.sin(t * 2.1 + b.ph[0]) + 0.5 * dock;
               b.glow += (gT - b.glow) * (1 - Math.exp(-dt * 14));
               b.halo.material.opacity = (0.18 + 0.5 * b.glow) * (fp && dc < 1.4 ? 0.4 : 1);
               b.halo.scale.setScalar(0.32 + 0.38 * b.glow);
@@ -21533,7 +21792,8 @@ body.netgame #revivetouch{display:flex}
           },
           readyText(w = WeaponSystem.current()) {
             if (!w?.specter && !w?.trident && !w?.scythe) return "";
-            if (w.specter && classBurst().flight === "angel") return "F · LANÇAR · SEM CD NO VOO";
+            if (w.specter && classBurst().flight === "angel") return `CLIQUE · LANÇAR LÂMINAS (${SpecterSwarm.blades.filter((b) => b.state === "idle").length}/5)`;
+            if (w.scythe && classBurst().flight === "demon") return ScytheThrow.active() ? "FOICE NO AR…" : "CLIQUE · ARREMESSAR FOICE";
             const left = Math.max(0, this.cooldown - simulationTime);
             return left > 0 ? `F · ARMA ${left.toFixed(1)}s` : "F · HABILIDADE DA ARMA";
           },
@@ -21571,10 +21831,6 @@ body.netgame #revivetouch{display:flex}
               return;
             }
             if (w.specter) {
-              if (flight === "angel") {
-                this.throwSpecter(w);
-                return;
-              }
               if (simulationTime < this.cooldown) {
                 UIManager.toast(`Espectro: ${Math.ceil(this.cooldown - simulationTime)}s de recarga.`);
                 return;
@@ -22019,6 +22275,7 @@ body.netgame #revivetouch{display:flex}
             if (burst.grenades)
               player.grenades += burst.grenades;
             if (burst.nova) ArchPowers.nova(burst.flight, burst.nova, burst.novaRadius || 8);
+            if (burst.hellPool) ArchPowers.pool(burst.hellPool.radius, burst.hellPool.duration);
             if (burst.blast)
               explosion(
                 player.pos.clone(),
@@ -22209,7 +22466,26 @@ body.netgame #revivetouch{display:flex}
           shoot() {
             if (NetGame.down || NetGame.dead) return;
             const w = WeaponSystem.current();
-            if (!w || reloadEnd || simulationTime - lastShot < w.rate) return;
+            if (!w || reloadEnd) return;
+            // Archdemon flight: the scythe is thrown instead of swung — one at a time.
+            if (w.scythe && (classBurst().flight === "demon" || ScytheThrow.active())) {
+              if (simulationTime - lastShot < 0.2 || !ScytheThrow.throw(w)) return;
+              lastShot = simulationTime;
+              player.shots++;
+              this.meleeLockUntil = simulationTime + 0.2;
+              muzzleLight.intensity = 0;
+              return;
+            }
+            // Archangel flight: the Angelic Specters are launched one by one, straight and fast.
+            if (w.specter && classBurst().flight === "angel") {
+              if (simulationTime - lastShot < 0.15 || !SpecterSwarm.launch(w)) return;
+              lastShot = simulationTime;
+              player.shots++;
+              this.meleeLockUntil = simulationTime + 0.14;
+              muzzleLight.intensity = 0;
+              return;
+            }
+            if (simulationTime - lastShot < w.rate) return;
             if (w.kind === "melee" && simulationTime < this.meleeLockUntil) return;
             if (w.ammo <= 0) {
               this.reload();
@@ -22624,7 +22900,7 @@ body.netgame #revivetouch{display:flex}
             const drawPower = w?.kind === "bow" && this.chargeHeldSince != null ? clamp((simulationTime - this.chargeHeldSince) / (w.chargeTime || 0.9), 0, 1) : 0;
             const targetFov =
               SettingsManager.data.fov *
-              (mouse.aim && w?.kind !== "melee" && !GrenadeThrow.active ? WeaponSystem.adsPose(w).fov : 1) *
+              (mouse.aim && w && w.kind !== "melee" && !GrenadeThrow.active ? (CameraRig.distance > 0.6 ? 1 - (1 - WeaponSystem.adsPose(w).fov) * 0.55 : WeaponSystem.adsPose(w).fov) : 1) *
               (1 - drawPower * 0.28) + // drawing a bow zooms in as the string comes back
               // Subtle speed cue: up to +3° at full sprint, +1.5° more at bunny-hop speed.
               (mouse.aim ? 0 : 3 * (1 - (1 - this.motion.sprint) ** 2) +
@@ -22632,6 +22908,7 @@ body.netgame #revivetouch{display:flex}
             camera.fov += (targetFov + ClassAscend.fovKick(ClassAscend.since()) - camera.fov) * Math.min(1, dt * 12);
             ClassAscend.update();
             ArchPowers.update(dt);
+            ScytheThrow.update(dt);
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
             CameraRig.update(dt);
@@ -27288,17 +27565,36 @@ body.netgame #revivetouch{display:flex}
             this.syncEquipped();
             // Third person aims over the shoulder: holding aim pulls the camera in (×0.55) and further
             // to the side so the crosshair clears the body; X swaps shoulders smoothly.
-            this.aimK += ((mouse.aim && this.target > 0.3 ? 1 : 0) - this.aimK) * Math.min(1, dt * 10);
+            // Melee weapons never aim. Scoped weapons (sniper/rail) drop to the first-person scope
+            // while aiming — same sight picture as 1st person — and come back out on release.
+            const cw = WeaponSystem.current(),
+              canAim = !!cw && cw.kind !== "melee" && !GrenadeThrow.active && !reloadEnd,
+              aiming3p = mouse.aim && canAim && this.target > 0.3,
+              scoped3p = aiming3p && !!WeaponSystem.adsPose(cw).scope;
+            this.aimK += ((aiming3p ? 1 : 0) - this.aimK) * Math.min(1, dt * 10);
+            this.scopeK = (this.scopeK || 0) + ((scoped3p ? 1 : 0) - (this.scopeK || 0)) * Math.min(1, dt * 14);
             this.sideNow += (this.side - this.sideNow) * Math.min(1, dt * 9);
-            const tgt = this.target * (1 - 0.45 * this.aimK);
+            const tgt = this.target * (1 - 0.32 * this.aimK) * (scoped3p ? 0 : 1);
             this.distance +=
-              (tgt - this.distance) * (1 - Math.exp(-dt * 9));
+              (tgt - this.distance) * (1 - Math.exp(-dt * (scoped3p || this.scopeK > 0.05 ? 16 : 9)));
+            // Smooth follow: in third person the pivot trails the eye a little (critically damped,
+            // faster on the horizontal plane than vertically, so jumps/stairs/landings don't jolt
+            // the view). Rotation stays 1:1 with the mouse so aiming is never delayed.
+            const eye = camera.position.clone();
+            if (this.distance > 0.3 && this.followPos && this.followPos.distanceToSquared(eye) < 9) {
+              const kh = 1 - Math.exp(-dt * 18), kv = 1 - Math.exp(-dt * 10);
+              this.followPos.x += (eye.x - this.followPos.x) * kh;
+              this.followPos.z += (eye.z - this.followPos.z) * kh;
+              this.followPos.y += (eye.y - this.followPos.y) * kv;
+            } else (this.followPos ||= new V()).copy(eye);
+            const lagBlend = clamp((this.distance - 0.3) / 0.9, 0, 1);
+            camera.position.lerpVectors(eye, this.followPos, lagBlend);
             const anchor = camera.position.clone(),
               blend = clamp(this.distance / 1.2, 0, 1),
               offset = forward()
                 .multiplyScalar(-this.distance)
                 .add(
-                  new V((0.45 + 0.12 * this.aimK) * blend * this.sideNow, (0.13 + 0.04 * this.aimK) * blend, 0).applyAxisAngle(
+                  new V((0.5 + 0.28 * this.aimK) * blend * this.sideNow, (0.16 + 0.06 * this.aimK) * blend, 0).applyAxisAngle(
                     new V(0, 1, 0),
                     yaw,
                   ),
@@ -29974,6 +30270,7 @@ body.netgame #revivetouch{display:flex}
             CameraRig.distance < 0.6 &&
             !!WeaponSystem.current() &&
             !(WeaponSystem.current()?.spear && (SpearThrow.active || !WeaponSystem.spearHeld)) &&
+            !(WeaponSystem.current()?.scythe && ScytheThrow.active()) &&
             !BossIntro.active &&
             !KillCam.active &&
             !BossDeath.active &&
@@ -30199,6 +30496,7 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             StreetBreak,
+            ScytheThrow,
             ArchPowers,
             WindLitter,
             PowerUps,

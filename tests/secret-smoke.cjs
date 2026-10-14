@@ -41,6 +41,7 @@ const server = http.createServer((req, res) => {
         const nearZ = T.ZombieManager.spawn(0, null, at(3, 0)); nearZ.speed = 0; nearZ.hp = nearZ.maxHp = 1e6;
         const nh0 = nearZ.hp;
         p.classCharge = 25; P.ability();
+        T.stepPlayer(1 / 30, 6);
         r.blastHit = nearZ.hp < nh0;
         r.flying = T.classBurst().flight;
         T.keys.add('Space'); T.stepPlayer(1 / 30, 45); T.keys.delete('Space');
@@ -77,14 +78,58 @@ const server = http.createServer((req, res) => {
       const spinning = S.spinUntil > T.time;
       return { thrown, hellfire, spinning };
     });
+    // v55: hell pool (slows non-bosses, 10 dmg / 0.25 s), thrown scythe (one at a time, comes back),
+    // launched Angelic Specters (one by one; no attack until one is home).
+    out.v55 = await page.evaluate(() => {
+const T=DeadRecoilTest,P=T.PlayerController,V=THREE.Vector3,W=T.WeaponSystem;
+      const r={};
+      // --- Archdemon: pool + scythe throw
+      T.setMap(0);P.start();T.setClass(23);T.setPlaying();T.WaveManager.remaining=0;T.WaveManager.update=()=>{};T.ZombieManager.clear();
+      let p=T.player;p.hp=p.maxhp=1e9;p.pos.set(0,1.7,12);T.setYaw(0);T.setPitch(0);
+      const sc=W.create(W.weapons.findIndex(w=>w.scythe));W.equip(sc);
+      const zin=T.ZombieManager.spawn(0,null,new V(2,0,12));zin.hp=zin.maxhp=1e6;
+      const boss=T.ZombieManager.spawn(0,null,new V(-2,0,12));boss.hp=boss.maxhp=1e6;boss.boss={rank:1,name:'test'};
+      const h0=zin.hp;p.classCharge=25;p.cooldown=0;P.ability();
+      r.pools=T.ArchPowers.pools.length;
+      T.stepPlayer(1/30,30);
+      r.poolDmg=+(h0-zin.hp).toFixed(1);r.slowed=zin.slowUntil>T.simulationTime;r.bossSlowed=boss.slowUntil>T.simulationTime;
+      // rise, then throw
+      T.keys.add('Space');T.stepPlayer(1/30,30);T.keys.delete('Space');
+      T.ZombieManager.clear();
+      const tz=[];for(let k=0;k<3;k++){const z=T.ZombieManager.spawn(0,null,new V(p.pos.x,0,p.pos.z-6-k*3));z.speed=0;z.hp=z.maxhp=1e6;tz.push(z);}
+      T.setPitch(-0.35);
+      P.shoot();r.thrown=T.ScytheThrow.active();
+      const second=(P.meleeLockUntil=0,P.shoot(),T.ScytheThrow.out);r.singleScythe=!!second;
+      let steps=0;while(T.ScytheThrow.active()&&steps<300){T.stepPlayer(1/30,1);steps++;}
+      r.caughtAfter=+(steps/30).toFixed(2);r.scytheHits=tz.filter(z=>z.hp<1e6).length;
+      // --- Archangel: blades
+      T.setClass(22);P.start();T.setClass(22);T.setPlaying();T.WaveManager.remaining=0;T.ZombieManager.clear();
+      p=T.player;p.hp=p.maxhp=1e9;p.pos.set(0,1.7,12);T.setYaw(0);T.setPitch(0);
+      const sp=W.create(W.weapons.findIndex(w=>w.specter));W.equip(sp);T.stepPlayer(1/30,10);
+      p.classCharge=25;p.cooldown=0;P.ability();T.keys.add('Space');T.stepPlayer(1/30,45);T.keys.delete('Space');
+      T.ZombieManager.clear();
+      const bz=[];for(let k=0;k<4;k++){const z=T.ZombieManager.spawn(0,null,new V(p.pos.x+(k-1.5)*0.6,0,p.pos.z-8));z.speed=0;z.hp=z.maxhp=1e6;bz.push(z);}
+      T.setPitch(-0.4);
+      let launched=0;for(let k=0;k<7;k++){P.meleeLockUntil=0;const before=T.SpecterSwarm.blades.filter(b=>b.state==='launch').length;P.shoot();T.stepPlayer(1/30,5);if(T.SpecterSwarm.blades.filter(b=>b.state==='launch'||b.state==='return').length>before)launched++;}
+      r.bladesOut=T.SpecterSwarm.blades.filter(b=>b.state!=='idle').length;r.launched=launched;
+      T.stepPlayer(1/30,60);
+      r.bladesHome=T.SpecterSwarm.blades.filter(b=>b.state==='idle').length;r.bladeHits=bz.filter(z=>z.hp<1e6).length;
+      return r;
+      
+    });
+    console.log(JSON.stringify(out.v55));
+    const v = out.v55;
+    assert.ok(v.pools === 1 && v.poolDmg >= 30 && v.poolDmg <= 50 && v.slowed && !v.bossSlowed, 'hell pool: ticks, slows commons, not bosses');
+    assert.ok(v.thrown && v.singleScythe && v.caughtAfter > 0.3 && v.caughtAfter < 6 && v.scytheHits >= 1, 'scythe throw returns and hits');
+    assert.ok(v.bladesOut >= 2 && v.bladesHome === 5, 'specters launch one by one and return');
     // Accessories on the character rig (third-person preview is built from the same code).
     out.models = await page.evaluate(() => !!DeadRecoilTest.PropModels.parts.get('acc_wing') && !!DeadRecoilTest.PropModels.parts.get('acc_tail'));
     console.log(JSON.stringify(out));
     for (const k of ['angel', 'demon']) {
       const r = out[k];
       assert.ok(r.lockedBefore100 && r.flying === k, `${k}: cast unlocks at 25 kills`);
-      assert.ok(r.blastHit, `${k}: cast blast damages nearby enemies`);
-      assert.ok(r.powerHits >= 1, `${k}: in-flight power strikes enemies`);
+      assert.ok(r.blastHit, `${k}: cast nova / hell pool damages nearby enemies`);
+      if (k === 'angel') assert.ok(r.powerHits >= 1, `${k}: in-flight smite strikes enemies`);
       assert.ok(r.rose > 1.8 && r.chargeConsumed, `${k}: rises while flying, kills consumed`);
       assert.ok(r.ended && r.landed < 0.3, `${k}: flight ends after 15 s and lands`);
     }
