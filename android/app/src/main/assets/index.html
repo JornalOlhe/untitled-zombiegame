@@ -6291,8 +6291,18 @@ body.netgame #revivetouch{display:flex}
                   parts.push({ name: o.name, geo, mat: m });
                 });
                 this.parts.set(name, parts);
-                if (--left === 0) this.ready = true;
-              }, () => { if (--left === 0) this.ready = true; });
+                if (--left === 0) this.done();
+              }, () => { if (--left === 0) this.done(); });
+            }
+          },
+          // Slow WebViews can build the lobby map before the GLBs finish decoding, which leaves
+          // cube-fallback trees/cars in the menu. Once everything is ready, rebuild that map (only
+          // while in the menu — never under a running match).
+          done() {
+            this.ready = true;
+            if (this.missed && typeof state !== "undefined" && state === GameState.MENU && MapManager.group) {
+              this.missed = false;
+              MapManager.build(MapManager.index || 0);
             }
           },
           has(name) {
@@ -6300,7 +6310,7 @@ body.netgame #revivetouch{display:flex}
           },
           // Queue one instance; returns false when the model is not available (caller falls back).
           place(name, x, y, z, ry = 0, s = 1, opts = {}) {
-            if (!this.has(name)) return false;
+            if (!this.has(name)) { if (!this.ready) this.missed = true; return false; }
             if (!this.pending.has(name)) this.pending.set(name, []);
             const m = new THREE.Matrix4().compose(
               new V(x, y, z),
@@ -9944,7 +9954,48 @@ body.netgame #revivetouch{display:flex}
                 this.soft(trim, [x, y, z + d / 2 + 0.065], [w + 0.1, 0.1, 0.1], null, 1.5);
               }
             }
+            if (h >= 4 && w >= 4 && d >= 4) this.roof(x, z, w, d, h, trim);
             return m;
+          },
+          // Rooftop dressing so the skyline isn't a field of flat slabs: tar membrane with seams,
+          // a parapet, HVAC boxes with fans, vent stacks, a stair hut and (on towers) a water tank.
+          // All instanced props (PropKit), no colliders — purely silhouette.
+          roof(x, z, w, d, h, trim) {
+            this.soft("roofTar", [x, h + 0.03, z], [w - 0.1, 0.06, d - 0.1], null, 0.6);
+            const pH = 0.55, t = 0.22;
+            for (const sz of [-1, 1]) this.soft(trim, [x, h + pH / 2, z + sz * (d / 2 - t / 2)], [w, pH, t], null, 1.2);
+            for (const sx of [-1, 1]) this.soft(trim, [x + sx * (w / 2 - t / 2), h + pH / 2, z], [t, pH, d - 2 * t], null, 1.2);
+            const spot = (m) => [x + this.r(-w / 2 + m, w / 2 - m), z + this.r(-d / 2 + m, d / 2 - m)];
+            const nAC = 1 + (this.rnd() < 0.5) + (w * d > 120);
+            for (let i = 0; i < nAC; i++) {
+              const [ax, az] = spot(1.4), ry = this.rnd() < 0.5 ? 0 : Math.PI / 2;
+              this.hard("metal", [ax, h + 0.5, az], [1.3, 0.9, 1.0], [0, ry, 0]);
+              this.soft("poleDark", [ax, h + 0.97, az], [0.78, 0.05, 0.78], [0, ry, 0]);
+              this.soft("tire", [ax, h + 1.0, az], [0.6, 0.04, 0.6], [0, ry + 0.4, 0]);
+              const [dx, dz] = this.at(ax, az, ry, 0.85, 0);
+              this.soft("metal", [dx, h + 0.3, dz], [0.4, 0.4, 0.5], [0, ry, 0]);
+            }
+            for (let i = 0, n = 2 + ((this.rnd() * 3) | 0); i < n; i++) {
+              const [vx, vz] = spot(0.8), vh = this.r(0.5, 1.2);
+              this.soft("metal", [vx, h + vh / 2, vz], [0.2, vh, 0.2]);
+              this.soft("poleDark", [vx, h + vh + 0.05, vz], [0.34, 0.1, 0.34]);
+            }
+            if (h >= 7 && w >= 6 && d >= 6) {
+              const [hx, hz] = spot(2);
+              this.hard(trim, [hx, h + 1.2, hz], [2.2, 2.4, 2.0]);
+              this.soft("roofTar", [hx, h + 2.45, hz], [2.4, 0.1, 2.2]);
+              this.soft("metal", [hx, h + 1.0, hz + 1.01], [0.9, 1.9, 0.04]);
+            }
+            if (h >= 12 && this.rnd() < 0.55) {
+              const [tx, tz] = spot(2.2);
+              for (const lx of [-0.8, 0.8]) for (const lz of [-0.8, 0.8]) this.soft("poleDark", [tx + lx, h + 1.1, tz + lz], [0.12, 2.2, 0.12]);
+              this.soft("poleDark", [tx, h + 2.25, tz], [2.1, 0.1, 2.1]);
+              this.hard("planks", [tx, h + 3.35, tz], [1.9, 2.1, 1.9]);
+              this.hard("planks", [tx, h + 3.35, tz], [1.5, 2.1, 2.2]);
+              this.hard("planks", [tx, h + 3.35, tz], [2.2, 2.1, 1.5]);
+              this.soft("poleDark", [tx, h + 4.55, tz], [1.5, 0.3, 1.5]);
+              this.soft("poleDark", [tx, h + 4.85, tz], [0.7, 0.3, 0.7]);
+            }
           },
           // Window grid on the four faces; `skip` lists faces to leave blank ("n","s","e","w").
           windows(x, z, w, d, h, opts = {}) {
@@ -18504,6 +18555,12 @@ body.netgame #revivetouch{display:flex}
                 for (let x = 0; x < N; x++) for (let y = 13; y < N; y++) if (R() < 0.6) px(x, y, jitter([58, 54, 46], 12));
                 break;
               }
+              case "roofTar":
+                // Rolled bitumen roofing: dark, gravel-specked, with lap seams every few pixels.
+                fill([54, 54, 52], 12);
+                dots([96, 94, 88], 26, 18);
+                for (let y = 0; y < N; y += 5) for (let x = 0; x < N; x++) px(x, y, jitter([38, 38, 36], 6));
+                break;
               case "signalHousing":
                 // Weathered yellow signal-head paint with black edge trim and sun-faded chips.
                 fill([196, 156, 34], 14);
@@ -18901,9 +18958,12 @@ body.netgame #revivetouch{display:flex}
               return;
             }
             const H = (3.2 + rand(0, 1.4)) * s,
-              T = 0.8 * s;
+              T = 0.42 * s;
             PropKit.add(this.hard, "bark", [x, H / 2, z], [T, H, T]);
-            this.collider(x, z, T, T, H + 3);
+            PropKit.add(this.hard, "bark", [x, 0.25 * s, z], [T * 1.7, 0.5 * s, T * 1.7]);
+            if (style !== "pine" && style !== "snowPine")
+              for (const a of [rand(0, 3), rand(3, 6)]) PropKit.add(this.hard, "bark", [x + Math.cos(a) * 0.45 * s, H * 0.8, z + Math.sin(a) * 0.45 * s], [0.2 * s, 1.1 * s, 0.2 * s], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]);
+            this.collider(x, z, 0.55 * s, 0.55 * s, H + 3);
             if (style === "pine" || style === "snowPine") {
               for (let i = 0; i < 4; i++) {
                 const w = (3.4 - i * 0.75) * s,
@@ -18912,10 +18972,15 @@ body.netgame #revivetouch{display:flex}
               }
               PropKit.add(this.soft, style === "snowPine" ? "snow" : style, [x, H * 0.55 + 4 * 0.95 * s, z], [0.7 * s, 0.9 * s, 0.7 * s]);
             } else {
-              const c = 3.2 * s;
-              PropKit.add(this.soft, style, [x, H + 0.4 * s, z], [c, 1.8 * s, c]);
-              PropKit.add(this.soft, style, [x, H + 1.7 * s, z], [c * 0.72, 1.2 * s, c * 0.72]);
-              PropKit.add(this.soft, style, [x + rand(-0.5, 0.5) * s, H - 0.5 * s, z + rand(-0.5, 0.5) * s], [c * 0.8, 0.8 * s, c * 0.8]);
+              // Clustered canopy: a core plus 4-5 offset lobes at varied heights, so the crown
+              // reads as a round leafy mass rather than a stack of two cubes.
+              const c = 2.6 * s;
+              PropKit.add(this.soft, style, [x, H + 0.7 * s, z], [c, 2.0 * s, c]);
+              for (let i = 0, n = 4 + (Math.random() < 0.5); i < n; i++) {
+                const a = (i / n) * Math.PI * 2 + rand(-0.3, 0.3), r = rand(0.9, 1.3) * s, k = rand(0.5, 0.75);
+                PropKit.add(this.soft, style, [x + Math.cos(a) * r, H + rand(-0.1, 1.2) * s, z + Math.sin(a) * r], [c * k, c * k * 0.75, c * k], [0, a, 0]);
+              }
+              PropKit.add(this.soft, style, [x, H + 2.0 * s, z], [c * 0.6, 0.9 * s, c * 0.6]);
             }
           },
           lampPost(x, z, side = -1) {
@@ -29914,6 +29979,7 @@ body.netgame #revivetouch{display:flex}
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
             PropKit,
+            MapKit,
             Viewmodel,
             MeleeAnim,
             Survivor,
