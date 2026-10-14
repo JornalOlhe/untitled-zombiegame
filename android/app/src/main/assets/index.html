@@ -5826,7 +5826,8 @@ body.netgame #revivetouch{display:flex}
                 const d = Math.hypot(z.group.position.x - P.pos.x, z.group.position.z - P.pos.z);
                 if (d > P.r + (z.size || 1) * 0.3) continue;
                 if (!z.boss) ZombieManager.applySlow(z, 0.6, 0.4);
-                ZombieManager.hit(z, 10, false, null, null, true);
+                ZombieManager.quietHits = true;
+                try { ZombieManager.hit(z, 10, false, null, null, true); } finally { ZombieManager.quietHits = false; }
               }
             }
           },
@@ -15287,16 +15288,20 @@ body.netgame #revivetouch{display:flex}
                 : Math.abs(localHit.x) > 0.22
                   ? "arm"
                   : "torso";
-            z.stagger = Math.min(0.65, (damage / z.maxhp) * 1.5);
+            // Damage-over-time ticks (hell pool) are "quiet": no stagger, blood, thud, hit marker or
+            // floating number every 0.25 s — the pool's own glow and embers show the burn.
+            const quiet = this.quietHits;
+            if (!quiet) z.stagger = Math.min(0.65, (damage / z.maxhp) * 1.5);
             const hitPoint =
               point || z.group.position.clone().add(new V(0, 1, 0));
-            if (z.type === 2)
+            if (quiet) { if (Math.random() < 0.15) ParticleSystem.emit(hitPoint, 0xff4a14, 2, 1.2); }
+            else if (z.type === 2)
               ParticleSystem.emit(hitPoint, 0x728632, head ? 16 : 8, 2);
             else {
               BloodFX.emit(hitPoint, head ? 22 : 14);
               if (Math.random() < 0.3) CombatFX.mark(hitPoint, 0x582a26, 0.25);
             }
-            if (!NetGame.attacker) {
+            if (!NetGame.attacker && !quiet) {
               // flesh impact: a short low thud (rate-limited so shotguns don't stack 8 of them)
               if (AudioManager.ctx && performance.now() - (this.lastThud || 0) > 50) { this.lastThud = performance.now(); AudioManager.tone(head ? 190 : 150, 0.06, "triangle", head ? 0.09 : 0.07, 60, "weapons"); }
               hitUntil = simulationTime + 0.12;
@@ -26401,6 +26406,10 @@ body.netgame #revivetouch{display:flex}
             if (!g) return;
             g.parent?.remove(g);
             g.userData.rig?.trail?.dispose();
+            // the demon tail's ribbon lives in the scene (not under g): drop it with the avatar,
+            // otherwise its last frame stays frozen in the world after a class/weapon change
+            g.userData.tailTrail?.dispose();
+            g.userData.tailTrail = null;
             g.traverse((o) => {
               if (o.geometry?.type === "ExtrudeGeometry") o.geometry.dispose();
               if (o.isSprite) o.material.dispose();
@@ -27574,7 +27583,11 @@ body.netgame #revivetouch{display:flex}
             this.aimK += ((aiming3p ? 1 : 0) - this.aimK) * Math.min(1, dt * 10);
             this.scopeK = (this.scopeK || 0) + ((scoped3p ? 1 : 0) - (this.scopeK || 0)) * Math.min(1, dt * 14);
             this.sideNow += (this.side - this.sideNow) * Math.min(1, dt * 9);
-            const tgt = this.target * (1 - 0.32 * this.aimK) * (scoped3p ? 0 : 1);
+            // Winged classes (Archangel/Archdemon): the wingspan would fill a normal shoulder view,
+            // so the camera sits higher and a little further back to look over the wings.
+            const winged = !!classes[selectedClass]?.secretFlight && this.target > 0.3;
+            this.wingK = (this.wingK || 0) + ((winged ? 1 : 0) - (this.wingK || 0)) * Math.min(1, dt * 6);
+            const tgt = (this.target + 0.9 * this.wingK) * (1 - 0.32 * this.aimK) * (scoped3p ? 0 : 1);
             this.distance +=
               (tgt - this.distance) * (1 - Math.exp(-dt * (scoped3p || this.scopeK > 0.05 ? 16 : 9)));
             // Smooth follow: in third person the pivot trails the eye a little (critically damped,
@@ -27594,7 +27607,7 @@ body.netgame #revivetouch{display:flex}
               offset = forward()
                 .multiplyScalar(-this.distance)
                 .add(
-                  new V((0.5 + 0.28 * this.aimK) * blend * this.sideNow, (0.16 + 0.06 * this.aimK) * blend, 0).applyAxisAngle(
+                  new V((0.5 + 0.28 * this.aimK) * blend * this.sideNow, (0.16 + 0.06 * this.aimK + 0.55 * this.wingK) * blend, 0).applyAxisAngle(
                     new V(0, 1, 0),
                     yaw,
                   ),
