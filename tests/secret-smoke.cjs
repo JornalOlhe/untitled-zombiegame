@@ -1,4 +1,4 @@
-// Secret classes and weapons: Archangel/Archdemon flight unlocks after 100 kills (Q), lasts 30 s,
+// Secret classes and weapons: Archangel/Archdemon cast unlocks after 25 kills (Q): blast + 15 s flight with auto powers,
 // allows vertical movement and ends; Demonic Fury throw (ground AoE in demon flight),
 // Angelic Specter spin; Blender accessories are attached.
 const { chromium } = require('playwright');
@@ -34,14 +34,25 @@ const server = http.createServer((req, res) => {
         const p = T.player; p.hp = p.maxhp = 1e9;
         const feet = () => (p.ground || 0) + p.jump;
         const r = {};
-        p.classCharge = 99; p.cooldown = 0; P.ability();
+        p.classCharge = 24; p.cooldown = 0; P.ability();
         r.lockedBefore100 = !T.classBurst().flight;
-        p.classCharge = 100; P.ability();
+        T.ZombieManager.clear();
+        const V = THREE.Vector3, at = (dx, dz) => new V(p.pos.x + dx, 0, p.pos.z + dz);
+        const nearZ = T.ZombieManager.spawn(0, null, at(3, 0)); nearZ.speed = 0; nearZ.hp = nearZ.maxHp = 1e6;
+        const nh0 = nearZ.hp;
+        p.classCharge = 25; P.ability();
+        r.blastHit = nearZ.hp < nh0;
         r.flying = T.classBurst().flight;
         T.keys.add('Space'); T.stepPlayer(1 / 30, 45); T.keys.delete('Space');
         r.rose = +feet().toFixed(2);
         r.chargeConsumed = p.classCharge === 0;
-        T.stepPlayer(1 / 30, 30 * 31);
+        // In-flight power: smite (angel) / brimstone meteors (demon) damage nearby enemies on their own.
+        const far = T.ZombieManager.spawn(0, null, at(-6, 4)); far.speed = 0; far.hp = far.maxHp = 1e6;
+        const fh0 = far.hp, nh1 = nearZ.hp;
+        T.stepPlayer(1 / 30, 30 * 4);
+        r.powerHits = (far.hp < fh0) + (nearZ.hp < nh1);
+        T.ZombieManager.clear();
+        T.stepPlayer(1 / 30, 30 * 12);
         r.ended = !T.classBurst().flight;
         T.stepPlayer(1 / 30, 30 * 4);
         r.landed = +feet().toFixed(2);
@@ -71,9 +82,11 @@ const server = http.createServer((req, res) => {
     console.log(JSON.stringify(out));
     for (const k of ['angel', 'demon']) {
       const r = out[k];
-      assert.ok(r.lockedBefore100 && r.flying === k, `${k}: flight unlocks at 100 kills`);
+      assert.ok(r.lockedBefore100 && r.flying === k, `${k}: cast unlocks at 25 kills`);
+      assert.ok(r.blastHit, `${k}: cast blast damages nearby enemies`);
+      assert.ok(r.powerHits >= 1, `${k}: in-flight power strikes enemies`);
       assert.ok(r.rose > 1.8 && r.chargeConsumed, `${k}: rises while flying, kills consumed`);
-      assert.ok(r.ended && r.landed < 0.3, `${k}: flight ends after 30 s and lands`);
+      assert.ok(r.ended && r.landed < 0.3, `${k}: flight ends after 15 s and lands`);
     }
     assert.ok(out.weapons.thrown && out.weapons.hellfire && out.weapons.spinning, 'secret weapon skills');
     assert.ok(out.models, 'Blender accessory models loaded');

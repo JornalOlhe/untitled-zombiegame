@@ -3341,17 +3341,17 @@ body.netgame #revivetouch{display:flex}
             active:"Por 10 s, o bônus com arcos é substituído por +20% e o salto fica 10% mais alto.",
             effects:{ bowDamage:1.15 }, burst:{ duration:10, bowDamageTotal:1.20, jumpTotal:1.10 } },
           { key:"archangel", name:"Archangel", tier:7, color:"#dff8ff",
-            ability:"Heavenly Flight", cd:30, requiredKills:100, secretFlight:"angel",
-            desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Auréola e duas asas exclusivas.",
-            active:"A cada 100 eliminações, libera 30 s de voo no Q. As kills são consumidas, não acumula carga e depois há 30 s de cooldown.",
-            effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
-            burst:{ duration:30, flight:"angel" } },
+            ability:"Judgement", cd:30, requiredKills:25, secretFlight:"angel",
+            desc:"Sustentação divina: +120% de dano, +100% de vida máxima, recebe 40% menos dano e regenera 4 HP/s após 4 s sem sofrer dano. Auréola e duas asas exclusivas.",
+            active:"Com 25 eliminações: Nova Sagrada (700 de dano em 9 m e cura 35% da vida) e 15 s de voo. Em voo, +180% de dano e a cada 1,1 s um raio de luz castiga o inimigo mais próximo (260 de dano, x2 em chefes).",
+            effects:{ damage:2.20, maxHp:2.00, damageTaken:0.60, regen:4, regenDelay:4 },
+            burst:{ duration:15, flight:"angel", nova:700, novaRadius:9, healPct:0.35, damageTotal:2.80 } },
           { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
-            ability:"Infernal Flight", cd:30, requiredKills:100, secretFlight:"demon",
-            desc:"+150% de dano, +100% de vida máxima e recebe 50% menos dano. Chifres e cauda demoníaca exclusivos.",
-            active:"A cada 100 eliminações, libera 30 s de voo no Q. A cauda se enrola e estala como chicote na decolagem e ondula durante o voo; kills zeram, sem cargas acumuladas, e há 30 s de cooldown.",
-            effects:{ damage:2.50, maxHp:2.00, damageTaken:0.50 },
-            burst:{ duration:30, flight:"demon" } },
+            ability:"Hellfire", cd:30, requiredKills:25, secretFlight:"demon",
+            desc:"Poder bruto: +170% de dano, +60% de vida máxima, recebe 40% menos dano e cada eliminação rouba 4 HP. Chifres e cauda demoníaca exclusivos.",
+            active:"Com 25 eliminações: Erupção Infernal (900 de dano em 8 m) e 15 s de voo. Em voo, +230% de dano e chovem meteoros de enxofre a cada 0,85 s (220 de dano em área). A cauda estala como chicote na decolagem.",
+            effects:{ damage:2.70, maxHp:1.60, damageTaken:0.60, killHeal:4 },
+            burst:{ duration:15, flight:"demon", nova:900, novaRadius:8, damageTotal:3.30 } },
         ];
         const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
         const classOf = () => classes[selectedClass] || classes[0];
@@ -5746,6 +5746,76 @@ body.netgame #revivetouch{display:flex}
         // Heavenly / Infernal Flight cast: one shared timeline for body, camera, wings, tail and FX.
         // ANTICIPATION (gather: crouch, wings rise / tail coils) → LAUNCH (explosive rise, burst,
         // wing downstroke / tail whip) → FOLLOW-THROUGH → RECOVERY into the flight loop.
+        // Tier-7 flight powers. Archangel: "Smite" — a pillar of light strikes the nearest enemy
+        // every 1.1 s. Archdemon: "Brimstone" — a meteor falls on a random enemy every 0.85 s and
+        // bursts in a small fire blast. Only while the class flight burst is active, after take-off.
+        const ArchPowers = {
+          next: 0,
+          meteors: [],
+          update(dt) {
+            for (let i = this.meteors.length - 1; i >= 0; i--) {
+              const m = this.meteors[i];
+              m.t += dt;
+              const k = Math.min(1, m.t / 0.42);
+              m.sp.position.lerpVectors(m.from, m.to, k * k);
+              if (k >= 1) {
+                scene.remove(m.sp); m.sp.material.dispose(); this.meteors.splice(i, 1);
+                explosion(m.to.clone(), 2.6, 220, false, 0xff4a14, WeaponSystem.current());
+                MonsterFX.circle(m.to, 1.6, 0xff3a10, 1.4, 0.45);
+              }
+            }
+            const f = classBurst().flight;
+            if (!f || state !== GameState.PLAYING) { this.next = 0; return; }
+            if (ClassAscend.since() < ClassAscend.END || simulationTime < this.next) return;
+            const angel = f === "angel", p = player.pos, R = angel ? 20 : 16;
+            this.next = simulationTime + (angel ? 1.1 : 0.85);
+            const near = ZombieManager.list.filter((z) => !z.dead && Math.hypot(z.group.position.x - p.x, z.group.position.z - p.z) < R);
+            if (!near.length) return;
+            if (angel) {
+              let best = near[0], bd = 1e9;
+              for (const z of near) { const d = z.group.position.distanceToSquared(p); if (d < bd) { bd = d; best = z; } }
+              this.smite(best);
+            } else this.meteor(near[(Math.random() * near.length) | 0]);
+          },
+          smite(z) {
+            const at = z.group.position.clone();
+            const geo = (this._pillar ||= new THREE.CylinderGeometry(0.35, 0.55, 14, 10, 1, true));
+            const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff2c4, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+            m.userData.ownMaterial = true; m.position.set(at.x, 7, at.z);
+            MonsterFX.add(m, 0.75, (it) => { const k = 1 - it.life / it.max; m.material.opacity = 0.95 * (1 - k * k); m.scale.set(1.2 - k * 0.8, 1, 1.2 - k * 0.8); });
+            MonsterFX.ring(at, 2.2, 0xffe7a8, 0.5);
+            ParticleSystem.emit(at.clone().setY(1), 0xffffff, 12, 5);
+            ZombieManager.hit(z, z.boss ? 520 : 260, false, at.clone().setY(1.4), WeaponSystem.current(), true);
+            AudioManager.tone(rand(1300, 1500), 0.25, "sine", 0.12, 2600, "weapons");
+          },
+          meteor(z) {
+            const to = z.group.position.clone().setY(0.2);
+            const from = to.clone().add(new V(rand(-4, 4), 16, rand(-4, 4)));
+            const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xff6a1e, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+            sp.scale.setScalar(1.6); sp.position.copy(from); scene.add(sp);
+            this.meteors.push({ sp, from, to, t: 0 });
+            MonsterFX.circle(to, 1.2, 0xff2a0a, 0.45, 0.35);
+          },
+          // Cast shockwave centred on the caster: damage with distance falloff, an expanding ground
+          // ring and a prop shove — no explosion debris in the caster's own face.
+          nova(kind, dmg, radius) {
+            const p = player.pos, angel = kind === "angel", col = angel ? 0xfff0c2 : 0xff3a14;
+            const base = new V(p.x, (player.ground || 0) + 0.1, p.z);
+            MonsterFX.ring(base, radius, col, 0.8).mesh.position.y = base.y;
+            MonsterFX.circle(base, radius * 0.6, angel ? 0xffe7a8 : 0xff5a1e, 0.5, 0.35).mesh.position.y = base.y;
+            for (const z of [...ZombieManager.list]) {
+              if (z.dead) continue;
+              const d = Math.hypot(z.group.position.x - p.x, z.group.position.z - p.z);
+              if (d > radius + (z.size || 1) * 0.4) continue;
+              const at = z.group.position.clone().setY(1.2);
+              ParticleSystem.emit(at, col, 6, 3);
+              ZombieManager.hit(z, dmg * (1 - 0.45 * Math.min(1, d / radius)), false, at, WeaponSystem.current(), true);
+            }
+            PhysicsProps.impulse(base, radius, 9);
+            shake = Math.max(shake, 0.4);
+          },
+          clear() { for (const m of this.meteors) { scene.remove(m.sp); m.sp.material.dispose(); } this.meteors.length = 0; this.next = 0; },
+        };
         const ClassAscend = {
           ANT: 0.34, RISE: 0.5, END: 1.35,
           since() { return player.abilityAt == null ? 99 : simulationTime - player.abilityAt; },
@@ -21742,6 +21812,7 @@ body.netgame #revivetouch{display:flex}
             BloodFX.clear();
             while (projectiles.length) removeProjectile(projectiles.length - 1);
             GrenadeThrow.cancel();
+            ArchPowers.clear();
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
             ReaperAllies.clear();
@@ -21926,6 +21997,8 @@ body.netgame #revivetouch{display:flex}
               player.hp = Math.min(player.maxhp + player.bonus, player.hp + burst.heal);
             if (burst.fullHeal)
               player.hp = player.maxhp + player.bonus;
+            if (burst.healPct)
+              player.hp = Math.min(player.maxhp + player.bonus, player.hp + (player.maxhp + player.bonus) * burst.healPct);
             if (burst.turret) {
               const g = new THREE.Group();
               box(g, 0, 0.4, 0, 0.7, 0.8, 0.7, 0x485861);
@@ -21937,6 +22010,7 @@ body.netgame #revivetouch{display:flex}
             }
             if (burst.grenades)
               player.grenades += burst.grenades;
+            if (burst.nova) ArchPowers.nova(burst.flight, burst.nova, burst.novaRadius || 8);
             if (burst.blast)
               explosion(
                 player.pos.clone(),
@@ -22549,6 +22623,7 @@ body.netgame #revivetouch{display:flex}
                 1.5 * clamp((this.motion.speed() - (this.speedCap || 99) / GroundMotion.BHOP_CAP) / ((this.speedCap || 99) * (1 - 1 / GroundMotion.BHOP_CAP)), 0, 1));
             camera.fov += (targetFov + ClassAscend.fovKick(ClassAscend.since()) - camera.fov) * Math.min(1, dt * 12);
             ClassAscend.update();
+            ArchPowers.update(dt);
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
             CameraRig.update(dt);
@@ -30115,6 +30190,7 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             StreetBreak,
+            ArchPowers,
             WindLitter,
             PowerUps,
             HitDir,
