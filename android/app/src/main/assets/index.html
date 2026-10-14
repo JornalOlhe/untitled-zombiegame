@@ -30570,8 +30570,11 @@ body.netgame #revivetouch{display:flex}
           },
           reset() { this.n = 0; },
         };
-        function frame(now, background = false) {
-          if (!background) requestAnimationFrame(frame);
+        function frame(now, background = false, manual = false) {
+          if (!background && !manual) requestAnimationFrame(frame);
+          // Recording only (?test=1): with window.__manual the vsync loop idles and frames are
+          // stepped one by one by window.__stepFrame(), so a capture runs at exact game speed.
+          if (window.__manual && !manual && !background) return;
           // Optional frame cap (settings): skip a vsync tick when we're ahead of the budget.
           const fpsCap = SettingsManager.data.fpsCap;
           if (fpsCap && !background && now - lastFrame < 1000 / fpsCap - 1.5) return;
@@ -30819,6 +30822,8 @@ body.netgame #revivetouch{display:flex}
           Perf.sample(perfT1 - perfT0, performance.now() - perfT1, wallDt);
         }
         requestAnimationFrame(frame);
+        if (new URLSearchParams(location.search).has("test"))
+          window.__stepFrame = (ms = 1000 / 60) => frame(lastFrame + ms, false, true);
         // Online matches keep running while the window is hidden or minimized (the browser stops
         // requestAnimationFrame there): step the simulation from a timer, without rendering, so the
         // host keeps sending the world and guests keep their connection.

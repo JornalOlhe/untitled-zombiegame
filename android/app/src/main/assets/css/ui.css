@@ -1032,3 +1032,13 @@ body.blood-wave #hud::before{content:"";position:fixed;inset:0;pointer-events:no
 body.blood-wave #wavehud{color:#ff5a4a!important;text-shadow:0 0 14px #ff000088}
 @keyframes bloodpulse{0%,100%{opacity:.75}50%{opacity:1}}
 @media (max-width:700px){.shop-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.shop-dialog{padding:12px}.shop-head h2{font-size:22px}#shop-essence{font-size:20px}}
+@media (max-height:620px){
+  .shop-dialog{max-height:96vh;padding:10px 14px 12px}
+  .shop-head h2{font-size:20px}.shop-head .eyebrow{font-size:8px}#shop-essence{font-size:20px}#shop-close{padding:6px 10px}
+  .shop-note{display:none}
+  #shop-body h3{margin:8px 0 5px;font-size:11px}
+  .shop-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+  .shop-card{grid-template-columns:26px 1fr;column-gap:7px;padding:6px 8px;row-gap:0}
+  .shop-card i{width:26px;height:26px;font-size:14px;border-radius:7px}
+  .shop-card b{font-size:11px}.shop-card small{font-size:9px;line-height:1.2}.shop-card em{font-size:10.5px}
+}
