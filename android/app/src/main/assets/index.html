@@ -22635,6 +22635,8 @@ body.netgame #revivetouch{display:flex}
           screen(id) {
             const epoch = ++this.screenEpoch;
             if (id === "pausescreen") this.pauseMenu();
+            // The lobby wallet chip must reflect coins earned during the run that just ended.
+            if (id === "menu" && DR.ProfileUI?.game) DR.ProfileUI.chip();
             const active = document.activeElement;
             for (const el of document.querySelectorAll(".screen")) {
               const hidden = el.id !== id;
