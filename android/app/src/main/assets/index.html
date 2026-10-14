@@ -2958,6 +2958,13 @@ body.netgame #revivetouch{display:flex}
         <div class="footer-actions"><span class="hint">20 waves por nível · 1 estrela libera o próximo</span><button id="story-deploy" class="primary">Iniciar nível</button></div>
       </div>
     </section>
+    <section id="matchshop" class="screen modal hidden">
+      <div class="dialog shop-dialog" role="dialog" aria-modal="true" aria-labelledby="shop-title">
+        <header class="shop-head"><div><span class="eyebrow">LOJA DA PARTIDA</span><h2 id="shop-title">ARSENAL</h2></div><strong id="shop-essence">0 ✦</strong><button id="shop-close" type="button" aria-label="Fechar loja">Voltar <small>B / Esc</small></button></header>
+        <p class="shop-note">A Essência só vale nesta partida: ganhe matando (tiro na cabeça e especiais pagam mais) e limpando ondas.</p>
+        <div id="shop-body"></div>
+      </div>
+    </section>
     <section id="pausescreen" class="screen modal hidden">
       <div class="dialog pause-dialog" role="dialog" aria-modal="true" aria-labelledby="pause-title">
         <div class="pause-head">
@@ -3067,6 +3074,7 @@ body.netgame #revivetouch{display:flex}
         <div class="hint" id="classhud"></div>
         <div class="wave" id="wavehud"></div>
         <div class="wallet" id="wallethud"></div>
+        <div class="essence" id="essencehud" title="Essência da partida · B abre a loja"></div>
       </div>
       <div id="feed" class="feed"></div>
       <div id="bossbar" class="hidden"></div>
@@ -3109,6 +3117,7 @@ body.netgame #revivetouch{display:flex}
       <div id="pinchhint">Arraste para olhar · Pinça para 1ª/3ª pessoa</div>
       <button id="moretouch" class="touch-btn" aria-label="Mais ações" aria-expanded="false">⋯</button>
       <button id="pausetouch" class="touch-btn touch-utility" aria-label="Pausar">Ⅱ</button>
+      <button id="shoptouch" class="touch-btn touch-utility" aria-label="Loja da partida">✦</button>
       <button id="firetouch" class="touch-btn touch-fire" aria-label="Atirar">
         <span class="touch-icon">⌖</span><span class="touch-label">ATIRAR</span>
       </button>
@@ -3364,7 +3373,7 @@ body.netgame #revivetouch{display:flex}
         const classValue = (key, fallback = 1) => {
           const burst = classBurst(), effects = classEffects();
           const totalKey = key + "Total";
-          return burst[totalKey] ?? effects[key] ?? fallback;
+          return (burst[totalKey] ?? effects[key] ?? fallback) * (typeof MatchShop !== "undefined" ? MatchShop.mult(key) : 1);
         };
 
         const maps = [
@@ -3469,6 +3478,7 @@ body.netgame #revivetouch{display:flex}
             resolution: 1,
             keys: {},
             numbers: true,
+            autoFire: true,
             fps: false,
             invert: false,
             shake: 100,
@@ -8825,7 +8835,7 @@ body.netgame #revivetouch{display:flex}
           if (isLong) multiplier *= burst.longRangeDamageTotal ?? effects.longRangeDamage ?? 1;
           if (isExplosive) multiplier *= burst.explosiveDamageTotal ?? effects.explosiveDamage ?? 1;
           if (DevMode.on("infiniteDamage")) return 1e6;
-          return w.damage * rarityMult[w.tier] * multiplier * critical;
+          return w.damage * rarityMult[w.tier] * multiplier * critical * MatchShop.papMult(w);
         }
         // Bosses and minibosses can't be melted: every hit is capped to a small slice of
         // their max HP and a rolling 1 s window bounds the total damage per second, no
@@ -15215,6 +15225,8 @@ body.netgame #revivetouch{display:flex}
             shadow.scale.set(0.9 * size, 0.65 * size, 1);
             g.add(shadow);
             z.contact = shadow;
+            if (!boss) ZombieVariants.roll(z);
+            if (!boss && WaveManager.blood) z.speed *= 1.15;
             this.list.push(z);
             NetGame.registerSpawn(z);
             return z;
@@ -15319,6 +15331,7 @@ body.netgame #revivetouch{display:flex}
               this.applyBurn(z, w.burn.dps * rarityMult[w.tier], w.burn.duration, w);
             if (w?.freeze && !z.remote) this.applySlow(z, w.freeze.slow, w.freeze.duration);
             if (w?.chill && !z.remote) this.applyChill(z, w.chill);
+            if (w?.mod && damage > 0 && !z.remote && z.hp > 0) MatchShop.proc(z, w, point);
             if (w?.lifesteal && !NetGame.attacker)
               player.hp = Math.min(
                 player.maxhp + player.bonus,
@@ -15412,6 +15425,7 @@ body.netgame #revivetouch{display:flex}
               ZombiePing.lastKill = simulationTime;
               PowerUps.onKill(z);
               Director.kill(z.group.position);
+              if (byMe) MatchShop.earn(z.boss ? (z.boss.major ? 1000 : 500) : (head ? 70 : 50) + ZombieVariants.reward(z));
               if (!z.boss) {
                 const reward = EconomyRewards.enemy(z.type);
                 Progression.reward(reward);
@@ -15531,6 +15545,7 @@ body.netgame #revivetouch{display:flex}
                 to = (z.toPlayer ||= new V()).copy(player.pos).sub(pos);
               to.y = 0;
               const dist = to.length();
+              if (z.variant && ZombieVariants.tick(z, dt, dist)) continue;
               const silent =
                 classEffects().silentCrouch && keys.has("ControlLeft") && dist > 9;
               HordeAI.sense(z, dt, dist);
@@ -20509,6 +20524,302 @@ body.netgame #revivetouch{display:flex}
             return 1;
           },
         };
+        // ── In-match economy (CoD Zombies points / Killing Floor dosh) ──────────────────────────
+        // Essência is earned only inside a match (kills, headshots, cleared waves) and spent in the
+        // shop (B / 🛒): perks with a rising price, a two-step weapon upgrade, an elemental ammo mod
+        // per weapon, armor and grenades. It never touches the persistent coin wallet.
+        const MatchShop = {
+          PERKS: [
+            { id: "couraca", name: "Couraça", icon: "⛨", color: "#e0483e", base: 1500, desc: "+50% de vida máxima" },
+            { id: "folego", name: "Fôlego", icon: "»", color: "#ffd24a", base: 1000, desc: "+15% de velocidade e pulo mais alto" },
+            { id: "recarga", name: "Recarga Relâmpago", icon: "↻", color: "#5ec8ff", base: 1200, desc: "Recarrega 45% mais rápido" },
+            { id: "toque", name: "Toque Duplo", icon: "⁑", color: "#ff9a3c", base: 1500, desc: "Atira 25% mais rápido e +10% de dano" },
+            { id: "mira", name: "Mira Mortal", icon: "◎", color: "#b07bff", base: 1200, desc: "Tiros na cabeça causam +50% de dano" },
+            { id: "chance", name: "Segunda Chance", icon: "✚", color: "#6dff92", base: 1500, desc: "Uma vez por partida, volta com 50% da vida" },
+          ],
+          MODS: {
+            fire: { name: "Munição Incendiária", icon: "🔥", color: "#ff6a2a", desc: "Chance de incendiar o alvo" },
+            ice: { name: "Munição Criogênica", icon: "❄", color: "#9fe4ff", desc: "Chance de congelar e desacelerar" },
+            shock: { name: "Munição Elétrica", icon: "⚡", color: "#ffe84a", desc: "Chance de dar choque em até 3 inimigos próximos" },
+          },
+          MOD_PRICE: 2000, ARMOR_PRICE: 800, GRENADE_PRICE: 600, PAP_PRICE: [3000, 6000],
+          essence: 0, owned: new Set(), procLock: false,
+          get open() { const el = document.getElementById("matchshop"); return !!el && !el.classList.contains("hidden"); },
+          reset() { this.essence = 0; this.owned = new Set(); this.close(true); },
+          has(id) { return this.owned.has(id); },
+          mult(key) {
+            if (key === "maxHp" && this.has("couraca")) return 1.5;
+            if ((key === "speed" || key === "jump") && this.has("folego")) return 1.15;
+            if (key === "damage" && this.has("toque")) return 1.1;
+            return 1;
+          },
+          reloadMult() { return this.has("recarga") ? 0.55 : 1; },
+          rateMult() { return this.has("toque") ? 0.75 : 1; },
+          headMult() { return this.has("mira") ? 1.5 : 1; },
+          papMult(w) { return 1 + 0.6 * (w?.pap || 0) + 0.1 * Math.max(0, (w?.pap || 0) - 1); },
+          earn(n, pos = null) {
+            if (!n || !player) return;
+            n = Math.round(n * (WaveManager.blood ? 2 : 1));
+            this.essence += n;
+            if (pos) UIManager.number(`+${n} ✦`, pos, "#c58bff");
+          },
+          perkPrice(p) { return p.base + 500 * this.owned.size; },
+          spend(cost) {
+            if (DevMode.on("infiniteAmmo")) return true;
+            if (this.essence < cost) { UIManager.toast(`Essência insuficiente (${cost} ✦).`); AudioManager.tone(140, 0.12, "square", 0.08, 90); return false; }
+            this.essence -= cost; return true;
+          },
+          buyPerk(id) {
+            const p = this.PERKS.find((x) => x.id === id);
+            if (!p || this.has(id) || !this.spend(this.perkPrice(p))) return false;
+            this.owned.add(id);
+            if (id === "couraca") player.hp = Math.min(player.maxhp * 1.5 + player.bonus, player.hp + player.maxhp * 0.5);
+            this.celebrate(p.color, `${p.name}`);
+            return true;
+          },
+          buyPap() {
+            const w = WeaponSystem.current();
+            if (!w || (w.pap || 0) >= 2) return false;
+            if (!this.spend(this.PAP_PRICE[w.pap || 0])) return false;
+            w.pap = (w.pap || 0) + 1;
+            if (w.mag !== Infinity) { w.mag = Math.round(w.mag * 1.5); w.ammo = w.mag; }
+            w.name = w.name.replace(/ ★+$/, "") + " " + "★".repeat(w.pap);
+            this.celebrate("#c58bff", `${w.name} aprimorada`);
+            return true;
+          },
+          buyMod(kind) {
+            const w = WeaponSystem.current();
+            if (!w || w.mod === kind || !this.MODS[kind] || !this.spend(this.MOD_PRICE)) return false;
+            w.mod = kind;
+            this.celebrate(this.MODS[kind].color, this.MODS[kind].name);
+            return true;
+          },
+          buyArmor() {
+            if (player.bonus >= 100 || !this.spend(this.ARMOR_PRICE)) return false;
+            player.bonus = Math.min(100, player.bonus + 50);
+            player.hp = Math.min(player.maxhp + player.bonus, player.hp + 50);
+            this.celebrate("#9fd2ff", "+50 de armadura");
+            return true;
+          },
+          buyGrenades() {
+            if (!this.spend(this.GRENADE_PRICE)) return false;
+            player.grenades += 2;
+            this.celebrate("#ffb24a", "+2 granadas");
+            return true;
+          },
+          celebrate(color, text) {
+            AudioManager.coin();
+            AudioManager.tone(660, 0.18, "triangle", 0.18, 1320);
+            ParticleSystem.emit(player.pos.clone().add(new V(0, -0.6, 0)), parseInt(color.slice(1), 16), 26, 3.5);
+            UIManager.toast(`✦ ${text}`);
+            this.render();
+          },
+          // Elemental ammo: a per-hit chance (lower for shotgun pellets) with a short per-target cooldown.
+          proc(z, w, point) {
+            if (!w?.mod || this.procLock || z.dead || z.remote || (z.modAt || 0) > simulationTime) return;
+            if (Math.random() > (w.pellets ? 0.06 : w.kind === "melee" ? 0.3 : 0.16)) return;
+            z.modAt = simulationTime + 0.6;
+            const at = point ? point.clone() : zombieBodyPoint(z);
+            this.procLock = true;
+            try {
+              if (w.mod === "fire") { ZombieManager.applyBurn(z, 18 * rarityMult[w.tier], 3, null); ParticleSystem.emit(at, 0xff6a2a, 16, 3); }
+              else if (w.mod === "ice") { ZombieManager.applyChill(z, z.boss ? 0.25 : 0.6); ZombieManager.applySlow(z, 0.6, 2); ParticleSystem.emit(at, 0xcff4ff, 16, 2.5); }
+              else if (w.mod === "shock") {
+                const near = ZombieManager.list.filter((o) => o !== z && !o.dead && o.group.position.distanceTo(z.group.position) < 6).slice(0, 3);
+                let from = at;
+                for (const o of near) {
+                  const to = zombieBodyPoint(o);
+                  this.bolt(from, to);
+                  ZombieManager.hit(o, weaponDamage(w) * 0.6 + 20, false, to, null, true);
+                  from = to;
+                }
+                ParticleSystem.emit(at, 0xffe84a, 14, 4);
+                AudioManager.tone(rand(1800, 2400), 0.09, "sawtooth", 0.06, 600, "weapons");
+              }
+            } finally { this.procLock = false; }
+          },
+          bolt(a, b) {
+            const pts = [a.clone()];
+            for (let i = 1; i < 6; i++) pts.push(a.clone().lerp(b, i / 6).add(new V(rand(-0.25, 0.25), rand(-0.25, 0.25), rand(-0.25, 0.25))));
+            pts.push(b.clone());
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xfff27a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+            line.userData.ownMaterial = true;
+            MonsterFX.add(line, 0.18, (it) => { line.material.opacity = it.life / it.max; }).ownGeometry = true;
+          },
+          toggle() { this.open ? this.close() : this.show(); },
+          show() {
+            if (state !== GameState.PLAYING || NetGame.down || NetGame.dead) return;
+            pause(false);
+            UIManager.screen("matchshop");
+            this.render();
+          },
+          close(silent = false) {
+            if (!this.open) return;
+            if (silent) { UIManager.screen(null); return; }
+            if (!silent && (state === GameState.PAUSED || NetGame.menuOpen)) resume();
+          },
+          card(attrs, icon, color, name, desc, price, state) {
+            return `<button type="button" class="shop-card ${state}" style="--c:${color}" ${attrs} ${state === "owned" || state === "max" ? "disabled" : ""}><i>${icon}</i><b>${name}</b><small>${desc}</small><em>${state === "owned" ? "COMPRADO" : state === "max" ? "MÁXIMO" : `${price} ✦`}</em></button>`;
+          },
+          render() {
+            const el = $("shop-body");
+            if (!el || !this.open) return;
+            const w = WeaponSystem.current(), lvl = w?.pap || 0, can = (n) => (this.essence >= n ? "" : "poor");
+            $("shop-essence").textContent = `${this.essence} ✦`;
+            const perks = this.PERKS.map((p) => this.card(`data-shop="perk" data-id="${p.id}"`, p.icon, p.color, p.name, p.desc, this.perkPrice(p), this.has(p.id) ? "owned" : can(this.perkPrice(p)))).join("");
+            const pap = this.card(`data-shop="pap"`, "★", "#c58bff", lvl ? "Aprimorar de novo" : "Aprimorar arma", `${w?.name || "Arma"}: ${lvl ? "+70% de dano" : "+60% de dano e pente 50% maior"}`, this.PAP_PRICE[Math.min(1, lvl)], lvl >= 2 ? "max" : can(this.PAP_PRICE[lvl]));
+            const mods = Object.entries(this.MODS).map(([k, m]) => this.card(`data-shop="mod" data-id="${k}"`, m.icon, m.color, m.name, m.desc, this.MOD_PRICE, w?.mod === k ? "owned" : can(this.MOD_PRICE))).join("");
+            const extra = this.card(`data-shop="armor"`, "▣", "#9fd2ff", "Placa de armadura", "+50 de vida extra (máx. 100)", this.ARMOR_PRICE, player.bonus >= 100 ? "max" : can(this.ARMOR_PRICE)) +
+              this.card(`data-shop="grenades"`, "◉", "#ffb24a", "Granadas", "+2 granadas", this.GRENADE_PRICE, can(this.GRENADE_PRICE));
+            el.innerHTML = `<h3>Perks <span>o preço sobe a cada perk comprado</span></h3><div class="shop-grid">${perks}</div>
+              <h3>Arma atual <span>${w?.name || ""}</span></h3><div class="shop-grid">${pap}${mods}</div>
+              <h3>Suprimentos</h3><div class="shop-grid">${extra}</div>`;
+          },
+          click(btn) {
+            const k = btn.dataset.shop, id = btn.dataset.id;
+            if (k === "perk") this.buyPerk(id);
+            else if (k === "pap") this.buyPap();
+            else if (k === "mod") this.buyMod(id);
+            else if (k === "armor") this.buyArmor();
+            else if (k === "grenades") this.buyGrenades();
+          },
+          perkIcons() {
+            return [...this.owned].map((id) => { const p = this.PERKS.find((x) => x.id === id); return `<i style="--c:${p.color}" title="${p.name}">${p.icon}</i>`; }).join("");
+          },
+        };
+        // ── Special infected variants (L4D specials / 7DTD ferals) ───────────────────────────────
+        // Ordinary zombies can spawn as a variant from mid waves on. Each has a glow you can read at
+        // a distance and its own spawn cue: Feral (yellow eyes, fast), Radiado (green aura,
+        // regenerates), Cuspidor (spits acid that leaves a burning puddle) and Saltador (leaps).
+        const ZombieVariants = {
+          KINDS: {
+            feral: { name: "Feral", wave: 4, color: 0xffd23a, speed: 1.4, hp: 1.2 },
+            pouncer: { name: "Saltador", wave: 5, color: 0xb05cff, speed: 1.1, hp: 1.3 },
+            spitter: { name: "Cuspidor", wave: 6, color: 0x9dff45, speed: 0.85, hp: 1.1 },
+            radiated: { name: "Radiado", wave: 8, color: 0x5cff7a, speed: 1, hp: 1.7 },
+          },
+          lastCue: {},
+          roll(z) {
+            const wave = WaveManager.wave || 0;
+            if (z.boss || z.remote || wave < 4 || [2, 6].includes(z.type)) return;
+            const chance = Math.min(0.32, 0.06 + (wave - 4) * 0.018) * (WaveManager.blood ? 1.6 : 1);
+            if (Math.random() > chance) return;
+            const pool = Object.entries(this.KINDS).filter(([, k]) => wave >= k.wave);
+            const [id, K] = pool[(Math.random() * pool.length) | 0];
+            this.apply(z, id, K);
+          },
+          apply(z, id, K = this.KINDS[id]) {
+            z.variant = id;
+            z.speed *= K.speed;
+            z.hp = z.maxhp = z.hp * K.hp;
+            z.name = `${K.name} ${z.name || ""}`.trim();
+            z.nextSkill = simulationTime + rand(2, 4);
+            const glow = VisualArt.texture("glow");
+            // eyes / aura: additive sprites on the head and the chest (two draws per variant)
+            const head = z.rig?.head || z.rig?.neck;
+            const eyes = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: K.color, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
+            eyes.scale.set(0.7, 0.34, 1); eyes.userData.disposableMaterial = true;
+            // in front of the face, in the zombie's own frame (+z faces where it walks)
+            void head; eyes.position.set(0, 1.66, 0.34); eyes.renderOrder = 5; z.group.add(eyes);
+            // a glowing ground ring reads from any angle and never hides inside the body
+            const aura = new THREE.Mesh(VisualArt.geometries.plane, new THREE.MeshBasicMaterial({ map: glow, color: K.color, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2 }));
+            aura.rotation.x = -Math.PI / 2; aura.scale.setScalar(id === "radiated" ? 2.6 : 1.9); aura.position.set(0, 0.04, 0); aura.userData.disposableMaterial = true;
+            z.group.add(aura);
+            z.variantFx = { eyes, aura };
+            this.cue(id, z);
+          },
+          // A distinct audible sting per kind (L4D leitmotif idea), rate-limited per kind.
+          cue(id, z) {
+            if (!AudioManager.ctx || simulationTime - (this.lastCue[id] ?? -9) < 4) return;
+            this.lastCue[id] = simulationTime;
+            const far = clamp(1 - z.group.position.distanceTo(player.pos) / 45, 0.25, 1);
+            const T = (f, d, type, v, to, delay = 0) => setTimeout(() => AudioManager.tone(f, d, type, v * far, to, "effects"), delay);
+            if (id === "feral") { T(520, 0.12, "sawtooth", 0.09, 900); T(620, 0.12, "sawtooth", 0.09, 1100, 110); }
+            else if (id === "pouncer") { T(240, 0.25, "square", 0.08, 120); T(900, 0.08, "triangle", 0.07, 1400, 220); }
+            else if (id === "spitter") { T(160, 0.4, "sawtooth", 0.08, 90); T(300, 0.15, "triangle", 0.05, 200, 260); }
+            else if (id === "radiated") { T(70, 0.9, "sine", 0.14, 110); T(1600, 0.3, "sine", 0.03, 1900, 150); }
+          },
+          // Returns true when the variant fully drives this zombie for this frame (a pounce in the air).
+          tick(z, dt, dist) {
+            const id = z.variant, t = simulationTime, fx = z.variantFx;
+            if (fx) fx.aura.material.opacity = 0.7 + 0.2 * Math.sin(t * 5 + z.anim);
+            if (Math.random() < dt * 3) ParticleSystem.emit(z.group.position.clone().add(new V(rand(-0.3, 0.3), 1.2 * (z.size || 1), rand(-0.3, 0.3))), this.KINDS[id].color, 1, 0.6);
+            if (id === "radiated") {
+              if (t - (z.lastHitAt ?? -9) > 2 && z.hp < z.maxhp) z.hp = Math.min(z.maxhp, z.hp + z.maxhp * 0.05 * dt);
+              return false;
+            }
+            if (id === "pouncer") {
+              const P = z.pounce;
+              if (P) {
+                const k = Math.min(1, (t - P.t0) / P.dur), pos = z.group.position;
+                pos.x = P.from.x + (P.to.x - P.from.x) * k;
+                pos.z = P.from.z + (P.to.z - P.from.z) * k;
+                pos.y = P.from.y + (P.to.y - P.from.y) * k + Math.sin(k * Math.PI) * 1.6;
+                z.group.rotation.x = -0.6 * Math.sin(k * Math.PI);
+                if (k >= 1) {
+                  z.pounce = null; z.group.rotation.x = 0;
+                  pos.y = MapManager.groundAt(pos.x, pos.z, 0.2, pos.y + 1);
+                  ParticleSystem.emit(pos.clone().add(new V(0, 0.2, 0)), 0x7a5a9a, 14, 3);
+                  if (pos.distanceTo(new V(player.pos.x, pos.y, player.pos.z)) < 1.7) {
+                    PlayerController.hurt(14 * diff[difficulty].damage);
+                    player.pinnedUntil = t + 0.9; // knocked: brief heavy slow, like a Hunter pin
+                    UIManager.toast("Derrubado! Mexa-se!");
+                  }
+                }
+                return true;
+              }
+              if (dist > 3.5 && dist < 10 && t > z.nextSkill && z.canSee) {
+                z.nextSkill = t + rand(5, 7);
+                const to = new V(player.pos.x, 0, player.pos.z), from = z.group.position.clone();
+                const dir = to.clone().sub(from).setY(0).normalize();
+                const land = from.clone().addScaledVector(dir, Math.min(dist - 0.6, 9));
+                land.y = MapManager.groundAt(land.x, land.z, 0.2, from.y + 1);
+                if (!MapManager.collides(land.x, land.z, 0.35, land.y)) {
+                  z.pounce = { from, to: land, t0: t, dur: 0.55 };
+                  z.group.rotation.y = Math.atan2(dir.x, dir.z);
+                  AudioManager.tone(300, 0.2, "sawtooth", 0.08, 700, "effects");
+                }
+              }
+              return false;
+            }
+            if (id === "spitter" && dist > 4 && dist < 15 && t > z.nextSkill && z.canSee) {
+              z.nextSkill = t + rand(3.2, 4.5);
+              const from = z.group.position.clone().add(new V(0, 1.5 * (z.size || 1), 0));
+              const to = new V(player.pos.x + rand(-0.8, 0.8), 0.05, player.pos.z + rand(-0.8, 0.8));
+              const blob = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0x9dff45, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+              blob.scale.setScalar(0.6); blob.position.copy(from); blob.userData.ownMaterial = true;
+              const dur = 0.5 + dist * 0.035;
+              MonsterFX.add(blob, dur, (it) => {
+                const k = 1 - it.life / it.max;
+                blob.position.lerpVectors(from, to, k); blob.position.y += Math.sin(k * Math.PI) * (1.2 + dist * 0.12);
+                if (Math.random() < 0.4) ParticleSystem.emit(blob.position.clone(), 0x9dff45, 1, 0.6);
+                if (k >= 0.95 && !it.landed) { it.landed = true; MonsterFX.addPuddle(to, 1.3, "acid"); ParticleSystem.emit(to.clone().setY(0.2), 0x9dff45, 18, 2.5); }
+              });
+              AudioManager.tone(220, 0.25, "sawtooth", 0.07, 110, "effects");
+              z.group.rotation.y = Math.atan2(player.pos.x - z.group.position.x, player.pos.z - z.group.position.z);
+            }
+            return false;
+          },
+          reward(z) { return z.variant ? 25 : 0; },
+        };
+        // Mobile auto-fire (Dead Trigger 2): the trigger pulls itself while the crosshair rests on an
+        // enemy. Off for charge/throw weapons (bow, spear) and when the player chose to turn it off.
+        const AutoFire = {
+          want() {
+            if (!touchMode || SettingsManager.data.autoFire === false || state !== GameState.PLAYING) return false;
+            const w = WeaponSystem.current();
+            if (!w || w.kind === "bow" || w.spear || w.chargeTime || reloadEnd) return false;
+            return !!WeaponSystem.onTarget;
+          },
+        };
+        // Blood wave (7 Days to Die's blood moon): every 7th wave is bigger and faster, has more
+        // special variants and pays double Essência. A red veil and a low drone sell it.
+        const BloodWave = {
+          set(on) {
+            document.body.classList.toggle("blood-wave", !!on);
+            if (on && AudioManager.ctx) { AudioManager.tone(55, 2.2, "sawtooth", 0.2, 40); setTimeout(() => AudioManager.tone(82, 1.6, "sawtooth", 0.14, 55), 400); }
+          },
+        };
         const WaveManager = {
           wave: 0,
           remaining: 0,
@@ -20556,8 +20867,10 @@ body.netgame #revivetouch{display:flex}
             this.wave++;
             player.waveKills = 0;
             MutationManager.roll(this.wave);
+            this.blood = this.wave % 7 === 0;
+            BloodWave.set(this.blood);
             this.remaining = Math.round(
-              (7 + 3 * (this.wave - 1)) * diff[difficulty].count * modeRules().count * MutationManager.countMultiplier(),
+              (7 + 3 * (this.wave - 1)) * diff[difficulty].count * modeRules().count * MutationManager.countMultiplier() * (this.blood ? 1.5 : 1),
             );
             this.total = this.remaining;
             this.spawnClock = 0.3;
@@ -20576,8 +20889,10 @@ body.netgame #revivetouch{display:flex}
             }
             this.bossPending = this.rankFor(this.wave) > 0;
             UIManager.announce(
-              `ONDA ${this.wave}`,
-              this.bossPending
+              this.blood ? `ONDA ${this.wave} · ONDA DE SANGUE` : `ONDA ${this.wave}`,
+              this.blood
+                ? "Mais rápidos, mais especiais · Essência em dobro"
+                : this.bossPending
                 ? "Movimento anormal detectado"
                 : "Mantenha sua posição",
               2.5,
@@ -20713,7 +21028,7 @@ body.netgame #revivetouch{display:flex}
               const spawned = ZombieManager.spawn(pick(this.spawnPool));
               if (spawned) {
                 this.remaining--;
-                this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier());
+                this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier()) * (this.blood ? 0.7 : 1);
               } else this.spawnClock = 0.16;
             }
             if (this.bossPending && this.remaining < this.total * 0.5 && this.spawnClock <= 0) {
@@ -20735,7 +21050,10 @@ body.netgame #revivetouch{display:flex}
                 this.clearedAt = simulationTime;
                 MutationManager.finishWave();
                 const waveCoins = RunStats.waveCleared(this.wave, true);
-                UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · Onda ${this.wave + 1} chegando…`, 2.4);
+                const essence = (100 + 25 * this.wave) * (this.blood ? 2 : 1);
+                MatchShop.essence += essence;
+                if (this.blood) { this.blood = false; BloodWave.set(false); }
+                UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · +${essence} ✦ · B abre a loja`, 2.4);
                 VoiceLines.say("clear", 0.8);
                 AudioManager.coin();
                 AudioManager.tone(440, 0.4, "triangle", 0.3, 880);
@@ -21214,7 +21532,7 @@ body.netgame #revivetouch{display:flex}
             if (seen.has(z)) continue;
             seen.add(z);
             const head = h.object.userData.head;
-            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) : 1,
+            const mult = head ? (w.head || 2) * (classEffects().headshot || 1) * MatchShop.headMult() : 1,
               distanceBonus = classEffects().distanceDamageMax
                 ? 1 + classEffects().distanceDamageMax * clamp(h.distance / Math.max(1, w.range), 0, 1)
                 : 1;
@@ -22128,6 +22446,9 @@ body.netgame #revivetouch{display:flex}
               flightDescentUntil: 0,
               ladderReleaseUntil: 0,
             };
+            MatchShop.reset();
+            WaveManager.blood = false;
+            BloodWave.set(false);
             player.maxhp = Math.round(player.baseMaxHp * classValue("maxHp", 1));
             player.hp = player.maxhp;
             // Bring every weapon in an owned slot into the run, not just the one
@@ -22206,6 +22527,15 @@ body.netgame #revivetouch{display:flex}
                 ParticleSystem.emit(player.pos.clone(), 0xff5a36, 80, 5);
                 return;
               }
+              if (MatchShop.has("chance") && !player.shopReviveUsed && !NetGame.active) {
+                player.shopReviveUsed = true;
+                MatchShop.owned.delete("chance");
+                player.hp = Math.max(1, Math.round(player.maxhp * 0.5));
+                player.lastDamage = simulationTime;
+                UIManager.announce("SEGUNDA CHANCE", "O perk foi consumido.", 2.2);
+                ParticleSystem.emit(player.pos.clone(), 0x6dff92, 80, 5);
+                return;
+              }
               player.hp = 0;
               if (NetGame.active && NetGame.goDown()) return;
               this.end(false);
@@ -22219,7 +22549,7 @@ body.netgame #revivetouch{display:flex}
               w.ammo = w.mag;
               return;
             }
-            reloadEnd = simulationTime + w.reload;
+            reloadEnd = simulationTime + w.reload * MatchShop.reloadMult();
             AudioManager.tone(180, 0.12, "square", 0.12, 80, "weapons");
             VoiceLines.say(w.ammo === 0 ? "empty" : "reload", w.ammo === 0 ? 0.6 : 0.4);
           },
@@ -22490,7 +22820,7 @@ body.netgame #revivetouch{display:flex}
               muzzleLight.intensity = 0;
               return;
             }
-            if (simulationTime - lastShot < w.rate) return;
+            if (simulationTime - lastShot < w.rate * MatchShop.rateMult()) return;
             if (w.kind === "melee" && simulationTime < this.meleeLockUntil) return;
             if (w.ammo <= 0) {
               this.reload();
@@ -22640,7 +22970,7 @@ body.netgame #revivetouch{display:flex}
             }
             if (w && w.spear) this.updateSpear(w, dt);
             else if (w && w.charge) this.updateChargeShot(w, dt);
-            else if (mouse.down && !GrenadeThrow.active) this.shoot();
+            else if ((mouse.down || AutoFire.want()) && !GrenadeThrow.active) this.shoot();
             if (this.meleeStrike && !this.meleeStrike.swung && simulationTime >= this.meleeStrike.swingAt) {
               this.meleeStrike.swung = true; // swing sound on the wind-up release frame
               AudioManager.meleeSwing();
@@ -22706,6 +23036,7 @@ body.netgame #revivetouch{display:flex}
               (mouse.aim ? 0.65 : 1) *
               (w?.modelId === 2 ? 1.15 : 1);
             if (player.slowUntil > simulationTime) walkSpeed *= 1 - (player.slowFactor || 0);
+            if (player.pinnedUntil > simulationTime) walkSpeed *= 0.2;
             let speed = walkSpeed * sprintMult * (devFly ? 1.8 : 1);
             // Hard momentum cap: bunny hops never exceed BHOP_CAP × this stance's max sprint
             // (aiming or crouching shrink it with the stance speed).
@@ -23492,6 +23823,7 @@ body.netgame #revivetouch{display:flex}
             const w = WeaponSystem.current();
             const mutation = MutationManager.current;
             this.hudHTML("wavehud", `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`);
+            this.hudHTML("essencehud", `<b>✦ ${MatchShop.essence}</b><small>${touchMode ? "" : "B · LOJA"}</small><span class="perk-row">${MatchShop.perkIcons()}</span>`);
             this.hudHTML("wallethud", `◈ ${this.displayBalance("coins")}<small>↻ ${this.displayBalance("normal")} normal &nbsp; ✦ ${this.displayBalance("lucky")} Lucky</small>`);
             $("classhud").textContent = classes[selectedClass].name;
             this.hudHTML("healthhud", `<div class="value">${Math.ceil(player.hp)} <small>/ ${player.maxhp + player.bonus}</small></div><div class="meter"><i style="width:${clamp((player.hp / (player.maxhp + player.bonus)) * 100, 0, 100)}%"></i></div><span class="hint">${player.grenades} granadas · G</span>`);
@@ -29362,6 +29694,7 @@ body.netgame #revivetouch{display:flex}
           }
           if (open.includes("helpscreen")) { UIManager.screen("pausescreen"); return true; }
           if (open.includes("pausescreen")) { resume(); return true; }
+          if (open.includes("matchshop")) { MatchShop.close(); return true; }
           return false;
         }
         function resume(){NetGame.menuOpen=false;state=GameState.PLAYING;WeaponSystem.model.visible=true;fallback=false;mouse.down=mouse.aim=false;MouseLook.quiet(80);UIManager.screen(null);$("lockhint").textContent=touchMode?"Arraste a direita para olhar · pinça alterna 1ª/3ª pessoa.":"Clique na arena para capturar o mouse. Esc abre o menu."}
@@ -29691,6 +30024,7 @@ body.netgame #revivetouch{display:flex}
           if (c === "F8" && DevMode.active) DevMode.toggle();
           if (c === "KeyQ") PlayerController.ability();
           if (c === "KeyF") SecretWeaponSkills.use();
+          if (c === "KeyB") MatchShop.toggle();
           if (c === "KeyG") PlayerController.grenade();
           if (/^Digit[1-5]$/.test(c)) PlayerController.switch(Number(c.slice(-1)) - 1);
           if (c === "Space") player.jumpQueuedAt = simulationTime;
@@ -29725,6 +30059,7 @@ body.netgame #revivetouch{display:flex}
             DeathFX.skip();
             return;
           }
+          if (MatchShop.open && inputCode(e.code) === "KeyB") { MatchShop.close(); e.preventDefault(); return; }
           if (e.code === "Escape") {
             if (state === GameState.PLAYING && !NetGame.menuOpen) pause();
             else if (inGameMenuBack()) e.preventDefault();
@@ -30038,6 +30373,15 @@ body.netgame #revivetouch{display:flex}
           else keys.add("ControlLeft");
           $("crouchtouch").classList.toggle("is-active", keys.has("ControlLeft"));
         });
+        $("shoptouch").onpointerdown = (e) => {
+          if (state !== GameState.PLAYING) return;
+          e.preventDefault();
+          e.stopPropagation();
+          haptic();
+          MatchShop.show();
+        };
+        $("shop-body").addEventListener("click", (e) => { const b = e.target.closest("[data-shop]"); if (b && !b.disabled) MatchShop.click(b); });
+        $("shop-close").onclick = () => MatchShop.close();
         $("pausetouch").onpointerdown = (e) => {
           if (state !== GameState.PLAYING) return;
           e.preventDefault();
@@ -30509,6 +30853,10 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             StreetBreak,
+            MatchShop,
+            ZombieVariants,
+            BloodWave,
+            AutoFire,
             ScytheThrow,
             ArchPowers,
             WindLitter,

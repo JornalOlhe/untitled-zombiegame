@@ -174,6 +174,7 @@
         ${this.range("hudScale", "Tamanho do HUD", 70, 130, 5)}
         ${this.check("minimap", "Minimapa")}
         ${this.check("numbers", "Números de dano")}
+        ${this.check("autoFire", "Tiro automático no celular", "Atira sozinho quando a mira está sobre um inimigo")}
         ${this.check("fps", "Mostrar FPS")}
       </div>`;
     },
@@ -232,7 +233,7 @@
         s = this.s;
       const keysOf = {
         graphics: ["profile", "graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "brightness", "fpsCap"],
-        hud: ["crossStyle", "crossColor", "crossSize", "crossThick", "crossOpacity", "crossOutline", "crossDynamic", "hudScale", "minimap", "numbers", "fps"],
+        hud: ["crossStyle", "crossColor", "crossSize", "crossThick", "crossOpacity", "crossOutline", "crossDynamic", "hudScale", "minimap", "numbers", "autoFire", "fps"],
         audio: ["master", "music", "ambient", "weapons", "sfx", "ui", "voice", "voiceSubs"],
         camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "shake", "viewBob", "invert"],
       };

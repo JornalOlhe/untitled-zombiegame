@@ -993,3 +993,42 @@ body.touch-ui #slotshud .slot b{white-space:nowrap;max-width:72px;overflow:hidde
 /* Short landscape viewports: the sticky footer must never sit on top of the cards it follows. */
 #modescreen,#mapscreen,#rulescreen,#storyscreen{scroll-padding-bottom:84px}
 @media (max-height:320px){#modescreen .footer-actions,#mapscreen .footer-actions,#rulescreen .footer-actions,#storyscreen .footer-actions{position:static}}
+/* ── v56: in-match shop (Essência), blood wave, special variants ─────────────────────────── */
+#essencehud{display:flex;align-items:center;gap:8px;font-family:var(--display,inherit);color:#e7d4ff;text-shadow:0 2px 0 #000}
+#essencehud b{font-size:20px;letter-spacing:.03em;color:#d7b4ff}
+#essencehud small{font-size:9px;letter-spacing:.16em;color:#9d8bb8}
+#essencehud .perk-row{display:flex;gap:3px}
+#essencehud .perk-row i{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;font-style:normal;font-size:12px;color:#fff;background:color-mix(in srgb,var(--c) 55%,#0b0f14);border:1px solid var(--c);box-shadow:0 0 8px color-mix(in srgb,var(--c) 45%,transparent)}
+#matchshop{background:radial-gradient(ellipse at 50% 30%,#2a1840cc,#05070bf2 70%)}
+.shop-dialog{width:min(980px,94vw);max-height:92vh;overflow:auto;padding:18px 22px 22px;border-radius:14px;border:1px solid #c58bff44;background:#0b0f16f2;box-shadow:0 30px 80px #000c,0 0 0 1px #ffffff0d inset}
+.shop-head{display:flex;align-items:center;gap:16px}
+.shop-head h2{margin:2px 0 0;font-size:30px;letter-spacing:.08em}
+.shop-head .eyebrow{font-size:10px;letter-spacing:.24em;color:#a88ccf}
+#shop-essence{margin-left:auto;font-size:28px;color:#d7b4ff;text-shadow:0 0 18px #a46cff88}
+#shop-close{padding:9px 14px;border-radius:9px;border:1px solid #ffffff2a;background:#ffffff0d;color:#fff;font-weight:800;cursor:pointer}
+#shop-close small{display:block;font-size:9px;color:#9aa6b2;font-weight:600}
+.shop-note{margin:8px 0 4px;font-size:12px;color:#93a0ad}
+#shop-body h3{margin:16px 0 8px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#f0e6ff}
+#shop-body h3 span{margin-left:8px;font-size:10px;letter-spacing:.06em;text-transform:none;color:#8a96a3;font-weight:600}
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.shop-card{position:relative;display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto auto;column-gap:10px;row-gap:2px;align-items:center;text-align:left;padding:11px 12px;border-radius:11px;border:1px solid color-mix(in srgb,var(--c) 55%,transparent);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 22%,#0d121a),#0d121a 70%);color:#fff;cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
+.shop-card:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 22px #0008,0 0 18px color-mix(in srgb,var(--c) 40%,transparent);border-color:var(--c)}
+.shop-card:active:not(:disabled){transform:translateY(0) scale(.98)}
+.shop-card i{grid-row:1/4;display:grid;place-items:center;width:34px;height:34px;border-radius:9px;font-style:normal;font-size:18px;background:color-mix(in srgb,var(--c) 30%,#0b0f14);box-shadow:0 0 14px color-mix(in srgb,var(--c) 35%,transparent)}
+.shop-card b{font-size:13px}
+.shop-card small{font-size:10.5px;line-height:1.3;color:#aab4be}
+.shop-card em{font-style:normal;font-size:12px;font-weight:900;color:#d7b4ff}
+.shop-card.poor em{color:#7d6a8f}
+.shop-card.poor{opacity:.72}
+.shop-card.owned,.shop-card.max{cursor:default;opacity:.9}
+.shop-card.owned em,.shop-card.max em{color:#6dff92;letter-spacing:.1em;font-size:10px}
+body.touch-ui #touch #shoptouch{--size:clamp(34px,9vh,42px)!important;right:calc(var(--tR) + 50px)!important;top:var(--tT)!important;bottom:auto!important;color:#d7b4ff}
+body.touch-ui .hud-top{right:calc(var(--tR) + 100px)!important}
+body.touch-ui #essencehud b{font-size:14px}
+body.touch-ui #essencehud .perk-row i{width:16px;height:16px;font-size:10px}
+body:not(.touch-ui) #touch #shoptouch{display:none}
+/* blood wave: a pulsing red veil at the screen edges */
+body.blood-wave #hud::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at center,transparent 45%,#8a0000 140%);animation:bloodpulse 2.4s ease-in-out infinite;mix-blend-mode:multiply}
+body.blood-wave #wavehud{color:#ff5a4a!important;text-shadow:0 0 14px #ff000088}
+@keyframes bloodpulse{0%,100%{opacity:.75}50%{opacity:1}}
+@media (max-width:700px){.shop-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.shop-dialog{padding:12px}.shop-head h2{font-size:22px}#shop-essence{font-size:20px}}
