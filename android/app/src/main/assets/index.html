@@ -6368,8 +6368,16 @@ body.netgame #revivetouch{display:flex}
           // Slow WebViews can build the lobby map before the GLBs finish decoding, which leaves
           // cube-fallback trees/cars in the menu. Once everything is ready, rebuild that map (only
           // while in the menu — never under a running match).
+          // Resolves once every prop GLB is decoded (or after `cap` ms) so the boot map is built
+          // once with the real models instead of cube fallbacks + a later rebuild.
+          whenReady(cap = 4000) {
+            if (this.ready || !window.DR_PROP_GLB) return Promise.resolve();
+            return new Promise((res) => { (this.waiters ||= []).push(res); setTimeout(res, cap); });
+          },
           done() {
             this.ready = true;
+            for (const res of this.waiters || []) res();
+            this.waiters = null;
             if (this.missed && typeof state !== "undefined" && state === GameState.MENU && MapManager.group) {
               this.missed = false;
               MapManager.build(MapManager.index || 0);
@@ -29877,6 +29885,7 @@ body.netgame #revivetouch{display:flex}
         const bootState = await Account.init();
         App.configureNet();
         SettingsManager.apply();
+        await PropModels.whenReady(4000);
         MapManager.build(0);
         $("loading").classList.add("hidden");
         let guestChosen = false;

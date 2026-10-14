@@ -990,3 +990,6 @@ html.native-android body.touch-ui #slotshud{max-width:none!important;overflow:vi
 html.native-android body.touch-ui #slotshud .slot{display:flex!important;min-width:0!important;max-width:none!important}
 body.touch-ui #slotshud .slot:not(.active) .ammo,body.touch-ui #slotshud .slot .mag,body.touch-ui #slotshud .slot .reload{display:none!important}
 body.touch-ui #slotshud .slot b{white-space:nowrap;max-width:72px;overflow:hidden;text-overflow:ellipsis}
+/* Short landscape viewports: the sticky footer must never sit on top of the cards it follows. */
+#modescreen,#mapscreen,#rulescreen,#storyscreen{scroll-padding-bottom:84px}
+@media (max-height:320px){#modescreen .footer-actions,#mapscreen .footer-actions,#rulescreen .footer-actions,#storyscreen .footer-actions{position:static}}
