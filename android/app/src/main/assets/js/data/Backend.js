@@ -170,6 +170,11 @@
     claimMaster: (requestId = uuid()) => Backend.rpc("story_claim_master", { p_request: requestId }),
   };
 
+  const SeasonRepository = {
+    state: () => Backend.rpc("season_state"),
+    claim: (tier, requestId = uuid()) => Backend.rpc("season_claim", { p_tier: tier, p_request: requestId }),
+  };
+
   const MissionRepository = {
     list: () => Backend.rpc("missions_list"),
     claim: (id, requestId = uuid()) => Backend.rpc("mission_claim", { p_mission: id, p_request: requestId }),
@@ -239,6 +244,7 @@
   DR.DevRepository = DevRepository;
   DR.RunRepository = RunRepository;
   DR.StoryRepository = StoryRepository;
+  DR.SeasonRepository = SeasonRepository;
   DR.MissionRepository = MissionRepository;
   DR.LobbyRepository = LobbyRepository;
   DR.OfflineQueue = OfflineQueue;

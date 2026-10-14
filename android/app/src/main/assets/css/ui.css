@@ -1042,3 +1042,47 @@ body.blood-wave #wavehud{color:#ff5a4a!important;text-shadow:0 0 14px #ff000088}
   .shop-card i{width:26px;height:26px;font-size:14px;border-radius:7px}
   .shop-card b{font-size:11px}.shop-card small{font-size:9px;line-height:1.2}.shop-card em{font-size:10.5px}
 }
+/* ── v56: Season Pass ─────────────────────────────────────────────────────────── */
+#seasonscreen{background:radial-gradient(ellipse at 30% 0%,#3a0d12 0,#0a0d12 60%);overflow:auto}
+.season-wrap{max-width:1100px;margin:0 auto;padding:clamp(14px,3vh,28px) clamp(14px,3vw,32px)}
+.season-head{display:flex;align-items:flex-start;gap:16px}
+.season-head h2{margin:4px 0 2px;font-size:clamp(20px,3.4vw,34px);letter-spacing:.06em}
+.season-head .eyebrow{font-size:10px;letter-spacing:.24em;color:#ff8a7a}
+.season-head p{margin:0;color:#9aa6b2;font-size:12px}
+#season-back{margin-left:auto;padding:9px 16px;border-radius:9px;border:1px solid #ffffff2a;background:#ffffff0d;color:#fff;font-weight:800;cursor:pointer}
+.season-progress{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin:16px 0}
+.season-progress b{font-size:18px;color:#ffd0c8}
+.season-progress i{height:12px;border-radius:99px;background:#ffffff14;overflow:hidden;border:1px solid #ffffff1a}
+.season-progress em{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff3b30,#ffb24a);box-shadow:0 0 14px #ff5a3a88}
+.season-progress span{font-size:12px;color:#cfd6dd}
+.season-track{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.season-tier{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 8px 9px;border-radius:11px;border:1px solid #ffffff1a;background:#0f141bcc;color:#fff;cursor:default;min-height:104px}
+.season-tier small{position:absolute;left:8px;top:6px;font-size:10px;color:#8b97a3;font-weight:800}
+.season-tier i{font-style:normal;font-size:24px;line-height:1.3;color:#f6d867}
+.season-tier b{font-size:11px;text-align:center;line-height:1.2}
+.season-tier em{font-style:normal;font-size:9px;letter-spacing:.12em;color:#7f8b97;font-weight:900}
+.season-tier.big{border-color:#ffd24a66;background:linear-gradient(160deg,#3a2a0acc,#0f141bcc)}
+.season-tier.big i{color:#ffe36a;text-shadow:0 0 14px #ffd24a}
+.season-tier.open{border-color:#ff5a3a;cursor:pointer;box-shadow:0 0 16px #ff3b3044;animation:seasonglow 1.6s ease-in-out infinite}
+.season-tier.open em{color:#ffb24a}
+.season-tier.got{opacity:.55}
+.season-tier.got em{color:#6dff92}
+.season-tier.locked i{filter:grayscale(1) opacity(.55)}
+@keyframes seasonglow{50%{box-shadow:0 0 26px #ff3b3077}}
+.season-note{margin-top:12px;font-size:11px;color:#8b97a3}
+#seasonbtn.has-reward small{color:#ffb24a}
+/* ── v56: map mission + secret tracker ───────────────────────────────────────── */
+#objtracker{position:absolute;left:clamp(10px,1.6vw,22px);top:clamp(150px,26vh,230px);display:grid;gap:4px;pointer-events:none;z-index:3}
+#objtracker .obj{padding:5px 10px;border-radius:7px;background:#05080bc7;border-left:3px solid #ffb020;color:#e9edf1;font-size:11.5px;letter-spacing:.02em;text-shadow:0 1px 0 #000}
+#objtracker .obj b{font-size:9.5px;letter-spacing:.18em;color:#ffb020;margin-right:6px}
+#objtracker .obj small{color:#93a0ad}
+#objtracker .obj.done{border-left-color:#4aff7a}#objtracker .obj.done b{color:#4aff7a}
+#objtracker .obj:nth-child(2){border-left-color:#c58bff}#objtracker .obj:nth-child(2) b{color:#c58bff}
+#objhold{position:absolute;left:50%;top:62%;transform:translateX(-50%);width:min(260px,50vw);opacity:0;transition:opacity .15s;pointer-events:none;text-align:center}
+#objhold i{display:block;height:8px;border-radius:99px;background:#ffffff22;overflow:hidden}
+#objhold i em{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffb020,#4aff7a);border-radius:inherit}
+#objhold span{display:block;margin-top:5px;font-size:10px;letter-spacing:.2em;color:#ffe08a;text-shadow:0 1px 0 #000}
+body.touch-ui #objtracker{top:auto;bottom:calc(var(--tB,12px) + clamp(150px,40vh,210px));left:calc(var(--tL,12px) + 4px)}
+body.touch-ui #objtracker .obj{font-size:10px;padding:3px 8px}
+#usetouch{display:none}
+body.touch-ui.can-use #touch #usetouch{display:flex!important;right:calc(var(--tR) + var(--tF) + 2*var(--tS) + 36px)!important;bottom:calc(var(--tB) + var(--tF)*.5)!important;background:rgba(200,140,20,.55)!important}

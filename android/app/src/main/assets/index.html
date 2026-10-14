@@ -2682,6 +2682,7 @@ body.netgame #revivetouch{display:flex}
       <nav class="home-nav" aria-label="Menu principal">
         <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>Solo ou multiplayer online</small><i>›</i></button>
         <button id="missionsbtn" class="home-item" type="button"><b>MISSÕES</b><small id="missionsbadge">Diárias, semanais e únicas</small><i>›</i></button>
+        <button id="seasonbtn" class="home-item" type="button"><b>PASSE DE TEMPORADA</b><small id="seasonbadge">Temporada 1 · grátis</small><i>›</i></button>
         <button id="indexbtn" class="home-item" type="button"><b>ÍNDICE</b><small id="indexbadge">Bestiário e marcos de abate</small><i>›</i></button>
         <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas, classes, spins e slots</small><i>›</i></button>
         <button id="customizebtn" class="home-item" type="button"><b>LOJA</b><small>Visual e equipamentos</small><i>›</i></button>
@@ -2690,6 +2691,17 @@ body.netgame #revivetouch{display:flex}
       </nav>
       <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
+    <section id="seasonscreen" class="screen hidden">
+      <div class="season-wrap">
+        <header class="season-head">
+          <div><span class="eyebrow">PASSE DE TEMPORADA · GRÁTIS</span><h2>TEMPORADA 1 · RASTRO VERMELHO</h2><p id="season-sub">Toda XP conta: partidas, missões e História. 30 níveis, 1000 XP cada.</p></div>
+          <button id="season-back" type="button">Voltar</button>
+        </header>
+        <div class="season-progress"><b id="season-tier">Nível 0</b><i><em id="season-bar"></em></i><span id="season-xp">0 / 1000 XP</span></div>
+        <div id="season-track" class="season-track"></div>
+        <p class="season-note" id="season-note"></p>
+      </div>
+    </section>
     <section id="loginscreen" class="screen hidden auth-screen">
       <div class="auth-art" aria-hidden="true">
         <span class="brand-kicker">UNTITLED ZOMBIE GAME</span>
@@ -3087,6 +3099,8 @@ body.netgame #revivetouch{display:flex}
       <div id="streakbanner" aria-live="polite"></div>
       <div id="damageveil"></div>
       <div id="statusline"></div>
+      <aside id="objtracker" class="hidden" aria-label="Missão do mapa"></aside>
+      <div id="objhold" aria-hidden="true"><i><em></em></i><span>RELIGANDO GERADOR…</span></div>
       <aside id="missiontracker" class="empty" aria-label="Missões em andamento"><header><span>MISSÕES</span><small class="mt-key"></small></header><ol class="mt-list"></ol></aside>
       <canvas
         id="minimap"
@@ -3145,6 +3159,7 @@ body.netgame #revivetouch{display:flex}
       <button id="crouchtouch" class="touch-btn touch-move" aria-label="Agachar">
         <span class="touch-icon">⌄</span><span class="touch-label">AGACHAR</span>
       </button>
+      <button id="usetouch" class="touch-btn touch-special" aria-label="Usar"><span class="touch-icon">⚡</span><span class="touch-label">SEGURE</span></button>
       <button id="revivetouch" class="touch-btn touch-special" aria-label="Reanimar aliado"><span class="touch-icon">✚</span><span class="touch-label">REANIMAR</span></button>
       <button id="jumptouch" class="touch-btn touch-action" aria-label="Pular">
         <span class="touch-icon">↑</span><span class="touch-label">PULAR</span>
@@ -5996,6 +6011,201 @@ body.netgame #revivetouch{display:flex}
             WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 2;
           },
           reset() { if (this.out) this.catch(); },
+        };
+        // ── Season Pass (free) ──────────────────────────────────────────────────────────────────
+        // 30 tiers × 1000 XP. Signed in: progress and claims are server-authoritative (season_state /
+        // season_claim). Guest: XP is earned locally at the end of each match and rewards go to the
+        // local wallet. Rewards are currencies only, mirrored from the server's _season_reward().
+        const SeasonPass = {
+          TIERS: 30, TIER_XP: 1000, KEY: "deadrecoil.season.S1",
+          server: null,
+          reward(t) {
+            if (t % 10 === 0) return { coins: 1500, normal: 1, lucky: 1 };
+            if (t % 5 === 0) return { coins: 0, normal: 2, lucky: 0 };
+            if (t % 3 === 0) return { coins: 0, normal: 1, lucky: 0 };
+            return { coins: 300 + 25 * t, normal: 0, lucky: 0 };
+          },
+          local() {
+            try { const d = JSON.parse(localStorage.getItem(this.KEY) || "null"); if (d && Array.isArray(d.claimed)) return d; } catch {}
+            return { xp: 0, claimed: [] };
+          },
+          saveLocal(d) { try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch {} },
+          state() { return Account.signedIn() && this.server ? { xp: this.server.xp, claimed: this.server.claimed || [] } : this.local(); },
+          localGain(xp) {
+            if (Account.signedIn() || !(xp > 0)) return 0;
+            const d = this.local(); d.xp += Math.round(xp); this.saveLocal(d); this.badge();
+            return Math.round(xp);
+          },
+          ready() { const st = this.state(), tier = Math.min(this.TIERS, Math.floor(st.xp / this.TIER_XP)); let n = 0; for (let t = 1; t <= tier; t++) if (!st.claimed.includes(t)) n++; return n; },
+          badge() { const n = this.ready(), b = $("seasonbadge"); if (b) b.textContent = n ? `${n} recompensa${n > 1 ? "s" : ""} para resgatar` : "Temporada 1 · grátis"; $("seasonbtn")?.classList.toggle("has-reward", n > 0); },
+          async open() {
+            UIManager.screen("seasonscreen");
+            this.render();
+            if (Account.signedIn() && DR.Backend.isOnline()) {
+              try { this.server = await DR.SeasonRepository.state(); } catch (e) { $("season-note").textContent = "Não foi possível carregar o passe do servidor: " + e.message; }
+              this.render();
+            }
+          },
+          async claim(t) {
+            const st = this.state();
+            if (st.claimed.includes(t) || st.xp < t * this.TIER_XP) return;
+            if (Account.signedIn()) {
+              if (!DR.Backend.isOnline()) return UIManager.toast("Conecte-se para resgatar recompensas do passe.");
+              try {
+                const x = await DR.SeasonRepository.claim(t);
+                Account.applyNonSpending(x.profile);
+                this.server = x.season;
+              } catch (e) { return UIManager.toast(e.message); }
+            } else {
+              const d = this.local(), r = this.reward(t);
+              d.claimed.push(t); this.saveLocal(d);
+              Progression.reward(r.coins, r.normal, r.lucky);
+            }
+            const r = this.reward(t);
+            AudioManager.coin();
+            UIManager.toast(`Passe nível ${t}: ${[r.coins && `+${r.coins} moedas`, r.normal && `+${r.normal} ticket normal`, r.lucky && `+${r.lucky} Lucky`].filter(Boolean).join(" · ")}`);
+            DR.ProfileUI?.game && DR.ProfileUI.chip();
+            this.render();
+          },
+          render() {
+            const st = this.state(), tier = Math.min(this.TIERS, Math.floor(st.xp / this.TIER_XP)), into = tier >= this.TIERS ? this.TIER_XP : st.xp % this.TIER_XP;
+            $("season-tier").textContent = `Nível ${tier}`;
+            $("season-bar").style.width = `${(into / this.TIER_XP) * 100}%`;
+            $("season-xp").textContent = tier >= this.TIERS ? "Passe completo!" : `${into} / ${this.TIER_XP} XP`;
+            $("season-note").textContent = Account.signedIn() ? "Progresso salvo na sua conta." : "Visitante: o progresso fica neste aparelho. Entre na conta para salvar na nuvem.";
+            let html = "";
+            for (let t = 1; t <= this.TIERS; t++) {
+              const r = this.reward(t), got = st.claimed.includes(t), open = st.xp >= t * this.TIER_XP, big = t % 10 === 0;
+              const icon = r.lucky ? "✦" : r.normal ? "↻" : "◈", label = [r.coins && `${r.coins}`, r.normal && `${r.normal}× normal`, r.lucky && `${r.lucky}× Lucky`].filter(Boolean).join(" + ");
+              html += `<button type="button" class="season-tier ${got ? "got" : open ? "open" : "locked"} ${big ? "big" : ""}" data-tier="${t}" ${got || !open ? "disabled" : ""}><small>${t}</small><i>${icon}</i><b>${label}</b><em>${got ? "RESGATADO" : open ? "RESGATAR" : "BLOQUEADO"}</em></button>`;
+            }
+            $("season-track").innerHTML = html;
+            this.badge();
+          },
+        };
+        // ── Map mission + secret (CoD quests / L4D events) ──────────────────────────────────────
+        // Every map, every match: MISSION — restore power at 3 generators (hold E for 3 s; each one
+        // wakes a small horde) → supply drop (Essência, armor, full ammo). SECRET — 3 relics hidden
+        // at fixed, seeded spots per map (they always sit in the same places, so they can be learned)
+        // → "Fúria Ancestral": 20 s of insta-kill + infinite ammo and a big Essência bonus.
+        const MapObjectives = {
+          gens: [], relics: [], group: null, done: false, secret: false,
+          rng(seed) { let x = seed * 2654435761 % 4294967296 || 1; return () => ((x = (x * 1664525 + 1013904223) % 4294967296) / 4294967296); },
+          pickSpots(n, seed, minFromStart, minApart) {
+            const M = MapManager, R = this.rng(seed), out = [], H = M.half - 4, start = player.pos;
+            M.updateFlow(start);
+            for (let tries = 0; tries < 900 && out.length < n; tries++) {
+              const x = (R() * 2 - 1) * H, z = (R() * 2 - 1) * H;
+              if (Math.hypot(x - start.x, z - start.z) < minFromStart) continue;
+              if (M.collides(x, z, 0.8, 0) || M.groundAt(x, z, 0.4, 0) > 0.2) continue;
+              const [cx, cz] = M.worldToCell(x, z), f = M.flow?.[cz * M.gridSize + cx];
+              if (!(f < 99999)) continue; // reachable from the start on the nav grid
+              if (out.some((o) => Math.hypot(o.x - x, o.z - z) < minApart)) continue;
+              out.push({ x, z });
+            }
+            return out;
+          },
+          clear() {
+            if (this.group) { this.group.traverse((o) => { if (o.material?.userData?.own) o.material.dispose(); }); scene.remove(this.group); }
+            this.group = null; this.gens = []; this.relics = [];
+          },
+          start() {
+            this.clear();
+            this.done = false; this.secret = false; this.found = 0;
+            if (NetGame.active && !NetGame.host) return;
+            this.group = new THREE.Group(); scene.add(this.group);
+            const glow = VisualArt.texture("glow");
+            for (const [i, p] of this.pickSpots(3, 101 + selectedMap * 7, 16, 14).entries()) {
+              const g = new THREE.Group(); g.position.set(p.x, 0, p.z); this.group.add(g);
+              const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.8), PropKit.mat("metal")); base.position.y = 0.6; g.add(base);
+              const top = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.6), PropKit.mat("poleDark")); top.position.y = 1.29; g.add(top);
+              const lampMat = new THREE.MeshBasicMaterial({ color: 0xffb020, toneMapped: false }); lampMat.userData.own = true;
+              const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.05), lampMat); lamp.position.set(0, 0.85, 0.42); g.add(lamp);
+              const beamMat = new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); beamMat.userData.own = true;
+              const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, 26, 10, 1, true), beamMat); beam.position.y = 13.5; g.add(beam);
+              const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffb020, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })); halo.material.userData.own = true; halo.scale.setScalar(1.6); halo.position.y = 1.5; g.add(halo);
+              MapManager.obstacles.push({ x: p.x, z: p.z, w: 0.55, d: 0.4, h: 1.38, top: 1.38 });
+              this.gens.push({ i, x: p.x, z: p.z, g, lampMat, beamMat, halo, hold: 0, on: false });
+            }
+            for (const [i, p] of this.pickSpots(3, 977 + selectedMap * 13, 12, 12).entries()) {
+              const g = new THREE.Group(); g.position.set(p.x, 0.9, p.z); this.group.add(g);
+              const mat = new THREE.MeshStandardMaterial({ color: 0xc89a3a, emissive: 0x7a3a10, emissiveIntensity: 0.9, metalness: 0.8, roughness: 0.3 }); mat.userData.own = true;
+              const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.22), mat); g.add(gem);
+              const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xff7a2a, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); s.material.userData.own = true; s.scale.setScalar(1.1); g.add(s);
+              this.relics.push({ i, x: p.x, z: p.z, g, gem, taken: false });
+            }
+            this.hud();
+          },
+          hud() {
+            const el = $("objtracker");
+            if (!el) return;
+            const on = this.gens.filter((g) => g.on).length;
+            el.classList.toggle("hidden", !this.gens.length);
+            el.innerHTML = this.gens.length ? `<div class="obj ${this.done ? "done" : ""}"><b>MISSÃO</b> ${this.done ? "Energia restaurada ✓" : `Religue os geradores ${on}/3 <small>(segure E)</small>`}</div><div class="obj ${this.secret ? "done" : ""}"><b>SEGREDO</b> ${this.secret ? "Fúria Ancestral desbloqueada ✓" : this.found ? `Relíquias ${this.found}/3` : "???"}</div>` : "";
+          },
+          update(dt) {
+            if (!this.group || state !== GameState.PLAYING) return;
+            const t = simulationTime, p = player.pos;
+            for (const r of this.relics) {
+              if (r.taken) continue;
+              r.g.rotation.y += dt * 2; r.g.position.y = 0.9 + Math.sin(t * 2 + r.i) * 0.12;
+              if (Math.random() < dt * 4) ParticleSystem.emit(r.g.position.clone(), 0xffb24a, 1, 0.6);
+              if (Math.hypot(p.x - r.x, p.z - r.z) < 1.3 && Math.abs((player.ground || 0) - 0) < 1.2) this.takeRelic(r);
+            }
+            for (const g of this.gens) {
+              g.halo.material.opacity = g.on ? 0.55 : 0.45 + 0.3 * Math.sin(t * 4 + g.i);
+              if (g.on) continue;
+              const near = Math.hypot(p.x - g.x, p.z - g.z) < 2.4;
+              const holding = near && (keys.has("KeyE") || this.touchHold);
+              g.hold = holding ? g.hold + dt : Math.max(0, g.hold - dt * 2);
+              if (near && !holding && t - (this.hintAt || -9) > 6) { this.hintAt = t; UIManager.toast?.(touchMode ? "Segure ⚡ para religar o gerador" : "Segure E para religar o gerador"); }
+              if (holding && Math.random() < dt * 10) ParticleSystem.emit(new V(g.x, 1.4, g.z), 0xffe08a, 2, 1.5);
+              if (g.hold >= 3) this.powerOn(g);
+            }
+            const canUse = this.gens.some((g) => !g.on && Math.hypot(p.x - g.x, p.z - g.z) < 2.4);
+            if (canUse !== this.canUse) { this.canUse = canUse; document.body.classList.toggle("can-use", canUse); if (!canUse) this.touchHold = false; }
+            const prog = Math.max(0, ...this.gens.map((g) => (g.on ? 0 : g.hold)));
+            const bar = $("objhold");
+            if (bar) { bar.style.opacity = prog > 0.05 ? 1 : 0; bar.firstElementChild.firstElementChild.style.width = `${Math.min(100, (prog / 3) * 100)}%`; }
+          },
+          powerOn(g) {
+            g.on = true; g.hold = 0;
+            g.lampMat.color.setHex(0x4aff7a); g.beamMat.color.setHex(0x4aff7a); g.halo.material.color.setHex(0x4aff7a);
+            AudioManager.tone(220, 0.6, "sawtooth", 0.15, 660); setTimeout(() => AudioManager.tone(880, 0.25, "triangle", 0.12, 1320), 300);
+            ParticleSystem.emit(new V(g.x, 1.5, g.z), 0x4aff7a, 40, 4);
+            MatchShop.earn(400);
+            const n = this.gens.filter((x) => x.on).length;
+            UIManager.announce(`GERADOR ${n}/3`, n < 3 ? "O barulho atraiu a horda!" : "Energia restaurada · suprimentos a caminho", 2.2);
+            // the noise pulls a small horde toward the generator
+            for (let k = 0; k < 4 + 2 * n; k++) { const a = Math.random() * 6.28; ZombieManager.spawn(WaveManager.spawnPool?.length ? pick(WaveManager.spawnPool) : 0, null, new V(g.x + Math.cos(a) * 14, 0, g.z + Math.sin(a) * 14)); }
+            if (n === 3) this.complete();
+            this.hud();
+          },
+          complete() {
+            this.done = true;
+            MatchShop.earn(2500);
+            player.bonus = Math.min(100, player.bonus + 50);
+            player.hp = player.maxhp + player.bonus;
+            for (const w of player.inventory) if (w && w.mag !== Infinity) w.ammo = w.mag;
+            player.grenades += 2;
+            UIManager.toast("Missão do mapa concluída: +2500 ✦, armadura, munição e granadas.");
+            RunStats.mapMission = true;
+          },
+          takeRelic(r) {
+            r.taken = true; r.g.visible = false; this.found++;
+            AudioManager.tone(1320, 0.3, "sine", 0.14, 1760); setTimeout(() => AudioManager.tone(1760, 0.3, "sine", 0.12, 2200), 160);
+            ParticleSystem.emit(r.g.position.clone(), 0xffd24a, 30, 3);
+            MatchShop.earn(500);
+            if (this.found === 3) {
+              this.secret = true;
+              UIManager.announce("SEGREDO ENCONTRADO", "Fúria Ancestral: 20 s de insta-kill e munição infinita", 3);
+              MatchShop.earn(3000);
+              for (const k of ["instakill", "ammo", "damage"]) PowerUps.active[k] = PowerUps.now() + 20;
+              PowerUps.paint();
+              try { const k = "deadrecoil.secrets"; const d = JSON.parse(localStorage.getItem(k) || "{}"); d[selectedMap] = true; localStorage.setItem(k, JSON.stringify(d)); } catch {}
+            } else UIManager.toast(`Relíquia encontrada (${this.found}/3)`);
+            this.hud();
+          },
         };
         const ClassAscend = {
           ANT: 0.34, RISE: 0.5, END: 1.35,
@@ -22400,6 +22610,8 @@ body.netgame #revivetouch{display:flex}
             while (projectiles.length) removeProjectile(projectiles.length - 1);
             GrenadeThrow.cancel();
             ArchPowers.clear();
+            MapObjectives.clear();
+            $("objtracker")?.classList.add("hidden");
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
             ReaperAllies.clear();
@@ -22447,6 +22659,7 @@ body.netgame #revivetouch{display:flex}
               ladderReleaseUntil: 0,
             };
             MatchShop.reset();
+            MapObjectives.start();
             WaveManager.blood = false;
             BloodWave.set(false);
             player.maxhp = Math.round(player.baseMaxHp * classValue("maxHp", 1));
@@ -23245,6 +23458,7 @@ body.netgame #revivetouch{display:flex}
             ClassAscend.update();
             ArchPowers.update(dt);
             ScytheThrow.update(dt);
+            MapObjectives.update(dt);
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
             CameraRig.update(dt);
@@ -23285,6 +23499,8 @@ body.netgame #revivetouch{display:flex}
               `${classes[selectedClass].name} em ${maps[selectedMap].name}. ${Math.floor(elapsed / 60)}min ${Math.floor(elapsed % 60)}s de resistência.`;
             $("endstats").innerHTML =
               `<div><strong>${WaveManager.wave}</strong><span>Onda alcançada</span></div><div><strong>${player.kills}</strong><span>Eliminações</span></div><div><strong>${player.headshots}</strong><span>Headshots</span></div>`;
+            const seasonXp = SeasonPass.localGain(player.kills * 6 + WaveManager.wave * 40 + Object.values(RunStats.bosses || {}).reduce((a, n) => a + (Number(n) || 0), 0) * 150);
+            if (seasonXp) $("endsub").textContent += ` +${seasonXp} XP no Passe de Temporada.`;
             if (Account.user) return;
             let scores = [];
             try {
@@ -29752,6 +29968,10 @@ body.netgame #revivetouch{display:flex}
           Armory.open();
         };
         $("missionsbtn").onclick = () => DR.MissionUI.open();
+        $("seasonbtn").onclick = () => SeasonPass.open();
+        $("season-back").onclick = () => UIManager.screen("menu");
+        $("season-track").addEventListener("click", (e) => { const b = e.target.closest("[data-tier]"); if (b && !b.disabled) SeasonPass.claim(Number(b.dataset.tier)); });
+        SeasonPass.badge();
         $("indexbtn").onclick = () => DR.MissionUI.openIndex();
         $("mp-back").onclick = () => DR.LobbyUI.openPlay();
         $("customizebtn").onclick = () => Armory.openCustomize();
@@ -30332,6 +30552,7 @@ body.netgame #revivetouch{display:flex}
 
         bindHoldButton("firetouch", () => { mouse.down = true; }, () => { mouse.down = false; });
         bindHoldButton("revivetouch", () => { touchRevive = true; }, () => { touchRevive = false; });
+        bindHoldButton("usetouch", () => { MapObjectives.touchHold = true; }, () => { MapObjectives.touchHold = false; });
         bindHoldButton("sprinttouch", () => keys.add("ShiftLeft"), () => keys.delete("ShiftLeft"));
         // Tap a weapon chip in the HUD to switch to it (touch); no extra "switch" thumb travel needed.
         $("slotshud").addEventListener("pointerdown", (e) => {
@@ -30858,6 +31079,8 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             StreetBreak,
+            MapObjectives,
+            SeasonPass,
             MatchShop,
             ZombieVariants,
             BloodWave,
