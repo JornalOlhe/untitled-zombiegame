@@ -7221,6 +7221,47 @@ body.netgame #revivetouch{display:flex}
             this.pts.visible = true;
           },
         };
+        // Wind-blown litter: paper sheets in the city, dry leaves in the forest. They skid along the
+        // ground with the wind, flip and lift in gusts, and wrap around the camera — one
+        // InstancedMesh (one draw call), ≤ 18 instances, no collisions.
+        const WindLitter = {
+          mesh: null, N: 18, items: null, map: -1,
+          cfg: { 0: { colors: [0xd8d2c0, 0xbfb8a4, 0xe8e2d0, 0x9a9488], size: [0.32, 0.24], n: 14 }, 2: { colors: [0x7a5428, 0x9a6a2a, 0x5a3e1e, 0xa88438], size: [0.16, 0.12], n: 18 } },
+          update(dt, map, on) {
+            const C = this.cfg[map];
+            if (!on || !C) { if (this.mesh) this.mesh.visible = false; return; }
+            if (!this.mesh) {
+              const geo = new THREE.PlaneGeometry(1, 1);
+              this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), this.N);
+              this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.mesh.frustumCulled = false; scene.add(this.mesh);
+              this.items = Array.from({ length: this.N }, () => ({ x: rand(-14, 14), z: rand(-14, 14), y: 0.02, vy: 0, rx: rand(0, 6), ry: rand(0, 6), spin: rand(-3, 3), ph: rand(0, 6) }));
+              this.m4 = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(); this.v = new THREE.Vector3(); this.sv = new THREE.Vector3();
+            }
+            if (this.map !== map) { this.map = map; const c = new THREE.Color(); for (let i = 0; i < this.N; i++) this.mesh.setColorAt(i, c.setHex(C.colors[i % C.colors.length])); this.mesh.instanceColor.needsUpdate = true; }
+            const n = Math.round(C.n * ({ low: 0, medium: 0.6, high: 1, ultra: 1 }[SettingsManager.data.graphics] ?? 0.6));
+            const o = camera.position, w = WindManager.vec(), gust = WindManager.strength;
+            for (let i = 0; i < n; i++) {
+              const f = this.items[i];
+              const sp = 0.6 + gust * 3.2 + Math.sin(menuTime * 1.7 + f.ph) * 0.4;
+              f.x += w.x * sp * dt; f.z += w.z * sp * dt;
+              if (f.vy === 0 && gust > 0.55 && Math.random() < dt * gust * 1.2) f.vy = rand(1.2, 2.6) * gust;
+              // ground under the sheet (sidewalks/curbs are 16 cm); walls stop it like a wind shadow
+              const gnd = MapManager.groundAt(f.x, f.z, 0.05, f.y + 0.3) + 0.02;
+              if (MapManager.collides(f.x, f.z, 0.05, f.y)) { f.x -= w.x * sp * dt * 1.5; f.z -= w.z * sp * dt * 1.5; f.spin = -f.spin; }
+              f.vy -= 3.2 * dt; f.y = Math.max(gnd, f.y + f.vy * dt); if (f.y <= gnd) f.vy = 0;
+              const air = f.y > gnd + 0.03;
+              f.rx += (air ? f.spin * 2.5 : f.spin * sp * 0.15) * dt; f.ry += f.spin * 0.4 * dt;
+              // wrap within ±14 m of the camera so there's always some litter around
+              const dx = f.x - o.x, dz = f.z - o.z;
+              if (Math.abs(dx) > 14) f.x = o.x - Math.sign(dx) * 13.5;
+              if (Math.abs(dz) > 14) f.z = o.z - Math.sign(dz) * 13.5;
+              this.e.set(air ? f.rx : -Math.PI / 2 + Math.sin(f.rx) * 0.15, f.ry, air ? f.rx * 0.6 : 0);
+              this.m4.compose(this.v.set(f.x, f.y, f.z), this.q.setFromEuler(this.e), this.sv.set(C.size[0], C.size[1], 1));
+              this.mesh.setMatrixAt(i, this.m4);
+            }
+            this.mesh.count = n; this.mesh.instanceMatrix.needsUpdate = true; this.mesh.visible = n > 0;
+          },
+        };
         const WorldArt = {
           weather: null,
           weatherPositions: null,
@@ -7961,6 +8002,7 @@ body.netgame #revivetouch{display:flex}
             const o = { type: "signal", mats, cols, dim, glowMats, glows: [[], []], t: 0 };
             for (const [hx, hz, ry] of list) {
               const head = new THREE.Group(); head.position.set(hx, 4.32, hz); head.rotation.y = ry; g.add(head);
+              StreetBreak.add({ x: hx, y: 4.32, z: hz, r: 0.5, head });
               for (const face of [0, 1]) {
                 const zf = face ? -0.175 : 0.175;
                 [0.34, 0, -0.34].forEach((dy, i) => { const l = new THREE.Mesh(geo, mats[face][i]); l.position.set(0, dy, zf); head.add(l); });
@@ -7987,9 +8029,12 @@ body.netgame #revivetouch{display:flex}
             const halo = (this._lampHalo ||= new THREE.SpriteMaterial({ map: tex, color: 0xffb060, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
             const poolMat = (this._lampPool ||= new THREE.MeshBasicMaterial({ map: tex, color: 0xffa050, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2 }));
             const plane = (this._lampPlane ||= new THREE.PlaneGeometry(1, 1));
-            for (const [x, z] of list) {
+            const coverGeo = (this._lampCover ||= new THREE.BoxGeometry(0.36, 0.06, 0.76));
+            for (const [x, z, ry] of list) {
               const h = new THREE.Sprite(halo); h.scale.setScalar(2.4); h.position.set(x, 6.25, z); g.add(h);
               const p = new THREE.Mesh(plane, poolMat); p.rotation.x = -Math.PI / 2; p.scale.setScalar(6.5); p.position.set(x, 0.05, z); g.add(p);
+              const cover = new THREE.Mesh(coverGeo, StreetBreak.dark()); cover.position.set(x, 6.375, z); cover.rotation.y = ry || 0; cover.visible = false; g.add(cover);
+              StreetBreak.add({ x, y: 6.4, z, r: 0.5, halo: h, pool: p, cover });
             }
           },
           buildHeadlights(g, list) {
@@ -8252,6 +8297,7 @@ body.netgame #revivetouch{display:flex}
             if (this.splashes) this.splashes.visible = weatherOn && rainMap;
             Lightning.update(dt, weatherOn && rainMap && state === GameState.PLAYING, map);
             AmbientMotes.update(dt, map, weatherOn && SettingsManager.data.graphics !== "low" && state === GameState.PLAYING);
+            WindLitter.update(dt, map, state === GameState.PLAYING && !MapManager.closed);
             if (this.snow) this.snow.visible = weatherOn && map === 4;
             if (this.snowBig) this.snowBig.visible = weatherOn && map === 4 && SettingsManager.data.graphics !== "low";
             this.updateReflections(dt);
@@ -10148,7 +10194,7 @@ body.netgame #revivetouch{display:flex}
             this.hard("poleDark", [lx, 6.5, lz], [0.44, 0.2, 0.92], R);
             this.soft("metal", [lx, 6.63, lz], [0.34, 0.07, 0.7], R);
             this.soft("lamp", [lx, 6.38, lz], [0.34, 0.05, 0.74], R, 0);
-            (MapManager.streetLamps ||= []).push([lx, lz]);
+            (MapManager.streetLamps ||= []).push([lx, lz, ry]);
             this.col(x, z, 0.36, 0.36, 6.6);
           },
           // Mast-arm signal: a pole with ped box and push button, a braced arm reaching over the
@@ -11803,6 +11849,7 @@ body.netgame #revivetouch{display:flex}
             this.headlights = [];
             this.signals = [];
             this.streetLamps = [];
+            StreetBreak.reset();
             WorldProps.begin();
             this.spawns = this.spawnSets[index].map((p) => p.slice());
             this.spawnCursor = 0;
@@ -20795,6 +20842,45 @@ body.netgame #revivetouch{display:flex}
         }
         // Bullet hits on world geometry: hot sparks, a dust puff tinted by the surface, and a
         // persistent bullet hole oriented to the face normal. Everything is pooled (fixed counts).
+        // Shootable street furniture: street-light lenses and signal heads break when hit — glass
+        // shards (pooled debris), a spark shower and a pop, then the halo/pool or the lenses go dark.
+        // Hit test is analytic (ray vs. point radius) against a short list: no extra raycasts.
+        const StreetBreak = {
+          list: [],
+          reset() { this.list.length = 0; },
+          add(o) { this.list.push(o); },
+          test(origin, dir, maxDist) {
+            for (const o of this.list) {
+              if (o.broken) continue;
+              const vx = o.x - origin.x, vy = o.y - origin.y, vz = o.z - origin.z, t = vx * dir.x + vy * dir.y + vz * dir.z;
+              if (t < 0 || t > maxDist + 0.3) continue;
+              if (vx * vx + vy * vy + vz * vz - t * t < o.r * o.r) this.shatter(o);
+            }
+          },
+          shatter(o) {
+            o.broken = true;
+            const at = new THREE.Vector3(o.x, o.y, o.z);
+            if (o.halo) o.halo.visible = false;
+            if (o.pool) o.pool.visible = false;
+            if (o.cover) o.cover.visible = true;
+            if (o.head) { for (const c of o.head.children) if (c.isMesh) c.material = StreetBreak.dark(); else if (c.isSprite) c.visible = false; }
+            ParticleSystem.emit(at, o.head ? 0xffc060 : 0xfff0c0, 16, 5.5);
+            const glass = (this._glass ||= new THREE.MeshBasicMaterial({ color: o.head ? 0xffd27a : 0xfff4d8, transparent: true, opacity: 0.8 }));
+            const geo = (this._shard ||= new THREE.BoxGeometry(0.09, 0.015, 0.07));
+            const n = (PhysicsProps.fxScale?.() ?? 1) > 0.5 ? 7 : 4;
+            for (let i = 0; i < n; i++) {
+              const m = new THREE.Mesh(geo, glass); m.position.copy(at); scene.add(m);
+              PhysicsProps.fling(m, new THREE.Vector3(rand(-2, 2), rand(-0.5, 1.5), rand(-2, 2)), rand(8, 16), 2.5);
+              const d = PhysicsProps.debris[PhysicsProps.debris.length - 1]; if (d && d.mesh === m) d.gore = false;
+            }
+            if (AudioManager.ctx) {
+              const far = clamp(1 - player.pos.distanceTo(at) / 45, 0.1, 1);
+              AudioManager.tone(rand(2400, 3200), 0.08, "triangle", 0.05 * far, rand(1400, 1800), "weapons");
+              setTimeout(() => AudioManager.tone(rand(3200, 4200), 0.12, "sine", 0.03 * far, rand(2000, 2600), "weapons"), 60);
+            }
+          },
+          dark() { return (this._dark ||= new THREE.MeshBasicMaterial({ color: 0x141414 })); },
+        };
         const ImpactFX = {
           holes: [], puffs: [], hi: 0, pi: 0,
           init() {
@@ -20876,6 +20962,7 @@ body.netgame #revivetouch{display:flex}
             PhysicsProps.shove(propHit[0].object.userData.prop, shot, propHit[0].point, damage);
             end = propHit[0].point;
           }
+          if (StreetBreak.list.length) StreetBreak.test(origin, shot, origin.distanceTo(end));
           const gunOrigin = origin.distanceTo(player.pos) > 0.05 ? origin : WeaponSystem.muzzleWorld(origin);
           if (wallHit && end.distanceTo(wallHit.point) < 0.02) ImpactFX.wall(wallHit, shot, w);
           WeaponSystem.lastImpact = end.clone();
@@ -30027,6 +30114,8 @@ body.netgame #revivetouch{display:flex}
             LightPool,
             FireFX,
             ImpactFX,
+            StreetBreak,
+            WindLitter,
             PowerUps,
             HitDir,
             Director,
