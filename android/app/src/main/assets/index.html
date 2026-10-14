@@ -15226,7 +15226,7 @@ body.netgame #revivetouch{display:flex}
             g.add(shadow);
             z.contact = shadow;
             if (!boss) ZombieVariants.roll(z);
-            if (!boss && WaveManager.blood) z.speed *= 1.15;
+            if (!boss && WaveManager.blood) z.speed = Math.min(Balance.RUN_LIMIT, z.speed * 1.15);
             this.list.push(z);
             NetGame.registerSpawn(z);
             return z;
@@ -20710,7 +20710,7 @@ body.netgame #revivetouch{display:flex}
           },
           apply(z, id, K = this.KINDS[id]) {
             z.variant = id;
-            z.speed *= K.speed;
+            z.speed = Math.min(Balance.RUN_LIMIT, z.speed * K.speed);
             z.hp = z.maxhp = z.hp * K.hp;
             z.name = `${K.name} ${z.name || ""}`.trim();
             z.nextSkill = simulationTime + rand(2, 4);
