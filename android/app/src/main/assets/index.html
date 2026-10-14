@@ -2829,6 +2829,22 @@ body.netgame #revivetouch{display:flex}
       <div class="play-choice">
         <button id="solo" class="choice-card" type="button"><span class="choice-icon">☠</span><b>SOLO</b><small>Você contra a horda · funciona offline</small></button>
         <button id="multiplayer" class="choice-card" type="button"><span class="choice-icon">⚑</span><b>MULTIPLAYER</b><small>1–4 jogadores · online</small></button>
+        <button id="arenabtn" class="choice-card" type="button"><span class="choice-icon">▦</span><b>ARENAS</b><small>Editor de mapas · códigos da comunidade</small></button>
+      </div>
+    </section>
+    <section id="arenascreen" class="screen hidden panel-screen">
+      <header class="panel-head"><button class="back-btn" id="arena-back" type="button">‹ VOLTAR</button><h2>EDITOR DE ARENAS</h2></header>
+      <div class="arena-wrap">
+        <div class="arena-stage"><div class="arena-board"><canvas id="arena-canvas" aria-label="Planta da arena (toque para colocar peças)"></canvas><span id="arena-count" class="arena-count">0 peças</span><div class="arena-zoom"><button id="arena-zout" type="button" aria-label="Afastar">−</button><b id="arena-zoom">2×</b><button id="arena-zin" type="button" aria-label="Aproximar">＋</button></div></div></div>
+        <aside class="arena-side">
+          <div class="arena-row2"><input id="arena-name" maxlength="28" placeholder="Nome da arena" aria-label="Nome da arena" /><select id="arena-map" aria-label="Mapa base"><option value="0">Cidade</option><option value="1">Hospital</option><option value="2">Floresta</option><option value="3">Laboratório</option><option value="4">Neve</option></select></div>
+          <div id="arena-tools" class="arena-tools"></div>
+          <div class="arena-actions"><button id="arena-play" class="primary" type="button">▶ JOGAR</button><button id="arena-save" type="button">Salvar</button><button id="arena-share" type="button">Gerar código</button><button id="arena-new" class="ghost" type="button">Nova</button><button id="arena-clear" class="ghost" type="button">Limpar</button></div>
+          <div class="arena-code"><input id="arena-code" placeholder="Cole aqui o código de um amigo (DRA1:…)" aria-label="Código da arena" spellcheck="false" autocomplete="off" /><button id="arena-import" type="button">Importar</button></div>
+          <h3>Salvas neste aparelho</h3>
+          <div id="arena-saved" class="arena-saved"></div>
+          <p class="arena-help">Verde = onde você nasce · ☠ = spawns de zumbis. Muros e sacos de areia bloqueiam tudo; caixotes e barris são física. Arenas da comunidade não dão recompensas de conta.</p>
+        </aside>
       </div>
     </section>
     <section id="mpscreen" class="screen hidden panel-screen">
@@ -3258,9 +3274,9 @@ body.netgame #revivetouch{display:flex}
             effects:{}, burst:{ heal:10 } },
           { key:"scout", name:"Scout", tier:0, color:"#808c78",
             ability:"Rush", cd:30,
-            desc:"+10% de velocidade.",
+            desc:"+10% de velocidade. Desvantagem: −10% de vida máxima.",
             active:"Velocidade total passa para +30% por 5 segundos.",
-            effects:{ speed:1.10 }, burst:{ duration:5, speedTotal:1.30 } },
+            effects:{ speed:1.10, maxHp:0.90 }, burst:{ duration:5, speedTotal:1.30 } },
           { key:"medic", name:"Medic", tier:0, color:"#4b9d78",
             ability:null, cd:0, passiveOnly:true,
             desc:"Após 5 s sem sofrer dano, regenera 0,5 HP/s. Receber dano reinicia a espera.",
@@ -3268,9 +3284,9 @@ body.netgame #revivetouch{display:flex}
             effects:{ regen:0.5, regenDelay:5 }, burst:{} },
           { key:"guardian", name:"Guardian", tier:1, color:"#668277",
             ability:"Fortify", cd:30,
-            desc:"Recebe 10% menos dano.",
+            desc:"Recebe 10% menos dano. Desvantagem: −5% de velocidade.",
             active:"Redução total passa para 30% por 10 segundos.",
-            effects:{ damageTaken:0.90 }, burst:{ duration:10, damageTakenTotal:0.70 } },
+            effects:{ damageTaken:0.90, speed:0.95 }, burst:{ duration:10, damageTakenTotal:0.70 } },
           { key:"gunslinger", name:"Gunslinger", tier:0, color:"#9a7954",
             ability:"Quickdraw", cd:30,
             desc:"+5% de dano com armas de médio/longo alcance.",
@@ -3299,14 +3315,14 @@ body.netgame #revivetouch{display:flex}
             effects:{ explosiveDamage:1.30 }, burst:{ duration:10, explosiveDamageTotal:1.50 } },
           { key:"vanguard", name:"Vanguard", tier:3, color:"#8d64c5",
             ability:"Bulwark", cd:30,
-            desc:"+20% de dano e recebe 15% menos dano.",
+            desc:"+20% de dano e recebe 15% menos dano. Desvantagem: −5% de velocidade.",
             active:"Por 10 s, mantém +20% de dano e passa a receber 50% menos dano.",
-            effects:{ damage:1.20, damageTaken:0.85 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+            effects:{ damage:1.20, damageTaken:0.85, speed:0.95 }, burst:{ duration:10, damageTakenTotal:0.50 } },
           { key:"revenant", name:"Revenant", tier:3, color:"#9c4c78",
             ability:"Soul Feast", cd:30,
-            desc:"+30% de dano e +10% de velocidade.",
+            desc:"+30% de dano e +10% de velocidade. Desvantagem: −15% de vida máxima.",
             active:"Durante 10 s, cada eliminação recupera 1 HP.",
-            effects:{ damage:1.30, speed:1.10 }, burst:{ duration:10, killHeal:1 } },
+            effects:{ damage:1.30, speed:1.10, maxHp:0.85 }, burst:{ duration:10, killHeal:1 } },
           { key:"stormcaller", name:"Storm Caller", tier:3, color:"#507fb5",
             ability:"Tempest", cd:30,
             desc:"+50% de dano, +10% de velocidade, mas recebe 20% mais dano de qualquer fonte.",
@@ -3315,53 +3331,53 @@ body.netgame #revivetouch{display:flex}
             burst:{ duration:10, speedTotal:1.20, stormHeadshot:true, stormChance:0.20, stormScale:0.50, stormRadius:5 } },
           { key:"warlord", name:"Warlord", tier:4, color:"#b57b43",
             ability:"Iron Rule", cd:30,
-            desc:"+50% de dano. Recupera 10 HP a cada 25 eliminações.",
+            desc:"+50% de dano. Recupera 10 HP a cada 25 eliminações. Desvantagem: recebe 10% mais dano.",
             active:"Recebe 50% menos dano por 10 segundos.",
-            effects:{ damage:1.50, healEvery:25, healAmount:10 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+            effects:{ damage:1.50, healEvery:25, healAmount:10, damageTaken:1.10 }, burst:{ duration:10, damageTakenTotal:0.50 } },
           { key:"juggernaut", name:"Juggernaut", tier:4, color:"#9b6e4c",
             ability:"Unbroken", cd:30,
-            desc:"+30% de dano, recebe 30% menos dano e tem +10% de velocidade.",
+            desc:"+30% de dano e recebe 30% menos dano. Desvantagem: armadura pesada, −12% de velocidade.",
             active:"Por 10 s: dano total +60%, velocidade total +20% e mantém 30% de redução.",
-            effects:{ damage:1.30, damageTaken:0.70, speed:1.10 },
+            effects:{ damage:1.30, damageTaken:0.70, speed:0.88 },
             burst:{ duration:10, damageTotal:1.60, speedTotal:1.20 } },
           { key:"deadeye", name:"Deadeye", tier:4, color:"#c59a45",
             ability:"Killshot", cd:30,
-            desc:"De +0% a +50% de dano conforme a distância; headshots recebem +100% de dano adicional.",
+            desc:"De +0% a +50% de dano conforme a distância; headshots recebem +100% de dano adicional. Desvantagem: −10% de vida máxima.",
             active:"Por 10 s, +60% de dano adicional, somando com distância e headshot.",
-            effects:{ distanceDamageMax:0.50, headshot:2 }, burst:{ duration:10, damageTotal:1.60 } },
+            effects:{ distanceDamageMax:0.50, headshot:2, maxHp:0.90 }, burst:{ duration:10, damageTotal:1.60 } },
           { key:"reaper", name:"Reaper", tier:6, color:"#ff7a3d",
             ability:"Gravebound", cd:15, requiredKills:5, excludeBossKills:true, summonAllies:5,
-            desc:"+30% de dano e +30% de velocidade. Chefes/minibosses não contam para a invocação.",
+            desc:"+30% de dano e +30% de velocidade. Chefes/minibosses não contam para a invocação. Desvantagem: −20% de vida máxima.",
             active:"Com 5 eliminações válidas, invoca 5 zumbis aliados do chão. As 5 kills são consumidas; máximo 5 aliados.",
-            effects:{ damage:1.30, speed:1.30 }, burst:{} },
+            effects:{ damage:1.30, speed:1.30, maxHp:0.80 }, burst:{} },
           { key:"voidwalker", name:"Void Walker", tier:5, color:"#7547bd",
             ability:"Voidshift", cd:30,
-            desc:"+75% de dano, +20% de velocidade e recebe 20% menos dano.",
+            desc:"+75% de dano, +20% de velocidade e recebe 20% menos dano. Desvantagem: corpo instável, −25% de vida máxima.",
             active:"Por 10 s: dano total +100%, velocidade total +50% e mantém 20% de redução.",
-            effects:{ damage:1.75, speed:1.20, damageTaken:0.80 },
+            effects:{ damage:1.75, speed:1.20, damageTaken:0.80, maxHp:0.75 },
             burst:{ duration:10, damageTotal:2.00, speedTotal:1.50 } },
           { key:"vampire", name:"Vampire", tier:5, color:"#9e2447",
             ability:null, cd:0, passiveOnly:true,
-            desc:"+30% de dano, +30% de vida máxima e recupera 3 HP por eliminação.",
+            desc:"+30% de dano, +30% de vida máxima e recupera 3 HP por eliminação. Desvantagem: recebe 10% mais dano.",
             active:"Passiva — não possui habilidade ativa.",
-            effects:{ damage:1.30, maxHp:1.30, killHeal:3 }, burst:{} },
+            effects:{ damage:1.30, maxHp:1.30, killHeal:3, damageTaken:1.10 }, burst:{} },
           { key:"archon", name:"Archon", tier:5, color:"#e66cae",
             ability:"Ascendant Form", cd:30,
-            desc:"+50% de dano, +50% de vida máxima e recebe 50% menos dano.",
+            desc:"+50% de dano, +50% de vida máxima e recebe 50% menos dano. Desvantagem: −10% de velocidade.",
             active:"Por 10 s: +100% dano, +100% vida máxima, +100% velocidade e 80% de redução de dano.",
-            effects:{ damage:1.50, maxHp:1.50, damageTaken:0.50 },
+            effects:{ damage:1.50, maxHp:1.50, damageTaken:0.50, speed:0.90 },
             burst:{ duration:10, damageTotal:2.00, maxHpTotal:2.00, speedTotal:2.00, damageTakenTotal:0.20 } },
           { key:"serafim", name:"Serafim", tier:6, color:"#ffd96a",
             ability:"Ascension", cd:30, requiredKills:50,
-            desc:"+80% de dano, recebe 30% menos dano e regenera 5 HP/s após 5 s sem sofrer dano.",
+            desc:"+80% de dano, recebe 30% menos dano e regenera 5 HP/s após 5 s sem sofrer dano. Desvantagem: −8% de velocidade.",
             active:"A cada 50 eliminações: por 10 s, +100% dano, +30% velocidade e 80% de redução; regeneração permanece 5 HP/s.",
-            effects:{ damage:1.80, damageTaken:0.70, regen:5, regenDelay:5 },
+            effects:{ damage:1.80, damageTaken:0.70, regen:5, regenDelay:5, speed:0.92 },
             burst:{ duration:10, damageTotal:2.00, speedTotal:1.30, damageTakenTotal:0.20 } },
           { key:"deathless", name:"Deathless", tier:6, color:"#ff5a36",
             ability:null, cd:0, passiveOnly:true,
-            desc:"+100% de dano e +50% de vida máxima. Uma vez por partida, ressuscita com 50% da própria vida máxima.",
+            desc:"+100% de dano e +50% de vida máxima. Uma vez por partida, ressuscita com 50% da própria vida máxima. Desvantagem: recebe 15% mais dano.",
             active:"Passiva — 1 ressurreição por partida.",
-            effects:{ damage:2.00, maxHp:1.50, reviveOnce:true }, burst:{} },
+            effects:{ damage:2.00, maxHp:1.50, reviveOnce:true, damageTaken:1.15 }, burst:{} },
           { key:"sharpshooter", name:"Sharpshooter", tier:1, color:"#5b9ac7",
             ability:"Eagle Step", cd:30,
             desc:"+15% de dano apenas com Bow, Stormpiercer e Wraithpiercer.",
@@ -3369,15 +3385,15 @@ body.netgame #revivetouch{display:flex}
             effects:{ bowDamage:1.15 }, burst:{ duration:10, bowDamageTotal:1.20, jumpTotal:1.10 } },
           { key:"archangel", name:"Archangel", tier:7, color:"#dff8ff",
             ability:"Judgement", cd:30, requiredKills:25, secretFlight:"angel",
-            desc:"Sustentação divina: +120% de dano, +100% de vida máxima, recebe 40% menos dano e regenera 4 HP/s após 4 s sem sofrer dano. Auréola e duas asas exclusivas.",
+            desc:"Sustentação divina: +120% de dano, +100% de vida máxima, recebe 40% menos dano e regenera 4 HP/s após 4 s sem sofrer dano. Desvantagem: asas pesadas, −8% de velocidade no chão. Auréola e duas asas exclusivas.",
             active:"Com 25 eliminações: Nova Sagrada (700 de dano em 9 m e cura 35% da vida) e 15 s de voo. Em voo, +180% de dano e a cada 1,1 s um raio de luz castiga o inimigo mais próximo (260 de dano, x2 em chefes).",
-            effects:{ damage:2.20, maxHp:2.00, damageTaken:0.60, regen:4, regenDelay:4 },
+            effects:{ damage:2.20, maxHp:2.00, damageTaken:0.60, regen:4, regenDelay:4, speed:0.92 },
             burst:{ duration:15, flight:"angel", nova:700, novaRadius:9, healPct:0.35, damageTotal:2.80 } },
           { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
             ability:"Hellfire", cd:30, requiredKills:25, secretFlight:"demon",
-            desc:"Poder bruto: +170% de dano, +60% de vida máxima, recebe 40% menos dano e cada eliminação rouba 4 HP. Chifres e cauda demoníaca exclusivos.",
+            desc:"Poder bruto: +170% de dano, +60% de vida máxima, recebe 25% menos dano e cada eliminação rouba 4 HP. Desvantagem: sem regeneração natural e mais exposto que o Archangel. Chifres e cauda demoníaca exclusivos.",
             active:"Com 25 eliminações: abre uma Poça Infernal de 7 m ao seu redor por 12 s (desacelera monstros comuns — não chefes/minibosses — e causa 10 de dano a cada 0,25 s) e voa por 15 s com +230% de dano. Em voo, com a Demonic Fury, o ataque vira arremesso: a foice gira, corta tudo no caminho e volta ao bater no chão, numa estrutura ou depois de 6 monstros.",
-            effects:{ damage:2.70, maxHp:1.60, damageTaken:0.60, killHeal:4 },
+            effects:{ damage:2.70, maxHp:1.60, damageTaken:0.75, killHeal:4 },
             burst:{ duration:15, flight:"demon", hellPool:{ radius:7, duration:12 }, damageTotal:3.30 } },
         ];
         const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
@@ -12258,6 +12274,237 @@ body.netgame #revivetouch{display:flex}
             return true;
           },
         };
+        // ── Arena editor (community content) ───────────────────────────────────────────────────
+        // Players build their own arena on top of any of the 5 maps: concrete walls, sandbag cover,
+        // crates, barrels, toxic drums and extra zombie spawns, on a 1 m grid seen from above.
+        // Arenas are saved on the device and shared as a text code ("DRA1:…") — paste a friend's
+        // code to play it. A live arena is applied while the map is built, BEFORE the navigation grid,
+        // so zombies path around everything. Community arenas never pay account rewards.
+        const ArenaEditor = {
+          KEY: "deadrecoil.arenas.v1", MAX: 120,
+          TOOLS: [
+            { id: "wall", label: "Muro", icon: "▬", color: "#9aa0a6", solid: [4, 2.6, 0.5, 0x6d6a63] },
+            { id: "cover", label: "Sacos de areia", icon: "▭", color: "#c2a46a", solid: [2, 1.1, 0.7, 0x7d6c4c] },
+            { id: "box", label: "Caixote", icon: "▣", color: "#b07a3a", prop: "box" },
+            { id: "barrel", label: "Barril", icon: "◉", color: "#d0483c", prop: "barrel" },
+            { id: "toxic", label: "Tambor tóxico", icon: "☢", color: "#8cff3c", prop: "toxic" },
+            { id: "spawn", label: "Spawn zumbi", icon: "☠", color: "#ff3b5c" },
+            { id: "erase", label: "Borracha", icon: "⌫", color: "#ffffff" },
+            { id: "pan", label: "Mover vista", icon: "✥", color: "#7fd0ff" },
+          ],
+          tool: "wall", rot: 0, data: null, live: null, base: null, zoom: 2, cx: 0, cz: 0,
+          blank(m = 0) { return { v: 1, n: "Minha arena", m, i: [] }; },
+          list() { try { const a = JSON.parse(localStorage.getItem(this.KEY) || "[]"); return Array.isArray(a) ? a.filter((x) => this.valid(x)) : []; } catch { return []; } },
+          saveList(a) { try { localStorage.setItem(this.KEY, JSON.stringify(a.slice(0, 20))); return true; } catch { return false; } },
+          valid(d) {
+            if (!d || typeof d !== "object" || !Array.isArray(d.i) || !(d.m >= 0 && d.m <= 4)) return null;
+            const half = (MapManager.halves[d.m] || 50) - 3, ids = this.TOOLS.map((t) => t.id).filter((t) => t !== "erase" && t !== "pan"), items = [];
+            for (const it of d.i.slice(0, this.MAX)) {
+              const [t, x, z, r] = it;
+              if (!ids.includes(t) || !Number.isFinite(x) || !Number.isFinite(z) || Math.abs(x) > half || Math.abs(z) > half) continue;
+              items.push([t, Math.round(x), Math.round(z), r ? 1 : 0]);
+            }
+            return { v: 1, n: String(d.n || "Arena").replace(/[<>&"]/g, "").slice(0, 28) || "Arena", m: Math.floor(d.m), i: items };
+          },
+          encode(d) {
+            const json = JSON.stringify({ v: 1, n: d.n, m: d.m, i: d.i });
+            return "DRA1:" + btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          },
+          decode(code) {
+            try {
+              const raw = String(code || "").trim().replace(/^DRA1:/i, "").replace(/-/g, "+").replace(/_/g, "/");
+              return this.valid(JSON.parse(decodeURIComponent(escape(atob(raw)))));
+            } catch { return null; }
+          },
+          toolDef(id) { return this.TOOLS.find((t) => t.id === id); },
+          // Called by MapManager.build right before the nav grid: the arena becomes real geometry.
+          applyTo(M, index) {
+            const d = this.live;
+            if (!d || d.m !== index) return;
+            for (const [t, x, z, r] of d.i) {
+              const def = this.toolDef(t);
+              if (t === "cover") {
+                const n0 = M.obstacles.length;
+                MapKit.sandbags(x, z, 2.1, r ? Math.PI / 2 : 0);
+                for (let k = n0; k < M.obstacles.length; k++) M.obstacles[k].arena = true; // never auto-cleared
+              }
+              else if (def.solid) {
+                const [len, h, th, color] = def.solid, w = r ? th : len, dd = r ? len : th;
+                const m = M.solid(x, h / 2, z, w, h, dd, color);
+                try { m.material = VisualArt.surface("concrete_wall_008", 0x9aa59c, "concrete"); VisualArt.tileUV(m, 2.4); m.userData.disposableMaterial = false; } catch (e) {}
+                m.castShadow = m.receiveShadow = true;
+              } else if (def.prop) M.designProps.push([def.prop, x, z]);
+              else if (t === "spawn") M.spawns.push([x, z]);
+            }
+          },
+          open() {
+            AudioManager.init();
+            this.data = this.data || this.list()[0] || this.blank(0);
+            UIManager.screen("arenascreen");
+            this.base = null;
+            this.loadBase(this.data.m);
+            this.renderList();
+            this.sync();
+          },
+          close() { this.live = null; UIManager.menu(); },
+          loadBase(m) {
+            // Build the real map once so the editor draws its true walls and the player start.
+            if (!this.base || this.base.m !== m) {
+              MapManager.build(m);
+              this.base = {
+                m, half: MapManager.half,
+                rects: MapManager.obstacles.filter((o) => o.top > 0.5 && !o.door).map((o) => [o.x, o.z, o.w, o.d]),
+                spawns: MapManager.spawns.map((p) => p.slice()),
+                start: (MapManager.playerStart || [0, 10]).slice(),
+              };
+              [this.cx, this.cz] = this.base.start;
+            }
+            this.draw();
+          },
+          sync() {
+            $("arena-name").value = this.data.n;
+            $("arena-map").value = String(this.data.m);
+            $("arena-count").textContent = `${this.data.i.length}/${this.MAX} peças`;
+            $("arena-tools").innerHTML = this.TOOLS.map((t) => `<button type="button" data-tool="${t.id}" class="${t.id === this.tool ? "on" : ""}" style="--c:${t.color}"><i>${t.icon}</i>${t.label}</button>`).join("") +
+              `<button type="button" data-tool="rotate" class="rot"><i>⟳</i>${this.rot ? "Vertical" : "Horizontal"}</button>`;
+            this.draw();
+          },
+          renderList() {
+            const a = this.list();
+            $("arena-saved").innerHTML = a.length
+              ? a.map((d, k) => `<div class="arena-row"><b>${d.n}</b><small>${maps[d.m]?.name || "Mapa"} · ${d.i.length} peças</small><button type="button" data-load="${k}">Abrir</button><button type="button" data-del="${k}" class="ghost">✕</button></div>`).join("")
+              : `<p class="arena-empty">Nenhuma arena salva ainda.</p>`;
+          },
+          view() {
+            const c = $("arena-canvas"), r = c.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+            const S = Math.max(120, Math.floor(Math.min(r.width, r.height)));
+            if (c.width !== S * dpr) { c.width = c.height = S * dpr; }
+            const half = this.base?.half || 50, span = (half * 2) / this.zoom;
+            this.cx = Math.max(-half + span / 2, Math.min(half - span / 2, this.cx));
+            this.cz = Math.max(-half + span / 2, Math.min(half - span / 2, this.cz));
+            return { c, S, dpr, half, span, x0: this.cx - span / 2, z0: this.cz - span / 2, k: (S * dpr) / span };
+          },
+          toWorld(ev, raw = false) {
+            const { c, span, x0, z0 } = this.view(), r = c.getBoundingClientRect(), side = Math.min(r.width, r.height);
+            const x = x0 + ((ev.clientX - r.left) / side) * span, z = z0 + ((ev.clientY - r.top) / side) * span;
+            return raw ? [x, z] : [Math.round(x), Math.round(z)];
+          },
+          setZoom(z) { this.zoom = Math.max(1, Math.min(4, z)); $("arena-zoom").textContent = `${this.zoom}×`; this.draw(); },
+          blockedAt(x, z) {
+            const s = this.base?.start || [0, 10];
+            return Math.hypot(x - s[0], z - s[1]) < 3;
+          },
+          place(x, z) {
+            const d = this.data, half = (this.base?.half || 50) - 3;
+            if (Math.abs(x) > half || Math.abs(z) > half) return;
+            if (this.tool === "erase") {
+              let best = -1, bd = 2.2;
+              d.i.forEach(([, ix, iz], k) => { const dd = Math.hypot(ix - x, iz - z); if (dd < bd) { bd = dd; best = k; } });
+              if (best >= 0) d.i.splice(best, 1);
+            } else {
+              if (d.i.length >= this.MAX) return UIManager.toast(`Limite de ${this.MAX} peças.`);
+              if (this.blockedAt(x, z)) return UIManager.toast("Deixe livre o ponto de nascimento do jogador.");
+              if (d.i.some(([t, ix, iz]) => t === this.tool && ix === x && iz === z)) return;
+              d.i.push([this.tool, x, z, this.toolDef(this.tool).solid ? this.rot : 0]);
+            }
+            AudioManager.tone(this.tool === "erase" ? 260 : 520, 0.05, "square", 0.05, 0);
+            $("arena-count").textContent = `${d.i.length}/${this.MAX} peças`;
+            this.draw();
+          },
+          draw() {
+            if (!this.base || !$("arena-canvas")) return;
+            const { c, k, half, x0, z0 } = this.view(), g = c.getContext("2d"), W = c.width, P = (v) => (v - x0) * k, Q = (v) => (v - z0) * k;
+            g.fillStyle = "#11161a"; g.fillRect(0, 0, W, W);
+            g.strokeStyle = "#ffffff10"; g.lineWidth = 1;
+            for (let v = -half; v <= half; v += this.zoom > 1 ? 1 : 5) { g.strokeStyle = v % 5 ? "#ffffff08" : "#ffffff14"; g.beginPath(); g.moveTo(P(v), 0); g.lineTo(P(v), W); g.moveTo(0, Q(v)); g.lineTo(W, Q(v)); g.stroke(); }
+            g.strokeStyle = "#ff3b5c88"; g.strokeRect(P(-half + 3), Q(-half + 3), (half * 2 - 6) * k, (half * 2 - 6) * k);
+            g.fillStyle = "#3b434a";
+            for (const [x, z, w, d] of this.base.rects) g.fillRect(P(x - w), Q(z - d), Math.max(1, w * 2 * k), Math.max(1, d * 2 * k));
+            for (const [x, z] of this.base.spawns) { g.fillStyle = "#ff3b5c66"; g.beginPath(); g.arc(P(x), Q(z), 0.9 * k, 0, 7); g.fill(); }
+            const s = this.base.start; g.fillStyle = "#4dff9a"; g.beginPath(); g.arc(P(s[0]), Q(s[1]), 1.1 * k, 0, 7); g.fill();
+            g.strokeStyle = "#4dff9a55"; g.beginPath(); g.arc(P(s[0]), Q(s[1]), 3 * k, 0, 7); g.stroke();
+            for (const [t, x, z, r] of this.data.i) {
+              const def = this.toolDef(t);
+              g.fillStyle = def.color;
+              if (def.solid) { const [len, , th] = def.solid, w = r ? th : len, d = r ? len : th; g.fillRect(P(x - w / 2), Q(z - d / 2), w * k, d * k); g.strokeStyle = "#000a"; g.strokeRect(P(x - w / 2), Q(z - d / 2), w * k, d * k); }
+              else if (t === "spawn") { g.font = `${Math.round(Math.max(12, 2.4 * k))}px sans-serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("☠", P(x), Q(z)); }
+              else { g.beginPath(); g.arc(P(x), Q(z), Math.max(3, 0.55 * k), 0, 7); g.fill(); }
+            }
+          },
+          save() {
+            const d = this.valid({ ...this.data, n: $("arena-name").value });
+            if (!d) return;
+            this.data = d;
+            const a = this.list().filter((x) => x.n !== d.n);
+            a.unshift(d);
+            UIManager.toast(this.saveList(a) ? `Arena “${d.n}” salva neste aparelho.` : "Não foi possível salvar.");
+            this.renderList();
+          },
+          share() {
+            this.data.n = $("arena-name").value || this.data.n;
+            const code = this.encode(this.data);
+            $("arena-code").value = code;
+            navigator.clipboard?.writeText(code).then(() => UIManager.toast("Código copiado! Mande para seus amigos."), () => UIManager.toast("Código gerado abaixo — copie e compartilhe."));
+          },
+          importCode() {
+            const d = this.decode($("arena-code").value);
+            if (!d) return UIManager.toast("Código de arena inválido.");
+            this.data = d; this.base = null;
+            this.loadBase(d.m); this.sync();
+            UIManager.toast(`Arena “${d.n}” carregada · ${d.i.length} peças.`);
+          },
+          async play() {
+            const d = this.valid({ ...this.data, n: $("arena-name").value });
+            if (!d) return;
+            this.data = d;
+            this.live = d;
+            selectedMap = d.m; mode = "infinite";
+            Account.run = null; // community arenas never touch account rewards
+            await enterFullscreen().catch(() => {});
+            WeaponSystem.model.visible = true;
+            PlayerController.start();
+            UIManager.announce(`ARENA · ${d.n.toUpperCase()}`, "Arena da comunidade · sem recompensas de conta", 2.6);
+          },
+          bind() {
+            $("arenabtn").onclick = () => this.open();
+            $("arena-back").onclick = () => this.close();
+            $("arena-tools").addEventListener("click", (e) => {
+              const b = e.target.closest("[data-tool]"); if (!b) return;
+              if (b.dataset.tool === "rotate") this.rot = this.rot ? 0 : 1; else this.tool = b.dataset.tool;
+              this.sync();
+            });
+            const cv = $("arena-canvas");
+            let painting = false, last = "";
+            let grab = null;
+            cv.addEventListener("pointerdown", (e) => {
+              cv.setPointerCapture?.(e.pointerId);
+              if (this.tool === "pan" || e.button === 2) { grab = { x: e.clientX, z: e.clientY, cx: this.cx, cz: this.cz }; return; }
+              painting = true; last = ""; const [x, z] = this.toWorld(e); last = x + "," + z; this.place(x, z);
+            });
+            cv.addEventListener("contextmenu", (e) => e.preventDefault());
+            cv.addEventListener("wheel", (e) => { e.preventDefault(); this.setZoom(this.zoom + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+            cv.addEventListener("pointermove", (e) => {
+              if (grab) { const r = cv.getBoundingClientRect(), u = this.view().span / Math.min(r.width, r.height); this.cx = grab.cx - (e.clientX - grab.x) * u; this.cz = grab.cz - (e.clientY - grab.z) * u; this.draw(); return; }
+              if (!painting || !["erase", "box", "barrel", "toxic"].includes(this.tool)) return; const [x, z] = this.toWorld(e), key = x + "," + z; if (key !== last) { last = key; this.place(x, z); } });
+            const stop = () => { painting = false; grab = null; };
+            $("arena-zin").onclick = () => this.setZoom(this.zoom + 1);
+            $("arena-zout").onclick = () => this.setZoom(this.zoom - 1);
+            cv.addEventListener("pointerup", stop); cv.addEventListener("pointercancel", stop);
+            $("arena-map").onchange = () => { this.data.m = +$("arena-map").value; this.data.i = []; this.base = null; this.loadBase(this.data.m); this.sync(); };
+            $("arena-clear").onclick = () => { this.data.i = []; this.sync(); };
+            $("arena-new").onclick = () => { this.data = this.blank(this.data.m); this.sync(); };
+            $("arena-save").onclick = () => this.save();
+            $("arena-share").onclick = () => this.share();
+            $("arena-import").onclick = () => this.importCode();
+            $("arena-play").onclick = () => this.play();
+            $("arena-saved").addEventListener("click", (e) => {
+              const a = this.list(), l = e.target.closest("[data-load]"), del = e.target.closest("[data-del]");
+              if (l) { this.data = a[+l.dataset.load]; this.base = null; this.loadBase(this.data.m); this.sync(); }
+              if (del) { a.splice(+del.dataset.del, 1); this.saveList(a); this.renderList(); }
+            });
+            addEventListener("resize", () => { if (!$("arenascreen").classList.contains("hidden")) this.draw(); });
+          },
+        };
         const MapManager = {
           group: new THREE.Group(),
           obstacles: [],
@@ -12580,6 +12827,7 @@ body.netgame #revivetouch{display:flex}
             );
             moon.castShadow = false;
             moon.userData.moon = true;
+            ArenaEditor.applyTo(this, index);
             WorldProps.finish(index);
             Doors.build(this);
             // Navigation sees every doorway as passable (zombies push doors open) but keeps clear of
@@ -14126,7 +14374,7 @@ body.netgame #revivetouch{display:flex}
             const badge = (item) =>
               `<span class="rarity-tag" style="color:${rarityColors[item.tier]}">${rarityNames[item.tier]}</span>`;
             $("classdetail").innerHTML =
-              `${badge(c)}<h3>${c.name}</h3><p>${c.desc}<br><strong>Q · ${c.ability} (${c.cd}s)</strong><br>${c.active}</p>`;
+              `${badge(c)}<h3>${c.name}</h3><p>${String(c.desc).replace(/(Desvantagem:[^.]*\.)/, '<em class="drawback">$1</em>')}<br><strong>Q · ${c.ability} (${c.cd}s)</strong><br>${c.active}</p>`;
             $("weapondetail").innerHTML =
               `${badge(w)}<h3>${w.name}</h3><p>${["Curto alcance", "Médio alcance", "Longo alcance"][w.cat]} · Dano base ${w.damage} × ${rarityMult[w.tier]}<br>${w.mag !== Infinity ? `Pente ${w.mag} · recarga ${w.reload}s` : w.kind === "melee" ? "Corpo a corpo · sem munição" : "Munição infinita"}${w.ability ? `<br><strong>${w.ability}</strong>` : ""}<br>Troque para esta arma durante a partida com as teclas 1-5, se ela estiver num slot que você possui.</p>`;
             for (const kind of ["class", "weapon"]) {
@@ -15360,8 +15608,12 @@ body.netgame #revivetouch{display:flex}
               size = boss ? boss.size : t.size;
             let loc = where ? where.clone() : new V(...[0, 0, 0]);
             if (!where) {
-              const s = MapManager.chooseSpawn(player.pos);
-              loc.set(s[0], 0, s[1]);
+              const hz = !boss && HordeEvent.spawnPoint();
+              if (hz) loc.copy(hz);
+              else {
+                const s = MapManager.chooseSpawn(player.pos);
+                loc.set(s[0], 0, s[1]);
+              }
             }
             if (MapManager.collides(loc.x, loc.z, 0.4)) {
               for (let r = 1; r < 12; r++) {
@@ -15436,7 +15688,7 @@ body.netgame #revivetouch{display:flex}
             shadow.scale.set(0.9 * size, 0.65 * size, 1);
             g.add(shadow);
             z.contact = shadow;
-            if (!boss) ZombieVariants.roll(z);
+            if (!boss) { HordeEvent.dress(z); if (!z.swarm) ZombieVariants.roll(z); }
             if (!boss && WaveManager.blood) z.speed = Math.min(Balance.RUN_LIMIT, z.speed * 1.15);
             this.list.push(z);
             NetGame.registerSpawn(z);
@@ -19801,7 +20053,7 @@ body.netgame #revivetouch{display:flex}
             const t0 = performance.now();
             const O = M.obstacles, H = M.half - 1.3, C = Math.max(0.5, Math.ceil((2 * H) / 400 * 10) / 10), n = Math.floor((2 * H) / C);
             if (!O.length || n < 8 || n > 400) return 0;
-            const isWall = (o) => o.structural || (o.top - (o.base || 0)) >= 2.6 || Math.max(o.w, o.d) * 2 >= 4 || o.top < 0.6 || (o.base || 0) > 1.6;
+            const isWall = (o) => o.structural || o.arena || (o.top - (o.base || 0)) >= 2.6 || Math.max(o.w, o.d) * 2 >= 4 || o.top < 0.6 || (o.base || 0) > 1.6;
             // cluster touching non-wall obstacles
             // Only dressing built from kit boxes can be removed cleanly (mesh + collider); rocks and
             // GLB props are already meshes by now, so their colliders are never candidates.
@@ -21025,6 +21277,41 @@ body.netgame #revivetouch{display:flex}
         };
         // Blood wave (7 Days to Die's blood moon): every 7th wave is bigger and faster, has more
         // special variants and pays double Essência. A red veil and a low drone sell it.
+        // ── Giant horde (World War Z swarm) ─────────────────────────────────────────────────────
+        // Every 9th wave (outside Story) a tidal swarm pours in from ONE side of the map: 2.2×
+        // enemies, near-continuous spawning, a higher simultaneous cap and lighter "swarmers"
+        // (55% HP, +12% speed, still clamped to the run limit). Clearing it pays triple Essência.
+        // Deterministic from the wave number, so multiplayer clients mirror the host.
+        const HordeEvent = {
+          active: false, front: [], i: 0,
+          isWave(w) { return w >= 9 && w % 9 === 0 && !(typeof StoryMode !== "undefined" && StoryMode.active()); },
+          begin() {
+            this.active = true; this.i = 0;
+            const M = MapManager, ang = Math.random() * Math.PI * 2, dx = Math.cos(ang), dz = Math.sin(ang);
+            const pts = (M.spawns || []).filter((p) => !M.collides(p[0], p[1], 0.8));
+            pts.sort((a, b) => (b[0] * dx + b[1] * dz) - (a[0] * dx + a[1] * dz));
+            this.front = pts.slice(0, Math.max(1, Math.min(4, Math.ceil(pts.length / 3))));
+            document.body.classList.add("horde-wave");
+            shake = Math.max(shake, 0.35);
+            if (AudioManager.ctx) { AudioManager.tone(38, 3.2, "sawtooth", 0.24, 30); setTimeout(() => AudioManager.tone(46, 2.4, "square", 0.12, 36), 600); setTimeout(() => AudioManager.tone(60, 1.8, "sawtooth", 0.16, 42), 1300); }
+          },
+          end() { this.active = false; this.front = []; document.body.classList.remove("horde-wave"); },
+          spawnPoint() {
+            if (!this.active || !this.front.length) return null;
+            const p = this.front[this.i++ % this.front.length];
+            for (let k = 0; k < 6; k++) {
+              const x = p[0] + rand(-2.4, 2.4), z = p[1] + rand(-2.4, 2.4);
+              if (!MapManager.collides(x, z, 0.45)) return new V(x, 0, z);
+            }
+            return new V(p[0], 0, p[1]);
+          },
+          dress(z) {
+            if (!this.active || z.boss) return;
+            z.swarm = true;
+            z.hp = z.maxhp = Math.max(1, Math.round(z.hp * 0.55));
+            z.speed = Math.min(Balance.RUN_LIMIT, z.speed * 1.12);
+          },
+        };
         const BloodWave = {
           set(on) {
             document.body.classList.toggle("blood-wave", !!on);
@@ -21071,7 +21358,8 @@ body.netgame #revivetouch{display:flex}
             const caps = touchMode
               ? { low: 36, medium: 46, high: 56, ultra: 64 }
               : { low: 55, medium: 70, high: 85, ultra: 96 };
-            return caps[SettingsManager.data.graphics] ?? (touchMode ? 46 : 85);
+            const cap = caps[SettingsManager.data.graphics] ?? (touchMode ? 46 : 85);
+            return this.horde ? Math.round(cap * 1.25) : cap;
           },
           start() {
             this.clearedAt = 0;
@@ -21080,8 +21368,10 @@ body.netgame #revivetouch{display:flex}
             MutationManager.roll(this.wave);
             this.blood = this.wave % 7 === 0;
             BloodWave.set(this.blood);
+            this.horde = HordeEvent.isWave(this.wave);
+            if (this.horde) HordeEvent.begin(); else if (HordeEvent.active) HordeEvent.end();
             this.remaining = Math.round(
-              (7 + 3 * (this.wave - 1)) * diff[difficulty].count * modeRules().count * MutationManager.countMultiplier() * (this.blood ? 1.5 : 1),
+              (7 + 3 * (this.wave - 1)) * diff[difficulty].count * modeRules().count * MutationManager.countMultiplier() * (this.blood ? 1.5 : 1) * (this.horde ? 2.2 : 1),
             );
             this.total = this.remaining;
             this.spawnClock = 0.3;
@@ -21100,8 +21390,10 @@ body.netgame #revivetouch{display:flex}
             }
             this.bossPending = this.rankFor(this.wave) > 0;
             UIManager.announce(
-              this.blood ? `ONDA ${this.wave} · ONDA DE SANGUE` : `ONDA ${this.wave}`,
-              this.blood
+              this.horde ? `ONDA ${this.wave} · HORDA GIGANTE` : this.blood ? `ONDA ${this.wave} · ONDA DE SANGUE` : `ONDA ${this.wave}`,
+              this.horde
+                ? "Uma maré de mortos vem de um lado só · Essência ×3"
+                : this.blood
                 ? "Mais rápidos, mais especiais · Essência em dobro"
                 : this.bossPending
                 ? "Movimento anormal detectado"
@@ -21239,7 +21531,7 @@ body.netgame #revivetouch{display:flex}
               const spawned = ZombieManager.spawn(pick(this.spawnPool));
               if (spawned) {
                 this.remaining--;
-                this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier()) * (this.blood ? 0.7 : 1);
+                this.spawnClock = Math.max(0.13, (0.8 - this.wave * 0.025) / MutationManager.spawnRateMultiplier()) * (this.blood ? 0.7 : 1) * (this.horde ? 0.3 : 1);
               } else this.spawnClock = 0.16;
             }
             if (this.bossPending && this.remaining < this.total * 0.5 && this.spawnClock <= 0) {
@@ -21261,9 +21553,10 @@ body.netgame #revivetouch{display:flex}
                 this.clearedAt = simulationTime;
                 MutationManager.finishWave();
                 const waveCoins = RunStats.waveCleared(this.wave, true);
-                const essence = (100 + 25 * this.wave) * (this.blood ? 2 : 1);
+                const essence = (100 + 25 * this.wave) * (this.horde ? 3 : this.blood ? 2 : 1);
                 MatchShop.essence += essence;
                 if (this.blood) { this.blood = false; BloodWave.set(false); }
+                if (this.horde) { this.horde = false; HordeEvent.end(); }
                 UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · +${essence} ✦ · B abre a loja`, 2.4);
                 VoiceLines.say("clear", 0.8);
                 AudioManager.coin();
@@ -22612,6 +22905,7 @@ body.netgame #revivetouch{display:flex}
             GrenadeThrow.cancel();
             ArchPowers.clear();
             MapObjectives.clear();
+            HordeEvent.end();
             $("objtracker")?.classList.add("hidden");
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
@@ -22659,7 +22953,7 @@ body.netgame #revivetouch{display:flex}
               flightDescentUntil: 0,
               ladderReleaseUntil: 0,
             };
-            MatchShop.reset();
+            MatchShop.reset(); HordeEvent.end();
             MapObjectives.start();
             WaveManager.blood = false;
             BloodWave.set(false);
@@ -23883,6 +24177,7 @@ body.netgame #revivetouch{display:flex}
             turrets.length = 0;
             for (const n of damageNumbers) n.el.remove();
             damageNumbers.length = 0;
+            ArenaEditor.live = null;
             this.screen("menu");
             clearTimeout(toastTimer);
             $("toast").classList.add("hidden");
@@ -24039,7 +24334,7 @@ body.netgame #revivetouch{display:flex}
             this.ageFeed();
             const w = WeaponSystem.current();
             const mutation = MutationManager.current;
-            this.hudHTML("wavehud", `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`);
+            this.hudHTML("wavehud", `ONDA ${WaveManager.wave}<small>${ZombieManager.list.length + WaveManager.remaining} ameaças restantes${mode === "timed" ? ` · ${Math.floor(Math.max(0, WaveManager.timeLeft) / 60)}:${String(Math.floor(Math.max(0, WaveManager.timeLeft) % 60)).padStart(2, "0")}` : ""}</small>${WaveManager.horde ? `<span class="horde-tag">☠ HORDA GIGANTE · Essência ×3</span>` : ""}${mutation ? `<span class="mutation">⚠ ${mutation.name} · +${Math.round((mutation.reward - 1) * 100)}% recompensa</span>` : ""}`);
             this.hudHTML("essencehud", `<b>✦ ${MatchShop.essence}</b><small>${touchMode ? "" : "B · LOJA"}</small><span class="perk-row">${MatchShop.perkIcons()}</span>`);
             this.hudHTML("wallethud", `◈ ${this.displayBalance("coins")}<small>↻ ${this.displayBalance("normal")} normal &nbsp; ✦ ${this.displayBalance("lucky")} Lucky</small>`);
             $("classhud").textContent = classes[selectedClass].name;
@@ -29970,6 +30265,7 @@ body.netgame #revivetouch{display:flex}
         };
         $("missionsbtn").onclick = () => DR.MissionUI.open();
         $("seasonbtn").onclick = () => SeasonPass.open();
+        ArenaEditor.bind();
         $("season-back").onclick = () => UIManager.screen("menu");
         $("season-track").addEventListener("click", (e) => { const b = e.target.closest("[data-tier]"); if (b && !b.disabled) SeasonPass.claim(Number(b.dataset.tier)); });
         SeasonPass.badge();
@@ -31080,7 +31376,7 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             StreetBreak,
-            MapObjectives,
+            MapObjectives, HordeEvent, ArenaEditor,
             SeasonPass,
             MatchShop,
             ZombieVariants,
