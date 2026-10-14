@@ -6005,12 +6005,24 @@ body.netgame #revivetouch{display:flex}
           sampler(tex) {
             const im = tex?.image;
             if (!im || !im.width) return null;
-            const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
-            const x = c.getContext("2d"); x.drawImage(im, 0, 0);
+            const sc = Math.min(1, 256 / Math.max(im.width, im.height)), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(im.width * sc)); c.height = Math.max(1, Math.round(im.height * sc));
+            const x = c.getContext("2d"); x.drawImage(im, 0, 0, c.width, c.height);
             const d = x.getImageData(0, 0, c.width, c.height).data, W = c.width, H = c.height, flip = tex.flipY;
             return (u, v) => { u = ((u % 1) + 1) % 1; v = ((v % 1) + 1) % 1; const px = Math.min(W - 1, (u * W) | 0), py = Math.min(H - 1, ((flip ? 1 - v : v) * H) | 0), i = (py * W + px) * 4; return [d[i] / 255, d[i + 1] / 255, d[i + 2] / 255]; };
           },
           cache: new Map(),
+          ensure(scene) {
+            if (!scene?.userData.voxelPending) return;
+            scene.userData.voxelPending = false;
+            for (const m of scene.userData.hdMeshes || []) { try { this.apply(m); } catch (e) {} }
+          },
+          // Background pass after boot: one pending weapon per idle slice.
+          idle() {
+            const next = [...WeaponModels.scenes.values()].find((sc) => sc.userData.voxelPending);
+            if (!next) return;
+            this.ensure(next);
+            setTimeout(() => this.idle(), 120);
+          },
           // Voxelise every mesh of an accessory clone (shared result per source geometry).
           group(root, res) {
             if (!root) return root;
@@ -6039,7 +6051,7 @@ body.netgame #revivetouch{display:flex}
             for (let t = 0; t < tri; t++) {
               const ia = I ? I.getX(t * 3) : t * 3, ib = I ? I.getX(t * 3 + 1) : t * 3 + 1, ic = I ? I.getX(t * 3 + 2) : t * 3 + 2;
               a.fromBufferAttribute(P, ia); b.fromBufferAttribute(P, ib); c.fromBufferAttribute(P, ic);
-              const n = Math.max(1, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / (C * 0.5)));
+              const n = Math.max(1, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / (C * 0.85)));
               for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
                 const wa = i / n, wb = j / n, wc = 1 - wa - wb;
                 p.set(a.x * wa + b.x * wb + c.x * wc, a.y * wa + b.y * wb + c.y * wc, a.z * wa + b.z * wb + c.z * wc);
@@ -6091,7 +6103,11 @@ body.netgame #revivetouch{display:flex}
           },
         };
         const WeaponModels = {
-          scenes: new Map(),
+          scenes: (() => {
+            const m = new Map(), get = m.get.bind(m);
+            m.get = (k) => { const sc = get(k); if (sc?.userData.voxelPending) WeaponVoxel.ensure(sc); return sc; };
+            return m;
+          })(),
           ready: false,
           load() {
             const src = window.DR_WEAPON_GLB;
@@ -6102,6 +6118,7 @@ body.netgame #revivetouch{display:flex}
             const done = () => {
               if (--left > 0) return;
               this.ready = true;
+              setTimeout(() => WeaponVoxel.idle(), 4000);
               if (typeof WeaponSystem !== "undefined" && WeaponSystem.model?.parent) WeaponSystem.buildModel();
             };
             for (const name of names) {
@@ -6141,7 +6158,9 @@ body.netgame #revivetouch{display:flex}
                     });
                     // Blocky art direction: the smooth HD melee meshes are voxelised once at load so every
                     // weapon reads as pixel blocks like the rest of the survivor's kit.
-                    for (const m of gltf.scene.userData.hdMeshes || []) { try { WeaponVoxel.apply(m); } catch (e) {} }
+                    // (deferred: done lazily on first use, or in the background after loading, so the
+                    // voxeliser never lengthens the boot)
+                    if (gltf.scene.userData.hdMeshes?.length) gltf.scene.userData.voxelPending = true;
                     this.scenes.set(name, gltf.scene);
                     done();
                   },

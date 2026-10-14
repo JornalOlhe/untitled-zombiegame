@@ -6,10 +6,10 @@ const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+(req.ur
 try{const page=await browser.newPage({viewport:{width:1280,height:720}}),errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error(e.stack);});
 await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await page.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
 await page.evaluate(()=>DeadRecoilTest.Armory.openCustomize());
-await page.waitForFunction(()=>[...document.querySelectorAll('[data-shop-thumb]')].length===9 && [...document.querySelectorAll('[data-shop-thumb]')].every(e=>e.style.backgroundImage),null,{timeout:90000}).catch(async e=>{console.log(await page.evaluate(()=>[...document.querySelectorAll('[data-shop-thumb]')].map(el=>({id:el.dataset.shopThumb,image:!!el.style.backgroundImage,text:el.textContent}))));throw e;});
+await page.waitForFunction(()=>[...document.querySelectorAll('[data-shop-thumb]')].length===21 && [...document.querySelectorAll('[data-shop-thumb]')].every(e=>e.style.backgroundImage),null,{timeout:240000}).catch(async e=>{console.log(await page.evaluate(()=>[...document.querySelectorAll('[data-shop-thumb]')].map(el=>({id:el.dataset.shopThumb,image:!!el.style.backgroundImage,text:el.textContent}))));throw e;});
 fs.mkdirSync('test-results/current',{recursive:true});await page.screenshot({path:'test-results/current/showroom-1280.png'});
 await page.locator('[data-shop-turn="0.4"]').click();assert.equal(await page.evaluate(()=>DeadRecoilTest.Armory.shopYaw),.4);
-await page.locator('[data-shop-category="headgear"]').click();assert.equal(await page.locator('[data-shop-thumb]').count(),3);
+await page.locator('[data-shop-category="headgear"]').click();assert.equal(await page.locator('[data-shop-thumb]').count(),6);
 for(const [width,height] of [[740,360],[390,844]]){await page.setViewportSize({width,height});await page.waitForTimeout(350);await page.screenshot({path:`test-results/current/showroom-${width}.png`});}
 await page.locator('[data-shop-category="all"]').click();
 await page.locator('[data-shop-thumb]').last().scrollIntoViewIfNeeded();
