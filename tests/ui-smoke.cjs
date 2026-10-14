@@ -327,7 +327,7 @@ const server = http.createServer((req, res) => {
       await diagnosticScreenshot(page, {path:`test-results/rules-${width}.png`});
       await page.locator('#deploy').click();
       await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PLAYING);
-      assert.equal(await page.evaluate(() => DeadRecoilTest.player.maxhp),100);
+      assert.equal(await page.evaluate(() => DeadRecoilTest.player.maxhp), await page.evaluate(() => Math.round(100 * DeadRecoilTest.classValue('maxHp', 1))));
       const before = await page.evaluate(() => DeadRecoilTest.player.pos.z);
       await page.keyboard.down('KeyW');
       // Software GL compiles the map shaders on the first frames; give movement a few seconds.

@@ -49,7 +49,7 @@ const server = http.createServer((q,r)=>{
       return r;
     });
     console.log(JSON.stringify(r));
-    assert.ok(r.perk && r.hp1 === 150, 'Couraça raises max HP by 50%');
+    assert.ok(r.perk && r.hp1 === Math.round(r.hp0 * 1.5), 'Couraça raises max HP by 50%');
     assert.equal(r.price2, 1500, 'perk price rises 500 per owned perk');
     assert.ok(r.pap && r.pap2 && !r.pap3 && /★★$/.test(r.name) && r.mag > 30, 'weapon upgrade: two steps, bigger mag');
     assert.ok(r.mod && r.chained >= 2, 'shock ammo chains to nearby enemies');

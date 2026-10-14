@@ -28798,7 +28798,7 @@ body.netgame #revivetouch{display:flex}
             return `hsl(${h} 100% ${Math.round(clamp(l * 100, 48, 62))}%)`;
           },
           itemDesc(kind, item) {
-            if (kind === "class") return item.desc || "";
+            if (kind === "class") return String(item.desc || "").replace(/(Desvantagem:[^.]*\.)/, '<em class="drawback">$1</em>');
             return item.ability || (item.kind === "melee" ? "Arma corpo a corpo." : `${["Curto", "Médio", "Longo"][item.cat] || "Médio"} alcance.`);
           },
           identity(kind, id) {
