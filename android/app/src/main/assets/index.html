@@ -10050,6 +10050,7 @@ body.netgame #revivetouch{display:flex}
             if (style !== "carBurnt" && !opts.tilt && (Math.abs(Math.sin(x * 12.9898 + z * 78.233)) * 43758.5453) % 1 < 0.55)
               (MapManager.headlights ||= []).push([x, z, ry, style === "policeBW"]);
             if (PropModels.place(model, x, 0, z, ry, 1, { tilt: opts.tilt || 0, color: paint })) {
+              if (style !== "carBurnt" && !opts.tilt) this.carDetail(x, z, ry, style);
               this.rotCol(x, z, ry, 1.9, 4.3, 1.45);
               return;
             }
@@ -10092,6 +10093,27 @@ body.netgame #revivetouch{display:flex}
               this.hard(style, [dx, 0.85, dz], [0.08, 0.9, 1.1], [0, ry + 0.9, 0]);
             }
             this.rotCol(x, z, ry, 1.9, 4.3, 1.62);
+          },
+          // Small instanced trim on the GLB cars: chrome grille and bumpers, plates, mirrors and
+          // hubcaps — breaks up the flat front/rear slabs without touching the model.
+          carDetail(x, z, ry, style) {
+            const R = [0, ry, 0], at = (ox, oz) => this.at(x, z, ry, ox, oz);
+            for (const e of [-1, 1]) {
+              const [bx, bz] = at(0, e * 2.25);
+              this.soft("metal", [bx, 0.36, bz], [1.8, 0.14, 0.1], R);
+              const [lx, lz] = at(0, e * 2.31);
+              this.soft("plate", [lx, 0.47, lz], [0.5, 0.15, 0.03], R, 0);
+            }
+            const [gx, gz] = at(0, -2.3);
+            this.soft("grille", [gx, 0.68, gz], [0.86, 0.22, 0.04], R, 0);
+            for (const sx of [-1, 1]) {
+              const [mx, mz] = at(sx * 1.0, -0.55);
+              this.soft(style, [mx, 1.1, mz], [0.2, 0.12, 0.1], R);
+              for (const oz of [-1.35, 1.35]) {
+                const [hx, hz] = at(sx * 0.98, oz);
+                this.soft("metal", [hx, 0.34, hz], [0.05, 0.3, 0.3], R);
+              }
+            }
           },
           bus(x, z, ry, onSide = false) {
             if (onSide) {
@@ -18555,6 +18577,15 @@ body.netgame #revivetouch{display:flex}
                 for (let x = 0; x < N; x++) for (let y = 13; y < N; y++) if (R() < 0.6) px(x, y, jitter([58, 54, 46], 12));
                 break;
               }
+              case "grille":
+                fill([20, 21, 23], 6);
+                for (let y = 2; y < N; y += 3) for (let x = 1; x < N - 1; x++) px(x, y, jitter([150, 154, 158], 14));
+                break;
+              case "plate":
+                fill([222, 220, 206], 8);
+                for (let i = 0; i < N; i++) { px(i, 0, [40, 60, 120]); px(i, N - 1, [40, 60, 120]); }
+                for (let x = 2; x < 14; x++) if (x % 3) for (let y = 6; y < 11; y++) if (R() < 0.7) px(x, y, [30, 30, 34]);
+                break;
               case "roofTar":
                 // Rolled bitumen roofing: dark, gravel-specked, with lap seams every few pixels.
                 fill([54, 54, 52], 12);
