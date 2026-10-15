@@ -34,7 +34,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error' && !m.location()?.url?.includes('/api/')) errors.push('console: ' + m.text()); });
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 30000 });
+    await page.waitForFunction(() => !!window.DeadRecoilTest, null, { timeout: 30000 });
     assert.ok(await page.evaluate(() => !!window.DR_VOXEL_ATLAS && Object.keys(window.DR_VOXEL_ATLAS.atlases).length >= 10), 'voxel atlas data must load');
     const SFX = ['roar', 'blizzard', 'demon', 'trident', 'frost', 'land', 'leap', 'medkit'];
     assert.ok(await page.evaluate(names => names.every(k => window.DR_MONSTER_SFX?.[k]), SFX), 'boss SFX data must load');

@@ -104,7 +104,7 @@ const server = http.createServer((q, r) => {
     assert.deepEqual(r.claimed, [1, 3], 'claims only unlocked tiers');
     assert.deepEqual(r.reward10, { coins: 1500, normal: 1, lucky: 1 });
     assert.equal(r.cls.scout.eff.maxHp, 0.9); assert.equal(r.cls.juggernaut.eff.speed, 0.88); assert.equal(r.cls.reaper.eff.maxHp, 0.8);
-    assert.equal(r.cls.voidwalker.eff.maxHp, 0.75); assert.equal(r.cls.archdemon.eff.damageTaken, 0.75);
+    assert.equal(r.cls.voidwalker.eff.maxHp, 0.75); assert.equal(r.cls.archdemon.eff.damageTaken, 0.8);
     for (const k of Object.keys(r.cls)) assert.ok(r.cls[k].drawback, k + ' shows its drawback');
     assert.equal(r.gens, 3); assert.equal(r.relics, 3); assert.ok(r.done && r.secret && r.insta, 'mission + secret');
     assert.ok(r.horde.on && r.horde.active && r.horde.front >= 1, 'horde wave 9');

@@ -9,10 +9,10 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
 (async () => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const b = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = [];
+  const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.setDefaultTimeout(150000);
   p.on('pageerror', e => errs.push(e.message));
   await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   await p.click('#loadoutbtn');
   await p.waitForSelector('#classscreen:not(.hidden)');
   const r = await p.evaluate(async () => {

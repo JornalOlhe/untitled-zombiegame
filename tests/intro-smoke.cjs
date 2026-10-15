@@ -25,7 +25,7 @@ const KINDS = ['juggernaut', 'wrecker', 'butcher', 'plague_host', 'wendigo', 'ab
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 60000 });
+    await page.waitForFunction(() => !!window.DeadRecoilTest, null, { timeout: 60000 });
     const res = await page.evaluate((kinds) => {
       const T = DeadRecoilTest, BI = T.BossIntro;
       T.setMap(0); T.PlayerController.start(); T.pause();

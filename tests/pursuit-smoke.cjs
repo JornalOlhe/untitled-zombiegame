@@ -24,7 +24,7 @@ const server = http.createServer((req, res) => {
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 60000 });
+    await page.waitForFunction(() => !!window.DeadRecoilTest, null, { timeout: 60000 });
     for (let map = 0; map < 5; map++) {
       const res = await page.evaluate((map) => {
         const T = DeadRecoilTest, M = T.MapManager;

@@ -51,14 +51,14 @@ has(html, 'if (wave === 20) return 4;', 'level 5+ wave 20 must spawn the stronge
 // Persistent Story backend and claims.
 has(backend, 'run_start_v48', 'client must start v48 Story-aware runs');
 has(backend, 'StoryRepository', 'Story repository must exist');
-has(migration, 'create table if not exists public.player_story_progress', 'Story progress must persist server-side');
-has(migration, 'create table if not exists public.player_story_claims', 'Story reward claims must persist server-side');
+has(migration, 'create table if not exists private.player_story_progress', 'Story progress must persist server-side');
+has(migration, 'create table if not exists private.player_story_claims', 'Story reward claims must persist server-side');
 has(migration, "when 'medium' then 1.25", 'server Medium multiplier must be x1.25');
 has(migration, "when 'hard' then 1.5", 'server Hard multiplier must be x1.5');
 has(migration, "when 'nightmare' then 2.5", 'server Hardcore multiplier must be x2.5');
 has(migration, "when 'infinite' then 1.5 when 'timed' then 2.5 else 1 end", 'server mode multiplier must match client');
 has(migration, 'v_coins := round(v_coins * diff_mult * mode_mult);', 'server rewards must combine mode x difficulty');
 has(migration, "perform public._grant(uid,100000,50000,25,10);", '100% Story must grant the large completion reward');
-has(migration, "r.mode = 'classic' and r.story_level is not null and v_cleared >= 20", 'completed Story levels must count as wins');
+has(migration, "r.mode = 'classic' and private.run_story_level(r.id) is not null and v_cleared >= 20", 'completed Story levels must count as wins');
 
 console.log('PASS v48 mode-first flow, combat scaling, Story progression and reward contracts');

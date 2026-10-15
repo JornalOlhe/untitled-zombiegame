@@ -8,7 +8,7 @@ const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent
 const b=await chromium.launch({args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try{
  const p=await b.newPage({viewport:{width:800,height:450}}),errs=[];p.on('pageerror',e=>errs.push(e.message));
- await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await p.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
+ await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await p.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready, null, {timeout:90000});
  const out=await p.evaluate(()=>{
   const T=DeadRecoilTest,W=T.WeaponSystem,P=T.PlayerController,V=THREE.Vector3;
   T.setMap(4);P.start();T.pause();T.WaveManager.remaining=0;T.ZombieManager.clear();T.MapManager.walls.length=0;

@@ -33,7 +33,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error' && !/\/api\/|supabase|Failed to load resource/.test(m.text() + (m.location()?.url || ''))) errors.push('console: ' + m.text()); });
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 60000 });
+    await page.waitForFunction(() => !!window.DeadRecoilTest, null, { timeout: 60000 });
     const maps = await page.evaluate(() => DeadRecoilTest.maps.length);
     for (let map = 0; map < maps; map++) {
       await page.evaluate(i => {

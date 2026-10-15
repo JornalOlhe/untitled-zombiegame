@@ -7,7 +7,7 @@ const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const b=await chromium.launch({executablePath:process.env.PW_CHROMIUM||undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const p=await b.newPage({viewport:{width:640,height:360}});const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error'&&/Dead Recoil/.test(m.text()))errs.push(m.text());});
-await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await p.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
+await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await p.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready, null, {timeout:90000});
 const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3;const out=[];
  for(let m=0;m<5;m++){T.setMap(m);T.PlayerController.start();T.pause();T.ZombieManager.clear();
   const jobs=[];for(let t=0;t<12;t++)jobs.push(['type'+t,t,null]);

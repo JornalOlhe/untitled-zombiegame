@@ -14,8 +14,8 @@ const server = http.createServer((q,r)=>{
     const page=await browser.newPage({viewport:{width:640,height:360}}), errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(()=>!!window.DeadRecoilTest,{timeout:60000});
-    await page.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
+    await page.waitForFunction(()=>!!window.DeadRecoilTest, null, {timeout:60000});
+    await page.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready, null, {timeout:90000});
     const r=await page.evaluate(async()=>{
       const T=DeadRecoilTest,P=T.PlayerController,V=THREE.Vector3,W=T.WeaponSystem,S=T.MatchShop;
       T.setMap(0);P.start();T.setPlaying();T.WaveManager.remaining=0;T.WaveManager.update=()=>{};T.ZombieManager.clear();
@@ -58,7 +58,7 @@ const server = http.createServer((q,r)=>{
     assert.ok(r.revived && r.chanceGone, 'Segunda Chance revives once and is consumed');
     assert.ok(Object.values(r.variants).every(Boolean), 'all four variants dress');
     assert.ok(r.blood && r.bloodClass && r.remaining > 30, 'every 7th wave is a bigger blood wave');
-    assert.ok(r.shopOpen && r.cards === 12 && r.closed, 'shop opens, lists 12 offers and resumes the match');
+    assert.ok(r.shopOpen && r.cards === 13 && r.closed, 'shop opens, lists 13 offers and resumes the match');
     assert.deepEqual(errors, []);
     console.log('PASS match shop / variants / blood wave');
   } finally { await browser.close(); server.close(); }

@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(() => !!window.DeadRecoilTest && window.DR_PROP_GLB, { timeout: 60000 });
+    await page.waitForFunction(() => !!window.DeadRecoilTest && window.DR_PROP_GLB, null, { timeout: 60000 });
     const r = await page.evaluate(() => {
       const T = DeadRecoilTest, R = T.CyborgRockets;
       T.setMap(4); T.PlayerController.start(); T.pause();

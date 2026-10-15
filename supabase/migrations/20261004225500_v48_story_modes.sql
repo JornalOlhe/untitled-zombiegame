@@ -2,6 +2,13 @@
 -- Story state lives in the unexposed `private` schema; the run's story level in private.run_story.
 -- v48 (store-safe variant): story progress lives in the unexposed `private` schema and the story level
 -- of a run in private.run_story, so no exposed table needs RLS changes.
+update public.catalog_difficulties set coins = case id
+  when 'easy' then 1
+  when 'medium' then 1.25
+  when 'hard' then 1.5
+  when 'nightmare' then 2.5
+  else coins end;
+
 create schema if not exists private;
 create table if not exists private.run_story (
   run_id uuid primary key references public.runs(id) on delete cascade,

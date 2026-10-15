@@ -7,7 +7,7 @@ const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const b=await chromium.launch({executablePath:process.env.PW_CHROMIUM||undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const p=await b.newPage({viewport:{width:640,height:360}});const errs=[];p.on('pageerror',e=>errs.push(e.message));
-await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await p.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
+await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);await p.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready, null, {timeout:90000});
 await p.evaluate(()=>{const T=DeadRecoilTest;T.setMap(4);T.PlayerController.start();T.pause();});await p.waitForTimeout(2500);
 await p.evaluate(()=>{const T=DeadRecoilTest;for(const k of ['yeti','demon','prototype_x','juggernaut','quarterback'])T.ZombieManager.spawn(6,{...T.WaveManager.bossRoster[k],intro:false},new THREE.Vector3(0,0,-40));});await p.waitForTimeout(3000);
 const res=await p.evaluate(()=>{const T=DeadRecoilTest,V=THREE.Vector3,ZM=T.ZombieManager,out={};

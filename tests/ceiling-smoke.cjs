@@ -11,7 +11,7 @@ const server = http.createServer((q, r) => { const f = path.resolve(root, '.' + 
   const page = await b.newPage({ viewport: { width: 480, height: 270 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await page.waitForFunction(() => !!window.DeadRecoilTest, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.DeadRecoilTest, null, { timeout: 60000 });
   const res = await page.evaluate(() => {
     const T = DeadRecoilTest, P = T.PlayerController, V = THREE.Vector3, out = {};
     for (const map of [1, 3]) {

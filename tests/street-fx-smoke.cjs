@@ -14,8 +14,8 @@ const server = http.createServer((q,r)=>{
     const page=await browser.newPage({viewport:{width:640,height:360}}), errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-    await page.waitForFunction(()=>!!window.DeadRecoilTest,{timeout:60000});
-    await page.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready,{timeout:90000});
+    await page.waitForFunction(()=>!!window.DeadRecoilTest, null, {timeout:60000});
+    await page.waitForFunction(()=>window.DeadRecoilTest?.WeaponModels?.ready, null, {timeout:90000});
     const r=await page.evaluate(async()=>{
       const T=DeadRecoilTest,V=THREE.Vector3;T.setMap(0);T.setMode('classic');T.PlayerController.start();
       await new Promise(r=>{const i=setInterval(()=>{if(T.state===T.GameState.PLAYING){clearInterval(i);r()}},100)});

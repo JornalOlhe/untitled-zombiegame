@@ -11,7 +11,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   const p = await b.newPage({ viewport: { width: 480, height: 270 } }); const errs = [];
   p.on('pageerror', e => errs.push(e.message));
   await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const r = await p.evaluate(async () => {
 const T=DeadRecoilTest,M=T.MapManager,D=T.Doors,out={};
 for(const m of [1,2]){T.setMap(m);T.PlayerController.start();T.setPlaying();T.ZombieManager.clear();T.WaveManager.update=()=>{};

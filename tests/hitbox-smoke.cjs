@@ -11,7 +11,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   const p = await b.newPage({ viewport: { width: 640, height: 360 } }); const errs = [];
   p.on('pageerror', e => errs.push(e.message));
   await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const r = await p.evaluate(() => {
 // Hitbox coverage: rays through each enemy's visible silhouette; how many also hit a hit mesh,
 // and for rays hitting something under the neck pivot (head + head accessories) how many count as head.

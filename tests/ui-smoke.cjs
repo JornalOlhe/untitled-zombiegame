@@ -31,7 +31,7 @@ const server = http.createServer((req, res) => {
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(`http://127.0.0.1:${server.address().port}/?native=1&platform=android&test=1`);
-      await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
+      await page.waitForFunction(() => !!window.DeadRecoilTest, null, {timeout:30000});
       const walletGuard = await page.evaluate(() => {
         const T = DeadRecoilTest;
         const original = { ...T.Progression.economy.data };
@@ -243,7 +243,7 @@ const server = http.createServer((req, res) => {
           return p.data.weaponId;
         });
         await page.locator('.spin-btn.lucky').click();
-        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 4, {timeout:3000});
+        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 4, null, {timeout:3000});
         // v28 spin (reference video): no reel overlay — title flicker, SKIP button, rarity burst.
         const spinMeta = await page.evaluate(() => ({
           duration: (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll).duration,
@@ -379,7 +379,7 @@ const server = http.createServer((req, res) => {
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-      await page.waitForFunction(() => !!window.DeadRecoilTest, {timeout:30000});
+      await page.waitForFunction(() => !!window.DeadRecoilTest, null, {timeout:30000});
       // Mouse-look state machine (headless browsers can't take Pointer Lock, so this drives the
       // compatibility source): one source per state, nothing moves in menus, spikes/NaN dropped,
       // the capture click never fires.

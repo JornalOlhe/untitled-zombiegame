@@ -11,7 +11,7 @@ const server = http.createServer((q, r) => { const f = path.resolve(root, '.' + 
   const page = await b.newPage({ viewport: { width: 480, height: 270 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await page.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await page.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const res = await page.evaluate(() => {
     const T = DeadRecoilTest, W = T.WeaponSystem, S = T.SpecterSwarm, Z = T.ZombieManager, V = THREE.Vector3;
     T.setMap(2); T.PlayerController.start(); T.pause(); Z.clear();

@@ -12,7 +12,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   const p = await b.newPage({ viewport: { width: 640, height: 360 } }); const errs = [];
   p.on('pageerror', e => errs.push(e.message));
   await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const r = await p.evaluate(() => {
     const T = DeadRecoilTest, B = T.Balance, W = T.WaveManager, V = THREE.Vector3, out = { rows: [] };
     T.setMap(0); T.PlayerController.start(); T.setPlaying(); W.remaining = 0; T.ZombieManager.clear();

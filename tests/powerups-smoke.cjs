@@ -11,7 +11,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   const p = await b.newPage({ viewport: { width: 640, height: 360 } }); const errs = [];
   p.on('pageerror', e => errs.push(e.message));
   await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
-  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const r = await p.evaluate(() => {
     const T = DeadRecoilTest, PU = T.PowerUps, V = THREE.Vector3, out = {};
     T.setMap(0); T.PlayerController.start(); T.setPlaying(); T.WaveManager.remaining = 0; T.ZombieManager.clear();
@@ -29,7 +29,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     const it = PU.spawn('ammo', px + 0.2, pz); out.spawned = PU.items.length;
     const w = T.WeaponSystem.current(); if (w.mag !== Infinity) { w.ammo = 1; }
     PU.update(0.016); out.picked = PU.items.length === 0 && PU.on('ammo');
-    if (w.mag !== Infinity) { w.ammo = 0; PU.update(0.016); out.ammoFull = w.ammo === w.mag; }
+    out.ammoFull = w.mag === Infinity || (w.ammo === w.mag && (w.reserve == null || w.reserve === w.reserveMax)); // Max Ammo: mag + reserve full
     // expiry
     PU.active.ammo = PU.now() - 1; PU.update(0.016); out.expired = !PU.on('ammo');
     out.hud = !!document.getElementById('powerups');
@@ -39,7 +39,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   });
   console.log(JSON.stringify(r));
   assert.ok(r.disabledInTest); assert.equal(r.baseHp, 490); assert.ok(r.instaDead); assert.equal(r.doubleHp, 480);
-  assert.equal(r.spawned, 1); assert.ok(r.picked); assert.ok(r.expired); assert.ok(r.hud); assert.equal(r.reward, r.reward2);
+  assert.equal(r.spawned, 1); assert.ok(r.picked); assert.ok(r.ammoFull, 'Max Ammo refills mag and reserve'); assert.ok(r.expired); assert.ok(r.hud); assert.equal(r.reward, r.reward2);
   assert.deepEqual(errs, []);
   console.log('PASS power-ups'); await b.close(); server.close();
 })().catch(e => { console.error(e); process.exit(1); });

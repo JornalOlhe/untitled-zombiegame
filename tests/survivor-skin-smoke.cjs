@@ -13,7 +13,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const b = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const p = await b.newPage({ viewport: { width: 400, height: 300 } }); const errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`); await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`); await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const res = await p.evaluate(async () => {
     const T = DeadRecoilTest, S = T.Survivor;
     T.setMap(0); T.PlayerController.start(); T.pause();

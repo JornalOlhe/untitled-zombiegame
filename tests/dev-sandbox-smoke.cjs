@@ -4,9 +4,9 @@ const root=path.resolve('android/app/src/main/assets');
 const server=http.createServer((q,r)=>{const f=path.join(root,decodeURIComponent(q.url.split('?')[0]==='/'?'index.html':q.url.split('?')[0]));fs.readFile(f,(e,d)=>{if(e){r.writeHead(404).end();return;}r.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':'text/html');r.end(d)})});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const b=await chromium.launch({args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try{const p=await b.newPage({viewport:{width:900,height:520}}),errs=[];p.on('pageerror',e=>errs.push(e.message));const url=`http://127.0.0.1:${server.address().port}/?test=1`;
-await p.goto(url);await p.waitForFunction(()=>!!window.DeadRecoilTest,{timeout:60000});
+await p.goto(url);await p.waitForFunction(()=>!!window.DeadRecoilTest, null, {timeout:60000});
 await p.evaluate(()=>{localStorage.setItem('deadrecoil.loadout.v2',JSON.stringify({coins:4321,normal:5,lucky:2,classId:0,weaponId:1,weaponSlot:0,weaponSlotsOwned:2,classSlotsOwned:1,weaponSlots:[1,0],classSlots:[0]}));localStorage.setItem('deadrecoil.dev',JSON.stringify({on:true,weaponId:null,classId:null}));});
-await p.reload();await p.waitForFunction(()=>window.DeadRecoilTest?.DevMode?.active,{timeout:60000});
+await p.reload();await p.waitForFunction(()=>window.DeadRecoilTest?.DevMode?.active, null, {timeout:60000});
 const r=await p.evaluate(async()=>{const T=DeadRecoilTest,before=JSON.parse(localStorage.getItem('deadrecoil.loadout.v2')),lastWeapon=T.WeaponSystem.weapons.length-1,lastClass=T.classes.length-1;const takeWeapon=T.DevMode.take('weapon',lastWeapon),takeClass=T.DevMode.take('class',lastClass);
 T.Account.apply({userId:'real-wallet-test',username:'real_user',displayName:'Real User',level:37,xp:9000,xpNeeded:10000,coins:9876,normal:9,lucky:4,stats:{}});let queueError='';try{await T.Account.queue('roll',{kind:'weapon'});}catch(e){queueError=e.message;}
 T.setMap(0);T.PlayerController.start();T.pause();T.DevMode.seq=[];T.DevMode.press('D');T.DevMode.press('A');

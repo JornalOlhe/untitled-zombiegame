@@ -16,7 +16,7 @@ const server = http.createServer((q, r) => { const f = path.join(root, decodeURI
     navigator.getGamepads = () => (window.__padOn ? [pad] : []);
     window.__press = (i, on) => { pad.buttons[i] = { pressed: on, value: on ? 1 : 0 }; };
   });
-  await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`); await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, { timeout: 90000 });
+  await p.goto(`http://127.0.0.1:${server.address().port}/?test=1`); await p.waitForFunction(() => window.DeadRecoilTest?.WeaponModels?.ready, null, { timeout: 90000 });
   const out = await p.evaluate(() => {
     const T = DeadRecoilTest, G = T.GamepadInput, P = T.PlayerController, r = {};
     T.setMap(0); P.start(); T.setPlaying(); T.WaveManager.remaining = 0; T.ZombieManager.clear(); T.pause(); T.setPlaying();
