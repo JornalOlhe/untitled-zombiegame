@@ -14440,7 +14440,7 @@ body.netgame #revivetouch{display:flex}
             $("classdetail").innerHTML =
               `${badge(c)}<h3>${c.name}</h3><p>${String(c.desc).replace(/(Desvantagem:[^.]*\.)/, '<em class="drawback">$1</em>')}<br><strong>Q · ${c.ability} (${c.cd}s)</strong><br>${c.active}</p>`;
             $("weapondetail").innerHTML =
-              `${badge(w)}<h3>${w.name}</h3><p>${["Curto alcance", "Médio alcance", "Longo alcance"][w.cat]} · Dano base ${w.damage} × ${rarityMult[w.tier]}<br>${w.mag !== Infinity ? `Pente ${w.mag} · recarga ${w.reload}s` : w.kind === "melee" ? "Corpo a corpo · sem munição" : "Munição infinita"}${w.ability ? `<br><strong>${w.ability}</strong>` : ""}<br>Troque para esta arma durante a partida com as teclas 1-5, se ela estiver num slot que você possui.</p>`;
+              `${badge(w)}<h3>${w.name}</h3><p>${["Curto alcance", "Médio alcance", "Longo alcance"][w.cat]} · Dano base ${w.damage} × ${rarityMult[w.tier]}<br>${w.mag !== Infinity ? `Pente ${w.mag} · reserva ${WeaponSystem.create(WeaponSystem.weapons.indexOf(w)).reserveMax ?? "∞"} · recarga ${w.reload}s` : w.kind === "melee" ? "Corpo a corpo · sem munição" : "Munição infinita"}${w.ability ? `<br><strong>${w.ability}</strong>` : ""}<br>Troque para esta arma durante a partida com as teclas 1-5, se ela estiver num slot que você possui.</p>`;
             for (const kind of ["class", "weapon"]) {
               $(kind + "-rolls").innerHTML = [false, true]
                 .map((lucky) => {
@@ -23276,6 +23276,11 @@ body.netgame #revivetouch{display:flex}
               return;
             }
             if (w.reserve != null && w.reserve <= 0 && !DevMode.on("infiniteAmmo")) {
+              // Completely dry: hop to the next weapon that can still fight (CoD-style), else melee.
+              if (w.ammo <= 0) {
+                const next = player.inventory.findIndex((x, i) => i !== player.slot && x && (x.mag === Infinity || x.ammo > 0 || (x.reserve || 0) > 0));
+                if (next >= 0) { this.switch(next); UIManager.toast(`${w.name} sem munição — trocando para ${player.inventory[next].name}`); return; }
+              }
               if (simulationTime - (this.dryAt || -9) > 1.2) {
                 this.dryAt = simulationTime;
                 AudioManager.tone(900, 0.04, "square", 0.08, 700, "weapons");
@@ -24573,7 +24578,7 @@ body.netgame #revivetouch{display:flex}
             this.hudHTML("slotshud", player.inventory
               .map(
                 (w, i) =>
-                  `<div class="slot ${i === player.slot ? "active" : ""} ${w && w.ammo !== Infinity && w.mag ? (w.ammo === 0 ? "empty" : w.ammo <= Math.ceil(w.mag * 0.25) ? "low" : "") : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small class="slot-key">${i + 1}</small><b>${w ? w.name : "Sem arma"}</b><span class="ammo">${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small class="mag">${w && w.ammo !== Infinity ? "/ " + (w.reserve != null ? w.reserve : w.mag) : ""}</small><em class="tier">${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</em>${i === player.slot && reloadEnd && w ? `<span class="reload"><i style="width:${Math.round(clamp(1 - (reloadEnd - simulationTime) / (w.reload || 1), 0, 1) * 100)}%"></i></span>` : ""}</div>`,
+                  `<div class="slot ${i === player.slot ? "active" : ""} ${w && w.ammo !== Infinity && w.mag ? (w.ammo === 0 && !w.reserve ? "empty" : w.ammo <= Math.ceil(w.mag * 0.25) || (w.reserve != null && w.reserve <= w.mag) ? "low" : "") : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small class="slot-key">${i + 1}</small><b>${w ? w.name : "Sem arma"}</b><span class="ammo">${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small class="mag">${w && w.ammo !== Infinity ? "/ " + (w.reserve != null ? w.reserve : w.mag) : ""}</small><em class="tier">${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</em>${i === player.slot && reloadEnd && w ? `<span class="reload"><i style="width:${Math.round(clamp(1 - (reloadEnd - simulationTime) / (w.reload || 1), 0, 1) * 100)}%"></i></span>` : ""}</div>`,
               )
               .join(""));
             const cd = Math.max(0, player.cooldown - simulationTime);
@@ -24641,6 +24646,13 @@ body.netgame #revivetouch{display:flex}
                 mz = Z(m.pos.z);
               c.fillRect(mx - 1.5, mz - 4, 3, 8);
               c.fillRect(mx - 4, mz - 1.5, 8, 3);
+            }
+            // golden ammo crates: a gold diamond, pulsing when you are low on ammo
+            for (const a of AmmoCrates.items) {
+              if (!inside(a.pos.x, a.pos.z)) continue;
+              const mx = X(a.pos.x), mz = Z(a.pos.z), s = AmmoCrates.needs() ? 5 + Math.sin(simulationTime * 6) : 4.5;
+              c.fillStyle = "#ffd24a"; c.beginPath(); c.moveTo(mx, mz - s); c.lineTo(mx + s, mz); c.lineTo(mx, mz + s); c.lineTo(mx - s, mz); c.closePath(); c.fill();
+              c.strokeStyle = "#5a3a00"; c.lineWidth = 1; c.stroke();
             }
             c.save();
             c.translate(n / 2, n / 2);

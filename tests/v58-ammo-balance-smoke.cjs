@@ -32,7 +32,7 @@ const server = http.createServer((q, r) => {
       out.afterReload = { ammo: ak.ammo, reserve: ak.reserve, used: before - ak.reserve };
       // no reserve: reload blocked
       ak.ammo = 0; ak.reserve = 0; P.reload(); T.stepPlayer(1 / 30, 120);
-      out.dry = ak.ammo;
+      out.dry = ak.ammo; out.switched = p.slot !== 0 || !p.inventory.some((x, i) => i && x);
       // golden crate pickup refills
       const c = T.AmmoCrates.spawn([p.pos.x + 0.4, 0, p.pos.z]);
       out.crateBuilt = !!c && c.crate.children.length > 8;
@@ -55,7 +55,7 @@ const server = http.createServer((q, r) => {
     assert.deepEqual(r.ak, { mag: 30, reserve: 108, max: 180 });
     assert.ok(r.infinite, 'melee and bows keep infinite ammo');
     assert.deepEqual(r.afterReload, { ammo: 30, reserve: 78, used: 30 });
-    assert.equal(r.dry, 0, 'no reserve → cannot reload');
+    assert.equal(r.dry, 0, 'no reserve → cannot reload'); assert.ok(r.switched, 'dry weapon auto-switches');
     assert.ok(r.crateBuilt, 'golden crate model');
     assert.deepEqual(r.afterCrate, { ammo: 30, reserve: 180, crates: 0 });
     assert.equal(r.maxAmmo.reserve, 180); assert.equal(r.maxAmmo.ammo, 30); assert.equal(r.maxAmmo.label, 'MUNIÇÃO MÁXIMA');

@@ -25,37 +25,14 @@ jobs:
           node-version: '22'
       - name: Syntax and v43 contracts
         run: |
-          node tests/js-syntax.cjs
-          node tests/v43-contract-smoke.cjs
-          node tests/story-modes-smoke.cjs
-          node tests/environment-detail-smoke.cjs
+          bash tools/ci/run-tests.sh tests/js-syntax.cjs tests/v43-contract-smoke.cjs tests/story-modes-smoke.cjs tests/environment-detail-smoke.cjs
       - name: Install browser test runtime
         run: |
           npm install --no-save --package-lock=false playwright@1.62.1
           npx playwright install --with-deps chromium
       - name: UI and menu state
         run: |
-          node tests/ui-smoke.cjs
-          node tests/showroom-gameplay-smoke.cjs
-          node tests/wallet-reconciliation-smoke.cjs
-          node tests/release-version.cjs
-          node tests/navigation-race.cjs
-          node tests/survivor-skin-smoke.cjs
-          node tests/v53-survivor-reference-lock.cjs
-          node tests/gamepad-smoke.cjs
-          node tests/puddles-smoke.cjs
-          node tests/powerups-smoke.cjs
-          node tests/hitdir-smoke.cjs
-          node tests/director-smoke.cjs
-          node tests/explosion-smoke.cjs
-          node tests/settings-hud-smoke.cjs
-          node tests/floor-gloss-smoke.cjs
-          node tests/wallcast-smoke.cjs
-          node tests/weather-smoke.cjs
-          node tests/hitbox-smoke.cjs
-          node tests/balance-smoke.cjs
-          node tests/loadout-locks-smoke.cjs
-          node tests/camera-feel-smoke.cjs
+          bash tools/ci/run-tests.sh tests/ui-smoke.cjs tests/showroom-gameplay-smoke.cjs tests/wallet-reconciliation-smoke.cjs tests/release-version.cjs tests/navigation-race.cjs tests/survivor-skin-smoke.cjs tests/v53-survivor-reference-lock.cjs tests/gamepad-smoke.cjs tests/puddles-smoke.cjs tests/powerups-smoke.cjs tests/hitdir-smoke.cjs tests/director-smoke.cjs tests/explosion-smoke.cjs tests/settings-hud-smoke.cjs tests/floor-gloss-smoke.cjs tests/wallcast-smoke.cjs tests/weather-smoke.cjs tests/hitbox-smoke.cjs tests/balance-smoke.cjs tests/loadout-locks-smoke.cjs tests/camera-feel-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -79,14 +56,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Movement, collision and spawning
         run: |
-          node tests/movement-smoke.cjs
-          node tests/economy-collision-smoke.cjs
-          node tests/wall-smoke.cjs
-          node tests/ceiling-smoke.cjs
-          node tests/spawn-smoke.cjs
-          node tests/pursuit-smoke.cjs
-          node tests/replayability-smoke.cjs
-          node tests/resource-cycle.cjs
+          bash tools/ci/run-tests.sh tests/movement-smoke.cjs tests/economy-collision-smoke.cjs tests/wall-smoke.cjs tests/ceiling-smoke.cjs tests/spawn-smoke.cjs tests/pursuit-smoke.cjs tests/replayability-smoke.cjs tests/resource-cycle.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -110,15 +80,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Combat, weapons and projectiles
         run: |
-          node tests/melee-smoke.cjs
-          node tests/spear-smoke.cjs
-          node tests/tp-smoke.cjs
-          node tests/rig-visual-audit.cjs
-          node tests/weapons-smoke.cjs
-          node tests/projectiles-smoke.cjs
-          node tests/stream-hitbox-smoke.cjs
-          node tests/barrel-weapons-smoke.cjs
-          node tests/cyborg-smoke.cjs
+          bash tools/ci/run-tests.sh tests/melee-smoke.cjs tests/spear-smoke.cjs tests/tp-smoke.cjs tests/rig-visual-audit.cjs tests/weapons-smoke.cjs tests/projectiles-smoke.cjs tests/stream-hitbox-smoke.cjs tests/barrel-weapons-smoke.cjs tests/cyborg-smoke.cjs tests/match-shop-smoke.cjs tests/v57-features-smoke.cjs tests/v58-ammo-balance-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -144,15 +106,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Bosses, secrets and visual systems
         run: |
-          node tests/monsters-smoke.cjs
-          node tests/boss-audio-smoke.cjs
-          node tests/intro-smoke.cjs
-          node tests/deathkill-smoke.cjs
-          node tests/ascend-smoke.cjs
-          node tests/secret-smoke.cjs
-          node tests/specter-smoke.cjs
-          node tests/wings-tail-smoke.cjs
-          node tests/dof-smoke.cjs
+          bash tools/ci/run-tests.sh tests/monsters-smoke.cjs tests/boss-audio-smoke.cjs tests/intro-smoke.cjs tests/deathkill-smoke.cjs tests/ascend-smoke.cjs tests/secret-smoke.cjs tests/specter-smoke.cjs tests/wings-tail-smoke.cjs tests/dof-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -176,9 +130,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Multiplayer and developer safety
         run: |
-          node tests/multiplayer-local.cjs
-          node tests/devmode-smoke.cjs
-          node tests/dev-sandbox-smoke.cjs
+          bash tools/ci/run-tests.sh tests/multiplayer-local.cjs tests/devmode-smoke.cjs tests/dev-sandbox-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
