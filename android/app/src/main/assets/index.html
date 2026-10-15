@@ -26302,7 +26302,7 @@ body.netgame #revivetouch{display:flex}
             this.lastSnap = null;
             this.reviveHold = 0;
             this.reviveTarget = null;
-            $("netoverlay")?.classList.add("hidden");
+            $("netoverlay")?.classList.add("hidden"); this.hostSilent = false;
             $("downed")?.classList.add("hidden");
             document.body.classList.remove("netgame", "net-downed");
           },
@@ -26357,7 +26357,11 @@ body.netgame #revivetouch{display:flex}
               for (const [id, b] of this.hitBudget) b.spent = Math.max(0, b.spent - b.cap * dt);
             } else if (performance.now() - this.lastHostMsg > 6000 && this.connection === "online") {
               // Host went silent: the lobby heartbeat will migrate the host role.
-              this.setOverlay("HOST SEM RESPOSTA", "Aguardando novo host…");
+              if (!this.hostSilent) { this.hostSilent = true; this.setOverlay("HOST SEM RESPOSTA", "Aguardando novo host…"); }
+            } else if (this.hostSilent) {
+              // The host came back (a loading hitch / brief background): drop the overlay again.
+              this.hostSilent = false;
+              if (this.connection === "online") $("netoverlay").classList.add("hidden");
             }
             for (const r of this.remotes.values()) this.driveRemote(r, dt);
             this.updateDowned(dt);
@@ -27054,6 +27058,7 @@ body.netgame #revivetouch{display:flex}
           promote() {
             this.host = true;
             $("netoverlay").classList.add("hidden");
+            this.hostSilent = false;
             let maxId = 0;
             for (const [id, z] of this.zmap) {
               maxId = Math.max(maxId, id);
