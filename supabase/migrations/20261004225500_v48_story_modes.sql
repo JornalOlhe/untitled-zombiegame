@@ -1,18 +1,13 @@
--- Dead Recoil v48: mode-first flow, difficulty/mode coin multipliers and persistent Story progression.
--- Internal IDs remain classic/easy/nightmare for backwards compatibility; the client labels them
--- Story/Normal/Hardcore.
-
-update public.catalog_difficulties set coins = case id
-  when 'easy' then 1
-  when 'medium' then 1.25
-  when 'hard' then 1.5
-  when 'nightmare' then 2.5
-  else coins end;
-
-alter table public.runs
-  add column if not exists story_level int check (story_level between 1 and 10);
-
-create table if not exists public.player_story_progress (
+-- Dead Recoil v48: Story progression + mode/difficulty coin multipliers (as applied to the live project).
+-- Story state lives in the unexposed `private` schema; the run's story level in private.run_story.
+-- v48 (store-safe variant): story progress lives in the unexposed `private` schema and the story level
+-- of a run in private.run_story, so no exposed table needs RLS changes.
+create schema if not exists private;
+create table if not exists private.run_story (
+  run_id uuid primary key references public.runs(id) on delete cascade,
+  story_level int not null check (story_level between 1 and 10)
+);
+create table if not exists private.player_story_progress (
   user_id uuid not null references public.profiles(id) on delete cascade,
   map_id int not null references public.catalog_maps(map_id),
   story_level int not null check (story_level between 1 and 10),
@@ -24,26 +19,17 @@ create table if not exists public.player_story_progress (
   updated_at timestamptz not null default now(),
   primary key (user_id, map_id, story_level, difficulty)
 );
-create index if not exists idx_story_user_map on public.player_story_progress(user_id,map_id,difficulty,story_level);
-
-create table if not exists public.player_story_claims (
+create table if not exists private.player_story_claims (
   user_id uuid not null references public.profiles(id) on delete cascade,
   claim_key text not null,
   claimed_at timestamptz not null default now(),
   primary key (user_id, claim_key)
 );
+create or replace function private.run_story_level(p_run uuid) returns int language sql stable set search_path = '' as $$
+  select story_level from private.run_story where run_id = p_run
+$$;
 
-alter table public.player_story_progress enable row level security;
-alter table public.player_story_claims enable row level security;
-drop policy if exists "own story progress" on public.player_story_progress;
-create policy "own story progress" on public.player_story_progress for select to authenticated
-  using (user_id = (select auth.uid()));
-drop policy if exists "own story claims" on public.player_story_claims;
-create policy "own story claims" on public.player_story_claims for select to authenticated
-  using (user_id = (select auth.uid()));
-revoke insert, update, delete, truncate on public.player_story_progress, public.player_story_claims from anon, authenticated;
-
-create or replace function public._story_json(p_uid uuid) returns jsonb
+create or replace function private.story_json(p_uid uuid) returns jsonb
 language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'progress', coalesce((
@@ -51,17 +37,16 @@ language sql stable security definer set search_path = '' as $$
         'map', s.map_id, 'level', s.story_level, 'difficulty', s.difficulty,
         'stars', s.stars, 'claimedStars', s.claimed_stars, 'best', s.best
       ) order by s.map_id, s.difficulty, s.story_level)
-      from public.player_story_progress s where s.user_id = p_uid
+      from private.player_story_progress s where s.user_id = p_uid
     ), '[]'::jsonb),
     'claims', coalesce((
       select jsonb_agg(c.claim_key order by c.claim_key)
-      from public.player_story_claims c where c.user_id = p_uid
+      from private.player_story_claims c where c.user_id = p_uid
     ), '[]'::jsonb)
   )
 $$;
-revoke execute on function public._story_json(uuid) from public, anon, authenticated;
 
-create or replace function public._story_star_count(p_map int, p_level int, p_report jsonb, p_result text)
+create or replace function private.story_star_count(p_map int, p_level int, p_report jsonb, p_result text)
 returns int language plpgsql immutable set search_path = '' as $$
 declare
   k bigint := greatest(0, coalesce((p_report->>'kills')::bigint,0));
@@ -72,48 +57,43 @@ declare
   stars int := 0;
   seed int := p_map + p_level;
   seed3 int := p_map * 2 + p_level;
+  ok2 boolean; ok3 boolean;
 begin
   if p_result <> 'win' or w < 20 or p_level not between 1 and 10 or p_map not between 0 and 4 then return 0; end if;
   stars := 1;
-  if case mod(seed,3)
-    when 0 then k >= 90 + p_level * 12
-    when 1 then h >= 15 + p_level * 4
-    else n >= 2 + floor(p_level / 2.0)::int
-  end then stars := 2; else return stars; end if;
-  if case mod(seed3,3)
-    when 0 then d >= 12000 + p_level * 2500
-    when 1 then k >= 120 + p_level * 15
-    else h >= 25 + p_level * 5
-  end then stars := 3; end if;
+  ok2 := (mod(seed,3) = 0 and k >= 90 + p_level * 12) or (mod(seed,3) = 1 and h >= 15 + p_level * 4)
+    or (mod(seed,3) = 2 and n >= 2 + floor(p_level / 2.0)::int);
+  if not ok2 then return stars; end if;
+  stars := 2;
+  ok3 := (mod(seed3,3) = 0 and d >= 12000 + p_level * 2500) or (mod(seed3,3) = 1 and k >= 120 + p_level * 15)
+    or (mod(seed3,3) = 2 and h >= 25 + p_level * 5);
+  if ok3 then stars := 3; end if;
   return stars;
 end $$;
-revoke execute on function public._story_star_count(int,int,jsonb,text) from public, anon, authenticated;
 
-create or replace function public._story_finish(p_uid uuid, r public.runs, p_report jsonb, p_result text)
+create or replace function private.story_finish(p_uid uuid, r public.runs, p_report jsonb, p_result text)
 returns void language plpgsql security definer set search_path = '' as $$
 declare s int;
 begin
-  if r.mode <> 'classic' or r.lobby_id is not null or r.story_level is null then return; end if;
-  s := public._story_star_count(r.map_id, r.story_level, p_report, p_result);
+  if r.mode <> 'classic' or r.lobby_id is not null or private.run_story_level(r.id) is null then return; end if;
+  s := private.story_star_count(r.map_id, private.run_story_level(r.id), p_report, p_result);
   if s < 1 then return; end if;
-  insert into public.player_story_progress(user_id,map_id,story_level,difficulty,stars,best,completed_at)
-  values(p_uid,r.map_id,r.story_level,r.difficulty,s,
+  insert into private.player_story_progress(user_id,map_id,story_level,difficulty,stars,best,completed_at)
+  values(p_uid,r.map_id,private.run_story_level(r.id),r.difficulty,s,
     jsonb_build_object('kills',coalesce((p_report->>'kills')::bigint,0),'headshots',coalesce((p_report->>'headshots')::bigint,0),
       'damage',coalesce((p_report->>'damage')::bigint,0),'noDamageWaves',coalesce((p_report->>'noDamageWaves')::int,0)),
     now())
   on conflict(user_id,map_id,story_level,difficulty) do update set
-    stars = greatest(public.player_story_progress.stars, excluded.stars),
-    best = case when excluded.stars >= public.player_story_progress.stars then excluded.best else public.player_story_progress.best end,
-    completed_at = coalesce(public.player_story_progress.completed_at, excluded.completed_at),
+    stars = greatest(private.player_story_progress.stars, excluded.stars),
+    best = case when excluded.stars >= private.player_story_progress.stars then excluded.best else private.player_story_progress.best end,
+    completed_at = coalesce(private.player_story_progress.completed_at, excluded.completed_at),
     updated_at = now();
 end $$;
-revoke execute on function public._story_finish(uuid,public.runs,jsonb,text) from public, anon, authenticated;
 
 create or replace function public.story_list() returns jsonb
 language sql stable security definer set search_path = '' as $$
-  select public._story_json(public._uid())
+  select private.story_json(public._uid())
 $$;
-revoke execute on function public.story_list() from public, anon;
 grant execute on function public.story_list() to authenticated;
 
 create or replace function public.run_start_v48(
@@ -137,16 +117,16 @@ begin
   end if;
   if p_request is not null and not public._first_request(uid,p_request) then
     select id into rid from public.runs where user_id=uid order by started_at desc limit 1;
-    return jsonb_build_object('run',rid,'profile',public._profile_json(uid),'story',public._story_json(uid));
+    return jsonb_build_object('run',rid,'profile',public._profile_json(uid),'story',private.story_json(uid));
   end if;
   update public.runs set ended_at=coalesce(last_report_at,started_at) where user_id=uid and ended_at is null;
   select coalesce(array_agg(item_id::int order by slot),'{}') into weapons
     from public.player_inventory where user_id=uid and item_type='weapon' and slot<p.weapon_slots_owned;
-  insert into public.runs(user_id,lobby_id,mode,map_id,difficulty,class_id,weapon_ids,party_size,story_level)
-    values(uid,p_lobby,p_mode,p_map,p_difficulty,p.class_id,weapons,party,p_story_level) returning id into rid;
-  return jsonb_build_object('run',rid,'profile',public._profile_json(uid),'story',public._story_json(uid));
+  insert into public.runs(user_id,lobby_id,mode,map_id,difficulty,class_id,weapon_ids,party_size)
+    values(uid,p_lobby,p_mode,p_map,p_difficulty,p.class_id,weapons,party) returning id into rid;
+  if p_story_level is not null then insert into private.run_story(run_id,story_level) values(rid,p_story_level); end if;
+  return jsonb_build_object('run',rid,'profile',public._profile_json(uid),'story',private.story_json(uid));
 end $$;
-revoke execute on function public.run_start_v48(text,int,text,uuid,uuid,int) from public, anon;
 grant execute on function public.run_start_v48(text,int,text,uuid,uuid,int) to authenticated;
 
 create or replace function public._apply_report(p_uid uuid, r public.runs, p jsonb, p_ended boolean, p_result text)
@@ -194,7 +174,7 @@ begin
   v_boss_spawns := public._clamp(
     coalesce((prev ->> 'bossSpawns')::numeric, 0),
     coalesce((p ->> 'bossSpawns')::numeric, 0),
-    case when r.mode = 'classic' and r.story_level is not null and r.lobby_id is null and r.story_level < 3
+    case when r.mode = 'classic' and private.run_story_level(r.id) is not null and r.lobby_id is null and private.run_story_level(r.id) < 3
       then 0 else greatest(0, v_wave / 5) end
   );
   if tally is not null and r.lobby_id is not null and lob.host_id <> p_uid then
@@ -207,10 +187,10 @@ begin
     declare cap int; prevb int := coalesce((prev -> 'bosses' ->> b.kind)::int, 0); claim int := coalesce((p -> 'bosses' ->> b.kind)::int, 0); v int;
     begin
       -- v28: four-step hierarchy per map (Miniboss I 5/25/45…, Miniboss II 15/35…, Boss I 10/30…, Boss II 20/40…).
-      if r.mode = 'classic' and r.story_level is not null and r.lobby_id is null then
+      if r.mode = 'classic' and private.run_story_level(r.id) is not null and r.lobby_id is null then
         cap := case
-          when r.story_level < 3 then 0
-          when r.story_level < 5 then
+          when private.run_story_level(r.id) < 3 then 0
+          when private.run_story_level(r.id) < 5 then
             case b.rank
               when 1 then (case when v_wave >= 5 then 1 else 0 end) + (case when v_wave >= 15 then 1 else 0 end)
               when 2 then (case when v_wave >= 10 then 1 else 0 end) + (case when v_wave >= 20 then 1 else 0 end)
@@ -289,7 +269,7 @@ begin
   mode_mult := case r.mode when 'infinite' then 1.5 when 'timed' then 2.5 else 1 end;
   v_coins := round(v_coins * diff_mult * mode_mult);
   v_xp := v_xp + dk * 10 + dh * 4 + dw * 40 + dd / 500 + dr * 60;
-  won := p_ended and p_result = 'win' and ((r.mode = 'timed' and el >= 290) or (r.mode = 'classic' and r.story_level is not null and v_cleared >= 20));
+  won := p_ended and p_result = 'win' and ((r.mode = 'timed' and el >= 290) or (r.mode = 'classic' and private.run_story_level(r.id) is not null and v_cleared >= 20));
   t := jsonb_build_object('kills', v_kills, 'headshots', v_heads, 'wave', v_wave, 'wavesCleared', v_cleared, 'bossSpawns', v_boss_spawns, 'damage', dmg, 'noDamageWaves', nod,
     'revives', rev, 'bosses', v_bosses, 'families', fams, 'types', types, 'elapsed', greatest(coalesce((prev ->> 'elapsed')::int, 0), floor(el_claim)::int),
     'coins', coalesce((prev ->> 'coins')::bigint, 0) + v_coins, 'xp', coalesce((prev ->> 'xp')::bigint, 0) + v_xp);
@@ -325,9 +305,9 @@ begin
   if not found then raise exception 'run_not_found'; end if;
   if r.ended_at is null and public._first_request(uid,p_request) then
     rewards := public._apply_report(uid,r,coalesce(p_report,'{}'::jsonb),p_ended,p_result);
-    if p_ended then perform public._story_finish(uid,r,coalesce(p_report,'{}'::jsonb),p_result); end if;
+    if p_ended then perform private.story_finish(uid,r,coalesce(p_report,'{}'::jsonb),p_result); end if;
   end if;
-  return jsonb_build_object('profile',public._profile_json(uid),'rewards',rewards,'missions',public._missions_json(uid),'story',public._story_json(uid));
+  return jsonb_build_object('profile',public._profile_json(uid),'rewards',rewards,'missions',public._missions_json(uid),'story',private.story_json(uid));
 end $$;
 
 create or replace function public.run_submit_offline(p_request uuid, p_report jsonb) returns jsonb
@@ -339,7 +319,7 @@ declare uid uuid := public._uid(); p public.profiles; el numeric; started timest
 begin
   if p_request is null then raise exception 'invalid_request'; end if;
   if not public._first_request(uid,p_request) then
-    return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),'duplicate',true);
+    return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),'duplicate',true);
   end if;
   if mode not in ('classic','infinite','timed') or not exists(select 1 from public.catalog_maps where map_id=map)
      or not exists(select 1 from public.catalog_difficulties where id=diff) then raise exception 'invalid_request'; end if;
@@ -352,16 +332,17 @@ begin
   select max(coalesce(ended_at,last_report_at,started_at)) into last_end from public.runs where user_id=uid;
   if last_end is not null and started<last_end then
     started:=last_end;
-    if started>=ended then return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),'rejected','overlap'); end if;
+    if started>=ended then return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),'rejected','overlap'); end if;
   end if;
   select * into p from public.profiles where id=uid for update;
   select coalesce(array_agg(item_id::int order by slot),'{}') into weapons
     from public.player_inventory where user_id=uid and item_type='weapon' and slot<p.weapon_slots_owned;
-  insert into public.runs(user_id,mode,map_id,difficulty,class_id,weapon_ids,started_at,ended_at,offline,story_level)
-    values(uid,mode,map,diff,p.class_id,weapons,started,ended,true,story) returning * into r;
+  insert into public.runs(user_id,mode,map_id,difficulty,class_id,weapon_ids,started_at,ended_at,offline)
+    values(uid,mode,map,diff,p.class_id,weapons,started,ended,true) returning * into r;
+  if story is not null then insert into private.run_story(run_id,story_level) values(r.id,story); end if;
   perform public._apply_report(uid,r,p_report,true,p_report->>'result');
-  perform public._story_finish(uid,r,p_report,p_report->>'result');
-  return jsonb_build_object('profile',public._profile_json(uid),'missions',public._missions_json(uid),'story',public._story_json(uid));
+  perform private.story_finish(uid,r,p_report,p_report->>'result');
+  return jsonb_build_object('profile',public._profile_json(uid),'missions',public._missions_json(uid),'story',private.story_json(uid));
 end $$;
 
 create or replace function public.mutation_reward(p_run uuid,p_wave int,p_id text,p_request uuid default null) returns jsonb
@@ -385,25 +366,24 @@ end $$;
 
 create or replace function public.story_claim_level(p_map int,p_level int,p_difficulty text,p_request uuid default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid:=public._uid(); s public.player_story_progress; d numeric:=1; delta int; coins bigint; xp bigint; nt int:=0; lt int:=0;
+declare uid uuid:=public._uid(); s private.player_story_progress; d numeric:=1; delta int; coins bigint; xp bigint; nt int:=0; lt int:=0;
 begin
   if p_request is null then raise exception 'invalid_request'; end if;
-  select * into s from public.player_story_progress where user_id=uid and map_id=p_map and story_level=p_level and difficulty=p_difficulty for update;
+  select * into s from private.player_story_progress where user_id=uid and map_id=p_map and story_level=p_level and difficulty=p_difficulty for update;
   if not found or s.stars<1 then raise exception 'story_incomplete'; end if;
-  if not public._first_request(uid,p_request) then return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),'duplicate',true); end if;
+  if not public._first_request(uid,p_request) then return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),'duplicate',true); end if;
   delta:=greatest(0,s.stars-s.claimed_stars);
   if delta=0 then raise exception 'story_reward_claimed'; end if;
   select coalesce(coins,1) into d from public.catalog_difficulties where id=p_difficulty;
   coins:=round((150+p_level*75)*d)*delta;
   xp:=round(coins/2.0);
   if s.claimed_stars<3 and s.stars>=3 then nt:=1; if p_level=10 then lt:=1; end if; end if;
-  update public.player_story_progress set claimed_stars=stars,updated_at=now()
+  update private.player_story_progress set claimed_stars=stars,updated_at=now()
     where user_id=uid and map_id=p_map and story_level=p_level and difficulty=p_difficulty;
   perform public._grant(uid,coins,xp,nt,lt);
-  return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),
+  return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),
     'reward',jsonb_build_object('coins',coins,'xp',xp,'normal',nt,'lucky',lt));
 end $$;
-revoke execute on function public.story_claim_level(int,int,text,uuid) from public, anon;
 grant execute on function public.story_claim_level(int,int,text,uuid) to authenticated;
 
 create or replace function public.story_claim_chapter(p_map int,p_difficulty text,p_request uuid default null)
@@ -411,18 +391,17 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid:=public._uid(); key text:='chapter:'||p_map||':'||p_difficulty; d numeric:=1; coins bigint;
 begin
   if p_request is null then raise exception 'invalid_request'; end if;
-  if (select count(*) from public.player_story_progress where user_id=uid and map_id=p_map and difficulty=p_difficulty and stars>=1)<>10
+  if (select count(*) from private.player_story_progress where user_id=uid and map_id=p_map and difficulty=p_difficulty and stars>=1)<>10
     then raise exception 'story_chapter_incomplete'; end if;
-  if exists(select 1 from public.player_story_claims where user_id=uid and claim_key=key) then raise exception 'story_reward_claimed'; end if;
-  if not public._first_request(uid,p_request) then return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),'duplicate',true); end if;
+  if exists(select 1 from private.player_story_claims where user_id=uid and claim_key=key) then raise exception 'story_reward_claimed'; end if;
+  if not public._first_request(uid,p_request) then return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),'duplicate',true); end if;
   select coalesce(coins,1) into d from public.catalog_difficulties where id=p_difficulty;
   coins:=round(5000*d);
-  insert into public.player_story_claims(user_id,claim_key) values(uid,key);
+  insert into private.player_story_claims(user_id,claim_key) values(uid,key);
   perform public._grant(uid,coins,2500,3,1);
-  return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),
+  return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),
     'reward',jsonb_build_object('coins',coins,'xp',2500,'normal',3,'lucky',1));
 end $$;
-revoke execute on function public.story_claim_chapter(int,text,uuid) from public, anon;
 grant execute on function public.story_claim_chapter(int,text,uuid) to authenticated;
 
 create or replace function public.story_claim_master(p_request uuid default null)
@@ -430,13 +409,12 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid:=public._uid();
 begin
   if p_request is null then raise exception 'invalid_request'; end if;
-  if (select count(*) from public.player_story_progress where user_id=uid and stars>=1)<>200 then raise exception 'story_master_incomplete'; end if;
-  if exists(select 1 from public.player_story_claims where user_id=uid and claim_key='master') then raise exception 'story_reward_claimed'; end if;
-  if not public._first_request(uid,p_request) then return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),'duplicate',true); end if;
-  insert into public.player_story_claims(user_id,claim_key) values(uid,'master');
+  if (select count(*) from private.player_story_progress where user_id=uid and stars>=1)<>200 then raise exception 'story_master_incomplete'; end if;
+  if exists(select 1 from private.player_story_claims where user_id=uid and claim_key='master') then raise exception 'story_reward_claimed'; end if;
+  if not public._first_request(uid,p_request) then return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),'duplicate',true); end if;
+  insert into private.player_story_claims(user_id,claim_key) values(uid,'master');
   perform public._grant(uid,100000,50000,25,10);
-  return jsonb_build_object('profile',public._profile_json(uid),'story',public._story_json(uid),
+  return jsonb_build_object('profile',public._profile_json(uid),'story',private.story_json(uid),
     'reward',jsonb_build_object('coins',100000,'xp',50000,'normal',25,'lucky',10));
 end $$;
-revoke execute on function public.story_claim_master(uuid) from public, anon;
 grant execute on function public.story_claim_master(uuid) to authenticated;
