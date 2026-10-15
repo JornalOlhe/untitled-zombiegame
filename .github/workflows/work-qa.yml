@@ -92,7 +92,7 @@ jobs:
   visuals:
     name: Bosses, secrets and visual systems
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       MONSTER_SHOTS: "0"
     steps:

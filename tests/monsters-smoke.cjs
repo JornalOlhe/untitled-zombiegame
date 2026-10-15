@@ -66,7 +66,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     // Headless software rendering runs slowly, so wait on simulated game time, not wall time.
     const waitSim = async (seconds) => {
       const start = await page.evaluate(() => DeadRecoilTest.time);
-      await page.waitForFunction(([s0, d]) => DeadRecoilTest.time >= s0 + d, [start, seconds], { timeout: 60000 }).catch(async e => { const s = await page.evaluate(() => ({ t: DeadRecoilTest.time, st: DeadRecoilTest.state, hp: DeadRecoilTest.player?.hp, scr: [...document.querySelectorAll('.screen:not(.hidden)')].map(x => x.id).join(','), dfx: !!DeadRecoilTest.DeathFX?.active, dt: DeadRecoilTest.DeathFX?.active?.time })).catch(() => null); console.log('DIAG', JSON.stringify(s)); throw e; });
+      await page.waitForFunction(([s0, d]) => DeadRecoilTest.time >= s0 + d, [start, seconds], { timeout: 240000 }).catch(async e => { const s = await page.evaluate(async () => ({ raf5s: await new Promise(r => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 5000) requestAnimationFrame(f); else r(n); }; requestAnimationFrame(f); }), t2: DeadRecoilTest.time, t: DeadRecoilTest.time, st: DeadRecoilTest.state, hp: DeadRecoilTest.player?.hp, scr: [...document.querySelectorAll('.screen:not(.hidden)')].map(x => x.id).join(','), dfx: !!DeadRecoilTest.DeathFX?.active, dt: DeadRecoilTest.DeathFX?.active?.time })).catch(() => null); console.log('DIAG', JSON.stringify(s)); throw e; });
     };
     // Sound: every effect decodes, and playing one produces real signal on the SFX bus.
     const audio = await page.evaluate(async names => {
