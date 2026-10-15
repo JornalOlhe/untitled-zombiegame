@@ -3263,7 +3263,7 @@ body.netgame #revivetouch{display:flex}
             "#DDF6FF",
           ],
           // v28 balance: rarity is an upgrade, not a multiplier that melts every enemy.
-          rarityMult = [1, 1.18, 1.38, 1.6, 1.85, 2.15, 2.5, 2.85];
+          rarityMult = [1, 1.15, 1.3, 1.45, 1.6, 1.75, 1.9, 2.05];
         const requiresRerollConfirm = (tier) => tier >= 5;
         const classes = [
           // IDs 0–20 preserve existing saves. New roster additions use 21+.
@@ -3300,9 +3300,9 @@ body.netgame #revivetouch{display:flex}
             burst:{ duration:10, shortRangeDamageTotal:1.20, damageTakenTotal:0.90 } },
           { key:"berserker", name:"Berserker", tier:2, color:"#b1443c",
             ability:"Endless Mag", cd:30,
-            desc:"+20% de dano com todas as armas, mas recebe 10% mais dano de qualquer fonte.",
-            active:"Munição infinita por 5 segundos, sem alterar a cadência.",
-            effects:{ damage:1.20, damageTaken:1.10 }, burst:{ duration:5, infiniteAmmo:true } },
+            desc:"+15% de dano com todas as armas, mas recebe 10% mais dano de qualquer fonte.",
+            active:"Recarrega a arma na hora e atira 30% mais rápido por 6 segundos.",
+            effects:{ damage:1.15, damageTaken:1.10 }, burst:{ duration:6, instantReload:true, fireRateTotal:0.77 } },
           { key:"phantom", name:"Phantom", tier:2, color:"#827da8",
             ability:"Vanish", cd:30,
             desc:"Sem passiva separada.",
@@ -3310,74 +3310,74 @@ body.netgame #revivetouch{display:flex}
             effects:{}, burst:{ duration:10, crouchInvisible:true } },
           { key:"demolitionist", name:"Demolitionist", tier:2, color:"#aa7866",
             ability:"High Explosive", cd:30,
-            desc:"+30% de dano com granadas e bazucas.",
-            active:"O bônus explosivo passa para +50% por 10 segundos.",
-            effects:{ explosiveDamage:1.30 }, burst:{ duration:10, explosiveDamageTotal:1.50 } },
+            desc:"+25% de dano com granadas e bazucas.",
+            active:"O bônus explosivo passa para +40% por 10 segundos.",
+            effects:{ explosiveDamage:1.25 }, burst:{ duration:10, explosiveDamageTotal:1.40 } },
           { key:"vanguard", name:"Vanguard", tier:3, color:"#8d64c5",
             ability:"Bulwark", cd:30,
-            desc:"+20% de dano e recebe 15% menos dano. Desvantagem: −5% de velocidade.",
-            active:"Por 10 s, mantém +20% de dano e passa a receber 50% menos dano.",
-            effects:{ damage:1.20, damageTaken:0.85, speed:0.95 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+            desc:"+12% de dano e recebe 15% menos dano. Desvantagem: −5% de velocidade.",
+            active:"Por 10 s, mantém +12% de dano e passa a receber 40% menos dano.",
+            effects:{ damage:1.12, damageTaken:0.85, speed:0.95 }, burst:{ duration:10, damageTakenTotal:0.60 } },
           { key:"revenant", name:"Revenant", tier:3, color:"#9c4c78",
             ability:"Soul Feast", cd:30,
-            desc:"+30% de dano e +10% de velocidade. Desvantagem: −15% de vida máxima.",
+            desc:"+18% de dano e +10% de velocidade. Desvantagem: −15% de vida máxima.",
             active:"Durante 10 s, cada eliminação recupera 1 HP.",
-            effects:{ damage:1.30, speed:1.10, maxHp:0.85 }, burst:{ duration:10, killHeal:1 } },
+            effects:{ damage:1.18, speed:1.10, maxHp:0.85 }, burst:{ duration:10, killHeal:1 } },
           { key:"stormcaller", name:"Storm Caller", tier:3, color:"#507fb5",
             ability:"Tempest", cd:30,
-            desc:"+50% de dano, +10% de velocidade, mas recebe 20% mais dano de qualquer fonte.",
+            desc:"+30% de dano, +10% de velocidade, mas recebe 20% mais dano de qualquer fonte.",
             active:"Por 10 s: velocidade total +20%. Headshot kill tem 20% de chance de causar um raio de 50% do dano do tiro em ~5 m.",
-            effects:{ damage:1.50, speed:1.10, damageTaken:1.20 },
+            effects:{ damage:1.30, speed:1.10, damageTaken:1.20 },
             burst:{ duration:10, speedTotal:1.20, stormHeadshot:true, stormChance:0.20, stormScale:0.50, stormRadius:5 } },
           { key:"warlord", name:"Warlord", tier:4, color:"#b57b43",
             ability:"Iron Rule", cd:30,
-            desc:"+50% de dano. Recupera 10 HP a cada 25 eliminações. Desvantagem: recebe 10% mais dano.",
-            active:"Recebe 50% menos dano por 10 segundos.",
-            effects:{ damage:1.50, healEvery:25, healAmount:10, damageTaken:1.10 }, burst:{ duration:10, damageTakenTotal:0.50 } },
+            desc:"+30% de dano. Recupera 10 HP a cada 25 eliminações. Desvantagem: recebe 10% mais dano.",
+            active:"Recebe 40% menos dano por 10 segundos.",
+            effects:{ damage:1.30, healEvery:25, healAmount:10, damageTaken:1.10 }, burst:{ duration:10, damageTakenTotal:0.60 } },
           { key:"juggernaut", name:"Juggernaut", tier:4, color:"#9b6e4c",
             ability:"Unbroken", cd:30,
-            desc:"+30% de dano e recebe 30% menos dano. Desvantagem: armadura pesada, −12% de velocidade.",
-            active:"Por 10 s: dano total +60%, velocidade total +20% e mantém 30% de redução.",
-            effects:{ damage:1.30, damageTaken:0.70, speed:0.88 },
-            burst:{ duration:10, damageTotal:1.60, speedTotal:1.20 } },
+            desc:"+18% de dano e recebe 25% menos dano. Desvantagem: armadura pesada, −12% de velocidade.",
+            active:"Por 10 s: dano total +40%, velocidade total +15% e mantém 25% de redução.",
+            effects:{ damage:1.18, damageTaken:0.75, speed:0.88 },
+            burst:{ duration:10, damageTotal:1.40, speedTotal:1.15 } },
           { key:"deadeye", name:"Deadeye", tier:4, color:"#c59a45",
             ability:"Killshot", cd:30,
-            desc:"De +0% a +50% de dano conforme a distância; headshots recebem +100% de dano adicional. Desvantagem: −10% de vida máxima.",
-            active:"Por 10 s, +60% de dano adicional, somando com distância e headshot.",
-            effects:{ distanceDamageMax:0.50, headshot:2, maxHp:0.90 }, burst:{ duration:10, damageTotal:1.60 } },
+            desc:"De +0% a +35% de dano conforme a distância; headshots recebem +60% de dano adicional. Desvantagem: −10% de vida máxima.",
+            active:"Por 10 s, +35% de dano adicional, somando com distância e headshot.",
+            effects:{ distanceDamageMax:0.35, headshot:1.6, maxHp:0.90 }, burst:{ duration:10, damageTotal:1.35 } },
           { key:"reaper", name:"Reaper", tier:6, color:"#ff7a3d",
             ability:"Gravebound", cd:15, requiredKills:5, excludeBossKills:true, summonAllies:5,
-            desc:"+30% de dano e +30% de velocidade. Chefes/minibosses não contam para a invocação. Desvantagem: −20% de vida máxima.",
+            desc:"+18% de dano e +25% de velocidade. Chefes/minibosses não contam para a invocação. Desvantagem: −20% de vida máxima.",
             active:"Com 5 eliminações válidas, invoca 5 zumbis aliados do chão. As 5 kills são consumidas; máximo 5 aliados.",
-            effects:{ damage:1.30, speed:1.30, maxHp:0.80 }, burst:{} },
+            effects:{ damage:1.18, speed:1.25, maxHp:0.80 }, burst:{} },
           { key:"voidwalker", name:"Void Walker", tier:5, color:"#7547bd",
             ability:"Voidshift", cd:30,
-            desc:"+75% de dano, +20% de velocidade e recebe 20% menos dano. Desvantagem: corpo instável, −25% de vida máxima.",
-            active:"Por 10 s: dano total +100%, velocidade total +50% e mantém 20% de redução.",
-            effects:{ damage:1.75, speed:1.20, damageTaken:0.80, maxHp:0.75 },
-            burst:{ duration:10, damageTotal:2.00, speedTotal:1.50 } },
+            desc:"+40% de dano, +15% de velocidade e recebe 15% menos dano. Desvantagem: corpo instável, −25% de vida máxima.",
+            active:"Por 10 s: dano total +70%, velocidade total +35% e mantém 15% de redução.",
+            effects:{ damage:1.40, speed:1.15, damageTaken:0.85, maxHp:0.75 },
+            burst:{ duration:10, damageTotal:1.70, speedTotal:1.35 } },
           { key:"vampire", name:"Vampire", tier:5, color:"#9e2447",
             ability:null, cd:0, passiveOnly:true,
-            desc:"+30% de dano, +30% de vida máxima e recupera 3 HP por eliminação. Desvantagem: recebe 10% mais dano.",
+            desc:"+18% de dano, +20% de vida máxima e recupera 2 HP por eliminação. Desvantagem: recebe 10% mais dano.",
             active:"Passiva — não possui habilidade ativa.",
-            effects:{ damage:1.30, maxHp:1.30, killHeal:3, damageTaken:1.10 }, burst:{} },
+            effects:{ damage:1.18, maxHp:1.20, killHeal:2, damageTaken:1.10 }, burst:{} },
           { key:"archon", name:"Archon", tier:5, color:"#e66cae",
             ability:"Ascendant Form", cd:30,
-            desc:"+50% de dano, +50% de vida máxima e recebe 50% menos dano. Desvantagem: −10% de velocidade.",
-            active:"Por 10 s: +100% dano, +100% vida máxima, +100% velocidade e 80% de redução de dano.",
-            effects:{ damage:1.50, maxHp:1.50, damageTaken:0.50, speed:0.90 },
-            burst:{ duration:10, damageTotal:2.00, maxHpTotal:2.00, speedTotal:2.00, damageTakenTotal:0.20 } },
+            desc:"+30% de dano, +30% de vida máxima e recebe 35% menos dano. Desvantagem: −10% de velocidade.",
+            active:"Por 10 s: +60% dano, +60% vida máxima, +40% velocidade e 60% de redução de dano.",
+            effects:{ damage:1.30, maxHp:1.30, damageTaken:0.65, speed:0.90 },
+            burst:{ duration:10, damageTotal:1.60, maxHpTotal:1.60, speedTotal:1.40, damageTakenTotal:0.40 } },
           { key:"serafim", name:"Serafim", tier:6, color:"#ffd96a",
             ability:"Ascension", cd:30, requiredKills:50,
-            desc:"+80% de dano, recebe 30% menos dano e regenera 5 HP/s após 5 s sem sofrer dano. Desvantagem: −8% de velocidade.",
-            active:"A cada 50 eliminações: por 10 s, +100% dano, +30% velocidade e 80% de redução; regeneração permanece 5 HP/s.",
-            effects:{ damage:1.80, damageTaken:0.70, regen:5, regenDelay:5, speed:0.92 },
-            burst:{ duration:10, damageTotal:2.00, speedTotal:1.30, damageTakenTotal:0.20 } },
+            desc:"+45% de dano, recebe 25% menos dano e regenera 3 HP/s após 5 s sem sofrer dano. Desvantagem: −8% de velocidade.",
+            active:"A cada 50 eliminações: por 10 s, +75% dano, +30% velocidade e 55% de redução; regeneração permanece 3 HP/s.",
+            effects:{ damage:1.45, damageTaken:0.75, regen:3, regenDelay:5, speed:0.92 },
+            burst:{ duration:10, damageTotal:1.75, speedTotal:1.30, damageTakenTotal:0.45 } },
           { key:"deathless", name:"Deathless", tier:6, color:"#ff5a36",
             ability:null, cd:0, passiveOnly:true,
-            desc:"+100% de dano e +50% de vida máxima. Uma vez por partida, ressuscita com 50% da própria vida máxima. Desvantagem: recebe 15% mais dano.",
+            desc:"+55% de dano e +35% de vida máxima. Uma vez por partida, ressuscita com 50% da própria vida máxima. Desvantagem: recebe 15% mais dano.",
             active:"Passiva — 1 ressurreição por partida.",
-            effects:{ damage:2.00, maxHp:1.50, reviveOnce:true, damageTaken:1.15 }, burst:{} },
+            effects:{ damage:1.55, maxHp:1.35, reviveOnce:true, damageTaken:1.15 }, burst:{} },
           { key:"sharpshooter", name:"Sharpshooter", tier:1, color:"#5b9ac7",
             ability:"Eagle Step", cd:30,
             desc:"+15% de dano apenas com Bow, Stormpiercer e Wraithpiercer.",
@@ -3385,16 +3385,16 @@ body.netgame #revivetouch{display:flex}
             effects:{ bowDamage:1.15 }, burst:{ duration:10, bowDamageTotal:1.20, jumpTotal:1.10 } },
           { key:"archangel", name:"Archangel", tier:7, color:"#dff8ff",
             ability:"Judgement", cd:30, requiredKills:25, secretFlight:"angel",
-            desc:"Sustentação divina: +120% de dano, +100% de vida máxima, recebe 40% menos dano e regenera 4 HP/s após 4 s sem sofrer dano. Desvantagem: asas pesadas, −8% de velocidade no chão. Auréola e duas asas exclusivas.",
-            active:"Com 25 eliminações: Nova Sagrada (700 de dano em 9 m e cura 35% da vida) e 15 s de voo. Em voo, +180% de dano e a cada 1,1 s um raio de luz castiga o inimigo mais próximo (260 de dano, x2 em chefes).",
-            effects:{ damage:2.20, maxHp:2.00, damageTaken:0.60, regen:4, regenDelay:4, speed:0.92 },
-            burst:{ duration:15, flight:"angel", nova:700, novaRadius:9, healPct:0.35, damageTotal:2.80 } },
+            desc:"Sustentação divina: +70% de dano, +60% de vida máxima, recebe 30% menos dano e regenera 3 HP/s após 4 s sem sofrer dano. Desvantagem: asas pesadas, −8% de velocidade no chão. Auréola e duas asas exclusivas.",
+            active:"Com 25 eliminações: Nova Sagrada (500 de dano em 9 m e cura 30% da vida) e 15 s de voo. Em voo, +110% de dano e a cada 1,1 s um raio de luz castiga o inimigo mais próximo (200 de dano, x2 em chefes).",
+            effects:{ damage:1.70, maxHp:1.60, damageTaken:0.70, regen:3, regenDelay:4, speed:0.92 },
+            burst:{ duration:15, flight:"angel", nova:500, novaRadius:9, healPct:0.30, damageTotal:2.10 } },
           { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
             ability:"Hellfire", cd:30, requiredKills:25, secretFlight:"demon",
-            desc:"Poder bruto: +170% de dano, +60% de vida máxima, recebe 25% menos dano e cada eliminação rouba 4 HP. Desvantagem: sem regeneração natural e mais exposto que o Archangel. Chifres e cauda demoníaca exclusivos.",
-            active:"Com 25 eliminações: abre uma Poça Infernal de 7 m ao seu redor por 12 s (desacelera monstros comuns — não chefes/minibosses — e causa 10 de dano a cada 0,25 s) e voa por 15 s com +230% de dano. Em voo, com a Demonic Fury, o ataque vira arremesso: a foice gira, corta tudo no caminho e volta ao bater no chão, numa estrutura ou depois de 6 monstros.",
-            effects:{ damage:2.70, maxHp:1.60, damageTaken:0.75, killHeal:4 },
-            burst:{ duration:15, flight:"demon", hellPool:{ radius:7, duration:12 }, damageTotal:3.30 } },
+            desc:"Poder bruto: +95% de dano, +40% de vida máxima, recebe 20% menos dano e cada eliminação rouba 3 HP. Desvantagem: sem regeneração natural e mais exposto que o Archangel. Chifres e cauda demoníaca exclusivos.",
+            active:"Com 25 eliminações: abre uma Poça Infernal de 7 m ao seu redor por 12 s (desacelera monstros comuns — não chefes/minibosses — e causa 10 de dano a cada 0,25 s) e voa por 15 s com +140% de dano. Em voo, com a Demonic Fury, o ataque vira arremesso: a foice gira, corta tudo no caminho e volta ao bater no chão, numa estrutura ou depois de 6 monstros.",
+            effects:{ damage:1.95, maxHp:1.40, damageTaken:0.80, killHeal:3 },
+            burst:{ duration:15, flight:"demon", hellPool:{ radius:7, duration:12 }, damageTotal:2.40 } },
         ];
         const legacyClassOrder = [6, 5, 2, 7, 12, 0, 1, 3, 8, 15, 18];
         const classOf = () => classes[selectedClass] || classes[0];
@@ -5880,7 +5880,7 @@ body.netgame #revivetouch{display:flex}
             MonsterFX.add(m, 0.75, (it) => { const k = 1 - it.life / it.max; m.material.opacity = 0.95 * (1 - k * k); m.scale.set(1.2 - k * 0.8, 1, 1.2 - k * 0.8); });
             MonsterFX.ring(at, 2.2, 0xffe7a8, 0.5);
             ParticleSystem.emit(at.clone().setY(1), 0xffffff, 12, 5);
-            ZombieManager.hit(z, z.boss ? 520 : 260, false, at.clone().setY(1.4), WeaponSystem.current(), true);
+            ZombieManager.hit(z, z.boss ? 400 : 200, false, at.clone().setY(1.4), WeaponSystem.current(), true);
             AudioManager.tone(rand(1300, 1500), 0.25, "sine", 0.12, 2600, "weapons");
           },
           meteor(z) {
@@ -6126,6 +6126,43 @@ body.netgame #revivetouch{display:flex}
             if (this.group) { this.group.traverse((o) => { if (o.material?.userData?.own) o.material.dispose(); }); scene.remove(this.group); }
             this.group = null; this.gens = []; this.relics = [];
           },
+          // Industrial diesel generator on a steel skid: textured painted-steel housing in safety
+          // yellow, radiator grille, louvres, control panel with gauges and a status lamp, fuel tank,
+          // exhaust stack, cable reel and hazard stripes. A short, soft beacon marks it from afar.
+          buildGenerator(g, glow) {
+            const own = (m) => { m.userData.own = true; return m; };
+            const tex = (name, rep) => { const t = VisualArt.photo(name); if (!t) return null; const c = VisualArt.photoCopy(t); c.repeat.set(rep, rep); return c; };
+            const body = own(new THREE.MeshStandardMaterial({ color: 0xc98a0c, normalMap: tex("painted_metal_nor", 0.8), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.5, metalness: 0.3, emissive: 0x1a0e00, emissiveIntensity: 0.3 }));
+            const steel = own(new THREE.MeshStandardMaterial({ color: 0x8a9094, map: tex("painted_metal_diff", 1.2), roughness: 0.5, metalness: 0.55 }));
+            const dark = own(new THREE.MeshStandardMaterial({ color: 0x16181a, roughness: 0.7, metalness: 0.4 }));
+            const chrome = own(new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: 0.25, metalness: 1 }));
+            const B = (w, h, d, m, x, y, z, ry = 0) => { const b = new THREE.Mesh(unitBox, m); b.scale.set(w, h, d); b.position.set(x, y, z); b.rotation.y = ry; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+            B(1.9, 0.12, 1.0, steel, 0, 0.06, 0);                                   // skid
+            for (const z of [-0.42, 0.42]) B(1.95, 0.08, 0.1, dark, 0, 0.16, z);    // rails
+            B(1.0, 0.32, 0.82, steel, -0.3, 0.32, 0);                               // fuel tank
+            B(1.7, 0.95, 0.86, body, 0, 0.95, 0);                                   // housing
+            B(1.74, 0.06, 0.9, dark, 0, 1.45, 0);                                   // roof lip
+            // radiator grille (front) + louvres on the sides
+            const grille = B(0.06, 0.7, 0.7, PropKit.mat("grille"), 0.86, 0.95, 0);
+            for (let k = 0; k < 6; k++) for (const sz of [-1, 1]) B(0.95, 0.03, 0.04, dark, -0.25, 0.7 + k * 0.1, sz * 0.44);
+            // control panel with gauges and a status lamp
+            B(0.04, 0.42, 0.5, dark, -0.87, 1.0, 0);
+            for (const z of [-0.12, 0.12]) { const gm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 16), chrome); gm.rotation.z = Math.PI / 2; gm.position.set(-0.9, 1.08, z); g.add(gm); }
+            const lampMat = own(new THREE.MeshBasicMaterial({ color: 0xffb020, toneMapped: false }));
+            const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), lampMat); lamp.position.set(-0.9, 0.88, 0); g.add(lamp);
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), lampMat); bulb.position.set(0.6, 1.58, 0.3); g.add(bulb);
+            B(0.06, 0.12, 0.06, chrome, 0.6, 1.5, 0.3);
+            // exhaust stack with rain cap
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.7, 12), chrome); pipe.position.set(0.45, 1.8, -0.22); g.add(pipe);
+            const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.06, 12), dark); cap.position.set(0.45, 2.17, -0.22); cap.rotation.z = 0.35; g.add(cap);
+            // hazard stripes on the skid ends and a cable reel
+            for (const x of [-0.98, 0.98]) B(0.04, 0.12, 1.0, PropKit.mat("hazard"), x, 0.06, 0);
+            const reel = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.06, 8, 16), dark); reel.position.set(-0.5, 1.56, -0.18); reel.rotation.x = Math.PI / 2; g.add(reel);
+            const beamMat = own(new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+            const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.35, 7, 10, 1, true), beamMat); beam.position.set(0.6, 5.1, 0.3); g.add(beam);
+            const halo = new THREE.Sprite(own(new THREE.SpriteMaterial({ map: glow, color: 0xffb020, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }))); halo.scale.setScalar(1.1); halo.position.set(0.6, 1.58, 0.3); g.add(halo);
+            return { lampMat, beamMat, halo, exhaust: new V(0.45, 2.2, -0.22) };
+          },
           start() {
             this.clear();
             this.done = false; this.secret = false; this.found = 0;
@@ -6133,16 +6170,10 @@ body.netgame #revivetouch{display:flex}
             this.group = new THREE.Group(); scene.add(this.group);
             const glow = VisualArt.texture("glow");
             for (const [i, p] of this.pickSpots(3, 101 + selectedMap * 7, 16, 14).entries()) {
-              const g = new THREE.Group(); g.position.set(p.x, 0, p.z); this.group.add(g);
-              const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.8), PropKit.mat("metal")); base.position.y = 0.6; g.add(base);
-              const top = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.6), PropKit.mat("poleDark")); top.position.y = 1.29; g.add(top);
-              const lampMat = new THREE.MeshBasicMaterial({ color: 0xffb020, toneMapped: false }); lampMat.userData.own = true;
-              const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.05), lampMat); lamp.position.set(0, 0.85, 0.42); g.add(lamp);
-              const beamMat = new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); beamMat.userData.own = true;
-              const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, 26, 10, 1, true), beamMat); beam.position.y = 13.5; g.add(beam);
-              const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffb020, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })); halo.material.userData.own = true; halo.scale.setScalar(1.6); halo.position.y = 1.5; g.add(halo);
-              MapManager.obstacles.push({ x: p.x, z: p.z, w: 0.55, d: 0.4, h: 1.38, top: 1.38 });
-              this.gens.push({ i, x: p.x, z: p.z, g, lampMat, beamMat, halo, hold: 0, on: false });
+              const g = new THREE.Group(); g.position.set(p.x, 0, p.z); g.rotation.y = Math.atan2(-p.x, -p.z); this.group.add(g);
+              const { lampMat, beamMat, halo, exhaust } = this.buildGenerator(g, glow);
+              MapManager.obstacles.push({ x: p.x, z: p.z, w: 0.8, d: 0.8, h: 1.45, top: 1.45 });
+              this.gens.push({ i, x: p.x, z: p.z, g, lampMat, beamMat, halo, exhaust, hold: 0, on: false, puffAt: 0 });
             }
             for (const [i, p] of this.pickSpots(3, 977 + selectedMap * 13, 12, 12).entries()) {
               const g = new THREE.Group(); g.position.set(p.x, 0.9, p.z); this.group.add(g);
@@ -6171,7 +6202,10 @@ body.netgame #revivetouch{display:flex}
             }
             for (const g of this.gens) {
               g.halo.material.opacity = g.on ? 0.55 : 0.45 + 0.3 * Math.sin(t * 4 + g.i);
-              if (g.on) continue;
+              if (g.on) {
+                if (t >= g.puffAt) { g.puffAt = t + rand(0.25, 0.5); const at = g.exhaust.clone().applyMatrix4(g.g.matrixWorld); ParticleSystem.emit(at, 0x3a3a3a, 2, 0.9); }
+                continue;
+              }
               const near = Math.hypot(p.x - g.x, p.z - g.z) < 2.4;
               const holding = near && (keys.has("KeyE") || this.touchHold);
               g.hold = holding ? g.hold + dt : Math.max(0, g.hold - dt * 2);
@@ -6203,7 +6237,7 @@ body.netgame #revivetouch{display:flex}
             MatchShop.earn(2500);
             player.bonus = Math.min(100, player.bonus + 50);
             player.hp = player.maxhp + player.bonus;
-            for (const w of player.inventory) if (w && w.mag !== Infinity) w.ammo = w.mag;
+            for (const w of player.inventory) if (w && w.mag !== Infinity) { w.ammo = w.mag; if (w.reserve != null) w.reserve = w.reserveMax; }
             player.grenades += 2;
             UIManager.toast("Missão do mapa concluída: +2500 ✦, armadura, munição e granadas.");
             RunStats.mapMission = true;
@@ -6215,9 +6249,10 @@ body.netgame #revivetouch{display:flex}
             MatchShop.earn(500);
             if (this.found === 3) {
               this.secret = true;
-              UIManager.announce("SEGREDO ENCONTRADO", "Fúria Ancestral: 20 s de insta-kill e munição infinita", 3);
+              UIManager.announce("SEGREDO ENCONTRADO", "Fúria Ancestral: 20 s de insta-kill, dano em dobro e munição máxima", 3);
               MatchShop.earn(3000);
-              for (const k of ["instakill", "ammo", "damage"]) PowerUps.active[k] = PowerUps.now() + 20;
+              for (const k of ["instakill", "damage"]) PowerUps.active[k] = PowerUps.now() + 20;
+              AmmoCrates.refillAll("Fúria Ancestral: munição máxima");
               PowerUps.paint();
               try { const k = "deadrecoil.secrets"; const d = JSON.parse(localStorage.getItem(k) || "{}"); d[selectedMap] = true; localStorage.setItem(k, JSON.stringify(d)); } catch {}
             } else UIManager.toast(`Relíquia encontrada (${this.found}/3)`);
@@ -6764,7 +6799,30 @@ body.netgame #revivetouch{display:flex}
                   const m = o.material;
                   m.vertexColors = !!geo.attributes.color;
                   if (o.name.startsWith("leaves")) PropKit.wind(m, name.includes("pine") ? 0.35 : 0.7);
-                  if (o.name.startsWith("glass")) { m.transparent = true; m.opacity = 0.5; m.depthWrite = false; }
+                  if (o.name.startsWith("glass")) { m.transparent = true; m.opacity = 0.62; m.depthWrite = false; m.roughness = 0.05; m.metalness = 0.85; m.envMapIntensity = 1.8; }
+                  // Car paint: lacquered metallic; trim: satin chrome.
+                  if (name.startsWith("car_") && o.name.startsWith("paint") && name !== "car_burnt") { m.roughness = 0.3; m.metalness = 0.5; m.envMapIntensity = 1.35; }
+                  if (name.startsWith("car_") && o.name.startsWith("trim")) { m.roughness = 0.35; m.metalness = 0.8; }
+                  // Trunks and rocks get real surface textures: generate UVs (cylindrical for trunks,
+                  // box-projected for rocks) since the GLBs carry vertex colours only.
+                  const surf = o.name.startsWith("trunk") ? "tree_bark" : (name.startsWith("rock_") || name === "mound") ? "rock_boulder_dry" : null;
+                  if (surf && VisualArt.photo(surf + "_diff")) {
+                    const P = geo.attributes.position, N = geo.attributes.normal, uv = new Float32Array(P.count * 2);
+                    for (let k = 0; k < P.count; k++) {
+                      const x = P.getX(k), y = P.getY(k), z = P.getZ(k);
+                      if (surf === "tree_bark") { uv[k * 2] = (Math.atan2(x, z) / (Math.PI * 2)) * 1.6; uv[k * 2 + 1] = y * 0.7; }
+                      else {
+                        const nx = Math.abs(N ? N.getX(k) : 0), ny = Math.abs(N ? N.getY(k) : 1), nz = Math.abs(N ? N.getZ(k) : 0);
+                        const [a, b] = ny >= nx && ny >= nz ? [x, z] : nx >= nz ? [z, y] : [x, y];
+                        uv[k * 2] = a * 0.45; uv[k * 2 + 1] = b * 0.45;
+                      }
+                    }
+                    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+                    m.map = VisualArt.photo(surf + "_diff"); m.normalMap = VisualArt.photo(surf + "_nor");
+                    if (m.normalMap) m.normalScale = new THREE.Vector2(1, 1);
+                    m.vertexColors = false; m.color = new THREE.Color(surf === "tree_bark" ? 0xd8ccbe : 0xc8c4bc); m.roughness = 0.95; m.metalness = 0;
+                    m.needsUpdate = true;
+                  }
                   if (o.name.startsWith("glow")) { m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.8; m.toneMapped = false; }
                   parts.push({ name: o.name, geo, mat: m });
                 });
@@ -10958,9 +11016,9 @@ body.netgame #revivetouch{display:flex}
           // Street ends at the playable edge: blocked by barricades; the city keeps going beyond.
           for (const s of streets) {
             for (const [x, z, ry] of [[s, -H + 3, 0], [s, H - 3, 0], [-H + 3, s, Math.PI / 2], [H - 3, s, Math.PI / 2]]) {
-              K.container(x + (ry ? 0 : -3.2), z + (ry ? -3.2 : 0), ry);
-              K.container(x + (ry ? 0 : 3.2), z + (ry ? 3.2 : 0), ry, 2);
-              K.hard("fence", [x, 2, z], ry ? [0.1, 4, 10] : [10, 4, 0.1], null, 0.5);
+              // Concrete jersey barriers in front of a chain-link fence (no more red container walls).
+              for (let k = -1.5; k <= 1.5; k++) K.jersey(x + (ry ? 0 : k * 2.5), z + (ry ? k * 2.5 : 0), ry);
+              K.hard("fence", [x + (ry ? (x > 0 ? 1.6 : -1.6) : 0), 2, z + (ry ? 0 : (z > 0 ? 1.6 : -1.6))], ry ? [0.1, 4, 10] : [10, 4, 0.1], null, 0.5);
             }
           }
           // Distant skyline behind the edge (no collision, fog hides the far end).
@@ -13540,6 +13598,12 @@ body.netgame #revivetouch{display:flex}
             if (variant) w.name = variant;
             if (tier !== undefined) w.tier = tier;
             w.ammo = w.mag;
+            // Finite firearm ammo: a reserve sized per weapon class (melee/bows stay infinite).
+            if (Number.isFinite(w.mag) && w.mag > 0 && w.kind !== "melee") {
+              const mags = { auto: 6, shotgun: 7, antimaterial: 5, rail: 4, missile: 3, laser: 4, quantum: 4, fire: 3, cryo: 3, double: 6 }[w.kind] ?? 5;
+              w.reserveMax = Math.max(w.mag * 2, Math.round(w.mag * mags));
+              w.reserve = Math.round(w.reserveMax * 0.6);
+            }
             return w;
           },
           current() {
@@ -15887,8 +15951,9 @@ body.netgame #revivetouch{display:flex}
               if (enemy) RunStats.types[enemy] = (RunStats.types[enemy] || 0) + 1;
               ZombiePing.lastKill = simulationTime;
               PowerUps.onKill(z);
+              if (z.boss && !z.remote && player && AmmoCrates.items.length < 3) AmmoCrates.spawn([z.group.position.x, MapManager.groundAt(z.group.position.x, z.group.position.z, 0.3, 0), z.group.position.z]);
               Director.kill(z.group.position);
-              if (byMe) MatchShop.earn(z.boss ? (z.boss.major ? 1000 : 500) : (head ? 70 : 50) + ZombieVariants.reward(z));
+              if (byMe) MatchShop.earn(z.boss ? (z.boss.major ? 600 : 300) : (head ? 45 : 30) + ZombieVariants.reward(z));
               if (!z.boss) {
                 const reward = EconomyRewards.enemy(z.type);
                 Progression.reward(reward);
@@ -19414,7 +19479,8 @@ body.netgame #revivetouch{display:flex}
                 for (let x = 2; x < 14; x++) { px(x, 6, [230, 236, 230]); if (x % 3) px(x, 9, [230, 236, 230]); }
                 break;
               case "container":
-                for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) px(x, y, jitter(x % 3 === 0 ? [120, 50, 36] : [158, 70, 48], 14));
+                // Weathered olive-drab corrugated steel with rust streaks (was a flat bright red).
+                for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) { const rib = x % 3 === 0, rust = ((x * 7 + y * 3) % 11 === 0) || (y > N - 3 && x % 2); px(x, y, jitter(rust ? [96, 62, 38] : rib ? [58, 66, 48] : [78, 88, 64], 10)); }
                 break;
               case "fence":
                 for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) px(x, y, (x + y) % 4 === 0 || (x - y + 16) % 4 === 0 ? [140, 146, 150] : [22, 26, 28]);
@@ -19536,7 +19602,22 @@ body.netgame #revivetouch{display:flex}
             }[kind];
             // 512px procedural surfaces (tools/map_textures_gen.py) for the big interior walls and the
             // city skyline; the 16px pixel textures stay for small props.
-            const photoWall = { labWall: ["lab_panel", 0x8d96a6, 0.5, { roughness: 0.48, metalness: 0.55, normal: 0.8 }], tile: ["ceiling_tile", 0xe6e9e4, 1.0, { roughness: 0.95, normal: 0.6 }] }[kind];
+            const photoWall = {
+              labWall: ["lab_panel", 0x8d96a6, 0.5, { roughness: 0.48, metalness: 0.55, normal: 0.8 }], tile: ["ceiling_tile", 0xe6e9e4, 1.0, { roughness: 0.95, normal: 0.6 }],
+              // v58 surfaces: photo bark/brick/wood/asphalt (CC0 / three.js examples) and painted steel.
+              bark: ["tree_bark", 0xd6cbbd, 0.7, { roughness: 0.96, normal: 1.1 }],
+              poleDark: ["painted_metal", 0xb4bcb6, 0.9, { roughness: 0.55, metalness: 0.5, normal: 0.7 }],
+              metal: ["painted_metal", 0xdfe3df, 0.8, { roughness: 0.45, metalness: 0.6, normal: 0.6 }],
+              crate: ["wood_planks", 0x9a7e5e, 0.9, { roughness: 0.88, normal: 0.9 }],
+              planks: ["wood_planks", 0x6f5a48, 0.7, { roughness: 0.9, normal: 1.0 }],
+              brick: ["red_brick_03", 0xe2d6cc, 0.55, { roughness: 0.9, normal: 0.9 }],
+              road: ["asphalt_02", 0xbcbcc0, 0.22, { roughness: 0.82, normal: 0.7 }],
+              rubble: ["stone_blocks", 0xb8b2a8, 0.8, { roughness: 0.95, normal: 1.0 }],
+              sandbag: ["burlap", 0xd8ccb0, 1.4, { roughness: 0.97, normal: 1.0 }],
+              stripeWhite: ["road_paint", 0xd8d8d0, 0.7, { roughness: 0.75, normal: 0.6 }],
+              stripeYellow: ["road_paint", 0xe0b030, 0.7, { roughness: 0.75, normal: 0.6 }],
+              sidewalk: ["sidewalk_pavers", 0xd2d2cc, 0.5, { roughness: 0.9, normal: 0.8 }],
+            }[kind];
             // Ceiling light fixtures: a troffer (frame, diffuser, louvers) whose diffuser glows.
             if (kind === "lightWhite" && VisualArt.photo("light_panel_diff")) {
               const map = VisualArt.photo("light_panel_diff"), emit = VisualArt.photo("light_panel_emit");
@@ -19575,6 +19656,11 @@ body.netgame #revivetouch{display:flex}
               emissiveIntensity: kind === "lamp" ? 1.4 : kind === "lava" ? 1.1 : kind === "ice" ? 0.5 : glow ? 0.9 : 0,
             });
             if (["leaf", "leafDark", "pine", "snowPine"].includes(kind)) this.wind(m, kind === "pine" || kind === "snowPine" ? 0.6 : 1);
+            // Glass reads as glass: glossy and reflective (picks up the SSR/cubemap when enabled).
+            if (["window", "windowBroken", "shopGlass", "glassCar"].includes(kind)) { m.roughness = kind === "windowBroken" ? 0.35 : 0.06; m.metalness = 0.55; m.envMapIntensity = 1.6; }
+            if (kind === "windowLit") { m.roughness = 0.12; m.metalness = 0.2; }
+            if (/^car/.test(kind) && kind !== "carBurnt") { m.roughness = 0.32; m.metalness = 0.45; m.envMapIntensity = 1.3; }
+            if (kind === "tire") { m.roughness = 0.95; }
             this.materials.set(kind, m);
             return m;
           },
@@ -20200,6 +20286,7 @@ body.netgame #revivetouch{display:flex}
             PhysicsProps.populate(index);
             Medkits.clear();
             PowerUps.clear();
+            AmmoCrates.clear();
           },
         };
 
@@ -20813,6 +20900,129 @@ body.netgame #revivetouch{display:flex}
           },
         };
 
+        // ── Golden ammo crates (finite firearm ammo) ───────────────────────────────────────────
+        // Firearms now carry a limited reserve (WeaponSystem.create). Reloading pulls from it; when
+        // it runs dry the gun is empty until you grab a golden ammo crate: polished, scratched gold
+        // with a lid propped open over rows of brass rounds, a crackling glow and rising sparks.
+        // A crate refills every weapon's reserve and tops up the current magazine.
+        const AmmoCrates = {
+          items: [], nextAt: 25, recent: [],
+          now: () => (typeof simulationTime === "number" ? simulationTime : 0),
+          clear() { for (const c of this.items) this.dispose(c); this.items = []; this.recent = []; this.nextAt = this.now() + 20; },
+          dispose(c) { MapManager.group.remove(c.group); c.halo.material.dispose(); c.flare.material.dispose(); c.beam.material.dispose(); },
+          // Gold: brushed base with scratches, inset panels, rivets and a stamped AMMO plate.
+          goldTex() {
+            if (this._gold) return this._gold;
+            const S = 512, cv = document.createElement("canvas"); cv.width = cv.height = S;
+            const g = cv.getContext("2d");
+            const grad = g.createLinearGradient(0, 0, S, S);
+            grad.addColorStop(0, "#f7d774"); grad.addColorStop(0.35, "#d9a520"); grad.addColorStop(0.6, "#ffe9a0"); grad.addColorStop(1, "#b57e12");
+            g.fillStyle = grad; g.fillRect(0, 0, S, S);
+            // brushed streaks
+            for (let i = 0; i < 1400; i++) { const y = Math.random() * S; g.strokeStyle = `rgba(${Math.random() < 0.5 ? "255,240,190" : "120,80,10"},${0.04 + Math.random() * 0.07})`; g.lineWidth = Math.random() * 1.4; g.beginPath(); g.moveTo(Math.random() * S, y); g.lineTo(Math.random() * S, y + rand(-2, 2)); g.stroke(); }
+            // scratches
+            for (let i = 0; i < 90; i++) { const x = Math.random() * S, y = Math.random() * S, a = Math.random() * 6.28, l = 8 + Math.random() * 46; g.strokeStyle = `rgba(255,250,220,${0.25 + Math.random() * 0.35})`; g.lineWidth = 0.6; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
+            // inset panel frame + corner rivets
+            g.strokeStyle = "rgba(90,55,5,.75)"; g.lineWidth = 10; g.strokeRect(26, 26, S - 52, S - 52);
+            g.strokeStyle = "rgba(255,245,200,.6)"; g.lineWidth = 3; g.strokeRect(36, 36, S - 72, S - 72);
+            for (const [x, y] of [[44, 44], [S - 44, 44], [44, S - 44], [S - 44, S - 44]]) { const r = g.createRadialGradient(x - 3, y - 3, 1, x, y, 11); r.addColorStop(0, "#fff6cf"); r.addColorStop(1, "#7a4d08"); g.fillStyle = r; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); }
+            // stamped plate
+            g.fillStyle = "rgba(60,32,0,.85)"; g.fillRect(S * 0.2, S * 0.4, S * 0.6, S * 0.2);
+            g.fillStyle = "#ffe48a"; g.font = `900 ${S * 0.12}px Impact, Arial Black, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("AMMO", S / 2, S / 2 + 4);
+            const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            return (this._gold = t);
+          },
+          mats() {
+            if (this._mats) return this._mats;
+            const nor = VisualArt.photo("gold_scratched_nor");
+            const gold = new THREE.MeshStandardMaterial({ map: this.goldTex(), color: 0xffe2a0, metalness: 0.78, roughness: 0.3, emissive: 0x4a2c00, emissiveMap: this.goldTex(), emissiveIntensity: 0.32, normalMap: nor || null, normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 1.6 });
+            const dark = new THREE.MeshStandardMaterial({ color: 0x2a1a06, metalness: 0.6, roughness: 0.5 });
+            const brass = new THREE.MeshStandardMaterial({ color: 0xe8b850, metalness: 0.8, roughness: 0.22, emissive: 0x6a4000, emissiveIntensity: 0.55 });
+            const tip = new THREE.MeshStandardMaterial({ color: 0xb8643a, metalness: 1, roughness: 0.3, emissive: 0x3a1500, emissiveIntensity: 0.4 });
+            return (this._mats = { gold, dark, brass, tip });
+          },
+          build() {
+            const M = this.mats(), crate = new THREE.Group();
+            const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(unitBox, m); b.scale.set(w, h, d); b.position.set(x, y, z); b.castShadow = true; crate.add(b); return b; };
+            box(0.86, 0.42, 0.56, M.gold, 0, 0.21, 0);                      // body
+            box(0.9, 0.06, 0.6, M.dark, 0, 0.03, 0);                        // base rim
+            box(0.9, 0.05, 0.6, M.dark, 0, 0.42, 0);                        // top rim
+            for (const x of [-0.3, 0.3]) box(0.06, 0.44, 0.6, M.dark, x, 0.22, 0); // steel bands
+            for (const s of [-1, 1]) box(0.16, 0.05, 0.05, M.dark, s * 0.46, 0.3, 0); // handles
+            // rows of brass rounds standing in the open crate
+            const shell = (this._shell ||= new THREE.CylinderGeometry(0.034, 0.034, 0.22, 10));
+            const cone = (this._tip ||= new THREE.ConeGeometry(0.034, 0.08, 10));
+            const n = 6 * 4, rounds = new THREE.InstancedMesh(shell, M.brass, n), tips = new THREE.InstancedMesh(cone, M.tip, n), m4 = new THREE.Matrix4();
+            let k = 0;
+            for (let ix = 0; ix < 6; ix++) for (let iz = 0; iz < 4; iz++, k++) {
+              const x = -0.3 + ix * 0.12, z = -0.17 + iz * 0.115;
+              m4.makeTranslation(x, 0.5, z); rounds.setMatrixAt(k, m4);
+              m4.makeTranslation(x, 0.65, z); tips.setMatrixAt(k, m4);
+            }
+            crate.add(rounds, tips);
+            // lid propped open behind
+            const lid = new THREE.Group(); lid.position.set(0, 0.44, -0.29); lid.rotation.x = -1.9;
+            const lp = new THREE.Mesh(unitBox, M.gold); lp.scale.set(0.88, 0.05, 0.58); lp.position.set(0, 0, 0.29); lid.add(lp);
+            const lb = new THREE.Mesh(unitBox, M.dark); lb.scale.set(0.9, 0.06, 0.06); lb.position.set(0, 0, 0.57); lid.add(lb);
+            crate.add(lid);
+            return crate;
+          },
+          spawn(at = null) {
+            const p = at || Medkits.place();
+            if (!p) return null;
+            const group = new THREE.Group(); group.position.set(p[0], p[1] ?? MapManager.groundAt(p[0], p[2], 0.3, 0), p[2]);
+            const crate = this.build(); crate.position.y = 0.05; crate.scale.setScalar(1.15); group.add(crate);
+            const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xffc63a, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+            halo.scale.setScalar(1.8); halo.position.y = 0.5;
+            const flare = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xfff1b0, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+            flare.scale.set(3.2, 0.5, 1); flare.position.y = 0.62;
+            const beam = new THREE.Mesh(VisualArt.geometries.cylinder, new THREE.MeshBasicMaterial({ color: 0xffd25a, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }));
+            beam.scale.set(0.09, 7, 0.09); beam.position.y = 3.5;
+            group.add(halo, flare, beam);
+            MapManager.group.add(group);
+            const c = { group, crate, halo, flare, beam, pos: group.position, born: this.now(), sparkAt: 0 };
+            this.items.push(c);
+            this.recent.push(group.position.clone()); if (this.recent.length > 4) this.recent.shift();
+            UIManager.toast("Caixa de munição dourada no mapa!");
+            AudioManager.tone(990, 0.18, "triangle", 0.1, 1480);
+            return c;
+          },
+          needs() { return player.inventory.some((w) => w && w.reserve != null && w.reserve < w.reserveMax * 0.5); },
+          refillAll(label = "Munição reabastecida") {
+            let got = 0;
+            for (const w of player.inventory) if (w && w.reserve != null) { got += w.reserveMax - w.reserve; w.reserve = w.reserveMax; }
+            const w = WeaponSystem.current();
+            if (w && w.reserve != null && w.ammo < w.mag) { w.ammo = w.mag; }
+            UIManager.toast(`${label}${got ? ` · +${got} balas` : ""}`);
+            return got;
+          },
+          update(dt) {
+            if (!player || state !== GameState.PLAYING) return;
+            const now = this.now();
+            if (now >= this.nextAt) {
+              this.nextAt = now + rand(32, 50);
+              if (this.items.length < 2 && (this.needs() || Math.random() < 0.4)) this.spawn();
+            }
+            const feet = (player.ground || 0) + (player.jump || 0);
+            for (let i = this.items.length - 1; i >= 0; i--) {
+              const c = this.items[i], t = now - c.born;
+              c.crate.rotation.y += dt * 0.9;
+              c.crate.position.y = 0.05 + Math.max(0, Math.sin(t * 2.4)) * 0.06;
+              const flick = 0.75 + 0.25 * Math.sin(t * 9) * Math.sin(t * 23.7);   // "sizzling" shimmer
+              c.halo.material.opacity = 0.45 + 0.3 * flick; c.halo.scale.setScalar(1.6 + 0.3 * flick);
+              c.flare.material.opacity = 0.35 + 0.35 * Math.abs(Math.sin(t * 6.3)); c.flare.material.rotation = t * 0.6;
+              c.beam.material.opacity = 0.1 + 0.07 * Math.sin(t * 3);
+              if (now >= c.sparkAt) { c.sparkAt = now + rand(0.12, 0.3); ParticleSystem.emit(c.pos.clone().add(new V(rand(-0.35, 0.35), 0.7, rand(-0.25, 0.25))), Math.random() < 0.6 ? 0xffd25a : 0xfff0b0, 1, 0.7); }
+              const d = Math.hypot(player.pos.x - c.pos.x, player.pos.z - c.pos.z);
+              if (d < 3 && Math.random() < dt * 3) AudioManager.tone(rand(2400, 4200), 0.025, "square", 0.012, rand(1200, 2000), "effects");
+              if (d > 1.2 || Math.abs(feet - c.pos.y) > 1.2) continue;
+              this.refillAll("Caixa dourada: munição cheia");
+              ParticleSystem.emit(c.pos.clone().add(new V(0, 0.6, 0)), 0xffd24a, 40, 4);
+              AudioManager.coin(); AudioManager.tone(660, 0.2, "triangle", 0.14, 1320); AudioManager.tone(180, 0.12, "square", 0.1, 120, "weapons");
+              this.dispose(c); this.items.splice(i, 1);
+            }
+          },
+        };
         // Timed power-up drops (Call of Duty Zombies style). Deliberately economy-neutral: no
         // coin multipliers, and kill rewards stay on the deterministic EconomyRewards path.
         //  - Insta-Kill: regular infected die in one hit (bosses take x1.5 instead).
@@ -20855,7 +21065,7 @@ body.netgame #revivetouch{display:flex}
         const PowerUps = {
           kinds: {
             instakill: { label: "INSTA-KILL", sub: "Infectados comuns morrem com 1 tiro", color: "#ff3b3b", hex: 0xff3b3b, dur: 12 },
-            ammo: { label: "MUNIÇÃO INFINITA", sub: "O pente não acaba", color: "#ffd24a", hex: 0xffd24a, dur: 15 },
+            ammo: { label: "MUNIÇÃO MÁXIMA", sub: "Pentes e reservas cheios", color: "#ffd24a", hex: 0xffd24a, dur: 0.6 },
             damage: { label: "DANO EM DOBRO", sub: "Todo dano x2", color: "#5ec8ff", hex: 0x5ec8ff, dur: 15 },
           },
           items: [], active: {}, lastDrop: -99, enabled: !new URLSearchParams(location.search).has("test"),
@@ -20893,7 +21103,7 @@ body.netgame #revivetouch{display:flex}
           grant(kind) {
             const k = this.kinds[kind];
             this.active[kind] = this.now() + k.dur;
-            if (kind === "ammo") { const w = WeaponSystem.current(); if (w && w.mag !== Infinity) w.ammo = w.mag; }
+            if (kind === "ammo") { AmmoCrates.refillAll("Munição máxima"); for (const w of player.inventory) if (w && w.mag !== Infinity) w.ammo = w.mag; }
             UIManager.announce(k.label, k.sub, 1.8);
             AudioManager.tone(520, 0.3, "sawtooth", 0.14, 1040);
             ParticleSystem.emit(player.pos.clone().add(new V(0, 1, 0)), k.hex, 30, 3.5);
@@ -20919,7 +21129,6 @@ body.netgame #revivetouch{display:flex}
               if (left <= 0) { this.dispose(it); this.items.splice(i, 1); continue; }
               if (d < 1.3) { this.grant(it.kind); this.dispose(it); this.items.splice(i, 1); }
             }
-            if (this.on("ammo")) { const w = WeaponSystem.current(); if (w && w.mag !== Infinity && w.ammo < w.mag) w.ammo = w.mag; }
             for (const k in this.active) if (this.active[k] && this.active[k] <= now) { delete this.active[k]; dirty = true; }
             if (dirty || Object.keys(this.active).length) this.paint();
           },
@@ -20993,40 +21202,39 @@ body.netgame #revivetouch{display:flex}
         // per weapon, armor and grenades. It never touches the persistent coin wallet.
         const MatchShop = {
           PERKS: [
-            { id: "couraca", name: "Couraça", icon: "⛨", color: "#e0483e", base: 1500, desc: "+50% de vida máxima" },
-            { id: "folego", name: "Fôlego", icon: "»", color: "#ffd24a", base: 1000, desc: "+15% de velocidade e pulo mais alto" },
-            { id: "recarga", name: "Recarga Relâmpago", icon: "↻", color: "#5ec8ff", base: 1200, desc: "Recarrega 45% mais rápido" },
-            { id: "toque", name: "Toque Duplo", icon: "⁑", color: "#ff9a3c", base: 1500, desc: "Atira 25% mais rápido e +10% de dano" },
-            { id: "mira", name: "Mira Mortal", icon: "◎", color: "#b07bff", base: 1200, desc: "Tiros na cabeça causam +50% de dano" },
-            { id: "chance", name: "Segunda Chance", icon: "✚", color: "#6dff92", base: 1500, desc: "Uma vez por partida, volta com 50% da vida" },
+            { id: "couraca", name: "Couraça", icon: "⛨", color: "#e0483e", base: 2500, desc: "+25% de vida máxima" },
+            { id: "folego", name: "Fôlego", icon: "»", color: "#ffd24a", base: 1500, desc: "+8% de velocidade e pulo um pouco mais alto" },
+            { id: "recarga", name: "Recarga Relâmpago", icon: "↻", color: "#5ec8ff", base: 2000, desc: "Recarrega 25% mais rápido" },
+            { id: "toque", name: "Toque Duplo", icon: "⁑", color: "#ff9a3c", base: 3000, desc: "Atira 15% mais rápido" },
+            { id: "mira", name: "Mira Mortal", icon: "◎", color: "#b07bff", base: 2500, desc: "Tiros na cabeça causam +25% de dano" },
+            { id: "chance", name: "Segunda Chance", icon: "✚", color: "#6dff92", base: 4000, desc: "Uma vez por partida, volta com 35% da vida" },
           ],
           MODS: {
             fire: { name: "Munição Incendiária", icon: "🔥", color: "#ff6a2a", desc: "Chance de incendiar o alvo" },
             ice: { name: "Munição Criogênica", icon: "❄", color: "#9fe4ff", desc: "Chance de congelar e desacelerar" },
-            shock: { name: "Munição Elétrica", icon: "⚡", color: "#ffe84a", desc: "Chance de dar choque em até 3 inimigos próximos" },
+            shock: { name: "Munição Elétrica", icon: "⚡", color: "#ffe84a", desc: "Chance de dar choque em até 2 inimigos próximos" },
           },
-          MOD_PRICE: 2000, ARMOR_PRICE: 800, GRENADE_PRICE: 600, PAP_PRICE: [3000, 6000],
+          MOD_PRICE: 3000, ARMOR_PRICE: 1200, GRENADE_PRICE: 900, AMMO_PRICE: 1000, PAP_PRICE: [5000, 10000],
           essence: 0, owned: new Set(), procLock: false,
           get open() { const el = document.getElementById("matchshop"); return !!el && !el.classList.contains("hidden"); },
           reset() { this.essence = 0; this.owned = new Set(); this.close(true); },
           has(id) { return this.owned.has(id); },
           mult(key) {
-            if (key === "maxHp" && this.has("couraca")) return 1.5;
-            if ((key === "speed" || key === "jump") && this.has("folego")) return 1.15;
-            if (key === "damage" && this.has("toque")) return 1.1;
+            if (key === "maxHp" && this.has("couraca")) return 1.25;
+            if ((key === "speed" || key === "jump") && this.has("folego")) return 1.08;
             return 1;
           },
-          reloadMult() { return this.has("recarga") ? 0.55 : 1; },
-          rateMult() { return this.has("toque") ? 0.75 : 1; },
-          headMult() { return this.has("mira") ? 1.5 : 1; },
-          papMult(w) { return 1 + 0.6 * (w?.pap || 0) + 0.1 * Math.max(0, (w?.pap || 0) - 1); },
+          reloadMult() { return this.has("recarga") ? 0.75 : 1; },
+          rateMult() { return this.has("toque") ? 0.87 : 1; },
+          headMult() { return this.has("mira") ? 1.25 : 1; },
+          papMult(w) { return 1 + 0.35 * (w?.pap || 0) + 0.05 * Math.max(0, (w?.pap || 0) - 1); },
           earn(n, pos = null) {
             if (!n || !player) return;
             n = Math.round(n * (WaveManager.blood ? 2 : 1));
             this.essence += n;
             if (pos) UIManager.number(`+${n} ✦`, pos, "#c58bff");
           },
-          perkPrice(p) { return p.base + 500 * this.owned.size; },
+          perkPrice(p) { return p.base + 1000 * this.owned.size; },
           spend(cost) {
             if (DevMode.on("infiniteAmmo")) return true;
             if (this.essence < cost) { UIManager.toast(`Essência insuficiente (${cost} ✦).`); AudioManager.tone(140, 0.12, "square", 0.08, 90); return false; }
@@ -21036,7 +21244,7 @@ body.netgame #revivetouch{display:flex}
             const p = this.PERKS.find((x) => x.id === id);
             if (!p || this.has(id) || !this.spend(this.perkPrice(p))) return false;
             this.owned.add(id);
-            if (id === "couraca") player.hp = Math.min(player.maxhp * 1.5 + player.bonus, player.hp + player.maxhp * 0.5);
+            if (id === "couraca") player.hp = Math.min(player.maxhp * 1.25 + player.bonus, player.hp + player.maxhp * 0.25);
             this.celebrate(p.color, `${p.name}`);
             return true;
           },
@@ -21045,7 +21253,7 @@ body.netgame #revivetouch{display:flex}
             if (!w || (w.pap || 0) >= 2) return false;
             if (!this.spend(this.PAP_PRICE[w.pap || 0])) return false;
             w.pap = (w.pap || 0) + 1;
-            if (w.mag !== Infinity) { w.mag = Math.round(w.mag * 1.5); w.ammo = w.mag; }
+            if (w.mag !== Infinity) { w.mag = Math.round(w.mag * 1.25); w.ammo = w.mag; if (w.reserve != null) { w.reserveMax = Math.round(w.reserveMax * 1.25); w.reserve = Math.min(w.reserveMax, w.reserve + w.mag); } }
             w.name = w.name.replace(/ ★+$/, "") + " " + "★".repeat(w.pap);
             this.celebrate("#c58bff", `${w.name} aprimorada`);
             return true;
@@ -21064,6 +21272,12 @@ body.netgame #revivetouch{display:flex}
             this.celebrate("#9fd2ff", "+50 de armadura");
             return true;
           },
+          buyAmmo() {
+            if (!player.inventory.some((x) => x && x.reserve != null && x.reserve < x.reserveMax) || !this.spend(this.AMMO_PRICE)) return false;
+            AmmoCrates.refillAll("Munição comprada");
+            this.celebrate("#ffd24a", "Reserva de munição cheia");
+            return true;
+          },
           buyGrenades() {
             if (!this.spend(this.GRENADE_PRICE)) return false;
             player.grenades += 2;
@@ -21080,20 +21294,20 @@ body.netgame #revivetouch{display:flex}
           // Elemental ammo: a per-hit chance (lower for shotgun pellets) with a short per-target cooldown.
           proc(z, w, point) {
             if (!w?.mod || this.procLock || z.dead || z.remote || (z.modAt || 0) > simulationTime) return;
-            if (Math.random() > (w.pellets ? 0.06 : w.kind === "melee" ? 0.3 : 0.16)) return;
-            z.modAt = simulationTime + 0.6;
+            if (Math.random() > (w.pellets ? 0.04 : w.kind === "melee" ? 0.2 : 0.1)) return;
+            z.modAt = simulationTime + 1.2;
             const at = point ? point.clone() : zombieBodyPoint(z);
             this.procLock = true;
             try {
-              if (w.mod === "fire") { ZombieManager.applyBurn(z, 18 * rarityMult[w.tier], 3, null); ParticleSystem.emit(at, 0xff6a2a, 16, 3); }
+              if (w.mod === "fire") { ZombieManager.applyBurn(z, 12 * rarityMult[w.tier], 3, null); ParticleSystem.emit(at, 0xff6a2a, 16, 3); }
               else if (w.mod === "ice") { ZombieManager.applyChill(z, z.boss ? 0.25 : 0.6); ZombieManager.applySlow(z, 0.6, 2); ParticleSystem.emit(at, 0xcff4ff, 16, 2.5); }
               else if (w.mod === "shock") {
-                const near = ZombieManager.list.filter((o) => o !== z && !o.dead && o.group.position.distanceTo(z.group.position) < 6).slice(0, 3);
+                const near = ZombieManager.list.filter((o) => o !== z && !o.dead && o.group.position.distanceTo(z.group.position) < 5).slice(0, 2);
                 let from = at;
                 for (const o of near) {
                   const to = zombieBodyPoint(o);
                   this.bolt(from, to);
-                  ZombieManager.hit(o, weaponDamage(w) * 0.6 + 20, false, to, null, true);
+                  ZombieManager.hit(o, weaponDamage(w) * 0.35 + 10, false, to, null, true);
                   from = to;
                 }
                 ParticleSystem.emit(at, 0xffe84a, 14, 4);
@@ -21130,10 +21344,11 @@ body.netgame #revivetouch{display:flex}
             const w = WeaponSystem.current(), lvl = w?.pap || 0, can = (n) => (this.essence >= n ? "" : "poor");
             $("shop-essence").textContent = `${this.essence} ✦`;
             const perks = this.PERKS.map((p) => this.card(`data-shop="perk" data-id="${p.id}"`, p.icon, p.color, p.name, p.desc, this.perkPrice(p), this.has(p.id) ? "owned" : can(this.perkPrice(p)))).join("");
-            const pap = this.card(`data-shop="pap"`, "★", "#c58bff", lvl ? "Aprimorar de novo" : "Aprimorar arma", `${w?.name || "Arma"}: ${lvl ? "+70% de dano" : "+60% de dano e pente 50% maior"}`, this.PAP_PRICE[Math.min(1, lvl)], lvl >= 2 ? "max" : can(this.PAP_PRICE[lvl]));
+            const pap = this.card(`data-shop="pap"`, "★", "#c58bff", lvl ? "Aprimorar de novo" : "Aprimorar arma", `${w?.name || "Arma"}: ${lvl ? "+40% de dano (total +75%)" : "+35% de dano e pente 25% maior"}`, this.PAP_PRICE[Math.min(1, lvl)], lvl >= 2 ? "max" : can(this.PAP_PRICE[lvl]));
             const mods = Object.entries(this.MODS).map(([k, m]) => this.card(`data-shop="mod" data-id="${k}"`, m.icon, m.color, m.name, m.desc, this.MOD_PRICE, w?.mod === k ? "owned" : can(this.MOD_PRICE))).join("");
             const extra = this.card(`data-shop="armor"`, "▣", "#9fd2ff", "Placa de armadura", "+50 de vida extra (máx. 100)", this.ARMOR_PRICE, player.bonus >= 100 ? "max" : can(this.ARMOR_PRICE)) +
-              this.card(`data-shop="grenades"`, "◉", "#ffb24a", "Granadas", "+2 granadas", this.GRENADE_PRICE, can(this.GRENADE_PRICE));
+              this.card(`data-shop="grenades"`, "◉", "#ffb24a", "Granadas", "+2 granadas", this.GRENADE_PRICE, can(this.GRENADE_PRICE)) +
+              this.card(`data-shop="ammo"`, "▤", "#ffd24a", "Caixa de munição", "Enche a reserva de todas as armas", this.AMMO_PRICE, AmmoCrates.needs() || player.inventory.some((x) => x && x.reserve != null && x.reserve < x.reserveMax) ? can(this.AMMO_PRICE) : "max");
             el.innerHTML = `<h3>Perks <span>o preço sobe a cada perk comprado</span></h3><div class="shop-grid">${perks}</div>
               <h3>Arma atual <span>${w?.name || ""}</span></h3><div class="shop-grid">${pap}${mods}</div>
               <h3>Suprimentos</h3><div class="shop-grid">${extra}</div>`;
@@ -21145,6 +21360,7 @@ body.netgame #revivetouch{display:flex}
             else if (k === "mod") this.buyMod(id);
             else if (k === "armor") this.buyArmor();
             else if (k === "grenades") this.buyGrenades();
+            else if (k === "ammo") this.buyAmmo();
           },
           perkIcons() {
             return [...this.owned].map((id) => { const p = this.PERKS.find((x) => x.id === id); return `<i style="--c:${p.color}" title="${p.name}">${p.icon}</i>`; }).join("");
@@ -21263,7 +21479,7 @@ body.netgame #revivetouch{display:flex}
             }
             return false;
           },
-          reward(z) { return z.variant ? 25 : 0; },
+          reward(z) { return z.variant ? 15 : 0; },
         };
         // Mobile auto-fire (Dead Trigger 2): the trigger pulls itself while the crosshair rests on an
         // enemy. Off for charge/throw weapons (bow, spear) and when the player chose to turn it off.
@@ -21553,10 +21769,11 @@ body.netgame #revivetouch{display:flex}
                 this.clearedAt = simulationTime;
                 MutationManager.finishWave();
                 const waveCoins = RunStats.waveCleared(this.wave, true);
-                const essence = (100 + 25 * this.wave) * (this.horde ? 3 : this.blood ? 2 : 1);
+                const essence = (80 + 15 * this.wave) * (this.horde ? 3 : this.blood ? 2 : 1);
                 MatchShop.essence += essence;
                 if (this.blood) { this.blood = false; BloodWave.set(false); }
                 if (this.horde) { this.horde = false; HordeEvent.end(); }
+                if (AmmoCrates.needs() && AmmoCrates.items.length < 2) AmmoCrates.spawn();
                 UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · +${essence} ✦ · B abre a loja`, 2.4);
                 VoiceLines.say("clear", 0.8);
                 AudioManager.coin();
@@ -23007,6 +23224,7 @@ body.netgame #revivetouch{display:flex}
             MonsterFX.init();
             Medkits.clear();
             PowerUps.clear();
+            AmmoCrates.clear();
             HitDir.clear();
             ExplosionFX.clear();
             Director.reset();
@@ -23038,7 +23256,7 @@ body.netgame #revivetouch{display:flex}
               if (MatchShop.has("chance") && !player.shopReviveUsed && !NetGame.active) {
                 player.shopReviveUsed = true;
                 MatchShop.owned.delete("chance");
-                player.hp = Math.max(1, Math.round(player.maxhp * 0.5));
+                player.hp = Math.max(1, Math.round(player.maxhp * 0.35));
                 player.lastDamage = simulationTime;
                 UIManager.announce("SEGUNDA CHANCE", "O perk foi consumido.", 2.2);
                 ParticleSystem.emit(player.pos.clone(), 0x6dff92, 80, 5);
@@ -23055,6 +23273,14 @@ body.netgame #revivetouch{display:flex}
               return;
             if (DevMode.on("noReload")) {
               w.ammo = w.mag;
+              return;
+            }
+            if (w.reserve != null && w.reserve <= 0 && !DevMode.on("infiniteAmmo")) {
+              if (simulationTime - (this.dryAt || -9) > 1.2) {
+                this.dryAt = simulationTime;
+                AudioManager.tone(900, 0.04, "square", 0.08, 700, "weapons");
+                UIManager.toast("Sem munição de reserva — procure uma caixa dourada!");
+              }
               return;
             }
             reloadEnd = simulationTime + w.reload * MatchShop.reloadMult();
@@ -23130,7 +23356,10 @@ body.netgame #revivetouch{display:flex}
               );
             if (burst.instantReload) {
               for (const weapon of player.inventory)
-                if (weapon && weapon.mag !== Infinity) weapon.ammo = weapon.mag;
+                if (weapon && weapon.mag !== Infinity) {
+                  if (weapon.reserve != null) { const take = Math.min(weapon.mag - weapon.ammo, weapon.reserve); weapon.ammo += take; weapon.reserve -= take; }
+                  else weapon.ammo = weapon.mag;
+                }
               reloadEnd = 0;
             }
             if (c.summonAllies) ReaperAllies.summon(c.summonAllies);
@@ -23328,7 +23557,7 @@ body.netgame #revivetouch{display:flex}
               muzzleLight.intensity = 0;
               return;
             }
-            if (simulationTime - lastShot < w.rate * MatchShop.rateMult()) return;
+            if (simulationTime - lastShot < w.rate * MatchShop.rateMult() * (classBurst().fireRateTotal || 1)) return;
             if (w.kind === "melee" && simulationTime < this.meleeLockUntil) return;
             if (w.ammo <= 0) {
               this.reload();
@@ -23472,7 +23701,8 @@ body.netgame #revivetouch{display:flex}
             }
             const w = WeaponSystem.current();
             if (reloadEnd && simulationTime >= reloadEnd) {
-              w.ammo = w.mag;
+              if (w.reserve != null && !DevMode.on("infiniteAmmo")) { const take = Math.min(w.mag - w.ammo, w.reserve); w.ammo += take; w.reserve -= take; }
+              else w.ammo = w.mag;
               reloadEnd = 0;
               AudioManager.tone(260, 0.08, "square", 0.12, 160, "weapons");
             }
@@ -24343,7 +24573,7 @@ body.netgame #revivetouch{display:flex}
             this.hudHTML("slotshud", player.inventory
               .map(
                 (w, i) =>
-                  `<div class="slot ${i === player.slot ? "active" : ""} ${w && w.ammo !== Infinity && w.mag ? (w.ammo === 0 ? "empty" : w.ammo <= Math.ceil(w.mag * 0.25) ? "low" : "") : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small class="slot-key">${i + 1}</small><b>${w ? w.name : "Sem arma"}</b><span class="ammo">${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small class="mag">${w && w.ammo !== Infinity ? "/ " + w.mag : ""}</small><em class="tier">${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</em>${i === player.slot && reloadEnd && w ? `<span class="reload"><i style="width:${Math.round(clamp(1 - (reloadEnd - simulationTime) / (w.reload || 1), 0, 1) * 100)}%"></i></span>` : ""}</div>`,
+                  `<div class="slot ${i === player.slot ? "active" : ""} ${w && w.ammo !== Infinity && w.mag ? (w.ammo === 0 ? "empty" : w.ammo <= Math.ceil(w.mag * 0.25) ? "low" : "") : ""}" style="--rarity:${w ? rarityColors[w.tier] : "#52606a"}"><small class="slot-key">${i + 1}</small><b>${w ? w.name : "Sem arma"}</b><span class="ammo">${w ? (w.ammo === Infinity ? "∞" : w.ammo) : "—"}</span> <small class="mag">${w && w.ammo !== Infinity ? "/ " + (w.reserve != null ? w.reserve : w.mag) : ""}</small><em class="tier">${w ? rarityNames[w.tier] : ["Curto", "Médio", "Longo", "Extra", "Extra"][i] || "Extra"}</em>${i === player.slot && reloadEnd && w ? `<span class="reload"><i style="width:${Math.round(clamp(1 - (reloadEnd - simulationTime) / (w.reload || 1), 0, 1) * 100)}%"></i></span>` : ""}</div>`,
               )
               .join(""));
             const cd = Math.max(0, player.cooldown - simulationTime);
@@ -24365,7 +24595,7 @@ body.netgame #revivetouch{display:flex}
               : player.activeUntil > simulationTime
                 ? `${classes[selectedClass].ability} · ${Math.ceil(player.activeUntil - simulationTime)}s`
                 : w?.ammo === 0
-                  ? "R para recarregar"
+                  ? (w.reserve === 0 ? "SEM MUNIÇÃO · pegue uma caixa dourada" : "R para recarregar")
                   : "";
             { const hm = $("hitmark"); hm.style.opacity = simulationTime < hitUntil ? 1 : 0; const k = simulationTime < hitUntil ? HitDir.markKind : "hit"; if (hm.dataset.k !== k) { hm.dataset.k = k; hm.className = k; } }
             $("damageveil").style.opacity =
@@ -31192,7 +31422,7 @@ body.netgame #revivetouch{display:flex}
                 sun.target.position.set(sx, 0, sz);
                 sun.position.set(sx + sunOffset.x, sunOffset.y, sz + sunOffset.z);
               }
-              if (state === GameState.PLAYING) { Medkits.update(sdt); PowerUps.update(sdt); HitDir.update(sdt); }
+              if (state === GameState.PLAYING) { Medkits.update(sdt); PowerUps.update(sdt); AmmoCrates.update(sdt); HitDir.update(sdt); }
               if (KillCam.active) KillCam.update(dt);
               if (BossDeath.active) BossDeath.update(dt);
               UIManager.hud(sdt);
@@ -31381,7 +31611,7 @@ body.netgame #revivetouch{display:flex}
             FireFX,
             ImpactFX,
             StreetBreak,
-            MapObjectives, HordeEvent, ArenaEditor,
+            MapObjectives, HordeEvent, ArenaEditor, AmmoCrates,
             SeasonPass,
             MatchShop,
             ZombieVariants,
