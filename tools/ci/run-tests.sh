@@ -12,7 +12,7 @@ for t in "$@"; do
     code=$?
     fail=1
     cat "$log"
-    msg="$(grep -vE '^\s+at |^\[2m|^$' "$log" | tail -n 12 | tr '\n' ' ' | tr -s ' ' | cut -c1-900)"
+    msg="$(grep -E "DIAG|Error|assert" "$log" | tail -n 6 | tr "\n" " " | cut -c1-500) :: $(grep -vE "^\s+at |^\[2m|^$" "$log" | tail -n 6 | tr "\n" " " | tr -s " " | cut -c1-500)"
     echo "::error title=$(basename "$t") failed (exit $code)::$msg"
   fi
   rm -f "$log"
