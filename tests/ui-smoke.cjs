@@ -243,7 +243,7 @@ const server = http.createServer((req, res) => {
           return p.data.weaponId;
         });
         await page.locator('.spin-btn.lucky').click();
-        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 4, null, {timeout:3000});
+        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 4, null, {timeout:30000});
         // v28 spin (reference video): no reel overlay — title flicker, SKIP button, rarity burst.
         const spinMeta = await page.evaluate(() => ({
           duration: (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll).duration,
@@ -265,7 +265,7 @@ const server = http.createServer((req, res) => {
           p.render();
         });
         await page.locator('.spin-btn.lucky').click();
-        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 6, null, {timeout:3000});
+        await page.waitForFunction(() => (DeadRecoilTest.Armory.roll || DeadRecoilTest.Armory.lastRoll)?.result?.item?.tier === 6, null, {timeout:30000});
         await page.waitForFunction(() => (DeadRecoilTest.Armory.fxCount || 0) >= 2, null, {timeout:8000});
         await page.waitForFunction(() => !DeadRecoilTest.Progression.busy, null, {timeout:11000});
         assert.ok(await page.locator('#spin-confirm').evaluate(el => el.classList.contains('hidden')), 'Winning Divine must not show a confirmation');

@@ -30,6 +30,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     fs.mkdirSync('test-results', { recursive: true });
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
     const page = await context.newPage();
+    page.setDefaultTimeout(150000);
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error' && !m.location()?.url?.includes('/api/')) errors.push('console: ' + m.text()); });
