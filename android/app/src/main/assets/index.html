@@ -6100,8 +6100,9 @@ body.netgame #revivetouch{display:flex}
               }
               const thumb = A.pivot(arm, -0.05 * sgn, -0.005, -0.01);
               A.link(thumb, [0, 0, 0], [-0.045 * sgn, 0, -0.04], 0.016, 0.013, 0x626a5e, "polymer");
-              A.link(arm, [0, 0.01, 0.06], [0.1 * sgn, -0.09, 0.52], 0.07, 0.085, 0x475953, "cloth");
-              A.tube(arm, [0, 0, 0.1], 0.07, 0.06, 0x2d3f3e, "cloth");
+              // forearm runs down and out of frame (never back through the camera)
+              A.link(arm, [0, 0.005, 0.07], [0.07 * sgn, -0.2, 0.26], 0.042, 0.05, 0x475953, "cloth");
+              A.tube(arm, [0, 0, 0.085], 0.048, 0.05, 0x2d3f3e, "cloth");
               arm.userData.fingers = fingers;
               arm.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; o.frustumCulled = false; } });
               g.add(arm);
@@ -22780,7 +22781,8 @@ body.netgame #revivetouch{display:flex}
           attack(w) {
             this.ensure(w);
             if (!this.active) return false;
-            const home = this.blades.filter((b) => b.state === "idle").length;
+            // thrown blades (launch) are out of reach; returning ones are recalled into the dance
+            const home = this.blades.filter((b) => b.state !== "launch").length;
             if (!home) return false; // every Specter is out: nothing to strike with
             if (simulationTime - this.lastAttack > 1.4) this.combo = 0;
             this.lastAttack = simulationTime;
@@ -22793,8 +22795,8 @@ body.netgame #revivetouch{display:flex}
             const toW = (p, base = atk.T) => base.clone().addScaledVector(r, p[0]).addScaledVector(u, p[1]).addScaledVector(f, p[2]);
             const free = (want) => {
               const b = this.blades[want];
-              if (b && b.state === "idle") return b;
-              return this.blades.filter((x) => x.state === "idle").sort((a, c) => a.pos.distanceTo(atk.T) - c.pos.distanceTo(atk.T))[0];
+              if (b && b.state !== "strike" && b.state !== "launch") return b;
+              return this.blades.filter((x) => x.state !== "strike" && x.state !== "launch").sort((a, c) => a.pos.distanceTo(atk.T) - c.pos.distanceTo(atk.T))[0];
             };
             if (heavy) {
               atk.move = { arm: "rl", sweep: 0, dmg: this.HEAVY.dmg };
@@ -22839,9 +22841,10 @@ body.netgame #revivetouch{display:flex}
             const hand = fp
               ? camera.position.clone().addScaledVector(F.r, 0.32 * sg).add(new V(0, -0.2, 0)).addScaledVector(aimDir(), 0.95)
               : player.pos.clone().addScaledVector(F.r, 0.42 * sg).add(new V(0, -0.35, 0)).addScaledVector(F.f, 0.55);
-            b.prev.copy(b.pos);
             b.pos.copy(hand);
-            ParticleSystem.emit(hand.clone(), 0xfff4d6, 6, 1.8);
+            b.prev.copy(hand);
+            b.trail.pts.length = 0; // no streak from the old slot to the hand
+            if (!fp) ParticleSystem.emit(hand.clone(), 0xfff4d6, 6, 1.8);
             const dir = target.clone().sub(b.pos);
             if (dir.lengthSq() < 0.01) dir.copy(aimDir());
             dir.normalize();
@@ -28697,7 +28700,7 @@ body.netgame #revivetouch{display:flex}
                 // head, the three-bladed tip turns flat and spins like a rotor; the body hangs below.
                 secret.tail.rotation.x = (-secret.lagX * 0.35 + 0.35 * de.ant - 0.12 * de.launch) * (1 - f) + 0.92 * f;
                 secret.tail.rotation.z = 0;
-                secret.tail.scale.setScalar(1 + 0.6 * f);
+                secret.tail.scale.setScalar(1 + 0.75 * f);
                 // Bone chain with inertia: every vertebra chases its target through its own spring,
                 // stiff at the base (it leads) and looser toward the tip (it arrives last and
                 // overshoots) — so the tail swings on after the body stops, then settles.
