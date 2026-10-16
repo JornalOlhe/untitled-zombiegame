@@ -5761,10 +5761,10 @@ body.netgame #revivetouch{display:flex}
           // tp.hold: weapon socket in chest space; tp.grip: where the palm sits on the model;
           // tp.mode: which IK chain drives the arms.
           P: {
-            sword: { fp: { r: [0, -0.15, -0.23, 0, 0, 0], l: null }, tp: { hold: [-0.32, 0.25, 0.31], grip: [0, -0.15, -0.23], rot: [0, Math.PI, 0], mode: "oneHand" } },
-            knife: { fp: { r: [0, -0.1, -0.23, 0, 0, 0], l: null }, tp: { hold: [-0.31, 0.26, 0.3], grip: [0, -0.1, -0.23], rot: [0, Math.PI, 0], mode: "oneHand" } },
-            staff: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.27, 0.23, 0.2], grip: [0, -0.1, -0.23], rot: [0.08, Math.PI, -0.02], mode: "oneHand" } },
-            scythe: { fp: { r: [0, -0.16, -0.22, 0], l: null }, tp: { hold: [-0.52, 0.24, 0.24], grip: [0, -0.12, -0.23], rot: [0.08, Math.PI, -0.035], mode: "oneHand" } },
+            sword: { fp: { r: [0, -0.08, -0.124, 0, 0, 0], l: null }, tp: { hold: [-0.32, 0.25, 0.31], grip: [0, -0.08, -0.124], rot: [0, Math.PI, 0], mode: "oneHand" } },
+            knife: { fp: { r: [0, -0.06, -0.123, 0, 0, 0], l: null }, tp: { hold: [-0.31, 0.26, 0.3], grip: [0, -0.06, -0.123], rot: [0, Math.PI, 0], mode: "oneHand" } },
+            staff: { fp: { r: [0, -0.04, -0.124, 0, 0, 0], l: null }, tp: { hold: [-0.27, 0.23, 0.2], grip: [0, -0.04, -0.124], rot: [0.08, Math.PI, -0.02], mode: "oneHand" } },
+            scythe: { fp: { r: [0, -0.12, 0.123, 0, 0, 0], l: null }, tp: { hold: [-0.52, 0.24, 0.24], grip: [0, -0.12, 0.123], rot: [0.08, Math.PI, -0.035], mode: "oneHand" } },
             spear: { fp: { r: [0, -0.16, -0.12, 0], l: [-0.03, -0.1, -0.5, -0.2] }, tp: { hold: [-0.05, 0.3, 0.5], grip: [0, 0, 0], rot: [1.25, 0, 0], mode: "spear" } },
             // Irelia-style: the five artifacts form a fan around the survivor, not one weapon held
             // in front of the chest.
@@ -5922,7 +5922,7 @@ body.netgame #revivetouch{display:flex}
         // the hand. Only one scythe: no new throw (and no swing animation) until it is caught.
         const ScytheThrow = {
           out: null,
-          SPEED: 30, RANGE: 30, PIERCE: 6,
+          SPEED: 21, RANGE: 26, PIERCE: 6,
           active() { return !!this.out; },
           model() {
             const src = WeaponModels.scenes.get("Demonic Fury");
@@ -5931,7 +5931,7 @@ body.netgame #revivetouch{display:flex}
               const m = src.clone(true);
               const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new V()), size = box.getSize(new V());
               m.position.sub(c);
-              const k = 1.35 / Math.max(0.01, Math.max(size.x, size.y, size.z));
+              const k = 2.1 / Math.max(0.01, Math.max(size.x, size.y, size.z)); // big enough to follow in flight
               const pivot = new THREE.Group(); pivot.add(m); pivot.scale.setScalar(k);
               pivot.rotation.x = Math.PI / 2; // lay the long axis flat: it spins like a disc
               g.add(pivot);
@@ -5940,18 +5940,20 @@ body.netgame #revivetouch{display:flex}
               VisualArt.ellipsoid(g, [0.35, 0, -0.55], [0.4, 0.03, 0.09], 0xc8c0c0, "steel", 0xff2a14);
             }
             const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xff3a14, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
-            halo.scale.setScalar(1.9); g.add(halo);
+            halo.scale.setScalar(3.2); halo.material.opacity = 0.75; g.add(halo);
+            const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xffb070, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+            core.scale.setScalar(1.1); g.add(core);
             return g;
           },
           throw(w) {
             if (this.out) return false;
             const eye = player.pos.clone(), target = aimTarget(this.RANGE + 4);
-            const from = eye.clone().addScaledVector(aimDir(), 1.05).add(new V(0, -0.25, 0));
+            const from = eye.clone().addScaledVector(aimDir(), 1.7).add(new V(0, -0.25, 0));
             const dir = target.clone().sub(from);
             if (dir.lengthSq() < 0.01) dir.copy(aimDir());
             dir.normalize();
             const g = this.model(); g.position.copy(from); scene.add(g);
-            this.out = { g, w, pos: from.clone(), prev: from.clone(), dir, back: false, dist: 0, hits: new Set(), count: 0, spin: 0, t0: simulationTime, trail: new BladeTrail(scene, 0xff3214, 1, 0.22), whoosh: 0 };
+            this.out = { g, w, pos: from.clone(), prev: from.clone(), dir, back: false, dist: 0, hits: new Set(), count: 0, spin: 0, t0: simulationTime, trail: new BladeTrail(scene, 0xff3214, 1.6, 0.32), whoosh: 0 };
             AudioManager.meleeSwing();
             AudioManager.tone(140, 0.3, "sawtooth", 0.12, 260, "weapons");
             return true;
@@ -6007,13 +6009,13 @@ body.netgame #revivetouch{display:flex}
               o.pos.addScaledVector(o.dir, sp * dt);
               this.hitAlong(o.prev, o.pos);
             }
-            o.spin += dt * 26;
+            o.spin += dt * 17;
             o.g.position.copy(o.pos);
             o.g.rotation.set(0.25 * Math.sin(simulationTime * 3), 0, 0);
             o.g.rotateY(o.spin);
             o.g.updateMatrixWorld(true);
             const r = new V(Math.cos(o.spin), 0, -Math.sin(o.spin));
-            o.trail.push(o.pos.clone().addScaledVector(r, 0.75), o.pos.clone().addScaledVector(r, 0.2), simulationTime);
+            o.trail.push(o.pos.clone().addScaledVector(r, 1.15), o.pos.clone().addScaledVector(r, 0.3), simulationTime);
             o.trail.update(simulationTime);
             if (Math.random() < dt * 30 && o.pos.distanceTo(camera.position) > 2.2) ParticleSystem.emit(o.pos.clone(), Math.random() < 0.6 ? 0xff4a14 : 0x1a0404, 1, 1.2);
             if ((o.whoosh -= dt) <= 0) { o.whoosh = 0.16; AudioManager.tone(rand(180, 240), 0.1, "triangle", 0.04, 120, "weapons"); }
@@ -6585,25 +6587,25 @@ body.netgame #revivetouch{display:flex}
             return "machete";
           },
           SETS: {
+            // Forward-only strikes (no pull back at the camera): a short raise, the blade drives
+            // forward through the target, follows through and returns. Keys: [t, px, py, pz, rx, ry, rz]
+            // added to the held pose; rx < 0 tips the blade forward, rz > 0 leans it left.
             machete: {
               dur: 0.42,
-              flipPitch: true,
               trail: 0xdfe6ea,
               moves: [
-                [[0.22, 0.1, 0.16, 0.06, -1.1, 0.2, -0.7], [0.46, -0.3, -0.14, -0.12, 0.75, -0.35, 0.9], [0.7, -0.34, -0.18, -0.08, 0.85, -0.4, 1.0]], // diagonal cut
-                [[0.22, 0.22, 0.02, 0.04, -0.25, -1.0, -1.45], [0.46, -0.3, -0.02, -0.16, -0.25, 0.95, -1.45], [0.7, -0.34, -0.03, -0.12, -0.2, 1.05, -1.4]], // side cut
-                [[0.25, 0.02, 0.26, 0.12, -1.5, 0, -0.1], [0.48, -0.04, -0.2, -0.22, 0.95, 0, -0.1], [0.7, -0.05, -0.24, -0.18, 1.05, 0, -0.1]], // overhead chop
+                { hit: 0.38, keys: [[0.16, 0.06, 0.07, 0, -0.15, -0.1, -0.55], [0.38, -0.16, -0.1, -0.2, -1.25, 0.25, 0.75], [0.52, -0.24, -0.16, -0.18, -1.45, 0.3, 0.95], [0.8, -0.08, -0.05, -0.06, -0.5, 0.1, 0.3]] }, // diagonal cut right → left
+                { hit: 0.38, keys: [[0.16, -0.14, 0.02, -0.02, -1.2, 0.75, 0.3], [0.38, 0.1, -0.02, -0.2, -1.35, -0.55, -0.2], [0.52, 0.18, -0.03, -0.17, -1.35, -0.85, -0.3], [0.8, 0.06, 0, -0.05, -0.5, -0.3, -0.1]] }, // backhand left → right
+                { hit: 0.4, keys: [[0.18, 0, 0.1, 0, 0, 0, -0.1], [0.4, -0.02, -0.12, -0.22, -1.5, 0, -0.1], [0.55, -0.02, -0.17, -0.2, -1.65, 0, -0.1], [0.8, 0, -0.05, -0.06, -0.6, 0, 0]] }, // overhead chop
               ],
             },
             knife: {
-              dur: 0.28,
-              flipPitch: true,
+              dur: 0.3,
               trail: 0xff4a4a,
               moves: [
-                [[0.2, 0.02, -0.03, 0.12, 0.15, 0, 0], [0.42, -0.1, 0.04, -0.36, -0.1, 0.1, 0], [0.62, -0.1, 0.04, -0.34, -0.1, 0.1, 0]], // stab
-                [[0.2, -0.18, 0.06, 0.02, -0.2, 0.6, 0.9], [0.45, 0.16, -0.06, -0.14, 0.1, -0.7, -0.6], [0.65, 0.18, -0.07, -0.12, 0.1, -0.75, -0.65]], // reverse slash
-                [[0.2, 0.14, 0, 0.02, -0.3, -0.7, -1.4], [0.45, -0.22, 0, -0.16, -0.3, 0.7, -1.4], [0.62, -0.24, 0, -0.14, -0.3, 0.75, -1.4]], // quick horizontal
-                [[0.2, 0.08, 0.1, 0.04, -0.8, 0.1, -0.5], [0.45, -0.16, -0.08, -0.12, 0.5, -0.2, 0.6], [0.62, -0.18, -0.1, -0.1, 0.55, -0.2, 0.65]], // diagonal strike
+                { hit: 0.36, keys: [[0.15, 0, 0, 0.01, -1.3, 0, 0], [0.36, -0.04, 0.02, -0.32, -1.5, 0, 0], [0.5, -0.04, 0.02, -0.3, -1.5, 0, 0], [0.8, 0, 0, -0.05, -0.6, 0, 0]] }, // stab
+                { hit: 0.38, keys: [[0.16, 0.05, 0.05, 0, -0.2, -0.1, -0.5], [0.38, -0.14, -0.08, -0.18, -1.2, 0.2, 0.7], [0.52, -0.2, -0.12, -0.16, -1.35, 0.25, 0.85], [0.8, -0.06, -0.04, -0.05, -0.5, 0.1, 0.3]] }, // diagonal slash
+                { hit: 0.38, keys: [[0.16, -0.12, 0.02, -0.02, -1.2, 0.7, 0.3], [0.38, 0.09, -0.02, -0.18, -1.3, -0.5, -0.2], [0.52, 0.15, -0.03, -0.15, -1.3, -0.8, -0.3], [0.8, 0.05, 0, -0.05, -0.5, -0.3, -0.1]] }, // backhand
               ],
             },
             // Two-hand lance: prepare (short draw back) → advance → extension → impact → short
@@ -6613,33 +6615,28 @@ body.netgame #revivetouch{display:flex}
               trail: 0xffe7a8,
               twoHands: true,
               moves: [
-                { hit: 0.42, keys: [[0.2, 0.02, -0.02, 0.2, 0.05, 0, 0.02], [0.33, -0.01, 0.0, -0.08, -0.01, 0, 0], [0.42, -0.05, 0.02, -0.62, -0.04, 0, 0], [0.5, -0.05, 0.02, -0.7, -0.05, 0, 0], [0.64, -0.04, 0.015, -0.58, -0.03, 0, 0]] }, // straight thrust
-                { hit: 0.42, keys: [[0.2, 0.08, -0.03, 0.18, 0.06, -0.16, 0.05], [0.33, 0.0, -0.01, -0.1, 0.0, -0.02, 0], [0.42, -0.14, 0.02, -0.6, -0.03, 0.16, -0.03], [0.5, -0.18, 0.02, -0.66, -0.04, 0.2, -0.04], [0.64, -0.15, 0.015, -0.55, -0.03, 0.16, -0.02]] }, // thrust crossing left
-                { hit: 0.44, keys: [[0.22, 0.02, -0.1, 0.18, 0.24, 0, 0], [0.35, -0.02, -0.02, -0.1, 0.08, 0, 0], [0.44, -0.04, 0.1, -0.6, -0.16, 0, 0], [0.52, -0.04, 0.13, -0.66, -0.2, 0, 0], [0.66, -0.03, 0.1, -0.55, -0.15, 0, 0]] }, // rising thrust
+                { hit: 0.42, keys: [[0.2, 0.02, -0.02, 0.03, 0.05, 0, 0.02], [0.33, -0.01, 0.0, -0.08, -0.01, 0, 0], [0.42, -0.05, 0.02, -0.62, -0.04, 0, 0], [0.5, -0.05, 0.02, -0.7, -0.05, 0, 0], [0.64, -0.04, 0.015, -0.58, -0.03, 0, 0]] }, // straight thrust
+                { hit: 0.42, keys: [[0.2, 0.08, -0.03, 0.03, 0.06, -0.16, 0.05], [0.33, 0.0, -0.01, -0.1, 0.0, -0.02, 0], [0.42, -0.14, 0.02, -0.6, -0.03, 0.16, -0.03], [0.5, -0.18, 0.02, -0.66, -0.04, 0.2, -0.04], [0.64, -0.15, 0.015, -0.55, -0.03, 0.16, -0.02]] }, // thrust crossing left
+                { hit: 0.44, keys: [[0.22, 0.02, -0.1, 0.03, 0.24, 0, 0], [0.35, -0.02, -0.02, -0.1, 0.08, 0, 0], [0.44, -0.04, 0.1, -0.6, -0.16, 0, 0], [0.52, -0.04, 0.13, -0.66, -0.2, 0, 0], [0.66, -0.03, 0.1, -0.55, -0.15, 0, 0]] }, // rising thrust
               ],
             },
-            // Scythe = weight: a real wind-up, the blade accelerates through contact, overshoots
-            // (follow-through), settles and recovers. Three blows: wide diagonal, reverse
-            // horizontal, heavy overhead; plus the spinning reap kept from the combo.
+            // Scythe = weight: bigger arcs, slower, but every blow still travels forward.
             scythe: {
-              dur: 0.78,
+              dur: 0.66,
               trail: 0xc01c10,
               aura: true,
               moves: [
-                { hit: 0.42, keys: [[0.18, 0.3, 0.16, 0.12, -0.5, -0.9, -0.9], [0.3, 0.2, 0.1, 0.02, -0.3, -0.4, -1.0], [0.42, -0.15, -0.08, -0.32, 0.35, 0.9, -1.2], [0.55, -0.42, -0.2, -0.2, 0.6, 1.4, -1.3], [0.7, -0.35, -0.16, -0.12, 0.5, 1.25, -1.25]] }, // wide diagonal (up-right → down-left)
-                { hit: 0.44, keys: [[0.2, -0.38, 0.02, 0.1, 0.0, 1.3, -1.35], [0.32, -0.2, 0.0, -0.1, 0.0, 0.7, -1.35], [0.44, 0.2, -0.02, -0.34, 0.0, -0.6, -1.35], [0.58, 0.46, -0.04, -0.18, 0.05, -1.35, -1.3], [0.72, 0.4, -0.03, -0.1, 0.05, -1.2, -1.3]] }, // reverse horizontal (left → right)
-                { hit: 0.58, keys: [[0.28, 0.05, 0.36, 0.2, -1.7, 0.1, -0.2], [0.38, 0.04, 0.4, 0.22, -1.8, 0.1, -0.2], [0.5, 0.0, 0.1, -0.25, 0.2, 0.0, -0.2], [0.58, 0.0, -0.28, -0.42, 1.2, 0.0, -0.2], [0.7, 0.0, -0.34, -0.36, 1.35, 0.0, -0.2], [0.82, 0.0, -0.25, -0.25, 1.0, 0.0, -0.2]] }, // heavy overhead
-                { hit: 0.5, keys: [[0.2, 0, 0.05, 0.05, 0, 0, -1.3], [0.7, 0, 0, -0.2, 0, -6.283, -1.3], [0.85, 0, 0, -0.2, 0, -6.283, -1.3], [1, 0, 0, 0, 0, -6.283, 0]] }, // spinning reap
+                { hit: 0.4, keys: [[0.18, 0.08, 0.1, 0, -0.2, -0.15, -0.6], [0.4, -0.22, -0.14, -0.26, -1.3, 0.3, 0.8], [0.55, -0.32, -0.2, -0.22, -1.5, 0.35, 1.0], [0.82, -0.1, -0.06, -0.08, -0.5, 0.1, 0.3]] }, // diagonal reap
+                { hit: 0.4, keys: [[0.18, -0.18, 0.03, -0.02, -1.2, 0.8, 0.3], [0.4, 0.14, -0.03, -0.26, -1.35, -0.6, -0.2], [0.55, 0.24, -0.04, -0.22, -1.35, -0.95, -0.3], [0.82, 0.08, 0, -0.06, -0.5, -0.3, -0.1]] }, // horizontal sweep
+                { hit: 0.44, keys: [[0.2, 0, 0.14, 0, 0.05, 0, -0.1], [0.44, -0.02, -0.16, -0.28, -1.55, 0, -0.1], [0.6, -0.02, -0.22, -0.24, -1.7, 0, -0.1], [0.84, 0, -0.06, -0.08, -0.6, 0, 0]] }, // overhead reap
               ],
-              slow: [1, 1, 1.25, 1.2],
             },
             staff: {
               dur: 0.5,
-              flipPitch: true,
               trail: 0x9fe4ff,
               moves: [
-                [[0.25, 0.1, 0.2, 0.08, -1.2, 0, -0.3], [0.5, -0.05, -0.15, -0.3, 0.7, 0, -0.2], [0.7, -0.06, -0.17, -0.28, 0.75, 0, -0.2]],
-                [[0.25, 0.25, 0.02, 0.04, -0.3, -0.9, -1.3], [0.5, -0.28, -0.02, -0.2, -0.3, 0.9, -1.3], [0.7, -0.3, -0.03, -0.18, -0.3, 1.0, -1.3]],
+                { hit: 0.4, keys: [[0.18, 0, 0.1, 0, 0, 0, -0.1], [0.4, -0.02, -0.12, -0.22, -1.5, 0, -0.1], [0.55, -0.02, -0.17, -0.2, -1.65, 0, -0.1], [0.8, 0, -0.05, -0.06, -0.6, 0, 0]] },
+                { hit: 0.38, keys: [[0.16, 0.06, 0.07, 0, -0.15, -0.1, -0.55], [0.38, -0.16, -0.1, -0.2, -1.25, 0.25, 0.75], [0.52, -0.24, -0.16, -0.18, -1.45, 0.3, 0.95], [0.8, -0.08, -0.05, -0.06, -0.5, 0.1, 0.3]] },
               ],
             },
           },
@@ -7612,7 +7609,24 @@ body.netgame #revivetouch{display:flex}
                 );
             }
             // Gloved hands and sleeves, attached to the viewmodel rather than floating cubes.
+            // One-hand melee: a real fist around the vertical handle — fingers wrap in front of it,
+            // stacked down the grip, the palm and thumb close behind; pivot = handle centre.
+            function gripHand(x, y, z) {
+              const h = A.pivot(g, x, y, z), glove = 0x5a6259, finger = 0x626a5e;
+              A.block(h, [0.03, 0, 0.032], [0.045, 0.105, 0.06], glove, "polymer");
+              A.block(h, [0.045, 0.012, 0.032], [0.012, 0.09, 0.05], 0x2d3939, "polymer");
+              for (let i = 0; i < 4; i++) {
+                const fy = 0.036 - i * 0.024;
+                A.link(h, [0.032, fy, -0.012], [-0.006, fy, -0.034], 0.0135, 0.0135, finger, "polymer");
+                A.link(h, [-0.006, fy, -0.034], [-0.03, fy, -0.004], 0.0125, 0.012, finger, "polymer");
+              }
+              A.link(h, [0.03, 0.05, 0.03], [-0.026, 0.058, 0.012], 0.016, 0.014, finger, "polymer");
+              A.link(h, [0.035, -0.03, 0.05], [0.1, -0.17, 0.2], 0.056, 0.064, 0x475953, "cloth");
+              A.tube(h, [0.04, -0.045, 0.07], 0.068, 0.05, 0x2d3f3e, "cloth").rotation.set(0.6, 0, 0.35);
+              return h;
+            }
             function hand(x, y, z, left) {
+              if (!left && w.kind === "melee" && !w.specter && !w.spear) return gripHand(x, y, z);
               const h = A.pivot(g, x, y, z);
               A.ellipsoid(
                 h,
@@ -14197,7 +14211,10 @@ body.netgame #revivetouch{display:flex}
             const target = aiming
               ? ads.pos.clone()
               : new V(0.255, -0.24, -0.42);
-            if (w.scythe && !aiming) target.x += 0.14; // keep the blade clear of the crosshair
+            // One-hand melee: the gloved hand visibly wraps the handle at the lower right, above the
+            // weapon HUD; the blade leans forward-left over the view.
+            const heldMelee = w.kind === "melee" && !w.specter && !w.spear;
+            if (heldMelee) target.set(w.scythe ? 0.3 : 0.2, w.scythe ? -0.08 : -0.1, w.scythe ? -0.78 : -0.46);
             if (w.kind === "bow" && !aiming) {
               // Keep the bow on the right but facing forward; sideways carry blocked too much view.
               target.x += 0.1;
@@ -14241,12 +14258,11 @@ body.netgame #revivetouch{display:flex}
               this.model.rotation.y += aiming ? 0.02 : 0.08;
               this.model.rotation.z += aiming ? 0.02 : 0.04;
             }
-            if (w.scythe && !aiming) {
-              // The scythe model is authored with its blade toward -Z. Keep that edge forward;
-              // do not yaw it sideways/reverse it in the hand.
-              this.model.rotation.x -= 0.18;
-              this.model.rotation.y += 0.08;
-              this.model.rotation.z -= 0.08;
+            if (heldMelee) {
+              // held pose: tip tilted forward and leaning in toward the crosshair
+              this.model.rotation.x -= w.scythe ? 0.18 : 0.32;
+              this.model.rotation.y += w.scythe ? 0.08 : 0;
+              this.model.rotation.z += w.scythe ? 0.42 : 0.28;
             }
             if (w.scythe) {
               const pend = PlayerController.throwPending;
@@ -14397,12 +14413,6 @@ body.netgame #revivetouch{display:flex}
             const mp = w.kind === "melee" && !w.specter ? MeleeAnim.sample(w, since, this.combo || 0) : null;
             if (mp) {
               const env = Math.sin(Math.min(1, mp.k * 1.4) * Math.PI) > 0 || mp.k < 0.9 ? 1 : 0;
-              if (w.scythe && !aiming) {
-                // Remove only the small forward carry offset before applying the authored strike.
-                this.model.rotation.x += 0.18 * env;
-                this.model.rotation.y -= 0.08 * env;
-                this.model.rotation.z += 0.08 * env;
-              }
               this.model.position.add(mp.p);
               this.model.rotation.x += mp.r[0];
               this.model.rotation.y += mp.r[1];
@@ -28910,12 +28920,23 @@ body.netgame #revivetouch{display:flex}
                 r.throwArm = true;
               } else r.throwArm = false;
             }
+            // Scythe throw in third person: the hand carries the scythe back over the shoulder
+            // (wind-up), thrusts it forward on the release and reaches out again for the catch.
+            if (g === CameraRig.avatar && r.weapon?.scythe && r.gun.visible) {
+              const tp = ThrowAnim.pose("r");
+              if (tp) {
+                const w8 = Math.max(tp.cock, tp.ext), m = tp.ext / Math.max(1e-4, tp.cock + tp.ext);
+                const cock = new V(-0.34, 0.66, -0.3), ext = new V(-0.2, 0.42, 0.62);
+                r.gun.position.lerp(cock.lerp(ext, m), w8);
+                r.gun.rotation.x += ((baseRot[0] + 1.0 * (1 - m) - 0.9 * m) - r.gun.rotation.x) * w8;
+              }
+            }
             // Equip: the freshly built weapon comes up from the hip into its profile pose.
             const eqK = clamp((simulationTime - (r.equipAt ?? -9)) / 0.3, 0, 1);
             if (eqK < 1 && (r.oneHand || r.spearHold)) { const e = 1 - (1 - eqK) ** 3; r.gun.position.y -= (1 - e) * 0.28; r.gun.rotation.x -= (1 - e) * 0.6; }
             // Hands follow the weapon socket (one-hand melee, spear, bow) instead of posing by
             // guesswork: the right hand is the weapon hand; the left only joins where defined.
-            if (!(r.secretAccessories?.fly > 0.5) && !reloading && !dead) {
+            if ((!(r.secretAccessories?.fly > 0.5) || r.oneHand) && !reloading && !dead) {
               const socket = (off) => off.clone().multiply(r.gun.scale).applyEuler(r.gun.rotation).add(r.gun.position);
               const gp = socket(r.gripOff);
               // Reach limit: a strike may push the socket past arm's length — then the weapon is
@@ -28943,7 +28964,7 @@ body.netgame #revivetouch{display:flex}
                   gp.add(r.gun.position.clone().sub(before));
                 }
               }
-              if (r.oneHand) this.ik(r.arms[0], r.elbows[0], gp);
+              if (r.oneHand) { if (r.gun.visible) this.ik(r.arms[0], r.elbows[0], gp); } // empty hand: the throw pose stays
               else if (r.spearHold) {
                 this.ik(r.arms[0], r.elbows[0], gp.clone().addScaledVector(axis, -0.02));
                 // During a throw only the right hand touches the spear; the left one is posed above.
