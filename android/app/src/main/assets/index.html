@@ -5946,7 +5946,7 @@ body.netgame #revivetouch{display:flex}
           throw(w) {
             if (this.out) return false;
             const eye = player.pos.clone(), target = aimTarget(this.RANGE + 4);
-            const from = eye.clone().addScaledVector(aimDir(), 0.6).add(new V(0, -0.25, 0));
+            const from = eye.clone().addScaledVector(aimDir(), 1.05).add(new V(0, -0.25, 0));
             const dir = target.clone().sub(from);
             if (dir.lengthSq() < 0.01) dir.copy(aimDir());
             dir.normalize();
@@ -6015,7 +6015,7 @@ body.netgame #revivetouch{display:flex}
             const r = new V(Math.cos(o.spin), 0, -Math.sin(o.spin));
             o.trail.push(o.pos.clone().addScaledVector(r, 0.75), o.pos.clone().addScaledVector(r, 0.2), simulationTime);
             o.trail.update(simulationTime);
-            if (Math.random() < dt * 30) ParticleSystem.emit(o.pos.clone(), Math.random() < 0.6 ? 0xff4a14 : 0x1a0404, 1, 1.2);
+            if (Math.random() < dt * 30 && o.pos.distanceTo(camera.position) > 2.2) ParticleSystem.emit(o.pos.clone(), Math.random() < 0.6 ? 0xff4a14 : 0x1a0404, 1, 1.2);
             if ((o.whoosh -= dt) <= 0) { o.whoosh = 0.16; AudioManager.tone(rand(180, 240), 0.1, "triangle", 0.04, 120, "weapons"); }
             if (simulationTime - o.t0 > 6) this.catch(); // safety: never lost
           },
@@ -6125,7 +6125,7 @@ body.netgame #revivetouch{display:flex}
               arm.visible = !!show;
               if (!show) continue;
               any = true;
-              const H = [0.34 * sgn, -0.62, -0.28], C = [0.36 * sgn, -0.06, -0.2], E = [0.15 * sgn, -0.13, -0.6];
+              const H = [0.34 * sgn, -0.62, -0.28], C = [0.33 * sgn, -0.02, -0.24], E = [0.17 * sgn, -0.08, -0.52];
               const m = p.ext / Math.max(1e-4, p.cock + p.ext), v = Math.max(p.cock, p.ext);
               const x = H[0] + (C[0] + (E[0] - C[0]) * m - H[0]) * v,
                 y = H[1] + (C[1] + (E[1] - C[1]) * m - H[1]) * v,
@@ -22861,7 +22861,7 @@ body.netgame #revivetouch{display:flex}
             const home = this.blades.filter((b) => b.state === "idle").length;
             if (!home) return false;
             const side = ["r", "l", "rl"][this.volleyN++ % 3];
-            ThrowAnim.play(side, 0.07, 0.42);
+            ThrowAnim.play(side, 0.08, 0.55);
             let n = 0;
             for (const s of side === "rl" ? ["r", "l"] : [side]) if (this.launch(w, s)) n++;
             if (n) WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 1.2;
@@ -23022,7 +23022,7 @@ body.netgame #revivetouch{display:flex}
                 b.pos.copy(p);
                 flying = true;
                 trailOn = k < 0.6;
-                if (Math.random() < dt * 14) ParticleSystem.emit(b.pos.clone(), Math.random() < 0.5 ? 0xfff4d6 : 0x9fdcff, 1, 0.5);
+                if (Math.random() < dt * 14 && b.pos.distanceTo(camera.position) > 1.6) ParticleSystem.emit(b.pos.clone(), Math.random() < 0.5 ? 0xfff4d6 : 0x9fdcff, 1, 0.5);
                 if (k >= 1) { b.state = "idle"; b.act = null; b.docked = t; }
               }
               if (!flying) {
