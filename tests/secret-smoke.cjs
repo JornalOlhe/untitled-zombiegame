@@ -101,7 +101,7 @@ const T=DeadRecoilTest,P=T.PlayerController,V=THREE.Vector3,W=T.WeaponSystem;
       // click = swing (no throw); hold = wind-up then throw; hands stay empty until the catch
       T.mouse.down=true;T.stepPlayer(1/30,2);T.mouse.down=false;T.stepPlayer(1/30,3);r.clickNoThrow=!T.ScytheThrow.active();
       T.stepPlayer(1/30,30);
-      T.mouse.down=true;T.stepPlayer(1/30,16);T.mouse.down=false;r.thrown=T.ScytheThrow.active();r.busy=T.handsBusy();
+      T.mouse.down=true;T.stepPlayer(1/30,16);T.mouse.down=false;r.thrown=T.ScytheThrow.active();r.busy=T.handsBusy();r.fpHidden=T.CameraRig.distance>=0.6||!T.WeaponSystem.model.visible;
       r.gunHidden=!T.CameraRig.avatar||!T.CameraRig.avatar.userData.rig.gun.visible||T.CameraRig.distance<0.6;
       const first=T.ScytheThrow.out;T.mouse.down=true;T.stepPlayer(1/30,12);T.mouse.down=false;r.singleScythe=T.ScytheThrow.out===first;
       let steps=0;while(T.ScytheThrow.active()&&steps<300){T.stepPlayer(1/30,1);steps++;}
@@ -133,7 +133,7 @@ const T=DeadRecoilTest,P=T.PlayerController,V=THREE.Vector3,W=T.WeaponSystem;
     console.log(JSON.stringify(out.v55));
     const v = out.v55;
     assert.ok(v.pools === 1 && v.poolDmg >= 30 && v.poolDmg <= 50 && v.slowed && !v.bossSlowed, 'hell pool: ticks, slows commons, not bosses');
-    assert.ok(v.clickNoThrow && v.thrown && v.busy && v.gunHidden && v.singleScythe && v.caughtAfter > 0.3 && v.caughtAfter < 6 && v.scytheHits >= 1 && v.freeAfter, 'scythe: click swings, hold throws, empty hand until caught');
+    assert.ok(v.clickNoThrow && v.thrown && v.busy && v.fpHidden && v.gunHidden && v.singleScythe && v.caughtAfter > 0.3 && v.caughtAfter < 6 && v.scytheHits >= 1 && v.freeAfter, 'scythe: click swings, hold throws, empty hand until caught');
     assert.ok(v.legion === 3 && v.legionHp.every(h => h === 80) && v.legionOnce === 3 && v.legionHit, 'infernal legion: last kills rise with 2x hp, once per flight, and fight');
     assert.ok(v.bladesOut >= 3 && v.bladesHome === 5 && v.sides.startsWith('rlrl'), 'specters: hold throws right, left, then both; all return');
     // Accessories on the character rig (third-person preview is built from the same code).

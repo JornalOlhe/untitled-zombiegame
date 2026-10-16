@@ -23786,15 +23786,18 @@ body.netgame #revivetouch{display:flex}
                   WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 3;
                 }
               }
-              this.holdSince = null;
               return;
             }
-            if (w.scythe && ScytheThrow.active()) { this.holdSince = null; return; }
+            // scythe in the air: every input waits for the catch (a click now is not an attack)
+            if (w.scythe && ScytheThrow.active()) return;
             if (mouse.down && !reloadEnd && !GrenadeThrow.active) {
               if (this.holdSince == null) { this.holdSince = t; this.holdThrew = false; this.nextVolley = 0; SpecterSwarm.volleyN = 0; }
               if (t - this.holdSince < this.HOLD_THROW) return;
-              if (w.scythe && !this.holdThrew) {
+              // still holding after the catch: throw again after a short beat
+              if (w.scythe && this.nextVolley === Infinity) this.nextVolley = t + 0.2;
+              if (w.scythe && t >= this.nextVolley) {
                 this.holdThrew = true;
+                this.nextVolley = Infinity;
                 this.throwPending = { at: t + 0.22, w };
                 ThrowAnim.play("r", 0.22, 0.62);
                 AudioManager.tone(110, 0.25, "sawtooth", 0.05, 220, "weapons");
@@ -23804,7 +23807,11 @@ body.netgame #revivetouch{display:flex}
               }
               return;
             }
-            if (this.holdSince == null) return;
+            if (this.holdSince == null) {
+              // touch auto-fire (aim assist on target): plain attacks only, never throws
+              if (!mouse.down && AutoFire.want() && !handsBusy()) this.shoot();
+              return;
+            }
             const held = t - this.holdSince, threw = this.holdThrew;
             this.holdSince = null;
             if (!threw && held < this.HOLD_THROW + 0.05) this.shoot(); // a click: the normal attack
@@ -29151,7 +29158,8 @@ body.netgame #revivetouch{display:flex}
             }
             WeaponSystem.model.visible =
               distance < 0.6 &&
-              !(WeaponSystem.current()?.spear && (SpearThrow.active || !WeaponSystem.spearHeld));
+              !(WeaponSystem.current()?.spear && (SpearThrow.active || !WeaponSystem.spearHeld)) &&
+              !(WeaponSystem.current()?.scythe && ScytheThrow.active()); // thrown scythe: empty hand
             const f = clamp(
               72 + (SettingsManager.data.fov - 85) * 0.55,
               58,
