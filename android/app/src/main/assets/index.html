@@ -825,6 +825,7 @@
         font-size: 12px;
         color: var(--gold);
       }
+      #statusline.tp { top: 78%; }
       #fps {
         position: fixed;
         left: 10px;
@@ -24954,6 +24955,8 @@ body.netgame #revivetouch{display:flex}
               $("aimtouch")?.classList.toggle("is-active", mouse.aim);
               $("crouchtouch")?.classList.toggle("is-active", keys.has("ControlLeft"));
             }
+            // third person: keep the status text below the character instead of across its chest
+            $("statusline").classList.toggle("tp", CameraRig.distance > 0.6);
             $("statusline").textContent = reloadEnd
               ? "Recarregando…"
               : player.activeUntil > simulationTime
