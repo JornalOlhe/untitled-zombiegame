@@ -3386,13 +3386,13 @@ body.netgame #revivetouch{display:flex}
           { key:"archangel", name:"Archangel", tier:7, color:"#dff8ff",
             ability:"Judgement", cd:30, requiredKills:25, secretFlight:"angel",
             desc:"Sustentação divina: +70% de dano, +60% de vida máxima, recebe 30% menos dano e regenera 3 HP/s após 4 s sem sofrer dano. Desvantagem: asas pesadas, −8% de velocidade no chão. Auréola e duas asas exclusivas.",
-            active:"Com 25 eliminações: Nova Sagrada (500 de dano em 9 m e cura 30% da vida) e 15 s de voo. Em voo, +110% de dano e a cada 1,1 s um raio de luz castiga o inimigo mais próximo (200 de dano, x2 em chefes).",
+            active:"Com 25 eliminações: Nova Sagrada (500 de dano em 9 m e cura 30% da vida) e 15 s de voo. Em voo, +110% de dano e a cada 1,1 s um raio de luz castiga o inimigo mais próximo (200 de dano, x2 em chefes). Com as Angelic Specters: clique ataca, segure para arremessar uma lâmina por braço — direita, esquerda, depois as duas juntas.",
             effects:{ damage:1.70, maxHp:1.60, damageTaken:0.70, regen:3, regenDelay:4, speed:0.92 },
             burst:{ duration:15, flight:"angel", nova:500, novaRadius:9, healPct:0.30, damageTotal:2.10 } },
           { key:"archdemon", name:"Archdemon", tier:7, color:"#ff3b32",
             ability:"Hellfire", cd:30, requiredKills:25, secretFlight:"demon",
             desc:"Poder bruto: +95% de dano, +40% de vida máxima, recebe 20% menos dano e cada eliminação rouba 3 HP. Desvantagem: sem regeneração natural e mais exposto que o Archangel. Chifres e cauda demoníaca exclusivos.",
-            active:"Com 25 eliminações: abre uma Poça Infernal de 7 m ao seu redor por 12 s (desacelera monstros comuns — não chefes/minibosses — e causa 10 de dano a cada 0,25 s) e voa por 15 s com +140% de dano. Em voo, com a Demonic Fury, o ataque vira arremesso: a foice gira, corta tudo no caminho e volta ao bater no chão, numa estrutura ou depois de 6 monstros.",
+            active:"Com 25 eliminações: abre uma Poça Infernal de 7 m ao seu redor por 12 s (desacelera monstros comuns — não chefes/minibosses — e causa 10 de dano a cada 0,25 s) e voa por 15 s com +140% de dano. Em voo a cauda vira hélice, e Q ergue a Legião Infernal: os 5 últimos monstros comuns que você matou voltam como aliados, com o dobro de vida e o dobro do dano que causariam em você. Com a Demonic Fury: clique corta, segure para arremessar a foice (a mão fica vazia até ela voltar).",
             effects:{ damage:1.95, maxHp:1.40, damageTaken:0.80, killHeal:3 },
             burst:{ duration:15, flight:"demon", hellPool:{ radius:7, duration:12 }, damageTotal:2.40 } },
         ];
@@ -5980,7 +5980,7 @@ body.netgame #revivetouch{display:flex}
           update(dt) {
             const o = this.out;
             const rig = CameraRig.avatar?.userData.rig;
-            if (rig?.gun && !player.onLadder) rig.gun.visible = !o;
+            if (rig?.gun && !player.onLadder && WeaponSystem.current()?.scythe) rig.gun.visible = !o;
             if (!o) return;
             o.prev.copy(o.pos);
             if (!o.back) {
@@ -6023,10 +6023,280 @@ body.netgame #revivetouch{display:flex}
             scene.remove(o.g); o.trail.dispose();
             o.g.traverse((m) => { if (m.isSprite) m.material.dispose(); });
             this.out = null;
+            ThrowAnim.caught();
+            ParticleSystem.emit(o.pos.clone(), 0xff4a14, 10, 2.6);
             AudioManager.tone(520, 0.12, "square", 0.08, 260, "weapons");
+            AudioManager.tone(160, 0.18, "sawtooth", 0.06, 90, "weapons");
             WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 2;
           },
           reset() { if (this.out) this.catch(); },
+        };
+        // Throw gestures shared by the Demonic Fury and the Angelic Specters. Each arm runs its own
+        // short timeline: WIND (the arm cocks back) → RELEASE (a fast snap forward, palm open) →
+        // RETRACT. pose(side) returns { cock, ext } in 0..1 for the first-person arms (ThrowArms)
+        // and the third-person avatar (poseTP). catchAt drives the scythe's catch in the hand.
+        // Hands empty: the scythe is in the air (or being thrown) or every Specter is out.
+        function handsBusy() {
+          const w = WeaponSystem.current();
+          if (!w || state !== GameState.PLAYING) return false;
+          if (w.scythe) return ScytheThrow.active() || !!PlayerController.throwPending;
+          if (w.specter) return SpecterSwarm.active && !SpecterSwarm.blades.some((b) => b.state === "idle" || b.state === "strike" || b.state === "open");
+          return false;
+        }
+        const ThrowAnim = {
+          arms: { r: null, l: null },
+          catchAt: -9,
+          play(side, wind = 0.08, total = 0.46) {
+            for (const s of side === "rl" ? ["r", "l"] : [side]) this.arms[s] = { t0: simulationTime, wind, total };
+          },
+          pose(side) {
+            const a = this.arms[side];
+            if (!a) return null;
+            const k = simulationTime - a.t0;
+            if (k > a.total || k < 0) { this.arms[side] = null; return null; }
+            if (k < a.wind) { const e = k / a.wind; return { cock: e * e * (3 - 2 * e), ext: 0 }; }
+            const r = (k - a.wind) / Math.max(0.01, a.total - a.wind);
+            const ext = r < 0.22 ? 1 - Math.pow(1 - r / 0.22, 3) : 1 - Math.pow((r - 0.22) / 0.78, 2);
+            return { cock: a.wind > 0 ? Math.max(0, 1 - r / 0.14) : 0, ext: Math.max(0, ext) };
+          },
+          caught() {
+            this.catchAt = simulationTime;
+            this.play("r", 0, 0.42);
+          },
+          reset() { this.arms.r = this.arms.l = null; this.catchAt = -9; },
+          // Third person: cocked = hand drawn back over the shoulder, extended = arm thrust at
+          // the crosshair with the palm open; the chest twists into the throw.
+          poseTP(r) {
+            for (const [side, i, sgn] of [["r", 0, 1], ["l", 1, -1]]) {
+              const p = this.pose(side);
+              if (!p) continue;
+              const wgt = Math.max(p.cock, p.ext), m = p.ext / Math.max(1e-4, p.cock + p.ext);
+              const ax = -2.75 + (-1.5 + 2.75) * m, az = sgn * (0.42 - 0.3 * m), el = -1.45 + 1.38 * m;
+              r.arms[i].rotation.x += (ax - r.arms[i].rotation.x) * wgt;
+              r.arms[i].rotation.z += (az - r.arms[i].rotation.z) * wgt;
+              r.arms[i].rotation.y += (0 - r.arms[i].rotation.y) * wgt;
+              r.elbows[i].rotation.x += (el - r.elbows[i].rotation.x) * wgt;
+              r.chest.rotation.y += sgn * (0.32 * p.cock - 0.22 * p.ext);
+            }
+          },
+        };
+        // First-person throwing arms: gloved hands with sleeves, rendered in the viewmodel pass.
+        // Only visible while a throw/catch gesture plays (the Specters are never held).
+        const ThrowArms = {
+          g: null,
+          build() {
+            const A = VisualArt, g = new THREE.Group();
+            g.name = "ThrowArms";
+            const make = (sgn) => {
+              const arm = new THREE.Group();
+              const palm = A.ellipsoid(arm, [0, 0, 0], [0.058, 0.03, 0.072], 0x5a6259, "polymer");
+              palm.castShadow = palm.receiveShadow = false;
+              A.block(arm, [0, 0.026, 0.012], [0.09, 0.02, 0.07], 0x2d3939, "polymer");
+              const fingers = [];
+              for (let f = 0; f < 4; f++) {
+                const fx = (-0.036 + f * 0.024) * sgn, base = A.pivot(arm, fx, 0, -0.06);
+                A.link(base, [0, 0, 0], [fx * 0.25, 0, -0.07 + Math.abs(f - 1.5) * 0.008], 0.014, 0.012, 0x626a5e, "polymer");
+                fingers.push(base);
+              }
+              const thumb = A.pivot(arm, -0.05 * sgn, -0.005, -0.01);
+              A.link(thumb, [0, 0, 0], [-0.045 * sgn, 0, -0.04], 0.016, 0.013, 0x626a5e, "polymer");
+              A.link(arm, [0, 0.01, 0.06], [0.1 * sgn, -0.09, 0.52], 0.07, 0.085, 0x475953, "cloth");
+              A.tube(arm, [0, 0, 0.1], 0.07, 0.06, 0x2d3f3e, "cloth");
+              arm.userData.fingers = fingers;
+              arm.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; o.frustumCulled = false; } });
+              g.add(arm);
+              return arm;
+            };
+            this.r = make(1); this.l = make(-1);
+            Viewmodel.camera.add(g);
+            this.g = g;
+          },
+          update() {
+            if (!this.g) this.build();
+            const fp = CameraRig.distance < 0.6 && state === GameState.PLAYING;
+            const w = WeaponSystem.current();
+            let any = false;
+            for (const [side, arm, sgn] of [["r", this.r, 1], ["l", this.l, -1]]) {
+              const p = ThrowAnim.pose(side);
+              // the scythe's own wind-up is shown by the scythe in the hand
+              const show = fp && p && !(w?.scythe && side === "r" && PlayerController.throwPending) && !(w?.scythe && side === "r" && simulationTime - ThrowAnim.catchAt < 0.45);
+              arm.visible = !!show;
+              if (!show) continue;
+              any = true;
+              const H = [0.34 * sgn, -0.62, -0.28], C = [0.36 * sgn, -0.06, -0.2], E = [0.15 * sgn, -0.13, -0.6];
+              const m = p.ext / Math.max(1e-4, p.cock + p.ext), v = Math.max(p.cock, p.ext);
+              const x = H[0] + (C[0] + (E[0] - C[0]) * m - H[0]) * v,
+                y = H[1] + (C[1] + (E[1] - C[1]) * m - H[1]) * v,
+                z = H[2] + (C[2] + (E[2] - C[2]) * m - H[2]) * v;
+              arm.position.set(x, y, z);
+              // palm faces forward when thrust out, edge-on and tilted back when cocked
+              arm.rotation.set(-1.05 * p.ext * (1 - p.cock) + 0.5 * p.cock, -0.25 * sgn * p.cock + 0.12 * sgn * p.ext, sgn * (0.3 * p.cock - 0.1 * p.ext));
+              for (const f of arm.userData.fingers) f.rotation.x = 0.55 * (1 - p.ext) + 0.25 * p.cock; // open hand on release
+            }
+            this.g.visible = any;
+          },
+        };
+        // Archdemon flight + Q: the Infernal Legion. The last 5 ordinary monsters he killed rise from
+        // a hell sigil as his allies: same body, 2× their life and 2× the damage they would deal to
+        // the player. They hunt the nearest monster; monsters next to them fight back.
+        const DemonLegion = {
+          list: [],
+          recent: [],
+          usedFlight: -1,
+          note(z) {
+            if (z.boss || z.remote || z.ally) return;
+            this.recent.unshift({ type: z.type, hp: Math.max(30, z.maxhp || 50) });
+            if (this.recent.length > 5) this.recent.length = 5;
+          },
+          playerDamage(type) { return ([6, 10].includes(type) ? 22 : type === 11 ? 4 : 10) * diff[difficulty].damage; },
+          canCast() { return classOf().key === "archdemon" && classBurst().flight === "demon" && ClassAscend.since() >= ClassAscend.END; },
+          cast() {
+            if (this.usedFlight === player.abilityAt) { UIManager.toast("A Legião Infernal já atendeu a este voo."); return false; }
+            if (!this.recent.length) { UIManager.toast("Nenhum monstro abatido para erguer."); return false; }
+            this.usedFlight = player.abilityAt;
+            for (const a of [...this.list]) this.dismiss(a, true);
+            const n = this.recent.length, gy = player.ground || 0;
+            this.recent.forEach((rec, i) => {
+              const ang = yaw + Math.PI + (i - (n - 1) / 2) * 0.9, R = 2.6 + (i % 2) * 0.8;
+              let x = player.pos.x - Math.sin(ang) * R, zz = player.pos.z - Math.cos(ang) * R;
+              if (MapManager.collides(x, zz, 0.4)) { x = player.pos.x + rand(-1, 1); zz = player.pos.z + rand(-1, 1); }
+              const floor = MapManager.groundAt(x, zz, 0.2, Math.max(gy, player.pos.y - 1.6) + 0.5);
+              this.spawn(rec, new V(x, floor, zz), simulationTime + i * 0.16);
+            });
+            this.recent.length = 0;
+            UIManager.announce?.("LEGIÃO INFERNAL", `${n} monstro${n > 1 ? "s" : ""} voltam do inferno para lutar por você`, 1.8);
+            AudioManager.tone(55, 1.1, "sawtooth", 0.24, 30, "weapons");
+            AudioManager.tone(220, 0.6, "square", 0.07, 110, "weapons");
+            shake = Math.max(shake, 0.35);
+            return true;
+          },
+          spawn(rec, at, riseAt) {
+            const t = zombieTypes[rec.type] || zombieTypes[0], g = new THREE.Group(), size = t.size || 1;
+            g.scale.setScalar(size);
+            g.position.copy(at).setY(at.y - 1.6 * size);
+            scene.add(g);
+            const rig = CreatureRig.create(g, rec.type, null);
+            try { VoxelMonsters.dress(rig, selectedMap); } catch {}
+            // infernal look: a crimson rim on every surface, glowing aura and a sigil under the feet
+            const mats = new Map();
+            g.traverse((o) => {
+              if (!o.isMesh || !o.material || Array.isArray(o.material) || o.material.transparent) return;
+              let m = mats.get(o.material);
+              if (!m) { m = o.material.clone(); if (m.emissive) { m.emissive.setHex(0x5a0800); m.emissiveIntensity = 0.55; } if (m.color) m.color.lerp(new THREE.Color(0x8a2a22), 0.35); mats.set(o.material, m); }
+              o.material = m;
+            });
+            const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color: 0xff3010, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+            aura.position.set(0, 1.0, 0); aura.scale.set(1.8, 2.4, 1); g.add(aura);
+            const sigil = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 6), new THREE.MeshBasicMaterial({ color: 0xff3a10, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+            sigil.rotation.x = -Math.PI / 2; sigil.position.y = 0.05; g.add(sigil);
+            const a = {
+              ally: true, group: g, type: rec.type, rig, legs: rig.legs, arms: rig.arms, size, boss: null,
+              hp: rec.hp * 2, maxhp: rec.hp * 2, damage: this.playerDamage(rec.type) * 2,
+              speed: Math.min(Balance.RUN_LIMIT, (t.speed || 2) * 1.1), anim: rand(0, 6), stagger: 0, phase: 1,
+              attack: 0, strikeAt: 0, swingStart: -9, target: null, riseAt, floor: at.y, aura, sigil, mats, dead: false, born: simulationTime,
+            };
+            MonsterFX.circle(at, 1.4, 0xff2a0a, 1.3, 0.7);
+            MonsterFX.ring(at, 2.2, 0xff4a14, 0.8);
+            this.list.push(a);
+            return a;
+          },
+          dismiss(a, quiet = false) {
+            if (a.dead) return;
+            a.dead = true;
+            const at = a.group.position.clone().setY(a.group.position.y + 1);
+            ParticleSystem.emit(at, 0xff4a14, 18, 3);
+            ParticleSystem.emit(at, 0x1a0404, 12, 2.2);
+            if (!quiet) AudioManager.tone(90, 0.4, "sawtooth", 0.08, 45, "weapons");
+            scene.remove(a.group);
+            for (const m of a.mats.values()) m.dispose();
+            a.aura.material.dispose(); a.sigil.geometry.dispose(); a.sigil.material.dispose();
+            const i = this.list.indexOf(a); if (i >= 0) this.list.splice(i, 1);
+          },
+          clear() { for (const a of [...this.list]) this.dismiss(a, true); this.recent.length = 0; this.usedFlight = -1; },
+          // A monster fights an ally that is next to it (or that is attacking it) instead of the player.
+          foeFor(z) {
+            const p = z.group.position, pd = Math.hypot(player.pos.x - p.x, player.pos.z - p.z);
+            let best = null, bd = Infinity;
+            for (const a of this.list) {
+              if (a.dead || simulationTime < a.riseAt + 0.9) continue;
+              const d = Math.hypot(a.group.position.x - p.x, a.group.position.z - p.z), lim = a.target === z ? 6 : 3.4;
+              if (d < lim && d < bd && d < pd) { bd = d; best = a; }
+            }
+            return best;
+          },
+          hurt(a, dmg) {
+            if (a.dead) return;
+            a.hp -= dmg;
+            a.hitFlash = simulationTime;
+            ParticleSystem.emit(a.group.position.clone().setY(a.group.position.y + 1.1), 0x5a0808, 5, 2);
+            if (a.hp <= 0) this.dismiss(a);
+          },
+          update(dt) {
+            const t = simulationTime;
+            for (let i = this.list.length - 1; i >= 0; i--) {
+              const a = this.list[i], g = a.group, pos = g.position;
+              if (a.dead) continue;
+              const life = clamp(a.hp / a.maxhp, 0, 1), flash = Math.max(0, 1 - (t - (a.hitFlash ?? -9)) / 0.15);
+              a.aura.material.opacity = (0.16 + 0.14 * life + 0.12 * Math.sin(t * 6 + a.anim)) * Math.min(1, Math.max(0, t - a.riseAt) / 0.6) + flash * 0.4;
+              a.sigil.material.opacity = 0.55 * life;
+              a.sigil.rotation.z += dt * 1.5;
+              if (t < a.riseAt) continue;
+              if (t < a.riseAt + 0.9) {
+                // claws its way out of the sigil
+                const k = (t - a.riseAt) / 0.9, e = 1 - Math.pow(1 - k, 3);
+                pos.y = a.floor - 1.6 * a.size * (1 - e);
+                g.rotation.y += dt * 3 * (1 - k);
+                if (Math.random() < dt * 30) ParticleSystem.emit(new V(pos.x + rand(-0.5, 0.5), a.floor + 0.1, pos.z + rand(-0.5, 0.5)), Math.random() < 0.6 ? 0xff4a14 : 0x2a0606, 1, 2);
+                CreatureRig.animate(a, dt, false);
+                continue;
+              }
+              // target: the nearest living monster (stick to the current one unless it got far)
+              if (!a.target || a.target.dead || a.target.group.position.distanceToSquared(pos) > 26 * 26 || t > (a.retarget || 0)) {
+                a.retarget = t + 0.6;
+                let best = null, bd = 30 * 30;
+                for (const z of ZombieManager.list) {
+                  if (z.dead || z.dropping || z.introQueued) continue;
+                  const d = z.group.position.distanceToSquared(pos);
+                  if (d < bd) { bd = d; best = z; }
+                }
+                a.target = best;
+              }
+              const goal = a.target ? a.target.group.position : player.pos;
+              const to = new V(goal.x - pos.x, 0, goal.z - pos.z), dist = to.length();
+              const reach = 1.35 + a.size * 0.25 + (a.target?.size || 1) * 0.25;
+              const walking = a.target ? dist > reach : dist > 3.2;
+              if (dist > 0.01) {
+                const want = Math.atan2(to.x, to.z), turn = Math.atan2(Math.sin(want - g.rotation.y), Math.cos(want - g.rotation.y));
+                g.rotation.y += turn * Math.min(1, dt * 8);
+              }
+              if (walking) {
+                const dir = to.normalize(), before = pos.clone();
+                const sp = a.speed * (a.target ? 1 : Math.min(1.4, dist / 3));
+                MapManager.move(pos, dir.x * sp * dt, dir.z * sp * dt, 0.35);
+                if (before.distanceToSquared(pos) < 1e-6) {
+                  const esc = MapManager.escapeDirection(pos, MapManager.direction(pos));
+                  MapManager.move(pos, esc.x * sp * dt, esc.z * sp * dt, 0.35);
+                }
+                pos.y += (MapManager.groundAt(pos.x, pos.z, 0.2, pos.y + 0.6) - pos.y) * Math.min(1, dt * 12);
+              } else if (a.target && t > a.attack) {
+                a.attack = t + 1.0;
+                a.swingStart = t;
+                a.strikeAt = t + 0.3;
+              }
+              if (a.strikeAt && t >= a.strikeAt) {
+                a.strikeAt = 0;
+                const z = a.target;
+                if (z && !z.dead && z.group.position.distanceTo(pos) < reach + 0.5) {
+                  const hitAt = zombieBodyPoint(z);
+                  ZombieManager.hit(z, a.damage, false, hitAt, null, true);
+                  ParticleSystem.emit(hitAt, 0xff3a14, 6, 2.4);
+                  AudioManager.meleeImpact?.();
+                }
+              }
+              a.walkingNow = walking;
+              CreatureRig.animate(a, dt, walking);
+            }
+          },
         };
         // ── Season Pass (free) ──────────────────────────────────────────────────────────────────
         // 30 tiers × 1000 XP. Signed in: progress and claims are server-authoritative (season_state /
@@ -6207,7 +6477,7 @@ body.netgame #revivetouch{display:flex}
                 continue;
               }
               const near = Math.hypot(p.x - g.x, p.z - g.z) < 2.4;
-              const holding = near && (keys.has("KeyE") || this.touchHold);
+              const holding = near && (keys.has("KeyE") || this.touchHold) && !handsBusy();
               g.hold = holding ? g.hold + dt : Math.max(0, g.hold - dt * 2);
               if (near && !holding && t - (this.hintAt || -9) > 6) { this.hintAt = t; UIManager.toast?.(touchMode ? "Segure ⚡ para religar o gerador" : "Segure E para religar o gerador"); }
               if (holding && Math.random() < dt * 10) ParticleSystem.emit(new V(g.x, 1.4, g.z), 0xffe08a, 2, 1.5);
@@ -13976,6 +14246,26 @@ body.netgame #revivetouch{display:flex}
               this.model.rotation.y += 0.08;
               this.model.rotation.z -= 0.08;
             }
+            if (w.scythe) {
+              const pend = PlayerController.throwPending;
+              if (pend) {
+                // wind-up: the scythe is drawn back over the right shoulder, blade cocked
+                const k = clamp(1 - (pend.at - simulationTime) / 0.22, 0, 1), e = k * k * (3 - 2 * k);
+                this.model.position.x += 0.1 * e;
+                this.model.position.y += 0.2 * e;
+                this.model.position.z += 0.16 * e;
+                this.model.rotation.x += 0.95 * e;
+                this.model.rotation.z -= 0.55 * e;
+              }
+              const ck = (simulationTime - ThrowAnim.catchAt) / 0.36;
+              if (ck >= 0 && ck < 1) {
+                // catch: it arrives spinning from the front and slaps into the palm
+                const e = 1 - Math.pow(1 - ck, 3);
+                this.model.position.z -= 0.42 * (1 - e);
+                this.model.position.y += 0.12 * (1 - e) - 0.05 * Math.sin(ck * Math.PI);
+                this.model.rotation.z += 3.2 * (1 - e);
+              }
+            }
             if (w.specter) this.floatSpecter(w, dt);
             if (w.spear && !aiming) {
               // Lance held level, point forward, both hands on the shaft.
@@ -15334,7 +15624,7 @@ body.netgame #revivetouch{display:flex}
             if (!d) { if (el) el.classList.remove("show"); return; }
             if (!el) {
               el = document.createElement("button"); el.id = "doorhint"; el.type = "button";
-              el.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); Doors.interact(); });
+              el.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); if (!handsBusy()) Doors.interact(); });
               document.body.appendChild(el);
             }
             const txt = d.target ? "Fechar porta" : "Abrir porta";
@@ -15910,6 +16200,7 @@ body.netgame #revivetouch{display:flex}
           kill(z, head = false, overkill = false, w = null) {
             if (z.dead) return;
             z.dead = true;
+            DemonLegion.note(z);
             const byMe = !NetGame.attacker;
             if (z.rig.voxel && !z.boss && head) {
               const away = z.group.position.clone().sub(player.pos);
@@ -16069,8 +16360,9 @@ body.netgame #revivetouch{display:flex}
                 z.strikeAt = 0;
                 continue;
               }
+              const foe = DemonLegion.list.length ? DemonLegion.foeFor(z) : null;
               const pos = z.group.position,
-                to = (z.toPlayer ||= new V()).copy(player.pos).sub(pos);
+                to = (z.toPlayer ||= new V()).copy(foe ? foe.group.position : player.pos).sub(pos);
               to.y = 0;
               const dist = to.length();
               if (z.variant && ZombieVariants.tick(z, dt, dist)) continue;
@@ -16117,7 +16409,7 @@ body.netgame #revivetouch{display:flex}
                 for (const detail of z.rig.detail) detail.visible = showDetail;
               }
               if (walking) {
-                let dir = z.detourUntil > simulationTime ? z.detourDir.clone() : z.canSee && !(z.flowUntil > simulationTime) ? to.clone().normalize() : MapManager.direction(pos);
+                let dir = foe ? to.clone().normalize() : z.detourUntil > simulationTime ? z.detourDir.clone() : z.canSee && !(z.flowUntil > simulationTime) ? to.clone().normalize() : MapManager.direction(pos);
                 if (z.boss?.kind === "necro" && dist < 11)
                   dir.multiplyScalar(-0.5);
                 for (const other of HordeAI.neighbors(pos)) {
@@ -16174,7 +16466,7 @@ body.netgame #revivetouch{display:flex}
               }
               // Height gap between the target's feet and the zombie's feet: nobody swings at a
               // player standing on a roof, a car or the top of a staircase above them.
-              const rise = player.pos.y - 1.6 - pos.y,
+              const rise = foe ? foe.group.position.y - pos.y : player.pos.y - 1.6 - pos.y,
                 reachUp = 1.05 + (z.boss ? z.size * 0.55 : z.size * 0.15),
                 inReach = rise < reachUp && rise > -1.6;
               if (
@@ -16185,10 +16477,13 @@ body.netgame #revivetouch{display:flex}
                 z.attack = simulationTime + 1.2;
                 z.swingStart = simulationTime;
                 z.strikeAt = simulationTime + 0.3;
+                z.foe = foe;
               }
               if (z.strikeAt && simulationTime >= z.strikeAt) {
                 z.strikeAt = 0;
-                if (active && inReach && dist < 1.7 + z.size * 0.25)
+                if (z.foe && !z.foe.dead) {
+                  if (z.foe === foe && dist < 1.9 + z.size * 0.25) DemonLegion.hurt(foe, DemonLegion.playerDamage(z.type));
+                } else if (!foe && active && inReach && dist < 1.7 + z.size * 0.25)
                   PlayerController.hurt(
                     (z.boss
                       ? 23
@@ -22484,10 +22779,12 @@ body.netgame #revivetouch{display:flex}
           HEAVY: { order: [0, 3, 1, 4, 2], gaps: [0, 40, 45, 35, 40], open: 0.3, dur: 0.34, dmg: 0.62 },
           attack(w) {
             this.ensure(w);
-            if (!this.active) return;
+            if (!this.active) return false;
+            const home = this.blades.filter((b) => b.state === "idle").length;
+            if (!home) return false; // every Specter is out: nothing to strike with
             if (simulationTime - this.lastAttack > 1.4) this.combo = 0;
             this.lastAttack = simulationTime;
-            const tgt = this.target(w), heavy = this.combo % 5 === 4, id = this.combo++;
+            const tgt = this.target(w), heavy = this.combo % 5 === 4 && home === this.COUNT, id = this.combo++;
             const O = player.pos.clone().add(new V(0, -0.3, 0));
             const dirv = tgt.point.clone().sub(O);
             dirv.y *= 0.4;
@@ -22496,8 +22793,8 @@ body.netgame #revivetouch{display:flex}
             const toW = (p, base = atk.T) => base.clone().addScaledVector(r, p[0]).addScaledVector(u, p[1]).addScaledVector(f, p[2]);
             const free = (want) => {
               const b = this.blades[want];
-              if (b && b.state !== "strike") return b;
-              return this.blades.filter((x) => x.state !== "strike").sort((a, c) => a.pos.distanceTo(atk.T) - c.pos.distanceTo(atk.T))[0];
+              if (b && b.state === "idle") return b;
+              return this.blades.filter((x) => x.state === "idle").sort((a, c) => a.pos.distanceTo(atk.T) - c.pos.distanceTo(atk.T))[0];
             };
             if (heavy) {
               atk.move = { arm: "rl", sweep: 0, dmg: this.HEAVY.dmg };
@@ -22523,28 +22820,48 @@ body.netgame #revivetouch{display:flex}
             }
             this.attacks.push(atk);
             this.gesture.dir.copy(f);
+            return true;
           },
           // Archangel flight: launch the next blade that is home, straight and fast toward the
           // crosshair. It pierces up to 4 monsters, and a structure, the ground or 32 m sends it
           // back. Returns false when no blade is home (the player can't attack until one docks).
           LAUNCH: { speed: 48, range: 32, pierce: 4 },
-          launch(w) {
+          launch(w, side = "r") {
             this.ensure(w);
             if (!this.active) return false;
             const home = this.blades.filter((b) => b.state === "idle");
             if (!home.length) return false;
             const target = aimTarget(this.LAUNCH.range + 4);
-            // the blade closest to the crosshair line leaves first
-            const b = home.sort((p, q) => p.pos.distanceToSquared(target) - q.pos.distanceToSquared(target))[0];
+            // the blade on the throwing arm's side leaves first; it is released from that hand
+            const F = this.frame(yaw), sg = side === "l" ? -1 : 1;
+            const b = home.sort((p, q) => q.pos.clone().sub(player.pos).dot(F.r) * sg - p.pos.clone().sub(player.pos).dot(F.r) * sg)[0];
+            const fp = this.firstPerson();
+            const hand = fp
+              ? camera.position.clone().addScaledVector(F.r, 0.32 * sg).add(new V(0, -0.2, 0)).addScaledVector(aimDir(), 0.95)
+              : player.pos.clone().addScaledVector(F.r, 0.42 * sg).add(new V(0, -0.35, 0)).addScaledVector(F.f, 0.55);
+            b.prev.copy(b.pos);
+            b.pos.copy(hand);
+            ParticleSystem.emit(hand.clone(), 0xfff4d6, 6, 1.8);
             const dir = target.clone().sub(b.pos);
             if (dir.lengthSq() < 0.01) dir.copy(aimDir());
             dir.normalize();
             b.state = "launch";
-            b.act = { dir, dist: 0, hits: new Set(), count: 0, dmg: weaponDamage(w) * 1.25, w };
+            b.act = { dir, dist: 0, hits: new Set(), count: 0, dmg: weaponDamage(w) * 1.25, w, side };
             b.vel.copy(dir).multiplyScalar(this.LAUNCH.speed);
             AudioManager.tone(1180, 0.12, "sine", 0.1, 1900, "weapons");
             AudioManager.meleeSwing();
             return true;
+          },
+          volleyN: 0,
+          volley(w) {
+            const home = this.blades.filter((b) => b.state === "idle").length;
+            if (!home) return false;
+            const side = ["r", "l", "rl"][this.volleyN++ % 3];
+            ThrowAnim.play(side, 0.07, 0.42);
+            let n = 0;
+            for (const s of side === "rl" ? ["r", "l"] : [side]) if (this.launch(w, s)) n++;
+            if (n) WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 1.2;
+            return n > 0;
           },
           launchStep(b, a, dt, w) {
             const L = this.LAUNCH, step = L.speed * dt, from = b.pos.clone();
@@ -22836,8 +23153,9 @@ body.netgame #revivetouch{display:flex}
           },
           readyText(w = WeaponSystem.current()) {
             if (!w?.specter && !w?.trident && !w?.scythe) return "";
-            if (w.specter && classBurst().flight === "angel") return `CLIQUE · LANÇAR LÂMINAS (${SpecterSwarm.blades.filter((b) => b.state === "idle").length}/5)`;
-            if (w.scythe && classBurst().flight === "demon") return ScytheThrow.active() ? "FOICE NO AR…" : "CLIQUE · ARREMESSAR FOICE";
+            if (w.specter) { const n = SpecterSwarm.blades.filter((b) => b.state === "idle").length; if (SpecterSwarm.active && !n) return "LÂMINAS NO AR…"; if (classBurst().flight === "angel") return `SEGURE · ARREMESSAR LÂMINAS (${n}/5)`; }
+            if (w.scythe && (ScytheThrow.active() || PlayerController.throwPending)) return "FOICE NO AR… ESPERE ELA VOLTAR";
+            if (w.scythe && classBurst().flight === "demon") return "CLIQUE · CORTAR · SEGURE · ARREMESSAR";
             const left = Math.max(0, this.cooldown - simulationTime);
             return left > 0 ? `F · ARMA ${left.toFixed(1)}s` : "F · HABILIDADE DA ARMA";
           },
@@ -23127,6 +23445,9 @@ body.netgame #revivetouch{display:flex}
             for (const t of turrets) scene.remove(t.group);
             turrets.length = 0;
             ReaperAllies.clear();
+            DemonLegion.clear();
+            ThrowAnim.reset();
+            PlayerController.holdSince = PlayerController.throwPending = null;
             SecretWeaponSkills.reset();
             for (const n of damageNumbers) n.el.remove();
             damageNumbers.length = 0;
@@ -23294,14 +23615,20 @@ body.netgame #revivetouch{display:flex}
           },
           switch(slot) {
             if (!player.inventory[slot] || slot === player.slot) return;
+            if (handsBusy()) { UIManager.toast(WeaponSystem.current()?.scythe ? "Espere a foice voltar." : "Espere as lâminas voltarem."); return; }
             player.slot = slot;
             reloadEnd = 0;
+            this.holdSince = null;
+            this.throwPending = null;
             this.spearHeldSince = null;
             this.spearThrowPending = null;
             this.chargeHeldSince = null;
             WeaponSystem.buildModel();
           },
           ability() {
+            // Archdemon in flight: Q raises the Infernal Legion (once per flight) instead of Hellfire.
+            if (state === GameState.PLAYING && DemonLegion.canCast()) { DemonLegion.cast(); return; }
+            if (classOf().key === "archdemon" && classBurst().flight === "demon") return; // still taking off
             if (DevMode.on("infiniteAbility")) player.cooldown = 0;
             if (simulationTime < player.cooldown || state !== GameState.PLAYING)
               return;
@@ -23322,7 +23649,7 @@ body.netgame #revivetouch{display:flex}
             if (c.requiredKills) player.classCharge = Math.max(0, (player.classCharge || 0) - c.requiredKills);
             player.cooldown = simulationTime + (c.cd || 30);
             AudioManager.tone(400, 0.45, "sine", 0.3, 1000);
-            UIManager.toast(c.ability);
+            UIManager.toast(burst.flight === "demon" ? `${c.ability} · em voo, Q ergue a Legião Infernal` : c.ability);
             if (burst.duration)
               player.activeUntil = simulationTime + burst.duration;
             if (burst.flight) ClassAscend.cast(burst.flight);
@@ -23370,6 +23697,7 @@ body.netgame #revivetouch{display:flex}
             if (c.summonAllies) ReaperAllies.summon(c.summonAllies);
           },
           grenade() {
+            if (handsBusy()) return;
             if (player.grenades <= 0) {
               UIManager.toast("Sem granadas.");
               return;
@@ -23436,6 +23764,46 @@ body.netgame #revivetouch{display:flex}
               if (held > 0.1) return { phase: "prep", k: clamp((held - 0.1) / Math.max(0.05, (w.chargeTime || 0.32) - 0.1), 0, 1) };
             }
             return null;
+          },
+          // Demonic Fury / Angelic Specter: a click attacks, holding throws. The scythe is thrown
+          // once (wind-up, release) and the hand stays empty until it is caught; the Specters
+          // leave one per arm — right, left, then both arms together — until none is left.
+          HOLD_THROW: 0.24,
+          updateHoldThrow(w, dt) {
+            const t = simulationTime;
+            if (this.throwPending) {
+              if (t >= this.throwPending.at) {
+                const p = this.throwPending;
+                this.throwPending = null;
+                if (WeaponSystem.current() === p.w && ScytheThrow.throw(p.w)) {
+                  lastShot = t;
+                  player.shots++;
+                  recoil = Math.max(recoil, 0.4);
+                  WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 3;
+                }
+              }
+              this.holdSince = null;
+              return;
+            }
+            if (w.scythe && ScytheThrow.active()) { this.holdSince = null; return; }
+            if (mouse.down && !reloadEnd && !GrenadeThrow.active) {
+              if (this.holdSince == null) { this.holdSince = t; this.holdThrew = false; this.nextVolley = 0; SpecterSwarm.volleyN = 0; }
+              if (t - this.holdSince < this.HOLD_THROW) return;
+              if (w.scythe && !this.holdThrew) {
+                this.holdThrew = true;
+                this.throwPending = { at: t + 0.22, w };
+                ThrowAnim.play("r", 0.22, 0.62);
+                AudioManager.tone(110, 0.25, "sawtooth", 0.05, 220, "weapons");
+              } else if (w.specter && t >= this.nextVolley) {
+                if (SpecterSwarm.volley(w)) { this.holdThrew = true; lastShot = t; player.shots++; this.nextVolley = t + 0.3; }
+                else this.nextVolley = t + 0.1;
+              }
+              return;
+            }
+            if (this.holdSince == null) return;
+            const held = t - this.holdSince, threw = this.holdThrew;
+            this.holdSince = null;
+            if (!threw && held < this.HOLD_THROW + 0.05) this.shoot(); // a click: the normal attack
           },
           updateSpear(w, dt) {
             // One physical spear: while it is out/returning, all spear attack input stays locked.
@@ -23544,24 +23912,9 @@ body.netgame #revivetouch{display:flex}
             if (NetGame.down || NetGame.dead) return;
             const w = WeaponSystem.current();
             if (!w || reloadEnd) return;
-            // Archdemon flight: the scythe is thrown instead of swung — one at a time.
-            if (w.scythe && (classBurst().flight === "demon" || ScytheThrow.active())) {
-              if (simulationTime - lastShot < 0.2 || !ScytheThrow.throw(w)) return;
-              lastShot = simulationTime;
-              player.shots++;
-              this.meleeLockUntil = simulationTime + 0.2;
-              muzzleLight.intensity = 0;
-              return;
-            }
-            // Archangel flight: the Angelic Specters are launched one by one, straight and fast.
-            if (w.specter && classBurst().flight === "angel") {
-              if (simulationTime - lastShot < 0.15 || !SpecterSwarm.launch(w)) return;
-              lastShot = simulationTime;
-              player.shots++;
-              this.meleeLockUntil = simulationTime + 0.14;
-              muzzleLight.intensity = 0;
-              return;
-            }
+            // Scythe / Specters out of the hand: no attack until they come back.
+            if ((w.scythe || w.specter) && handsBusy()) return;
+            if (w.specter && SpecterSwarm.active && !SpecterSwarm.blades.some((b) => b.state === "idle")) return;
             if (simulationTime - lastShot < w.rate * MatchShop.rateMult() * (classBurst().fireRateTotal || 1)) return;
             if (w.kind === "melee" && simulationTime < this.meleeLockUntil) return;
             if (w.ammo <= 0) {
@@ -23712,6 +24065,7 @@ body.netgame #revivetouch{display:flex}
               AudioManager.tone(260, 0.08, "square", 0.12, 160, "weapons");
             }
             if (w && w.spear) this.updateSpear(w, dt);
+            else if (w && (w.scythe || w.specter)) this.updateHoldThrow(w, dt);
             else if (w && w.charge) this.updateChargeShot(w, dt);
             else if ((mouse.down || AutoFire.want()) && !GrenadeThrow.active) this.shoot();
             if (this.meleeStrike && !this.meleeStrike.swung && simulationTime >= this.meleeStrike.swingAt) {
@@ -23991,10 +24345,12 @@ body.netgame #revivetouch{display:flex}
             MapObjectives.update(dt);
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
+            ThrowArms.update();
             CameraRig.update(dt);
             Account.update();
             HordeAI.update(dt);
             ReaperAllies.update(dt);
+            DemonLegion.update(dt);
             if (DevMode.on("infiniteAbility")) { SecretWeaponSkills.cooldown = 0; player.cooldown = 0; }
             SecretWeaponSkills.update(dt);
             SpecterSwarm.update(dt);
@@ -27202,7 +27558,7 @@ body.netgame #revivetouch{display:flex}
             if (this.down || this.dead) return;
             let near = null;
             for (const r of this.remotes.values()) if (r.dn === 1 && r.pos.distanceTo(player.pos) < 2.4) near = r;
-            const hold = near && (keys.has("KeyE") || touchRevive);
+            const hold = near && (keys.has("KeyE") || touchRevive) && !handsBusy();
             $("reviveprompt").classList.toggle("hidden", !near);
             if (near) $("reviveprompt").querySelector("b").textContent = near.name.toUpperCase();
             if (hold) {
@@ -28337,8 +28693,11 @@ body.netgame #revivetouch{display:flex}
                 const ak = ownD ? ClassAscend.since() : 99, de = ClassAscend.env(ak),
                   whipFront = (ak - ClassAscend.ANT) / 0.38; // travelling pulse position along the chain (0 base → 1 tip)
                 secret.whip = de.launch;
-                secret.tail.rotation.x = -0.18 * f - secret.lagX * (1 - f) * 0.35 + 0.35 * de.ant - 0.12 * de.launch;
+                // Flight = helicopter: the tail rises straight up behind the back and arcs over the
+                // head, the three-bladed tip turns flat and spins like a rotor; the body hangs below.
+                secret.tail.rotation.x = (-secret.lagX * 0.35 + 0.35 * de.ant - 0.12 * de.launch) * (1 - f) + 0.92 * f;
                 secret.tail.rotation.z = 0;
+                secret.tail.scale.setScalar(1 + 0.6 * f);
                 // Bone chain with inertia: every vertebra chases its target through its own spring,
                 // stiff at the base (it leads) and looser toward the tip (it arrives last and
                 // overshoots) — so the tail swings on after the body stops, then settles.
@@ -28351,16 +28710,19 @@ body.netgame #revivetouch{display:flex}
                     sway = t * (2.4 + moving * 3) - i * 0.5,
                     walk = 0.055 + moving * 0.1;
                   const swim = t * 5.2 - i * 0.62, pulse = whipFront >= 0 && whipFront < 1.4 ? Math.exp(-(((k - whipFront) * 4.5) ** 2)) : 0;
-                  const tx =
+                  let tx =
                     seg.userData.base * (1 - f * 0.55) - secret.lagX * (1 - f) * 0.35 + secret.kick * (0.3 + k) * (1 - f) +
                     Math.sin(sway * 0.9) * walk * 0.6 * (1 - f) +
                     f * Math.sin(swim * 0.5 + 1.1) * (0.02 + 0.04 * k) - // flight: restrained vertical undulation
                     de.ant * (0.03 + 0.22 * k) + // cast: coil up over the back (scorpion)
                     pulse * 0.32 * (0.4 + 0.6 * k); // whip crack running down the chain
-                  const ty =
+                  let ty =
                     Math.sin(sway) * walk * (1 - f) + secret.lagY * (0.34 + k * 0.7) * (1 - f * 0.6) +
                     f * Math.sin(swim) * (0.03 + 0.1 * k) + // flight: controlled S-wave, widest at the tip
                     de.ant * Math.sin(i * 0.5) * 0.06;
+                  // flight: rigid boom curving over the head (tiny vibration from the rotor)
+                  tx = tx * (1 - f) + f * (0.05 + 0.3 * Math.pow(k, 1.5) + Math.sin(t * 31 + i) * 0.006);
+                  ty = ty * (1 - f) + f * (secret.lagY * 0.15 * k + Math.sin(t * 2.2 - i * 0.4) * 0.012);
                   const S = (seg.userData.spr ||= { x: tx, y: ty, vx: 0, vy: 0 }), K = 320 - k * 230, C = 2 * (0.75 - k * 0.3) * Math.sqrt(K);
                   const n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
                   for (let q = 0; q < n; q++) {
@@ -28373,7 +28735,26 @@ body.netgame #revivetouch{display:flex}
                 // tip blade: lazy idle turn, a short flourish on the whip, steady cruise in flight
                 // The tip is a blade ornament, not a helicopter: a restrained flourish follows the
                 // tail movement, with one sharper turn only during the launch/whip.
-                secret.rotor.rotation.z = Math.sin(t * (1.2 + 1.8 * f)) * (0.1 + 0.08 * f) + de.launch * 0.55;
+                secret.rotor.rotation.set(0, 0, Math.sin(t * 1.2) * 0.1 + de.launch * 0.55);
+                secret.spin = (secret.spin || 0) + dt * (2 + 20 * f * f);
+                if (f > 0.02) {
+                  // rotor: blades level with the ground, spinning about the world vertical
+                  secret.rotor.parent.updateMatrixWorld(true);
+                  const pq = secret.rotor.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+                  const want = new THREE.Quaternion().setFromAxisAngle(new V(0, 1, 0), secret.spin).multiply(new THREE.Quaternion().setFromAxisAngle(new V(1, 0, 0), -Math.PI / 2));
+                  secret.rotor.quaternion.slerp(pq.multiply(want), Math.min(1, f * 1.15));
+                }
+                if (!secret.blur) {
+                  // motion-blur disc of the spinning blades
+                  const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d");
+                  const gr = x.createRadialGradient(64, 64, 6, 64, 64, 64);
+                  gr.addColorStop(0, "rgba(255,80,40,0.0)"); gr.addColorStop(0.25, "rgba(120,10,10,0.35)"); gr.addColorStop(0.8, "rgba(60,0,0,0.3)"); gr.addColorStop(0.93, "rgba(255,60,20,0.55)"); gr.addColorStop(1, "rgba(255,60,20,0)");
+                  x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+                  secret.blur = new THREE.Mesh(new THREE.CircleGeometry(0.42, 40), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+                  secret.rotor.add(secret.blur);
+                }
+                secret.blur.material.opacity = clamp((f - 0.3) / 0.5, 0, 1) * 0.85;
+                secret.blur.visible = secret.blur.material.opacity > 0.01;
                 if (!secret.trail) {
                   secret.trail = new BladeTrail(scene, 0xff2a14, 1, 0.4);
                   g.userData.tailTrail = secret.trail;
@@ -28383,7 +28764,7 @@ body.netgame #revivetouch{display:flex}
                   const tip = secret.rotor.getWorldPosition(new V()),
                     side = new V(0, 0.05 + 0.02 * f, 0).applyQuaternion(secret.rotor.getWorldQuaternion(new THREE.Quaternion()));
                   secret.trail.color.setHex(secret.whip > 0.2 ? 0xff6a24 : flying ? 0xc42410 : 0x6a0c0c);
-                  secret.trail.maxAge = 0.18 + 0.32 * act;
+                  secret.trail.maxAge = (0.18 + 0.32 * act) * (1 - 0.8 * f);
                   secret.trail.push(tip.clone().add(side), tip.clone().sub(side), simulationTime);
                 }
                 secret.trail.update(simulationTime);
@@ -28393,27 +28774,32 @@ body.netgame #revivetouch{display:flex}
                   ParticleSystem.emit(secret.rotor.getWorldPosition(new V()), Math.random() < 0.5 ? 0xff2a14 : 0x3a0808, 1, 1);
                 }
                 if (flying) {
-                  r.arms[0].rotation.x = 0.08;
-                  r.elbows[0].rotation.x = -0.15;
-                  r.arms[1].rotation.x = 0.08;
-                  r.elbows[1].rotation.x = -0.15;
-                  r.arms[0].rotation.z = 0.18;
-                  r.arms[1].rotation.z = -0.18;
+                  // hanging under the rotor: weapon arm forward and ready, free arm loose
+                  r.arms[0].rotation.x = -0.55 + Math.sin(t * 2.1) * 0.04;
+                  r.elbows[0].rotation.x = -0.45;
+                  r.arms[1].rotation.x = 0.12 + Math.sin(t * 1.7 + 1) * 0.05;
+                  r.elbows[1].rotation.x = -0.2;
+                  r.arms[0].rotation.z = 0.12;
+                  r.arms[1].rotation.z = -0.2;
                 }
               }
             }
             if (r.secretAccessories?.fly > 0.01) {
               // Flight posture: chest pitched into the direction of travel, legs trailing and
               // slightly bent, free arm opened for balance.
-              const f = r.secretAccessories.fly;
-              r.chest.rotation.x += 0.38 * f;
+              const f = r.secretAccessories.fly, heli = r.secretAccessories.type === "demon";
+              r.chest.rotation.x += (heli ? 0.06 : 0.38) * f;
               for (let i = 0; i < 2; i++) {
-                r.legs[i].rotation.x = r.legs[i].rotation.x * (1 - f) + (0.42 + Math.sin(t * 2 + i) * 0.06) * f;
-                r.knees[i].rotation.x = r.knees[i].rotation.x * (1 - f) + (0.35 + i * 0.12) * f;
+                // demon: legs dangle straight down and sway with the rotor; angel: trailing legs
+                const lx = heli ? 0.08 + Math.sin(t * 1.6 + i * 1.3) * 0.07 : 0.42 + Math.sin(t * 2 + i) * 0.06,
+                  kx = heli ? 0.12 + i * 0.08 + Math.max(0, Math.sin(t * 1.6 + i * 1.3)) * 0.1 : 0.35 + i * 0.12;
+                r.legs[i].rotation.x = r.legs[i].rotation.x * (1 - f) + lx * f;
+                r.knees[i].rotation.x = r.knees[i].rotation.x * (1 - f) + kx * f;
               }
             }
             if (r.secretAccessories && r.classId === selectedClass && state === GameState.PLAYING && player.abilityKind) ClassAscend.pose(r, ClassAscend.since());
             else r.ascDip = 0;
+            if (g === CameraRig.avatar && state === GameState.PLAYING) ThrowAnim.poseTP(r);
             if (reloading) {
               // Phased reload in third person (mirrors the first-person one): weapon rolls in, the
               // support hand drops to the belt for a fresh mag, slaps it in (knock), then racks.
@@ -30784,11 +31170,11 @@ body.netgame #revivetouch{display:flex}
           keys.add(c);
           if (repeat) return true;
           if (c === "KeyR") PlayerController.reload();
-          if (c === "KeyE") Doors.interact();
+          if (c === "KeyE" && !handsBusy()) Doors.interact();
           if (c === "F8" && DevMode.active) DevMode.toggle();
           if (c === "KeyQ") PlayerController.ability();
-          if (c === "KeyF") SecretWeaponSkills.use();
-          if (c === "KeyB") MatchShop.toggle();
+          if (c === "KeyF" && !handsBusy()) SecretWeaponSkills.use();
+          if (c === "KeyB" && !handsBusy()) MatchShop.toggle();
           if (c === "KeyG") PlayerController.grenade();
           if (/^Digit[1-5]$/.test(c)) PlayerController.switch(Number(c.slice(-1)) - 1);
           if (c === "Space") player.jumpQueuedAt = simulationTime;
@@ -31576,9 +31962,10 @@ body.netgame #revivetouch{display:flex}
           const perfT1 = performance.now();
           renderer.info.autoReset = false;
           renderer.info.reset();
+          if (window.__camOverride) window.__camOverride(camera); // capture tooling only (?test)
           if (inWorld) WorldArt.planarReflection(dt);
           if (!DepthOfField.render(dt)) renderer.render(scene, camera);
-          if (inWorld && WeaponSystem.model.visible) {
+          if (inWorld && (WeaponSystem.model.visible || ThrowArms.g?.visible)) {
             renderer.autoClear = false;
             renderer.clearDepth();
             renderer.render(Viewmodel.scene, Viewmodel.camera);
@@ -31630,6 +32017,10 @@ body.netgame #revivetouch{display:flex}
             BloodWave,
             AutoFire,
             ScytheThrow,
+            ThrowAnim,
+            ThrowArms,
+            DemonLegion,
+            handsBusy,
             ArchPowers,
             WindLitter,
             PowerUps,
