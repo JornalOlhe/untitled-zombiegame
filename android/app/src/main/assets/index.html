@@ -6025,7 +6025,7 @@ body.netgame #revivetouch{display:flex}
             o.g.traverse((m) => { if (m.isSprite) m.material.dispose(); });
             this.out = null;
             ThrowAnim.caught();
-            ParticleSystem.emit(o.pos.clone(), 0xff4a14, 10, 2.6);
+            if (CameraRig.distance > 0.6) ParticleSystem.emit(o.pos.clone(), 0xff4a14, 10, 2.6);
             AudioManager.tone(520, 0.12, "square", 0.08, 260, "weapons");
             AudioManager.tone(160, 0.18, "sawtooth", 0.06, 90, "weapons");
             WeaponSystem.kickVelocity = (WeaponSystem.kickVelocity || 0) + 2;
