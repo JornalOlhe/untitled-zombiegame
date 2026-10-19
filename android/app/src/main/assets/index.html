@@ -28954,6 +28954,8 @@ body.netgame #revivetouch{display:flex}
                 r.arms[0].rotation.x = (r.oneHand ? -1.2 : -0.6) - Math.max(0, mp.p.y) * 2 + mp.p.z * 1.5;
                 r.arms[0].rotation.z = (r.oneHand ? -0.04 : 0.5) - mp.p.x * 1.2;
                 if (r.oneHand) r.elbows[0].rotation.x = -0.4 - mp.p.z * 1.4;
+                // the long scythe sweeps across the body: the free arm swings back out of its path
+                if (r.weapon?.scythe) { const k = Math.sin(Math.min(1, mp.k) * Math.PI); r.arms[1].rotation.set(-0.08 + 0.55 * k, 0, -0.52 - 0.35 * k); r.elbows[1].rotation.x = -0.32 - 0.2 * k; }
               }
             } else if (attack < 0.3 && r.weapon?.kind !== "melee") {
               const a = Math.sin((attack / 0.3) * Math.PI);
