@@ -300,12 +300,22 @@ const server = http.createServer((req, res) => {
       assert.deepEqual(screenState.visible, ['menu'], 'screen transitions must leave exactly one menu visible');
       assert.deepEqual(screenState.hiddenInteractive, [], 'hidden menus must be inert and aria-hidden');
       await page.locator('#play').click();
-      await page.locator('#solo').click();
+      await page.locator('#survivalbtn').click();
       await page.locator('#modescreen:not(.hidden)').waitFor({state:'visible'});
       await page.locator('#backplay').click();
       await page.locator('#playscreen:not(.hidden)').waitFor({state:'visible'});
       assert.ok(await page.locator('#classscreen').evaluate(el=>el.classList.contains('hidden')), 'Mode Back must return one step to Play, never open Loadout');
+      // HISTÓRIA: one click to the level list, map and difficulty picked on the same screen
       await page.locator('#solo').click();
+      await page.locator('#storyscreen:not(.hidden)').waitFor({state:'visible'});
+      assert.equal(await page.locator('#story-pick [data-story-map]').count(), 5, 'story screen lists the 5 maps');
+      assert.equal(await page.locator('#story-pick [data-story-diff]').count(), 4, 'story screen lists the 4 difficulties');
+      await page.locator('#story-pick [data-story-map="2"]').click();
+      assert.match(await page.locator('#story-title').textContent(), /Dark Forest/);
+      await page.locator('#story-pick [data-story-map="0"]').click();
+      await page.locator('#backdifficulty').click();
+      await page.locator('#playscreen:not(.hidden)').waitFor({state:'visible'});
+      await page.locator('#survivalbtn').click();
       await page.locator('[data-choice="mode"][data-value="timed"]').click();
       assert.equal(await page.locator('#mode').inputValue(),'timed');
       await page.locator('#nextmap').click();

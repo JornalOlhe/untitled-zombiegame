@@ -1126,3 +1126,15 @@ body.horde-wave #hud::after { content: ""; position: fixed; inset: 0; pointer-ev
   .arena-help { display: none; }
 }
 @media (max-width: 560px) and (orientation: portrait) { .arena-wrap { grid-template-columns: 1fr; } }
+
+/* v55: decluttered home + one-screen story picker */
+.home-icons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.home-icons button { padding: 10px 6px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; position: relative; }
+.home-icons #helpbtn, .home-icons #exitbtn { grid-column: span 2; }
+.home-icons small:not([hidden]) { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--amber); }
+.choice-card.primary-card { border-color: #ff4a3f88; background: linear-gradient(160deg, #5a070b, var(--panel) 70%); }
+.story-pick { display: grid; gap: 6px; margin: 0 0 12px; }
+.story-pick .pick-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.story-pick .pick { padding: 7px 12px; font-family: var(--mono); font-size: 12px; letter-spacing: .08em; background: #ffffff0a; border: 1px solid #ffffff22; }
+.story-pick .pick.on { background: linear-gradient(90deg, #8e0c12, #4a070a); border-color: #ff4a3f; color: #fff; }
+.home-icons button.has-reward::after { content: ""; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }

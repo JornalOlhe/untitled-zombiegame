@@ -905,8 +905,22 @@
       }
       .loading h2 {
         font-family: Impact, sans-serif;
-        font-size: 50px;
+        font-size: clamp(54px, 11vw, 120px);
+        letter-spacing: .06em;
+        margin: 0;
+        color: #efe6da;
+        text-shadow: 0 0 2px #000, 4px 4px 0 #3a0306, 0 0 70px #c0141c88;
+        animation: introTitle 1.6s cubic-bezier(.2,.8,.2,1) both, introFlicker 4s 1.6s infinite;
       }
+      .loading { background: radial-gradient(ellipse at 50% 55%, #2a0a0c 0%, #0b0a0b 55%, #050505 100%); transition: opacity .85s ease; }
+      .loading::before { content: "UNTITLED ZOMBIE GAME"; font: 600 12px/1 monospace; letter-spacing: .5em; color: #d8262e; margin-bottom: 14px; animation: introFade 1.2s .3s both; }
+      .loading p { font: 500 13px/1.4 monospace; letter-spacing: .18em; text-transform: uppercase; color: #b9aea2; animation: introFade 1s .8s both; }
+      .loading::after { content: ""; justify-self: center; width: min(320px, 60vw); height: 3px; margin-top: 18px; background: linear-gradient(90deg, transparent, #d8262e, transparent) 0 0 / 40% 100% no-repeat, #ffffff14; animation: introBar 1.4s ease-in-out infinite; }
+      .loading.fadeout { opacity: 0; pointer-events: none; }
+      @keyframes introTitle { from { opacity: 0; transform: scale(1.18); filter: blur(8px); letter-spacing: .3em; } to { opacity: 1; transform: none; filter: none; } }
+      @keyframes introFlicker { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .55; } 95% { opacity: 1; } 97% { opacity: .7; } }
+      @keyframes introFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      @keyframes introBar { from { background-position: -40% 0, 0 0; } to { background-position: 140% 0, 0 0; } }
       #touch {
         position: fixed;
         inset: 0;
@@ -2681,14 +2695,16 @@ body.netgame #revivetouch{display:flex}
         <button id="profilechip" class="profile-chip" type="button" aria-label="Abrir perfil"></button>
       </header>
       <nav class="home-nav" aria-label="Menu principal">
-        <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>Solo ou multiplayer online</small><i>›</i></button>
-        <button id="missionsbtn" class="home-item" type="button"><b>MISSÕES</b><small id="missionsbadge">Diárias, semanais e únicas</small><i>›</i></button>
-        <button id="seasonbtn" class="home-item" type="button"><b>PASSE DE TEMPORADA</b><small id="seasonbadge">Temporada 1 · grátis</small><i>›</i></button>
-        <button id="indexbtn" class="home-item" type="button"><b>ÍNDICE</b><small id="indexbadge">Bestiário e marcos de abate</small><i>›</i></button>
-        <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas, classes, spins e slots</small><i>›</i></button>
+        <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>História, sobrevivência ou multiplayer</small><i>›</i></button>
+        <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas e classes</small><i>›</i></button>
         <button id="customizebtn" class="home-item" type="button"><b>LOJA</b><small>Visual e equipamentos</small><i>›</i></button>
-        <button id="settingsbtn" class="home-item" type="button"><b>CONFIGURAÇÕES</b><small>Gráficos, áudio e controles</small><i>›</i></button>
-        <div class="home-minor"><button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button></div>
+        <div class="home-minor home-icons">
+          <button id="missionsbtn" type="button" title="Missões"><span>MISSÕES</span><small id="missionsbadge" hidden></small></button>
+          <button id="seasonbtn" type="button" title="Passe de temporada"><span>PASSE</span><small id="seasonbadge" hidden></small></button>
+          <button id="indexbtn" type="button" title="Índice"><span>ÍNDICE</span><small id="indexbadge" hidden></small></button>
+          <button id="settingsbtn" type="button" title="Configurações"><span>CONFIG.</span></button>
+          <button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button>
+        </div>
       </nav>
       <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
@@ -2828,7 +2844,8 @@ body.netgame #revivetouch{display:flex}
     <section id="playscreen" class="screen hidden panel-screen">
       <header class="panel-head"><button class="back-btn" data-menu type="button">‹ VOLTAR</button><h2>JOGAR</h2></header>
       <div class="play-choice">
-        <button id="solo" class="choice-card" type="button"><span class="choice-icon">☠</span><b>SOLO</b><small>Você contra a horda · funciona offline</small></button>
+        <button id="solo" class="choice-card primary-card" type="button"><span class="choice-icon">☠</span><b>HISTÓRIA</b><small>Escolha o mapa e o nível · funciona offline</small></button>
+        <button id="survivalbtn" class="choice-card" type="button"><span class="choice-icon">∞</span><b>SOBREVIVÊNCIA</b><small>Infinity ou contra o tempo</small></button>
         <button id="multiplayer" class="choice-card" type="button"><span class="choice-icon">⚑</span><b>MULTIPLAYER</b><small>1–4 jogadores · online</small></button>
         <button id="arenabtn" class="choice-card" type="button"><span class="choice-icon">▦</span><b>ARENAS</b><small>Editor de mapas · códigos da comunidade</small></button>
       </div>
@@ -2982,7 +2999,8 @@ body.netgame #revivetouch{display:flex}
     </section>
     <section id="storyscreen" class="screen hidden">
       <div class="container">
-        <div class="topline"><div><p class="step-label">04 / STORY</p><h2 id="story-title">Escolha o nível.</h2><p id="story-map" class="story-summary"></p></div><button id="backdifficulty">Voltar à dificuldade</button></div>
+        <div class="topline"><div><p class="step-label">04 / STORY</p><h2 id="story-title">Escolha o nível.</h2><p id="story-map" class="story-summary"></p></div><button id="backdifficulty">Voltar</button></div>
+        <div id="story-pick" class="story-pick" aria-label="Mapa e dificuldade"></div>
         <div class="story-layout"><div><div id="story-levels" class="story-levels" aria-label="Níveis da história"></div><div id="story-detail" class="story-detail"></div></div><aside id="story-rewards" class="story-rewards" aria-label="Recompensas da história"></aside></div>
         <div class="footer-actions"><span class="hint">20 waves por nível · 1 estrela libera o próximo</span><button id="story-deploy" class="primary">Iniciar nível</button></div>
       </div>
@@ -3802,7 +3820,8 @@ body.netgame #revivetouch{display:flex}
           async claimMaster(){if(!this.masterReady())return UIManager.toast("Ainda faltam níveis/dificuldades para a recompensa máxima.");if(this.data.claims.includes("master"))return UIManager.toast("Recompensa máxima já coletada.");if(Account.signedIn()){if(!DR.Backend.isOnline())return UIManager.toast("Conecte-se para resgatar a recompensa máxima.");try{const x=await DR.StoryRepository.claimMaster();Account.applyNonSpending(x.profile);this.setServer(x.story);UIManager.toast("STORY COMPLETA · recompensa máxima recebida.")}catch(e){UIManager.toast(e.message)}}else{this.grantLocal(100000,25,10);this.data.claims.push("master");this.saveLocal();UIManager.toast("STORY COMPLETA · recompensa máxima recebida.")}this.render()},
           async open(){await this.load();this.render();UIManager.screen("storyscreen")},
           render(){
-            const title=maps[selectedMap]?.name||"Mapa";$("story-title").textContent=`${title} · Story`;$("story-map").textContent=`${diff[difficulty]?.label||difficulty} · 10 níveis · 20 waves por nível · ×${String(diff[difficulty]?.coins||1).replace(".",",")} moedas`;
+            const title=maps[selectedMap]?.name||"Mapa";$("story-title").textContent=`${title} · Story`;
+            const pick=$("story-pick");if(pick){pick.innerHTML=`<div class="pick-row">${maps.map((m,i)=>`<button type="button" class="pick ${i===selectedMap?"on":""}" data-story-map="${i}">${m.name}</button>`).join("")}</div><div class="pick-row">${["easy","medium","hard","nightmare"].map(k=>`<button type="button" class="pick ${k===difficulty?"on":""}" data-story-diff="${k}">${diff[k]?.label||k}</button>`).join("")}</div>`;pick.querySelectorAll("[data-story-map]").forEach(b=>b.onclick=()=>{selectedMap=Number(b.dataset.storyMap);storyLevel=1;this.render()});pick.querySelectorAll("[data-story-diff]").forEach(b=>b.onclick=()=>{difficulty=b.dataset.storyDiff;$("difficulty").value=difficulty;storyLevel=1;this.render()});}$("story-map").textContent=`${diff[difficulty]?.label||difficulty} · 10 níveis · 20 waves por nível · ×${String(diff[difficulty]?.coins||1).replace(".",",")} moedas`;
             $("story-levels").innerHTML=Array.from({length:10},(_,i)=>{const level=i+1,r=this.row(selectedMap,level,difficulty),stars=r?.stars||0,unlocked=this.unlocked(level);return`<button class="story-level ${level===storyLevel?"selected":""} ${unlocked?"":"locked"}" data-story-level="${level}" ${unlocked?"":"disabled"}><b>${unlocked?"":"🔒 "}${level}</b><span class="story-stars">${"★".repeat(stars)}${"☆".repeat(3-stars)}</span>${level>=5?`<small class="boss-tag">BOSS</small>`:""}</button>`}).join("");
             $("story-levels").querySelectorAll("[data-story-level]").forEach(b=>b.onclick=()=>{storyLevel=Number(b.dataset.storyLevel);this.render()});
             const r=this.row(),o=this.objectives(selectedMap,storyLevel),best=r?.best||{},stars=r?.stars||0,rw=this.levelReward(),values={...best,wavesCleared:stars?20:0};
@@ -6045,10 +6064,111 @@ body.netgame #revivetouch{display:flex}
           },
           reset() { if (this.out) this.catch(); },
         };
+        // First-person arms cloned from the live survivor model (forearm + hand with the player's
+        // skin and outfit), oriented from the grip back toward the camera.
+        const FPArms = {
+          key: "", src: null,
+          rig() {
+            let style = "";
+            try { style = JSON.stringify(CharacterStyle.data || {}); } catch {}
+            const key = selectedClass + "|" + style;
+            if (this.key !== key || !this.src) {
+              if (this.src) { try { Survivor.dispose(this.src); } catch {} }
+              this.src = null;
+              try { this.src = Survivor.create(selectedClass, WeaponSystem.weapons.find((x) => x.name === "MP5") || WeaponSystem.weapons[1]); } catch (e) { this.src = null; console.warn("[FPArms]", e.message); }
+              this.key = key;
+            }
+            return this.src?.userData?.rig || null;
+          },
+          make(left, w) {
+            if (this.building) return null; // the survivor's own weapon build re-enters here
+            this.building = true;
+            let r = null;
+            try { r = this.rig(); } finally { this.building = false; }
+            if (!r?.arms || !r.elbows) return null;
+            const i = left ? 1 : 0, arm = r.arms[i], elbow = r.elbows[i];
+            const piece = new THREE.Group();
+            const ey = elbow.position.y;
+            for (const c of arm.children) if (c.isMesh) { const m = c.clone(); m.material = c.material.clone(); piece.add(m); } // whole arm: runs off-screen
+            const e = elbow.clone(true);
+            e.rotation.set(0, 0, 0);
+            e.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.castShadow = o.receiveShadow = false; } });
+            piece.add(e);
+            piece.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(piece);
+            if (!isFinite(box.min.y)) return null;
+            // hand end (lowest point) sits on the grip; the forearm runs back toward the camera
+            const wrap = new THREE.Group();
+            piece.position.set(-(box.min.x + box.max.x) / 2, -(box.min.y + 0.07), -(box.min.z + box.max.z) / 2);
+            wrap.add(piece);
+            const melee = w?.kind === "melee" && !w.specter;
+            const d = left ? new V(-0.3, -0.5, 0.82) : melee ? new V(0.3, -0.55, 0.78) : new V(0.34, -0.5, 0.8);
+            wrap.quaternion.setFromUnitVectors(new V(0, 1, 0), d.normalize());
+            wrap.scale.setScalar(melee ? 0.62 : 0.56);
+            wrap.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; o.frustumCulled = false; } });
+            return wrap;
+          },
+        };
         // Throw gestures shared by the Demonic Fury and the Angelic Specters. Each arm runs its own
         // short timeline: WIND (the arm cocks back) → RELEASE (a fast snap forward, palm open) →
         // RETRACT. pose(side) returns { cock, ext } in 0..1 for the first-person arms (ThrowArms)
         // and the third-person avatar (poseTP). catchAt drives the scythe's catch in the hand.
+        // Soft particle FX: billowing smoke puffs (camera-facing sprites that rise, drift with the
+        // wind, grow and fade), glowing sparks with gravity and short electric arcs. Pooled.
+        const SoftSmoke = {
+          items: [], MAX: 140,
+          smokeTex() {
+            if (this._tex) return this._tex;
+            const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d");
+            for (let i = 0; i < 9; i++) {
+              const px = 64 + (Math.random() - 0.5) * 40, py = 64 + (Math.random() - 0.5) * 40, r = 26 + Math.random() * 22;
+              const gr = x.createRadialGradient(px, py, 0, px, py, r);
+              gr.addColorStop(0, "rgba(255,255,255,0.32)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+              x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+            }
+            return (this._tex = new THREE.CanvasTexture(c));
+          },
+          add(obj, it) { if (this.items.length >= this.MAX) this.drop(this.items.shift()); scene.add(obj); it.obj = obj; this.items.push(it); return it; },
+          drop(it) { scene.remove(it.obj); it.obj.material.dispose(); if (it.obj.geometry && !it.obj.isSprite) it.obj.geometry.dispose(); },
+          puff(pos, o = {}) {
+            const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.smokeTex(), color: o.color ?? 0x555555, transparent: true, opacity: 0, depthWrite: false, rotation: Math.random() * 6.28 }));
+            sp.position.copy(pos); sp.scale.setScalar(o.size ?? 0.4);
+            this.add(sp, { kind: "puff", t: 0, life: o.life ?? 2, size: o.size ?? 0.4, grow: o.grow ?? 1.8, rise: o.rise ?? 1, op: o.opacity ?? 0.4, spin: (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 0.25, vz: (Math.random() - 0.5) * 0.25 });
+          },
+          spark(pos, color = 0xffd27a, speed = 2.6) {
+            const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: VisualArt.texture("glow"), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+            sp.position.copy(pos); sp.scale.setScalar(0.09);
+            const a = Math.random() * 6.28, u = Math.random();
+            this.add(sp, { kind: "spark", t: 0, life: 0.35 + Math.random() * 0.4, v: new V(Math.cos(a) * speed * u, speed * (0.4 + Math.random() * 0.8), Math.sin(a) * speed * u) });
+          },
+          arc(center, radius, color = 0xbfe6ff) {
+            const pts = [], a = Math.random() * 6.28, b = a + (Math.random() - 0.5) * 2.2, n = 7;
+            const p0 = center.clone().add(new V(Math.cos(a) * radius * 0.4, (Math.random() - 0.5) * 0.4, Math.sin(a) * radius * 0.4)), p1 = center.clone().add(new V(Math.cos(b) * radius, (Math.random() - 0.5) * 0.6, Math.sin(b) * radius));
+            for (let i = 0; i <= n; i++) { const p = p0.clone().lerp(p1, i / n); if (i && i < n) p.add(new V((Math.random() - 0.5) * 0.14, (Math.random() - 0.5) * 0.14, (Math.random() - 0.5) * 0.14)); pts.push(p); }
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+            this.add(line, { kind: "arc", t: 0, life: 0.12 + Math.random() * 0.08 });
+          },
+          update(dt) {
+            const wind = typeof WindManager !== "undefined" ? WindManager.vec?.() : null;
+            for (let i = this.items.length - 1; i >= 0; i--) {
+              const it = this.items[i], o = it.obj;
+              it.t += dt;
+              const k = it.t / it.life;
+              if (k >= 1) { this.drop(it); this.items.splice(i, 1); continue; }
+              if (it.kind === "puff") {
+                o.position.x += (it.vx + (wind?.x || 0) * 0.35 * k) * dt; o.position.z += (it.vz + (wind?.z || 0) * 0.35 * k) * dt;
+                o.position.y += it.rise * (1 - k * 0.6) * dt;
+                o.scale.setScalar(it.size * (1 + it.grow * Math.sqrt(k)));
+                o.material.opacity = it.op * Math.min(1, k * 5) * (1 - k) ** 1.4;
+                o.material.rotation += it.spin * dt;
+              } else if (it.kind === "spark") {
+                it.v.y -= 9 * dt; o.position.addScaledVector(it.v, dt);
+                o.material.opacity = 1 - k; o.scale.setScalar(0.09 * (1 - k * 0.5));
+              } else o.material.opacity = Math.random() < 0.3 ? 0.2 : 1 - k;
+            }
+          },
+          clear() { for (const it of this.items) this.drop(it); this.items.length = 0; },
+        };
         // Hands empty: the scythe is in the air (or being thrown) or every Specter is out.
         function handsBusy() {
           const w = WeaponSystem.current();
@@ -6102,6 +6222,17 @@ body.netgame #revivetouch{display:flex}
             const A = VisualArt, g = new THREE.Group();
             g.name = "ThrowArms";
             const make = (sgn) => {
+              const own = FPArms.make(sgn < 0, { kind: "throw" });
+              if (own) {
+                // the survivor's own arm (same skin as the body), palm forward
+                const arm = new THREE.Group();
+                own.scale.multiplyScalar(0.62);
+                arm.add(own);
+                arm.userData.fingers = [];
+                arm.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+                g.add(arm);
+                return arm;
+              }
               const arm = new THREE.Group();
               const palm = A.ellipsoid(arm, [0, 0, 0], [0.058, 0.03, 0.072], 0x5a6259, "polymer");
               palm.castShadow = palm.receiveShadow = false;
@@ -6127,7 +6258,7 @@ body.netgame #revivetouch{display:flex}
             this.g = g;
           },
           update() {
-            if (!this.g) this.build();
+            if (!this.g || (FPArms.key && this.key !== FPArms.key)) { if (this.g) this.g.parent?.remove(this.g); this.build(); this.key = FPArms.key; }
             const fp = CameraRig.distance < 0.6 && state === GameState.PLAYING;
             const w = WeaponSystem.current();
             let any = false;
@@ -6488,14 +6619,20 @@ body.netgame #revivetouch{display:flex}
             for (const g of this.gens) {
               g.halo.material.opacity = g.on ? 0.55 : 0.45 + 0.3 * Math.sin(t * 4 + g.i);
               if (g.on) {
-                if (t >= g.puffAt) { g.puffAt = t + rand(0.25, 0.5); const at = g.exhaust.clone().applyMatrix4(g.g.matrixWorld); ParticleSystem.emit(at, 0x3a3a3a, 2, 0.9); }
+                if (t >= g.puffAt) { g.puffAt = t + rand(0.12, 0.22); const at = g.exhaust.clone().applyMatrix4(g.g.matrixWorld); SoftSmoke.puff(at, { color: 0x4a4744, size: 0.35, grow: 1.9, life: rand(1.8, 2.6), rise: 1.1, opacity: 0.42 }); }
+                if (Math.random() < dt * 1.5) SoftSmoke.spark(new V(g.x + rand(-0.4, 0.4), 1.2 + rand(0, 0.4), g.z + rand(-0.4, 0.4)), 0x9dffb6);
                 continue;
               }
               const near = Math.hypot(p.x - g.x, p.z - g.z) < 2.4;
               const holding = near && (keys.has("KeyE") || this.touchHold) && !handsBusy();
               g.hold = holding ? g.hold + dt : Math.max(0, g.hold - dt * 2);
               if (near && !holding && t - (this.hintAt || -9) > 6) { this.hintAt = t; UIManager.toast?.(touchMode ? "Segure ⚡ para religar o gerador" : "Segure E para religar o gerador"); }
-              if (holding && Math.random() < dt * 10) ParticleSystem.emit(new V(g.x, 1.4, g.z), 0xffe08a, 2, 1.5);
+              if (holding) {
+                // repair in progress: crackling electric arcs and hot sparks off the panel, faster as it charges
+                if (Math.random() < dt * (8 + g.hold * 8)) SoftSmoke.spark(new V(g.x + rand(-0.45, 0.45), 1.05 + rand(0, 0.5), g.z + rand(-0.45, 0.45)), Math.random() < 0.5 ? 0xfff2b0 : 0x9fd8ff);
+                if (Math.random() < dt * (3 + g.hold * 3)) SoftSmoke.arc(new V(g.x, 1.3, g.z), 0.55, 0xbfe6ff);
+                if (Math.random() < dt * 2) SoftSmoke.puff(new V(g.x + rand(-0.3, 0.3), 1.6, g.z + rand(-0.3, 0.3)), { color: 0x5a5550, size: 0.25, grow: 1.2, life: 1.2, rise: 0.8, opacity: 0.3 });
+              }
               if (g.hold >= 3) this.powerOn(g);
             }
             const canUse = this.gens.some((g) => !g.on && Math.hypot(p.x - g.x, p.z - g.z) < 2.4);
@@ -6508,7 +6645,11 @@ body.netgame #revivetouch{display:flex}
             g.on = true; g.hold = 0;
             g.lampMat.color.setHex(0x4aff7a); g.beamMat.color.setHex(0x4aff7a); g.halo.material.color.setHex(0x4aff7a);
             AudioManager.tone(220, 0.6, "sawtooth", 0.15, 660); setTimeout(() => AudioManager.tone(880, 0.25, "triangle", 0.12, 1320), 300);
-            ParticleSystem.emit(new V(g.x, 1.5, g.z), 0x4aff7a, 40, 4);
+            // power-up: green shockwave, a burst of sparks, arcs and a thick exhaust cough
+            MonsterFX.ring(new V(g.x, 0.1, g.z), 4, 0x4aff7a, 0.7);
+            for (let k = 0; k < 26; k++) SoftSmoke.spark(new V(g.x + rand(-0.5, 0.5), 1.2 + rand(0, 0.6), g.z + rand(-0.5, 0.5)), k % 3 ? 0x8dffad : 0xffffff, 4.5);
+            for (let k = 0; k < 6; k++) SoftSmoke.arc(new V(g.x, 1.4, g.z), 0.9, 0x9dffb6);
+            { const at = g.exhaust.clone().applyMatrix4(g.g.matrixWorld); for (let k = 0; k < 8; k++) SoftSmoke.puff(at.clone().add(new V(rand(-0.2, 0.2), k * 0.1, rand(-0.2, 0.2))), { color: 0x2e2c2a, size: 0.5, grow: 2.6, life: 2.6, rise: 1.6, opacity: 0.55 }); }
             MatchShop.earn(400);
             const n = this.gens.filter((x) => x.on).length;
             UIManager.announce(`GERADOR ${n}/3`, n < 3 ? "O barulho atraiu a horda!" : "Energia restaurada · suprimentos a caminho", 2.2);
@@ -7648,6 +7789,10 @@ body.netgame #revivetouch{display:flex}
               return h;
             }
             function hand(x, y, z, left) {
+              // First person uses the survivor's own forearm and hand (same voxel skin as the
+              // third-person character), not a separate glove model.
+              const own = FPArms.make(left, w);
+              if (own) { const h = A.pivot(g, x, y, z); h.add(own); return h; }
               if (!left && w.kind === "melee" && !w.specter && !w.spear) return gripHand(x, y, z);
               const h = A.pivot(g, x, y, z);
               A.ellipsoid(
@@ -9141,7 +9286,7 @@ body.netgame #revivetouch{display:flex}
             }
             if (!this.weather) return;
             const map = [GameState.MENU, GameState.CLASS_SELECT].includes(state)
-                ? 0
+                ? MapManager.currentMap ?? 0
                 : selectedMap,
               weatherOn = SettingsManager.data.vfx !== "off",
               rainMap = map === 0 || map === 2;
@@ -10647,7 +10792,8 @@ body.netgame #revivetouch{display:flex}
             this.mesh = new THREE.Points(
               this.geo,
               new THREE.PointsMaterial({
-                size: 0.11,
+                size: 0.15,
+                map: VisualArt.texture("glow"),
                 vertexColors: true,
                 transparent: true,
                 opacity: 0.85,
@@ -12894,6 +13040,7 @@ body.netgame #revivetouch{display:flex}
           flow: null,
           blocked: null,
           build(index) {
+            this.currentMap = index;
             this.group.traverse((o) => {
               if (o.userData.disposableMaterial && o.material) {
                 for (const material of Array.isArray(o.material) ? o.material : [o.material])
@@ -14267,13 +14414,30 @@ body.netgame #revivetouch{display:flex}
             target.x += GrenadeThrow.drop * 0.08;
             this.basePos = (this.basePos || target.clone()).lerp(target, 1 - Math.exp(-dt * 16));
             this.model.position.copy(this.basePos);
+            // Body feel in first person: the weapon floats up a touch in the air, dips and springs
+            // back on landing (harder after a long fall) and settles lower while crouched.
+            {
+              const h = player.jump || 0, air = h > 0.05 && !player.onLadder;
+              if (air) this.fpPeak = Math.max(this.fpPeak || 0, h);
+              if (this.fpAir && !air) { this.fpLandAt = simulationTime; this.fpLandPow = clamp((this.fpPeak || 0) / 1.1, 0.35, 1.4); this.fpPeak = 0; }
+              this.fpAir = air;
+              this.fpAirK = (this.fpAirK || 0) + ((air ? 1 : 0) - (this.fpAirK || 0)) * (1 - Math.exp(-dt * 9));
+              const lk = clamp((simulationTime - (this.fpLandAt ?? -9)) / 0.32, 0, 1), dip = lk < 1 ? Math.sin(lk * Math.PI) * (1 - lk * 0.4) * 0.055 * (this.fpLandPow || 1) : 0;
+              const crouchNow = keys.has("ControlLeft") || keys.has("ControlRight") || !!PlayerController.crouching;
+              this.fpCrouchK = (this.fpCrouchK || 0) + ((crouchNow ? 1 : 0) - (this.fpCrouchK || 0)) * (1 - Math.exp(-dt * 10));
+              const k = aiming ? 0.3 : 1;
+              this.model.position.y += (0.018 * this.fpAirK - dip - 0.022 * this.fpCrouchK) * k;
+              this.model.position.x -= 0.01 * this.fpCrouchK * k;
+              this.fpTilt = (0.06 * this.fpAirK - dip * 0.9 + 0.0) * k;
+              this.fpRoll = 0.05 * this.fpCrouchK * k;
+            }
             const eq = clamp((simulationTime - (this.equipAt ?? -9)) / 0.28, 0, 1), eqE = 1 - (1 - eq) * (1 - eq) * (1 - eq);
             if (eq < 1) { this.model.position.y -= (1 - eqE) * 0.32; this.model.position.x += (1 - eqE) * 0.06; }
             if (this.scoped) this.model.position.y = -2; // looking through the scope
             this.model.rotation.set(
-              this.kick * 0.075 + swayY * 0.3 - (1 - eqE) * 0.5,
+              this.kick * 0.075 + swayY * 0.3 - (1 - eqE) * 0.5 + (this.fpTilt || 0),
               swayX * 0.3,
-              this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002),
+              this.sprintRoll + Math.sin(phase * 0.5) * (moving ? 0.012 : 0.002) + (this.fpRoll || 0),
             );
             if (w.kind === "bow") {
               // Vertical bow, limbs ahead of the player; only a tiny cant keeps the string readable.
@@ -23482,6 +23646,7 @@ body.netgame #revivetouch{display:flex}
             turrets.length = 0;
             ReaperAllies.clear();
             DemonLegion.clear();
+            SoftSmoke.clear();
             ThrowAnim.reset();
             PlayerController.holdSince = PlayerController.throwPending = null;
             SecretWeaponSkills.reset();
@@ -24389,6 +24554,7 @@ body.netgame #revivetouch{display:flex}
             camera.updateProjectionMatrix();
             WeaponSystem.update(dt);
             ThrowArms.update();
+            SoftSmoke.update(dt);
             CameraRig.update(dt);
             Account.update();
             HordeAI.update(dt);
@@ -28506,6 +28672,14 @@ body.netgame #revivetouch{display:flex}
             r.hips.rotation.z = Math.cos(phase) * 0.04 * b * ground;
             r.chest.rotation.y = -r.hips.rotation.y * 0.9;
             r.chest.rotation.x += run * 0.16 + landK * 0.12 - r.airK * 0.05 - fallK * 0.12;
+            // own avatar in play: the chest follows the look pitch so the held weapon aims up/down
+            // with the camera (the head adds the rest); crouched/running reduce it a little
+            if (pitchOverride == null && g === CameraRig.avatar && state === GameState.PLAYING) {
+              const lookP = -pitch * (0.42 - 0.12 * run);
+              r.lookP = (r.lookP ?? lookP) + (lookP - (r.lookP ?? lookP)) * (1 - Math.exp(-dt * 14));
+              r.chest.rotation.x += r.lookP;
+              r.head.rotation.x -= r.lookP * 0.6;
+            }
             r.head.rotation.x += fallK * 0.25; // looks down at the landing
             const baseRot = r.holdRot || [0, Math.PI, 0];
             r.gun.rotation.set(baseRot[0], baseRot[1], baseRot[2] + Math.sin(t * 1.7) * 0.006);
@@ -29102,6 +29276,55 @@ body.netgame #revivetouch{display:flex}
         // intensity > 0 in the menu (the light itself is permanent, so no shader recompiles).
         const menuKeyLight = new THREE.PointLight(0xffd8b0, 0, 10, 2);
         scene.add(menuKeyLight);
+        // Menu backdrop: a slow cinematic dolly through each map, then a fade to the next map.
+        // The path is planned from the map's player start along the longest free line (tested
+        // against the map collision and the ceiling), so the camera never crosses a wall.
+        const MenuFlyby = {
+          DUR: 16, t: 0, map: 0, path: null, group: null,
+          fadeEl() { return (this._fade ||= (() => { const d = document.createElement("div"); d.id = "menufade"; d.style.cssText = "position:fixed;inset:0;background:#000;pointer-events:none;z-index:1;opacity:0;transition:none"; document.body.insertBefore(d, document.body.firstChild.nextSibling); return d; })()); },
+          plan() {
+            const M = MapManager, S = M.playerStart || [0, 10], ceil = M.ceilingAt?.() ?? 99;
+            const y0 = Math.min(3.0, ceil - 0.8);
+            let best = null;
+            for (let k = 0; k < 24; k++) {
+              const a = (k / 24) * Math.PI * 2, dx = Math.sin(a), dz = Math.cos(a);
+              let d = 0;
+              while (d < 26) {
+                const x = S[0] + dx * (d + 0.5), z = S[1] + dz * (d + 0.5);
+                if (M.collides(x, z, 1.1, 1.0) || M.collides(x, z, 1.1, y0)) break;
+                d += 0.5;
+              }
+              // prefer long, open lines; a slight bias to keep variety between maps
+              const score = d + Math.sin(k * 1.7 + this.map) * 0.6;
+              if (!best || score > best.score) best = { score, d, dx, dz };
+            }
+            const len = Math.max(0, Math.min(14, best.d - 3));
+            this.path = { sx: S[0], sz: S[1], dx: best.dx, dz: best.dz, len, h: y0, look: best.d };
+            this.group = M.group;
+          },
+          update(dt) {
+            const home = !$("menu")?.classList.contains("hidden") && state === GameState.MENU;
+            if (home) this.t += dt;
+            if (this.group !== MapManager.group || !this.path) { this.map = MapManager.currentMap ?? 0; this.plan(); this.t = 0; }
+            if (home && this.t > this.DUR) {
+              this.map = (this.map + 1) % maps.length;
+              MapManager.build(this.map);
+              this.plan(); this.t = 0;
+            }
+            const P = this.path, k = clamp(this.t / this.DUR, 0, 1), e = k * k * (3 - 2 * k);
+            const along = P.len * e, sway = Math.sin(this.t * 0.35) * 0.6;
+            const px = P.sx + P.dx * along + -P.dz * sway * 0.3, pz = P.sz + P.dz * along + P.dx * sway * 0.3;
+            const gy = MapManager.groundAt?.(px, pz, 0.3, P.h + 1) || 0;
+            camera.position.set(px, gy + P.h + Math.sin(this.t * 0.5) * 0.12, pz);
+            const ahead = Math.min(P.look, along + 7), yawOff = Math.sin(this.t * 0.22) * 0.35;
+            const lx = P.dx * Math.cos(yawOff) - P.dz * Math.sin(yawOff), lz = P.dz * Math.cos(yawOff) + P.dx * Math.sin(yawOff);
+            camera.lookAt(P.sx + P.dx * along + lx * (ahead - along + 4), gy + P.h * 0.55, P.sz + P.dz * along + lz * (ahead - along + 4));
+            // fade in after a map switch and out before the next one
+            const f = this.fadeEl(), edge = home ? Math.max(1 - this.t / 0.9, (this.t - (this.DUR - 0.9)) / 0.9) : 0;
+            f.style.opacity = String(clamp(edge, 0, 1));
+            f.style.display = home ? "block" : "none";
+          },
+        };
         const MenuAvatar = {
           model: null, key: "",
           update(dt, on) {
@@ -31079,7 +31302,8 @@ body.netgame #revivetouch{display:flex}
         $("backmode").onclick=()=>UIManager.screen("modescreen");
         $("nextmode").onclick=()=>{mode=$("mode").value;updatePrepSummary();document.querySelectorAll('[data-choice="difficulty"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.value===$("difficulty").value)));UIManager.screen("rulescreen")};
         $("backmaps").onclick=()=>UIManager.screen("mapscreen");
-        $("backdifficulty").onclick=()=>UIManager.screen("rulescreen");
+        $("backdifficulty").onclick=()=>DR.LobbyUI.openPlay();
+        $("survivalbtn").onclick=()=>{AudioManager.init();if($("mode").value==="classic"){$("mode").value="infinite";mode="infinite";}openModeSelect()};
         document.querySelectorAll("[data-choice]").forEach(button=>{button.onclick=()=>{const group=button.dataset.choice;$(group).value=button.dataset.value;if(group==="mode")mode=button.dataset.value;if(group==="difficulty")difficulty=button.dataset.value;document.querySelectorAll(`[data-choice="${group}"]`).forEach(o=>o.setAttribute("aria-pressed",String(o===button)));updatePrepSummary()}});
         const deployPreparedRun=async()=>{if($("deploy").disabled||$("story-deploy").disabled)return;$("deploy").disabled=$("story-deploy").disabled=true;const full=enterFullscreen();mode=$("mode").value;difficulty=$("difficulty").value;try{await Promise.all([full,Account.begin()])}catch(e){UIManager.toast(e.message);$("deploy").disabled=$("story-deploy").disabled=false;return}$("deploy").disabled=$("story-deploy").disabled=false;WeaponSystem.model.visible=true;PlayerController.start()};
         $("deploy").onclick=async()=>{mode=$("mode").value;difficulty=$("difficulty").value;if(mode==="classic"){await StoryMode.open();return}await deployPreparedRun()};
@@ -31719,9 +31943,12 @@ body.netgame #revivetouch{display:flex}
           async logout() {
             await Account.logout();
           },
+          // HISTÓRIA goes straight to the level list (map and difficulty are picked right there).
           startSolo() {
             AudioManager.init();
-            openModeSelect();
+            $("mode").value = "classic"; mode = "classic";
+            difficulty = $("difficulty").value;
+            StoryMode.open();
           },
           // Lobby moved to in_game: every member starts the shared match.
           async startMatch(lobby) {
@@ -31821,7 +32048,7 @@ body.netgame #revivetouch{display:flex}
         SettingsManager.apply();
         await PropModels.whenReady(4000);
         MapManager.build(0);
-        $("loading").classList.add("hidden");
+        { const L = $("loading"); L.classList.add("fadeout"); setTimeout(() => L.classList.add("hidden"), 900); }
         let guestChosen = false;
         try {
           guestChosen = !!localStorage.getItem(Account.guestKey);
@@ -31984,25 +32211,17 @@ body.netgame #revivetouch{display:flex}
               true,
             );
           }
-          MenuAvatar.update(dt, !inWorld && state === GameState.MENU);
+          MenuAvatar.update(dt, false); // the menu shows only the maps (no idle survivor)
+          if (inWorld && MenuFlyby._fade && MenuFlyby._fade.style.display !== "none") MenuFlyby._fade.style.display = "none";
           if (!inWorld) {
-            camera.position.set(
-              11 + Math.sin(menuTime * 0.055) * 5,
-              3.5,
-              -1 + Math.cos(menuTime * 0.055) * 10,
-            );
-            camera.lookAt(-5, 1, -12);
-            camera.fov = 65;
+            MenuFlyby.update(dt);
+            camera.fov = 62;
             camera.updateProjectionMatrix();
             ambientClock -= dt;
             if (ambientClock <= 0) {
-              ambientClock = 0.16;
-              ParticleSystem.emit(
-                new V(rand(-12, 15), rand(0.1, 4), rand(-15, 10)),
-                0xf69b52,
-                2,
-                0.2,
-              );
+              ambientClock = 0.2;
+              const c = camera.position, f = camera.getWorldDirection(new V());
+              ParticleSystem.emit(c.clone().addScaledVector(f, rand(4, 12)).add(new V(rand(-4, 4), rand(-1, 2), rand(-4, 4))), 0xf69b52, 1, 0.2);
             }
             if (state === GameState.CLASS_SELECT && previewRenderer) {
               const rect = $("classpreview").getBoundingClientRect();

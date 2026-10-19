@@ -53,7 +53,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     assert.deepEqual(schedule.advanced, ['quarterback', 'juggernaut', 'roadblock', 'wrecker']);
 
     await page.locator('#play').click();
-    await page.locator('#solo').click();
+    await page.locator('#survivalbtn').click();
     await page.locator('[data-choice="mode"][data-value="infinite"]').click();
     await page.locator('#nextmap').click();
     await page.locator('[data-map="0"]').click();
