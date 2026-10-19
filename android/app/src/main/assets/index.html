@@ -3891,6 +3891,9 @@ body.netgame #revivetouch{display:flex}
             tapered: new THREE.CylinderGeometry(0.85 * Math.SQRT2, Math.SQRT2, 1, 4).rotateY(Math.PI / 4),
             ring: new THREE.TorusGeometry(1, 0.13, 4, 4).rotateZ(Math.PI / 4),
             plane: new THREE.PlaneGeometry(1, 1),
+            // smooth versions for organic parts that must read round (first-person hand, demon tail)
+            roundSphere: new THREE.SphereGeometry(1, 16, 12),
+            roundTapered: new THREE.CylinderGeometry(0.85, 1, 1, 14),
           },
           textures: new Map(),
           materials: new Map(),
@@ -4152,6 +4155,14 @@ body.netgame #revivetouch{display:flex}
             );
             if (axis === "z") m.rotation.x = Math.PI / 2;
             if (axis === "x") m.rotation.z = Math.PI / 2;
+            return m;
+          },
+          roundEllipsoid(parent, pos, scale, color, kind = "skin", glow = 0) {
+            return this.mesh(parent, this.geometries.roundSphere, this.mat(color, kind, glow), pos, scale);
+          },
+          roundLink(parent, a, b, r1, r2, color, kind = "skin") {
+            const m = this.link(parent, a, b, r1, r2, color, kind);
+            m.geometry = this.geometries.roundTapered;
             return m;
           },
           link(parent, a, b, r1, r2, color, kind = "skin") {
@@ -6942,7 +6953,7 @@ body.netgame #revivetouch{display:flex}
                     // weapon reads as pixel blocks like the rest of the survivor's kit.
                     // (deferred: done lazily on first use, or in the background after loading, so the
                     // voxeliser never lengthens the boot)
-                    if (gltf.scene.userData.hdMeshes?.length) gltf.scene.userData.voxelPending = true;
+                    // HD melee stays a real 3D mesh (the voxel pass flattened thin blades into paper).
                     this.scenes.set(name, gltf.scene);
                     done();
                   },
@@ -7612,17 +7623,28 @@ body.netgame #revivetouch{display:flex}
             // One-hand melee: a real fist around the vertical handle — fingers wrap in front of it,
             // stacked down the grip, the palm and thumb close behind; pivot = handle centre.
             function gripHand(x, y, z) {
-              const h = A.pivot(g, x, y, z), glove = 0x5a6259, finger = 0x626a5e;
-              A.block(h, [0.03, 0, 0.032], [0.045, 0.105, 0.06], glove, "polymer");
-              A.block(h, [0.045, 0.012, 0.032], [0.012, 0.09, 0.05], 0x2d3939, "polymer");
+              const h = A.pivot(g, x, y, z), glove = 0x59625a, finger = 0x646d61, dark = 0x2e3a39;
+              // rounded palm and back of the hand closing behind the handle
+              A.roundEllipsoid(h, [0.03, 0, 0.03], [0.05, 0.072, 0.052], glove, "polymer");
+              A.roundEllipsoid(h, [0.046, 0.006, 0.036], [0.022, 0.06, 0.04], dark, "polymer");
+              // four fingers: knuckle → middle → tip, each curled round the front of the grip
               for (let i = 0; i < 4; i++) {
-                const fy = 0.036 - i * 0.024;
-                A.link(h, [0.032, fy, -0.012], [-0.006, fy, -0.034], 0.0135, 0.0135, finger, "polymer");
-                A.link(h, [-0.006, fy, -0.034], [-0.03, fy, -0.004], 0.0125, 0.012, finger, "polymer");
+                const fy = 0.036 - i * 0.024, r = i === 3 ? 0.0115 : 0.0135;
+                const k1 = [0.034, fy, -0.006], k2 = [0.012, fy, -0.036], k3 = [-0.022, fy, -0.03], tip = [-0.03, fy, -0.004];
+                A.roundEllipsoid(h, k1, [0.017, 0.017, 0.017], finger, "polymer");
+                A.roundLink(h, k1, k2, r, r * 0.95, finger, "polymer");
+                A.roundEllipsoid(h, k2, [0.015, 0.015, 0.015], finger, "polymer");
+                A.roundLink(h, k2, k3, r * 0.95, r * 0.9, finger, "polymer");
+                A.roundEllipsoid(h, k3, [0.014, 0.014, 0.014], finger, "polymer");
+                A.roundLink(h, k3, tip, r * 0.9, r * 0.75, finger, "polymer");
               }
-              A.link(h, [0.03, 0.05, 0.03], [-0.026, 0.058, 0.012], 0.016, 0.014, finger, "polymer");
-              A.link(h, [0.035, -0.03, 0.05], [0.1, -0.17, 0.2], 0.056, 0.064, 0x475953, "cloth");
-              A.tube(h, [0.04, -0.045, 0.07], 0.068, 0.05, 0x2d3f3e, "cloth").rotation.set(0.6, 0, 0.35);
+              // thumb wrapping over the index finger
+              A.roundEllipsoid(h, [0.03, 0.05, 0.034], [0.018, 0.018, 0.018], finger, "polymer");
+              A.roundLink(h, [0.03, 0.05, 0.034], [0.0, 0.058, 0.02], 0.016, 0.014, finger, "polymer");
+              A.roundLink(h, [0.0, 0.058, 0.02], [-0.026, 0.052, 0.004], 0.014, 0.012, finger, "polymer");
+              // cuff and forearm sleeve running down and out of view
+              A.roundEllipsoid(h, [0.045, -0.05, 0.075], [0.05, 0.05, 0.055], dark, "cloth");
+              A.roundLink(h, [0.045, -0.05, 0.075], [0.1, -0.18, 0.2], 0.05, 0.06, 0x475953, "cloth");
               return h;
             }
             function hand(x, y, z, left) {
@@ -14214,7 +14236,7 @@ body.netgame #revivetouch{display:flex}
             // One-hand melee: the gloved hand visibly wraps the handle at the lower right, above the
             // weapon HUD; the blade leans forward-left over the view.
             const heldMelee = w.kind === "melee" && !w.specter && !w.spear;
-            if (heldMelee) target.set(w.scythe ? 0.3 : 0.2, w.scythe ? -0.08 : -0.1, w.scythe ? -0.78 : -0.46);
+            if (heldMelee) target.set(w.scythe ? 0.3 : 0.2, w.scythe ? -0.08 : -0.15, w.scythe ? -0.78 : -0.5);
             if (w.kind === "bow" && !aiming) {
               // Keep the bow on the right but facing forward; sideways carry blocked too much view.
               target.x += 0.1;
@@ -14260,9 +14282,9 @@ body.netgame #revivetouch{display:flex}
             }
             if (heldMelee) {
               // held pose: tip tilted forward and leaning in toward the crosshair
-              this.model.rotation.x -= w.scythe ? 0.18 : 0.32;
+              this.model.rotation.x -= w.scythe ? 0.18 : 0.24;
               this.model.rotation.y += w.scythe ? 0.08 : 0;
-              this.model.rotation.z += w.scythe ? 0.42 : 0.28;
+              this.model.rotation.z += w.scythe ? 0.26 : 0.06;
             }
             if (w.scythe) {
               const pend = PlayerController.throwPending;
@@ -28755,6 +28777,70 @@ body.netgame #revivetouch{display:flex}
                   seg.rotation.x = S.x;
                   seg.rotation.y = S.y;
                 });
+                // Smooth skin over the vertebra chain: one continuous tapered tube rebuilt from the
+                // joint positions every frame (Catmull-Rom through the joints, parallel-transport
+                // frames), with curved spines along the top — no visible stack of boxes.
+                if (!secret.skin) {
+                  const SEGS = 44, RAD = 12, geo = new THREE.BufferGeometry();
+                  const pos = new Float32Array((SEGS + 1) * (RAD + 1) * 3), col = new Float32Array((SEGS + 1) * (RAD + 1) * 3), idx = [];
+                  for (let i = 0; i < SEGS; i++) for (let j = 0; j < RAD; j++) {
+                    const a = i * (RAD + 1) + j, b = a + RAD + 1;
+                    idx.push(a, b, a + 1, b, b + 1, a + 1);
+                  }
+                  const c0 = new THREE.Color(0x0f090b), c1 = new THREE.Color(0x221012), c2 = new THREE.Color(0x6a0e0a);
+                  for (let i = 0; i <= SEGS; i++) {
+                    const t = i / SEGS, c = t < 0.7 ? c0.clone().lerp(c1, t / 0.7) : c1.clone().lerp(c2, (t - 0.7) / 0.3);
+                    for (let j = 0; j <= RAD; j++) { const v = (i * (RAD + 1) + j) * 3, belly = Math.max(0, Math.sin((j / RAD) * Math.PI * 2)) * 0.35; col[v] = c.r + belly * 0.12; col[v + 1] = c.g + belly * 0.02; col[v + 2] = c.b + belly * 0.02; }
+                  }
+                  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+                  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+                  geo.setIndex(idx);
+                  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.25, emissive: 0x2a0402, emissiveIntensity: 0.6 });
+                  const mesh = new THREE.Mesh(geo, mat);
+                  mesh.frustumCulled = false; mesh.castShadow = true; mesh.name = "DemonTailSkin";
+                  g.add(mesh);
+                  const spineGeo = new THREE.ConeGeometry(1, 1, 8).translate(0, 0.5, 0), spineMat = new THREE.MeshStandardMaterial({ color: 0x1b1316, roughness: 0.35, metalness: 0.3 });
+                  const spines = [];
+                  for (let k = 0; k < 9; k++) { const s = new THREE.Mesh(spineGeo, spineMat); s.castShadow = true; g.add(s); spines.push(s); }
+                  secret.skin = { mesh, geo, SEGS, RAD, spines };
+                  // the boxy vertebra meshes stay as invisible pivots; the rotor keeps its model
+                  for (const seg of secret.segs) for (const ch of seg.children) if (ch.isMesh) ch.visible = false;
+                }
+                {
+                  const S = secret.skin, P = S.geo.attributes.position.array;
+                  g.updateMatrixWorld(true);
+                  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
+                  const pts = [secret.tail.getWorldPosition(new V()).applyMatrix4(inv)];
+                  for (const seg of secret.segs) pts.push(seg.localToWorld(new V(0, 0, -seg.userData.len)).applyMatrix4(inv));
+                  const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+                  const sc = secret.tail.scale.x;
+                  let prevT = null, nrm = null;
+                  const tmp = new V(), bin = new V();
+                  for (let i = 0; i <= S.SEGS; i++) {
+                    const t = i / S.SEGS, p = curve.getPointAt(t), tan = curve.getTangentAt(t).normalize();
+                    if (!nrm) { nrm = new V(0, 1, 0); if (Math.abs(nrm.dot(tan)) > 0.9) nrm.set(1, 0, 0); nrm.sub(tan.clone().multiplyScalar(nrm.dot(tan))).normalize(); }
+                    else { const axis = tmp.crossVectors(prevT, tan); const s2 = axis.length(); if (s2 > 1e-6) nrm.applyAxisAngle(axis.normalize(), Math.asin(Math.min(1, s2))); nrm.sub(tan.clone().multiplyScalar(nrm.dot(tan))).normalize(); }
+                    prevT = tan;
+                    bin.crossVectors(tan, nrm);
+                    // thick root that tapers to a slim neck before the tip ornament
+                    const r = (0.058 * (1 - t) ** 0.8 + 0.012) * sc;
+                    for (let j = 0; j <= S.RAD; j++) {
+                      const a = (j / S.RAD) * Math.PI * 2, cx = Math.cos(a) * r, cy = Math.sin(a) * r * 0.86, v = (i * (S.RAD + 1) + j) * 3;
+                      P[v] = p.x + nrm.x * cx + bin.x * cy; P[v + 1] = p.y + nrm.y * cx + bin.y * cy; P[v + 2] = p.z + nrm.z * cx + bin.z * cy;
+                    }
+                    const k = Math.round(t * 10) - 1;
+                    if (i % Math.round(S.SEGS / 10) === 0 && k >= 0 && k < S.spines.length) {
+                      const sp = S.spines[k], h = (0.07 - 0.045 * t) * sc;
+                      sp.position.copy(p).addScaledVector(bin, -r * 0.8);
+                      sp.quaternion.setFromUnitVectors(new V(0, 1, 0), bin.clone().negate().addScaledVector(tan, -0.55).normalize());
+                      sp.scale.set(r * 0.42, h, r * 0.42);
+                      sp.visible = true;
+                    }
+                  }
+                  S.geo.attributes.position.needsUpdate = true;
+                  S.geo.computeVertexNormals();
+                  S.mesh.visible = secret.tail.visible !== false;
+                }
                 // tip blade: lazy idle turn, a short flourish on the whip, steady cruise in flight
                 // The tip is a blade ornament, not a helicopter: a restrained flourish follows the
                 // tail movement, with one sharper turn only during the launch/whip.
@@ -28919,6 +29005,13 @@ body.netgame #revivetouch{display:flex}
                 r.elbows[1].rotation.x = -0.2;
                 r.throwArm = true;
               } else r.throwArm = false;
+            }
+            // Archdemon flight: hanging under the rotor — the weapon arm comes down beside the hip
+            // (IK keeps the hand on the grip) so arms and legs both point down.
+            if (r.secretAccessories?.type === "demon" && r.secretAccessories.fly > 0.02 && r.oneHand && !mp && !ThrowAnim.pose("r")) {
+              const f = r.secretAccessories.fly;
+              r.gun.position.lerp(new V(r.hold[0] * 0.75, -0.12 + Math.sin(t * 1.7) * 0.015, 0.08), f);
+              r.gun.rotation.x += (baseRot[0] + 0.15 - r.gun.rotation.x) * f;
             }
             // Scythe throw in third person: the hand carries the scythe back over the shoulder
             // (wind-up), thrusts it forward on the release and reaches out again for the catch.
