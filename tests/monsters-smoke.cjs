@@ -54,7 +54,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
 
     await page.locator('#play').click();
     await page.locator('[data-world-map="0"]').click();
-    await page.locator('[data-stage="inf"]').click();
+    await page.locator('[data-stage-tab="infinite"]').click();
     await page.locator('#stage-play').click();
     await page.waitForFunction(() => DeadRecoilTest.state === DeadRecoilTest.GameState.PLAYING);
 

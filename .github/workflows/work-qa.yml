@@ -32,7 +32,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: UI and menu state
         run: |
-          bash tools/ci/run-tests.sh tests/ui-smoke.cjs tests/showroom-gameplay-smoke.cjs tests/wallet-reconciliation-smoke.cjs tests/release-version.cjs tests/navigation-race.cjs tests/survivor-skin-smoke.cjs tests/v53-survivor-reference-lock.cjs tests/gamepad-smoke.cjs tests/puddles-smoke.cjs tests/powerups-smoke.cjs tests/hitdir-smoke.cjs tests/director-smoke.cjs tests/explosion-smoke.cjs tests/settings-hud-smoke.cjs tests/floor-gloss-smoke.cjs tests/wallcast-smoke.cjs tests/weather-smoke.cjs tests/hitbox-smoke.cjs tests/balance-smoke.cjs tests/loadout-locks-smoke.cjs tests/camera-feel-smoke.cjs
+          bash tools/ci/run-tests.sh tests/ui-smoke.cjs tests/artifacts-smoke.cjs tests/showroom-gameplay-smoke.cjs tests/wallet-reconciliation-smoke.cjs tests/release-version.cjs tests/navigation-race.cjs tests/survivor-skin-smoke.cjs tests/v53-survivor-reference-lock.cjs tests/gamepad-smoke.cjs tests/puddles-smoke.cjs tests/powerups-smoke.cjs tests/hitdir-smoke.cjs tests/director-smoke.cjs tests/explosion-smoke.cjs tests/settings-hud-smoke.cjs tests/floor-gloss-smoke.cjs tests/wallcast-smoke.cjs tests/weather-smoke.cjs tests/hitbox-smoke.cjs tests/balance-smoke.cjs tests/loadout-locks-smoke.cjs tests/camera-feel-smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

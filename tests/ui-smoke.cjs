@@ -308,12 +308,16 @@ const server = http.createServer((req, res) => {
       await page.locator('[data-world-map="2"]').click();
       await page.locator('#stagemodal:not(.hidden)').waitFor({state:'visible'});
       assert.match(await page.locator('#stage-main h3').textContent(), /Dark Forest/);
-      assert.equal(await page.locator('#stage-list [data-stage]').count(), 12, 'levels 1-10 plus Infinity and Timed');
+      assert.deepEqual(await page.locator('#stage-tabs [data-stage-tab]').evaluateAll(b => b.map(x => x.dataset.stageTab)), ['story','challenge','infinite'], 'exactly three modes, each once');
+      assert.equal(await page.locator('#stage-list [data-stage]').count(), 10, 'story levels 1-10');
       assert.equal(await page.locator('#stage-main [data-stage-diff]').count(), 4, 'stage panel lists the 4 difficulties');
       await page.locator('#stage-close').click();
       assert.ok(await page.locator('#stagemodal').evaluate(el=>el.classList.contains('hidden')), 'close returns to the map row');
       await page.locator('[data-world-map="4"]').click();
-      await page.locator('[data-stage="timed"]').click();
+      await page.locator('[data-stage-tab="challenge"]').click();
+      assert.equal(await page.locator('#stage-list [data-chal]').count(), 5, 'five challenges per map');
+      assert.equal(await page.locator('#stage-mp').count(), 0, 'challenges are solo');
+      await page.locator('[data-chal="1"]').click();
       await page.locator('[data-stage-diff="easy"]').click();
       assert.ok(await page.locator('#stage-play').isVisible(), 'JOGAR must be visible without scrolling');
       await diagnosticScreenshot(page, {path:`test-results/maps-${width}.png`});

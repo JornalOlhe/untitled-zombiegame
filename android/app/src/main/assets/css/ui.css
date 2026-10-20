@@ -1172,7 +1172,7 @@ body.horde-wave #hud::after { content: ""; position: fixed; inset: 0; pointer-ev
 @keyframes stageIn { from { transform: scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
 .stage-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 8px 16px; background: linear-gradient(90deg, #8e0c12, #2a0507 60%, transparent); }
 .stage-head span { font-family: var(--display); font-size: 22px; letter-spacing: .08em; color: #fff; }
-.stage-head button { width: 36px; height: 36px; border-radius: 50%; padding: 0; font-size: 18px; background: #c01c22; border-color: #ff6a5a; }
+.stage-head > button { width: 36px; height: 36px; border-radius: 50%; padding: 0; font-size: 18px; background: #c01c22; border-color: #ff6a5a; }
 .stage-body { display: grid; grid-template-columns: 74px minmax(0, 1.6fr) minmax(220px, 1fr); gap: 10px; padding: 10px; min-height: 0; overflow: hidden; }
 .stage-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 2px; }
 .stage-btn { display: grid; justify-items: center; gap: 1px; padding: 6px 2px; background: #1a1e24; border: 1px solid #ffffff1c; border-radius: 6px; text-transform: none; letter-spacing: 0; }
@@ -1212,3 +1212,88 @@ body.horde-wave #hud::after { content: ""; position: fixed; inset: 0; pointer-ev
   .stage-threats { display: none; } .stage-main h4 { margin: 0; }
   .mission { padding: 5px 8px; font-size: 11px; } .world-card { flex-basis: clamp(200px, 34vw, 300px); }
 }
+
+/* v58 · mode tabs in the map panel */
+.stage-head { padding: 6px 8px 6px 10px; }
+.stage-tabs { display: flex; gap: 4px; }
+.stage-tabs button { padding: 7px 16px; font-family: var(--display); font-size: 18px; letter-spacing: .06em; color: #ffd9d4; background: #0006; border: 1px solid #ffffff22; border-radius: 6px; text-transform: uppercase; }
+.stage-tabs button.on { color: #fff; background: linear-gradient(180deg, #e8442f, #9a0e14); border-color: #ff8a7a; box-shadow: 0 2px 0 #4a070a; }
+.stage-list.hidden { display: none; }
+.stage-body:has(.stage-list.hidden) { grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); }
+.stage-btn.chal span { color: #9dffb6; font-size: 12px; }
+.stage-actions.solo { grid-template-columns: 1fr; }
+.stage-play:disabled { filter: grayscale(.8); opacity: .6; }
+.drop-table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.drop-table span { display: grid; justify-items: center; padding: 5px 2px; background: #15181d; border: 1px solid color-mix(in srgb, var(--rc) 45%, #ffffff10); border-radius: 6px; }
+.drop-table span b { font-size: 11px; color: var(--rc); } .drop-table span em { font-style: normal; font-family: var(--mono); font-size: 12px; color: #fff; }
+.drop-table span.off { opacity: .35; }
+.mission.secret i { color: #ff5a68; }
+.world-loot .loot.chal { color: #9dffb6; }
+@media (max-height: 520px), (max-width: 760px) {
+  .stage-tabs button { padding: 5px 10px; font-size: 15px; }
+  .stage-body:has(.stage-list.hidden) { grid-template-columns: minmax(0, 1fr) minmax(170px, .8fr); }
+}
+
+/* v58 · Personalizar tabs + Equipamentos */
+.custom-tabs { display: flex; gap: 4px; }
+.custom-tabs.hidden { display: none !important; }
+.armory-header .custom-tabs { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; }
+.custom-tabs button { padding: 8px 18px; font-family: var(--display, inherit); font-size: 16px; letter-spacing: .08em; color: #dfe6f5; background: #0b1330d9; border: 1px solid #ffffff26; border-radius: 6px; }
+.custom-tabs button.on { color: #fff; background: linear-gradient(180deg, #e8442f, #9a0e14); border-color: #ff8a7a; }
+.gear-screen { display: grid; grid-template-rows: auto 1fr; background: radial-gradient(ellipse at 50% 120%, #3a0b0e 0, #0b0d11 60%), #0b0d11; padding: 10px; gap: 10px; }
+.gear-screen.hidden { display: none; }
+.gear-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+.gear-head .custom-tabs { justify-self: center; }
+.gear-head #gear-back { padding: 8px 16px; font-family: var(--display, inherit); font-size: 18px; }
+.gear-head strong { font-family: var(--mono); color: #ffd166; font-size: 15px; }
+.gear-body { display: grid; grid-template-columns: 220px minmax(0, 1fr) 260px; gap: 10px; min-height: 0; }
+.gear-col { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; background: #0d0f12e6; border: 1px solid #ffffff14; border-radius: 10px; padding: 10px; }
+.gear-col h4 { margin: 2px 0 0; font-family: var(--head, inherit); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #ff8a7a; }
+.gear-slot { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 8px; padding: 7px 8px; text-align: left; background: #15181d; border: 1px solid #ffffff1c; border-radius: 8px; text-transform: none; letter-spacing: 0; }
+.gear-slot i { font-style: normal; font-size: 20px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 6px; background: #0007; }
+.gear-slot b { display: block; font-size: 12px; } .gear-slot small { font-size: 10px; color: var(--dim, #9aa); }
+.gear-slot.full { border-color: var(--rc); box-shadow: inset 0 0 14px color-mix(in srgb, var(--rc) 22%, transparent); } .gear-slot.full i { color: var(--rc); }
+.gear-slot.empty { border-style: dashed; opacity: .7; } .gear-slot.locked { opacity: .4; }
+.gear-slot.buy { border-color: #ffd16688; } .gear-slot.buy small { color: #ffd166; font-family: var(--mono); }
+.gear-total { display: grid; gap: 4px; } .gear-total span { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; padding: 4px 6px; background: #15181d; border-radius: 5px; } .gear-total b { color: #9dffb6; font-family: var(--mono); order: 2; }
+.gear-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.gear-chips button { padding: 4px 9px; font-size: 11px; border-radius: 12px; background: #15181d; border: 1px solid #ffffff22; text-transform: none; letter-spacing: 0; }
+.gear-chips button.on { background: #b3141b; border-color: #ff6a5a; } .gear-chips em { margin-left: auto; font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--dim, #9aa); }
+.gear-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.gear-card { position: relative; display: grid; justify-items: center; gap: 2px; padding: 8px 4px 6px; background: linear-gradient(170deg, color-mix(in srgb, var(--rc) 16%, #15181d), #101216); border: 1px solid color-mix(in srgb, var(--rc) 50%, #ffffff10); border-radius: 8px; text-transform: none; letter-spacing: 0; }
+.gear-card i { font-style: normal; font-size: 24px; color: var(--rc); line-height: 1.1; text-shadow: 0 0 10px color-mix(in srgb, var(--rc) 60%, transparent); }
+.gear-card b { font-size: 10px; line-height: 1.1; text-align: center; } .gear-card small { font-size: 9px; color: var(--rc); }
+.gear-card em { position: absolute; top: 3px; right: 5px; font-style: normal; font-family: var(--mono); font-size: 10px; color: #fff; }
+.gear-card.unowned { filter: grayscale(1) brightness(.55); }
+.gear-card.equipped::after { content: "EQUIPADO"; position: absolute; top: 3px; left: 4px; font-size: 7px; font-weight: 900; letter-spacing: .08em; color: #9dffb6; }
+.gear-card.sel { outline: 2px solid #fff; outline-offset: 1px; }
+.gear-hint { margin: 0; font-size: 11px; color: var(--dim, #9aa); line-height: 1.35; }
+.gear-detail { display: grid; justify-items: center; gap: 4px; padding: 10px; border: 1px solid var(--rc); border-radius: 8px; background: linear-gradient(170deg, color-mix(in srgb, var(--rc) 18%, #15181d), #101216); }
+.gear-detail > i { font-style: normal; font-size: 34px; color: var(--rc); } .gear-detail em { font-style: normal; font-size: 10px; letter-spacing: .14em; color: var(--rc); } .gear-detail > b { font-size: 14px; text-align: center; }
+.gear-detail ul { list-style: none; margin: 4px 0; padding: 0; width: 100%; display: grid; gap: 3px; }
+.gear-detail li { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 6px; background: #0006; border-radius: 4px; } .gear-detail li b { color: #9dffb6; font-family: var(--mono); }
+.gear-detail button { width: 100%; padding: 9px; font-family: var(--display, inherit); font-size: 18px; background: linear-gradient(180deg, #e8442f, #9a0e14); border-color: #ff8a7a; color: #fff; }
+.gear-detail button.off { background: linear-gradient(180deg, #4c5566, #262b35); border-color: #8a96aa; }
+.gear-detail small { font-size: 10px; color: var(--dim, #9aa); text-align: center; }
+.gear-secrets { display: grid; gap: 4px; }
+.gear-secret { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 6px; padding: 5px 6px; background: #15181d; border: 1px solid #ff3b4e33; border-radius: 6px; }
+.gear-secret > i { font-style: normal; font-size: 16px; color: #ff5a68; text-align: center; } .gear-secret b { display: block; font-size: 10px; }
+.gear-secret small { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 9px; color: var(--dim, #9aa); }
+.gear-secret .pbar { flex: 1; height: 4px; background: #0008; border-radius: 2px; overflow: hidden; } .gear-secret .pbar u { display: block; height: 100%; background: #ff3b4e; }
+.gear-secret button { padding: 5px 8px; font-size: 10px; background: #b3141b; border-color: #ff6a5a; }
+.gear-secret.ready { border-color: #ff3b4e; box-shadow: 0 0 12px #ff3b4e44; }
+@media (max-height: 520px), (max-width: 760px) {
+  .gear-screen { padding: 6px; gap: 6px; } .gear-body { grid-template-columns: 170px minmax(0, 1fr) 200px; gap: 6px; }
+  .gear-col { padding: 7px; } .gear-cards { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
+  .gear-slot { padding: 4px 6px; grid-template-columns: 28px 1fr; } .gear-slot i { width: 28px; height: 28px; font-size: 16px; }
+  .custom-tabs button { padding: 6px 12px; font-size: 14px; }
+}
+
+/* v58 · challenge loot on the game-over screen */
+.end-loot { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 8px 0; }
+.end-loot > small { color: var(--dim, #9aa); }
+.loot-card { display: grid; grid-template-columns: 44px auto; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border: 1px solid var(--rc); border-radius: 10px; background: linear-gradient(170deg, color-mix(in srgb, var(--rc) 22%, #15181d), #0d0f12); box-shadow: 0 0 22px color-mix(in srgb, var(--rc) 35%, transparent); animation: lootPop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.loot-card > i { font-style: normal; font-size: 30px; color: var(--rc); text-align: center; }
+.loot-card em { display: block; font-style: normal; font-size: 10px; letter-spacing: .16em; color: var(--rc); } .loot-card b { display: block; font-size: 15px; } .loot-card small { font-size: 11px; color: #cfd6e0; }
+@keyframes lootPop { from { transform: scale(.7); } to { transform: none; } }
+#classscreen.customize-mode .armory-section-label { visibility: hidden; }

@@ -7,6 +7,11 @@
 
   const SERVER_MESSAGES = {
     insufficient_funds: "Saldo insuficiente.",
+    insufficient_coins: "Moedas insuficientes.",
+    artifact_not_owned: "Você não tem esse artefato.",
+    artifact_slots_full: "Todos os slots de artefato estão ocupados.",
+    not_enough_pieces: "Faltam peças para montar esse artefato.",
+    invalid_challenge: "Challenge inválido.",
     invalid_request: "Pedido inválido.",
     invalid_slot: "Slot inválido.",
     empty_slot: "Slot vazio.",
@@ -158,7 +163,15 @@
   const RunRepository = {
     // Falls back to the pre-v48 RPC when the server has not received the story migration yet,
     // so co-op/arcade never break on a partially migrated backend.
-    start: (mode, map, difficulty, lobbyId = null, requestId = uuid(), storyLevel = null) =>
+    // v58 wraps v48 (equipped artifact coin bonus + challenge number); older servers fall back.
+    start: (mode, map, difficulty, lobbyId = null, requestId = uuid(), storyLevel = null, challenge = null) =>
+      Backend.rpc("run_start_v58", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId, p_story_level: Number.isInteger(storyLevel) ? storyLevel : null, p_challenge: Number.isInteger(challenge) ? challenge : null })
+        .catch((e) => {
+          if (mode !== "challenge" && /run_start_v58|PGRST202|could not find the function/i.test(String(e?.detail || e?.message || "")))
+            return RunRepository.startV48(mode, map, difficulty, lobbyId, requestId, storyLevel);
+          throw e;
+        }),
+    startV48: (mode, map, difficulty, lobbyId = null, requestId = uuid(), storyLevel = null) =>
       Backend.rpc("run_start_v48", { p_mode: mode, p_map: map, p_difficulty: difficulty, p_lobby: lobbyId, p_request: requestId, p_story_level: Number.isInteger(storyLevel) ? storyLevel : null })
         .catch((e) => {
           if (!Number.isInteger(storyLevel) && /run_start_v48|PGRST202|could not find the function/i.test(String(e?.detail || e?.message || "")))
@@ -178,6 +191,14 @@
     claimChapter: (map, difficulty, requestId = uuid()) =>
       Backend.rpc("story_claim_chapter", { p_map: map, p_difficulty: difficulty, p_request: requestId }),
     claimMaster: (requestId = uuid()) => Backend.rpc("story_claim_master", { p_request: requestId }),
+  };
+
+  const ArtifactRepository = {
+    state: () => Backend.rpc("artifacts_state"),
+    equip: (ids, requestId = uuid()) => Backend.rpc("artifacts_equip", { p_equipped: ids, p_request: requestId }),
+    buySlot: (requestId = uuid()) => Backend.rpc("artifacts_buy_slot", { p_request: requestId }),
+    craft: (id, requestId = uuid()) => Backend.rpc("artifacts_craft", { p_secret: id, p_request: requestId }),
+    challengeResult: (runId) => Backend.rpc("challenge_result", { p_run: runId }),
   };
 
   const SeasonRepository = {
@@ -255,6 +276,7 @@
   DR.RunRepository = RunRepository;
   DR.StoryRepository = StoryRepository;
   DR.SeasonRepository = SeasonRepository;
+  DR.ArtifactRepository = ArtifactRepository;
   DR.MissionRepository = MissionRepository;
   DR.LobbyRepository = LobbyRepository;
   DR.OfflineQueue = OfflineQueue;

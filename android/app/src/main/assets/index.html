@@ -2697,7 +2697,7 @@ body.netgame #revivetouch{display:flex}
       <nav class="home-nav" aria-label="Menu principal">
         <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>História, sobrevivência ou multiplayer</small><i>›</i></button>
         <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas e classes</small><i>›</i></button>
-        <button id="customizebtn" class="home-item" type="button"><b>LOJA</b><small>Visual e equipamentos</small><i>›</i></button>
+        <button id="customizebtn" class="home-item" type="button"><b>PERSONALIZAR</b><small>Skins e equipamentos</small><i>›</i></button>
         <div class="home-minor home-icons">
           <button id="missionsbtn" type="button" title="Missões"><span>MISSÕES</span><small id="missionsbadge" hidden></small></button>
           <button id="seasonbtn" type="button" title="Passe de temporada"><span>PASSE</span><small id="seasonbadge" hidden></small></button>
@@ -2865,13 +2865,17 @@ body.netgame #revivetouch{display:flex}
         </aside>
       </div>
     </section>
+    <section id="gearscreen" class="screen hidden gear-screen">
+      <header class="gear-head"><button id="gear-back" type="button">‹ Voltar</button><nav class="custom-tabs" aria-label="Personalizar"><button type="button" data-custom-tab="skins">SKINS</button><button type="button" class="on" data-custom-tab="gear">EQUIPAMENTOS</button></nav><strong id="gear-bank"></strong></header>
+      <div class="gear-body"><aside id="gear-slots" class="gear-col"></aside><section id="gear-grid" class="gear-col"></section><aside id="gear-side" class="gear-col"></aside></div>
+    </section>
     <section id="worldscreen" class="screen hidden world-screen">
       <header class="world-ribbon"><span>JOGAR</span><small id="world-diff"></small></header>
       <div id="world-track" class="world-track" aria-label="Mapas"></div>
       <footer class="world-foot"><button id="world-back" class="world-back" type="button">‹ Voltar</button><div class="world-extra"><button id="world-mp" type="button">Multiplayer</button><button id="world-arenas" type="button">Arenas</button></div></footer>
       <div id="stagemodal" class="stage-modal hidden" role="dialog" aria-modal="true">
         <div class="stage-box">
-          <header class="stage-head"><span>ESCOLHA O NÍVEL</span><button id="stage-close" type="button" aria-label="Fechar">✕</button></header>
+          <header class="stage-head"><nav id="stage-tabs" class="stage-tabs" aria-label="Modo"></nav><button id="stage-close" type="button" aria-label="Fechar">✕</button></header>
           <div class="stage-body"><nav id="stage-list" class="stage-list"></nav><section id="stage-main" class="stage-main"></section><aside id="stage-side" class="stage-side"></aside></div>
         </div>
       </div>
@@ -2893,7 +2897,7 @@ body.netgame #revivetouch{display:flex}
         <div class="lobby-options">
           <label>Mapa<select id="lobby-map"></select></label>
           <label>Dificuldade<select id="lobby-difficulty"><option value="easy">Fácil</option><option value="medium">Médio</option><option value="hard">Difícil</option><option value="nightmare">Pesadelo</option></select></label>
-          <label>Modo<select id="lobby-mode"><option value="classic">Clássico</option><option value="infinite">Infinito</option><option value="timed">Contra o tempo</option></select></label>
+          <label>Modo<select id="lobby-mode"><option value="classic">Clássico</option><option value="infinite">Infinito</option></select></label>
           <p id="lobby-summary" class="lobby-summary"></p>
         </div>
       </div>
@@ -2914,6 +2918,7 @@ body.netgame #revivetouch{display:flex}
           <p>Spins, arsenal e loadout.</p>
         </div>
         <div id="bank"></div>
+        <nav id="custom-tabs" class="custom-tabs hidden" aria-label="Personalizar"><button type="button" class="on" data-custom-tab="skins">SKINS</button><button type="button" data-custom-tab="gear">EQUIPAMENTOS</button></nav>
       </header>
       <div class="armory-layout">
         <aside class="armory-inventory">
@@ -2982,7 +2987,7 @@ body.netgame #revivetouch{display:flex}
           <button type="button" class="mode-card" style="--mode-glow:#6ab3e655" data-choice="mode" data-value="infinite"><strong>Infinity</strong><small>Sem wave final. A horda escala continuamente, fica mais resistente e a partida tende a durar muito mais.</small><em>×1,5 MOEDAS</em></button>
           <button type="button" class="mode-card" style="--mode-glow:#e64f4f66" data-choice="mode" data-value="timed"><strong>Contra o tempo</strong><small>5 minutos de pressão máxima. Mais inimigos, zumbis mais rápidos e ataques muito mais perigosos.</small><em>×2,5 MOEDAS</em></button>
         </div>
-        <select id="mode" class="sr-only" aria-label="Modo de jogo"><option value="classic">Story</option><option value="infinite">Infinity</option><option value="timed">Contra o tempo</option></select>
+        <select id="mode" class="sr-only" aria-label="Modo de jogo"><option value="classic">Story</option><option value="infinite">Infinity</option><option value="timed">Contra o tempo</option><option value="challenge">Challenge</option></select>
         <div class="footer-actions"><span class="hint">Story tem progressão própria; Infinity e Contra o tempo entram direto após a dificuldade.</span><button id="nextmap" class="primary">Continuar · mapa</button></div>
       </div>
     </section>
@@ -3434,7 +3439,7 @@ body.netgame #revivetouch{display:flex}
         const classValue = (key, fallback = 1) => {
           const burst = classBurst(), effects = classEffects();
           const totalKey = key + "Total";
-          return (burst[totalKey] ?? effects[key] ?? fallback) * (typeof MatchShop !== "undefined" ? MatchShop.mult(key) : 1);
+          return (burst[totalKey] ?? effects[key] ?? fallback) * (typeof MatchShop !== "undefined" ? MatchShop.mult(key) : 1) * (typeof RunMods !== "undefined" ? RunMods.mult(key) : 1);
         };
 
         const maps = [
@@ -3800,7 +3805,7 @@ body.netgame #revivetouch{display:flex}
           // Infinity: the classic ×1.085 per wave up to 30, then a gentler ×1.045 so the run stays winnable.
           infiniteHp(wave) { return wave <= 30 ? Math.pow(1.085, wave - 1) : Math.pow(1.085, 29) * Math.pow(1.045, wave - 30); },
         };
-        const rewardMultiplier = () => (diff[difficulty]?.coins || 1) * modeRules().coins;
+        const rewardMultiplier = () => (diff[difficulty]?.coins || 1) * modeRules().coins * (typeof RunMods !== "undefined" ? RunMods.coins() : 1);
         const scaledCoinReward = (base) => Math.max(0, Math.round(Number(base || 0) * rewardMultiplier()));
         const isStoryRun = () => mode === "classic" && !NetGame.active;
         const StoryMode = {
@@ -22286,6 +22291,9 @@ body.netgame #revivetouch{display:flex}
                 if (StoryMode.active() && this.wave >= 20) {
                   this.clearedAt = 0;
                   PlayerController.end(true, true, "story");
+                } else if (Challenges.active() && this.wave >= Challenges.WAVES) {
+                  this.clearedAt = 0;
+                  PlayerController.end(true, true, "challenge");
                 } else {
                   this.clearedAt = 0;
                   this.start();
@@ -23703,6 +23711,7 @@ body.netgame #revivetouch{display:flex}
               flightDescentUntil: 0,
               ladderReleaseUntil: 0,
             };
+            RunMods.begin();
             MatchShop.reset(); HordeEvent.end();
             MapObjectives.start();
             WaveManager.blood = false;
@@ -23715,6 +23724,7 @@ body.netgame #revivetouch{display:flex}
             player.inventory = Progression.data.weaponSlots
               .slice(0, Progression.data.weaponSlotsOwned)
               .map((id) => (id != null ? WeaponSystem.create(id) : null));
+            RunMods.ammo(player.inventory);
             const preferredSlot = Number.isInteger(Progression.data.weaponSlot)
               ? clamp(Progression.data.weaponSlot, 0, Math.max(0, player.inventory.length - 1))
               : 0;
@@ -24314,6 +24324,7 @@ body.netgame #revivetouch{display:flex}
                 player.maxhp + player.bonus,
                 player.hp + passiveClass.regen * dt,
               );
+            RunMods.regen(dt);
             if (
               this.curseUntil > simulationTime &&
               simulationTime >= this.nextCurse
@@ -24586,7 +24597,8 @@ body.netgame #revivetouch{display:flex}
             if (NetGame.active) NetGame.finish(timed ? "win" : "loss");
             let storyStars = 0;
             if (reason === "story") storyStars = StoryMode.finishRun({ ...RunStats.report(), result: "win" });
-            Account.checkpoint(true, timed ? "win" : "loss");
+            const runRef = Account.run;
+            const finalReport = Account.checkpoint(true, timed ? "win" : "loss");
             state = GameState.GAMEOVER;
             mouse.down = false;
             mouse.aim = false;
@@ -24596,7 +24608,8 @@ body.netgame #revivetouch{display:flex}
             UIManager.hudClock = 0;
             UIManager.hud(0);
             UIManager.screen("gameoverscreen");
-            $("endtitle").textContent = reason === "story"
+            document.querySelectorAll("#gameoverscreen .end-loot").forEach((e) => e.remove());
+            $("endtitle").textContent = reason === "challenge" ? `CHALLENGE CONCLUÍDO · ${Challenges.get(selectedMap, Challenges.current)?.name || ""}` : reason === "story"
               ? `LEVEL ${storyLevel} CONCLUÍDO · ${"★".repeat(storyStars)}${"☆".repeat(3-storyStars)}`
               : timed
                 ? "Tempo encerrado."
@@ -24605,6 +24618,7 @@ body.netgame #revivetouch{display:flex}
               `${classes[selectedClass].name} em ${maps[selectedMap].name}. ${Math.floor(elapsed / 60)}min ${Math.floor(elapsed % 60)}s de resistência.`;
             $("endstats").innerHTML =
               `<div><strong>${WaveManager.wave}</strong><span>Onda alcançada</span></div><div><strong>${player.kills}</strong><span>Eliminações</span></div><div><strong>${player.headshots}</strong><span>Headshots</span></div>`;
+            if (reason === "challenge") Challenges.reward(runRef, finalReport);
             const seasonXp = SeasonPass.localGain(player.kills * 6 + WaveManager.wave * 40 + Object.values(RunStats.bosses || {}).reduce((a, n) => a + (Number(n) || 0), 0) * 150);
             if (seasonXp) $("endsub").textContent += ` +${seasonXp} XP no Passe de Temporada.`;
             if (Account.user) return;
@@ -25609,11 +25623,12 @@ body.netgame #revivetouch{display:flex}
               try {
                 const op = this.pending
                   .catch(() => {})
-                  .then(() => DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId, DR.Backend.uuid(), mode === "classic" && !lobbyId ? storyLevel : null));
+                  .then(() => DR.RunRepository.start(mode, Number(selectedMap), difficulty, lobbyId, DR.Backend.uuid(), mode === "classic" && !lobbyId ? storyLevel : null, mode === "challenge" && !lobbyId ? Challenges.current : null));
                 this.pending = op.catch(() => {});
                 const r = await op;
                 this.run = { id: r.run, offline: false };
                 if (r.profile) this.applyNonSpending(r.profile);
+                if (r.artifacts) Artifacts.setServer(r.artifacts);
                 return;
               } catch (e) {
                 if (lobbyId) throw e;
@@ -29860,6 +29875,7 @@ body.netgame #revivetouch{display:flex}
             $("rarity-board").classList.toggle("hidden", customizing);
             ["spin-pity", "spin-buy", "spin-vfx"].forEach((id) => $(id).classList.toggle("hidden", customizing));
             tabs.classList.toggle("customize-hidden", customizing);
+            $("custom-tabs").classList.toggle("hidden", !customizing || this.mode !== "customize");
             if (customizing) {
               this.identityKey = "";
               title.textContent = "SHOWROOM"; subtitle.textContent = "Monte a aparência do sobrevivente.";
@@ -31316,18 +31332,280 @@ body.netgame #revivetouch{display:flex}
         const deployPreparedRun=async()=>{if($("deploy").disabled||$("story-deploy").disabled)return;$("deploy").disabled=$("story-deploy").disabled=true;const full=enterFullscreen();mode=$("mode").value;difficulty=$("difficulty").value;try{await Promise.all([full,Account.begin()])}catch(e){UIManager.toast(e.message);$("deploy").disabled=$("story-deploy").disabled=false;return}$("deploy").disabled=$("story-deploy").disabled=false;WeaponSystem.model.visible=true;PlayerController.start()};
         $("deploy").onclick=async()=>{mode=$("mode").value;difficulty=$("difficulty").value;if(mode==="classic"){await StoryMode.open();return}await deployPreparedRun()};
         $("story-deploy").onclick=()=>deployPreparedRun();
+        // ── Artefatos ─────────────────────────────────────────────────────────────────────────
+        // Equipment won in Challenges. Five families (vida, fortuna, munição, vento, seiva) × six
+        // rarities, plus 2 secret artifacts per map crafted from 5 pieces. Stats are the same rule
+        // the server uses for the coin bonus (private.artifact_coin): Épico adds the next family's
+        // Comum value, Lendário the next two, Divino the other four at Incomum value.
+        // Signed in: server-authoritative (artifacts_* RPCs). Visitor: saved on this device.
+        const Artifacts = {
+          TIERS: [
+            { k: "c", name: "Comum", color: "#a9b2bf" },
+            { k: "u", name: "Incomum", color: "#5ccf72" },
+            { k: "r", name: "Raro", color: "#4d96ff" },
+            { k: "e", name: "Épico", color: "#b86bff" },
+            { k: "l", name: "Lendário", color: "#ffad33" },
+            { k: "d", name: "Divino", color: "#fff1a8" },
+          ],
+          SECRET: { name: "Secreto", color: "#ff3b4e" },
+          FAMS: [
+            { id: "vida", name: "Amuleto Vital", stat: "hp", icon: "❤", vals: [6, 10, 15, 20, 28, 40] },
+            { id: "fortuna", name: "Moeda da Sorte", stat: "coins", icon: "◈", vals: [5, 8, 12, 16, 22, 30] },
+            { id: "municao", name: "Cartucheira", stat: "ammo", icon: "▤", vals: [10, 16, 24, 32, 45, 60] },
+            { id: "vento", name: "Pena do Vento", stat: "speed", icon: "»", vals: [3, 5, 7, 9, 12, 16] },
+            { id: "seiva", name: "Seiva Viva", stat: "regen", icon: "✚", vals: [0.5, 0.8, 1.2, 1.7, 2.4, 3.5] },
+          ],
+          STAT: { hp: ["Vida máxima", "%"], coins: ["Moedas", "%"], ammo: ["Munição", "%"], speed: ["Velocidade", "%"], regen: ["Regeneração", " HP/s"] },
+          SECRETS: {
+            secret_0a: { name: "Distintivo do Último Policial", icon: "★", stats: { hp: 20, ammo: 40, coins: 10 } },
+            secret_0b: { name: "Chave da Cidade", icon: "⚿", stats: { coins: 35, speed: 8 } },
+            secret_1a: { name: "Bisturi do Dr. Halden", icon: "✄", stats: { regen: 3, hp: 25 } },
+            secret_1b: { name: "Frasco de Adrenalina", icon: "⚗", stats: { speed: 14, regen: 1.5, ammo: 20 } },
+            secret_2a: { name: "Totem da Floresta", icon: "♣", stats: { regen: 4, speed: 8 } },
+            secret_2b: { name: "Garra do Lobo Branco", icon: "☾", stats: { hp: 30, speed: 10 } },
+            secret_3a: { name: "Núcleo Instável", icon: "☢", stats: { ammo: 60, coins: 15 } },
+            secret_3b: { name: "Soro X-13", icon: "⚕", stats: { hp: 35, regen: 2, speed: 6 } },
+            secret_4a: { name: "Coração de Gelo", icon: "❄", stats: { hp: 45, regen: 2 } },
+            secret_4b: { name: "Bússola do Explorador", icon: "✧", stats: { coins: 40, ammo: 30 } },
+          },
+          // Rarity weights per difficulty (Comum → Divino) and secret-piece chance (%), same as the server.
+          DROPS: { easy: [60, 30, 10, 0, 0, 0], medium: [30, 38, 24, 8, 0, 0], hard: [10, 25, 35, 22, 7, 1], nightmare: [0, 10, 30, 33, 22, 5] },
+          PIECE_CHANCE: { easy: 2, medium: 4, hard: 7, nightmare: 12 },
+          PIECES: 5, SLOT_PRICES: [0, 12000, 35000, 90000], MAX_SLOTS: 4, COIN_CAP: 150,
+          KEY: "deadrecoil.artifacts.v1",
+          server: null,
+          ids() { return [...this.FAMS.flatMap((f) => this.TIERS.map((t) => `${f.id}_${t.k}`)), ...Object.keys(this.SECRETS)]; },
+          info(id) {
+            const s = this.SECRETS[id];
+            if (s) return { id, name: s.name, icon: s.icon, tier: 6, rarity: this.SECRET, stats: { ...s.stats }, secret: true, map: Number(id[7]) };
+            const [fid, k] = String(id).split("_"), fi = this.FAMS.findIndex((f) => f.id === fid), t = this.TIERS.findIndex((x) => x.k === k);
+            if (fi < 0 || t < 0) return null;
+            const f = this.FAMS[fi], stats = { [f.stat]: f.vals[t] }, n = t === 3 ? 1 : t === 4 ? 2 : t === 5 ? 4 : 0;
+            for (let j = 1; j <= n; j++) { const g = this.FAMS[(fi + j) % 5]; stats[g.stat] = g.vals[t === 5 ? 1 : 0]; }
+            return { id, name: f.name, icon: f.icon, tier: t, rarity: this.TIERS[t], stats, fam: f.id };
+          },
+          statText(stats) {
+            return Object.entries(stats).map(([k, v]) => `+${String(v).replace(".", ",")}${this.STAT[k][1]} ${this.STAT[k][0].toLowerCase()}`).join(" · ");
+          },
+          blank() { return { owned: {}, pieces: {}, slots: 1, equipped: [], challenges: [] }; },
+          local() {
+            try { const d = JSON.parse(localStorage.getItem(this.KEY) || "null"); if (d && d.owned) return { ...this.blank(), ...d }; } catch {}
+            return this.blank();
+          },
+          saveLocal(d) { try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch {} },
+          data() { return Account.user && this.server ? { ...this.blank(), ...this.server } : this.local(); },
+          setServer(x) { if (x && typeof x === "object") this.server = x; },
+          count(id) { return Number(this.data().owned?.[id] || 0); },
+          pieces(id) { return Number(this.data().pieces?.[id] || 0); },
+          clears(map, ch, d = null) {
+            return (this.data().challenges || []).filter((c) => c.map === map && c.challenge === ch && (!d || c.difficulty === d)).reduce((a, c) => a + (c.clears || 0), 0);
+          },
+          totals() {
+            const out = { hp: 0, coins: 0, ammo: 0, speed: 0, regen: 0 };
+            for (const id of this.data().equipped || []) { const i = this.info(id); if (i && this.count(id) > 0) for (const [k, v] of Object.entries(i.stats)) out[k] += v; }
+            out.coins = Math.min(this.COIN_CAP, out.coins);
+            return out;
+          },
+          async load() {
+            if (!Account.user || !DR.Backend.isOnline()) return;
+            try { this.server = await DR.ArtifactRepository.state(); } catch {}
+          },
+          async equip(id) {
+            const d = this.data(), on = (d.equipped || []).includes(id);
+            const list = on ? d.equipped.filter((x) => x !== id) : [...(d.equipped || []), id];
+            if (!on && list.length > d.slots) return UIManager.toast("Todos os slots estão ocupados. Tire um artefato ou compre outro slot.");
+            if (Account.user) {
+              try { const r = await DR.ArtifactRepository.equip(list); this.server = r.artifacts; } catch (e) { return UIManager.toast(e.message); }
+            } else { d.equipped = list; this.saveLocal(d); }
+            AudioManager.tone(on ? 330 : 660, 0.08, "triangle", 0.12, on ? 220 : 990);
+          },
+          slotPrice() { const s = this.data().slots; return s >= this.MAX_SLOTS ? null : this.SLOT_PRICES[s]; },
+          async buySlot() {
+            const price = this.slotPrice();
+            if (price == null) return;
+            if (Account.user) {
+              try { const r = await DR.ArtifactRepository.buySlot(); this.server = r.artifacts; Account.apply(r.profile); } catch (e) { return UIManager.toast(e.message); }
+            } else {
+              if (Progression.data.coins < price) return UIManager.toast(`Moedas insuficientes (◈ ${price.toLocaleString("pt-BR")}).`);
+              Progression.data.coins -= price; player.coins = Progression.data.coins; Progression.economy.save();
+              const d = this.local(); d.slots = Math.min(this.MAX_SLOTS, d.slots + 1); this.saveLocal(d);
+            }
+            AudioManager.coin();
+          },
+          async craft(id) {
+            if (this.pieces(id) < this.PIECES) return;
+            if (Account.user) {
+              try { const r = await DR.ArtifactRepository.craft(id); this.server = r.artifacts; } catch (e) { return UIManager.toast(e.message); }
+            } else {
+              const d = this.local(); d.pieces[id] -= this.PIECES; d.owned[id] = (d.owned[id] || 0) + 1; this.saveLocal(d);
+            }
+            AudioManager.tone(520, 0.5, "sawtooth", 0.18, 1560);
+            UIManager.announce?.("ARTEFATO SECRETO", this.info(id).name, 2.4);
+          },
+          // Visitor drop (the server rolls its own for accounts).
+          localDrop(map, ch, diff) {
+            const w = this.DROPS[diff] || this.DROPS.easy, roll = Math.random() * 100;
+            let acc = 0, t = 0;
+            for (let i = 0; i < 6; i++) { acc += w[i]; if (roll < acc) { t = i; break; } }
+            const art = `${this.FAMS[Math.floor(Math.random() * 5)].id}_${this.TIERS[t].k}`;
+            const d = this.local();
+            d.owned[art] = (d.owned[art] || 0) + 1;
+            let piece = null;
+            if (Math.random() * 100 < (this.PIECE_CHANCE[diff] || 2) + (ch - 1)) {
+              piece = `secret_${map}${Math.random() < 0.5 ? "a" : "b"}`;
+              d.pieces[piece] = (d.pieces[piece] || 0) + 1;
+            }
+            const row = d.challenges.find((c) => c.map === map && c.challenge === ch && c.difficulty === diff);
+            if (row) row.clears++; else d.challenges.push({ map, challenge: ch, difficulty: diff, clears: 1 });
+            this.saveLocal(d);
+            return { artifact: art, piece };
+          },
+        };
+
+        // Per-run modifiers: equipped artifacts + the rules of the current challenge.
+        const RunMods = {
+          art: { hp: 0, coins: 0, ammo: 0, speed: 0, regen: 0 }, ch: {},
+          begin() {
+            this.art = Artifacts.totals();
+            this.ch = mode === "challenge" && !NetGame.active ? (Challenges.get(selectedMap, Challenges.current)?.mods || {}) : {};
+          },
+          mult(key) {
+            if (key === "maxHp") return (1 + this.art.hp / 100) * (this.ch.playerHp || 1);
+            if (key === "speed") return 1 + this.art.speed / 100;
+            return 1;
+          },
+          coins() { return 1 + this.art.coins / 100; },
+          ammo(inv) {
+            const reserve = (1 + this.art.ammo / 100) * (this.ch.ammo || 1), mag = 1 + this.art.ammo / 200;
+            for (const w of inv || []) {
+              if (!w || !Number.isFinite(w.mag) || w.kind === "melee") continue;
+              w.mag = Math.max(1, Math.round(w.mag * mag)); w.ammo = w.mag;
+              if (w.reserve != null) { w.reserveMax = Math.max(w.mag, Math.round(w.reserveMax * reserve)); w.reserve = Math.round(w.reserveMax * 0.6); }
+            }
+          },
+          regen(dt) {
+            if (this.art.regen > 0 && player && player.hp > 0 && simulationTime - (player.lastDamage || 0) > 4)
+              player.hp = Math.min(player.maxhp + (player.bonus || 0), player.hp + this.art.regen * dt);
+          },
+        };
+
+        // ── Challenges ───────────────────────────────────────────────────────────────────────
+        // 5 per map, 10 waves each, harder rules every step. Winning drops an artifact whose rarity
+        // depends on the difficulty. Challenge n unlocks after clearing n−1 once (any difficulty).
+        const Challenges = {
+          current: 1, WAVES: 10,
+          TEMPLATES: [
+            { rule: "Zumbis 25% mais rápidos", mods: { speed: 1.25 } },
+            { rule: "Metade da munição de reserva · +10% inimigos", mods: { ammo: 0.5, count: 1.1 } },
+            { rule: "Inimigos com +50% de vida", mods: { hp: 1.5 } },
+            { rule: "Sua vida máxima cai pela metade · inimigos +15% de dano", mods: { playerHp: 0.5, damage: 1.15 } },
+            { rule: "+30% vida, +15% velocidade, +30% dano e +20% inimigos", mods: { hp: 1.3, speed: 1.15, damage: 1.3, count: 1.2 } },
+          ],
+          NAMES: [
+            ["Rush na Avenida", "Últimos Cartuchos", "Blindados", "Sem Colete", "Cidade em Chamas"],
+            ["Corredor da Morte", "Farmácia Vazia", "Paciente Zero", "Plantão Frágil", "Código Vermelho"],
+            ["Matilha Veloz", "Caçador sem Flechas", "Troncos Vivos", "Pele Fina", "Noite Eterna"],
+            ["Cobaias Aceleradas", "Estoque Selado", "Mutação Estável", "Exposição Total", "Contenção Rompida"],
+            ["Nevasca Rápida", "Suprimentos Congelados", "Gelo Eterno", "Hipotermia", "Tempestade Branca"],
+          ],
+          get(map, n) { const t = this.TEMPLATES[n - 1]; return t ? { n, name: this.NAMES[map]?.[n - 1] || `Challenge ${n}`, ...t } : null; },
+          unlocked(map, n) { return n === 1 || Artifacts.clears(map, n - 1) > 0; },
+          rules() {
+            const m = this.get(selectedMap, this.current)?.mods || {};
+            return { label: "Challenge", coins: 1.25, hp: m.hp || 1, speed: m.speed || 1, damage: m.damage || 1, count: m.count || 1 };
+          },
+          active() { return mode === "challenge" && !NetGame.active; },
+          // Shows the drop on the game-over screen once the final report has been accepted.
+          async reward(runRef, checkpoint) {
+            const box = document.createElement("div");
+            box.className = "end-loot"; box.innerHTML = `<small>Abrindo recompensa…</small>`;
+            $("endstats").after(box);
+            let rw = null;
+            try {
+              if (!Account.user) rw = Artifacts.localDrop(Number(selectedMap), this.current, difficulty);
+              else if (runRef && !runRef.offline && runRef.id) {
+                await checkpoint;
+                const r = await DR.ArtifactRepository.challengeResult(runRef.id);
+                Artifacts.setServer(r.artifacts); rw = r.reward;
+              }
+            } catch {}
+            if (!rw || !rw.artifact) { box.innerHTML = `<small>${Account.user ? "Sem conexão com o servidor: este challenge não gerou artefato." : "Sem recompensa."}</small>`; return; }
+            const a = Artifacts.info(rw.artifact), p = rw.piece ? Artifacts.info(rw.piece) : null;
+            box.innerHTML = `<div class="loot-card" style="--rc:${a.rarity.color}"><i>${a.icon}</i><span><em>${a.rarity.name.toUpperCase()}</em><b>${a.name}</b><small>${Artifacts.statText(a.stats)}</small></span></div>`
+              + (p ? `<div class="loot-card secret" style="--rc:${Artifacts.SECRET.color}"><i>${p.icon}</i><span><em>PEÇA SECRETA</em><b>${p.name}</b><small>${Artifacts.pieces(rw.piece)}/${Artifacts.PIECES} peças</small></span></div>` : "");
+            AudioManager.tone(520 + a.tier * 120, 0.5, "triangle", 0.2, 1200 + a.tier * 200);
+          },
+        };
+        Object.defineProperty(modeConfig, "challenge", { get: () => Challenges.rules(), enumerable: false, configurable: true });
+
+        // ── Personalizar › Equipamentos ──────────────────────────────────────────────────────
+        const GearUI = {
+          sel: null, filter: "all",
+          async open() {
+            AudioManager.init();
+            UIManager.screen("gearscreen");
+            this.render();
+            await Artifacts.load();
+            this.render();
+          },
+          render() {
+            const d = Artifacts.data(), eq = d.equipped || [], tot = Artifacts.totals();
+            $("gear-bank").textContent = `◈ ${Number(Progression.data.coins || 0).toLocaleString("pt-BR")}`;
+            // left: slots
+            const slots = [];
+            for (let i = 0; i < Artifacts.MAX_SLOTS; i++) {
+              if (i < d.slots) {
+                const a = eq[i] ? Artifacts.info(eq[i]) : null;
+                slots.push(a ? `<button type="button" class="gear-slot full" data-gear-pick="${a.id}" style="--rc:${a.rarity.color}"><i>${a.icon}</i><span><b>${a.name}</b><small>${a.rarity.name}</small></span></button>`
+                  : `<div class="gear-slot empty"><i>+</i><span><b>Slot ${i + 1}</b><small>Vazio</small></span></div>`);
+              } else if (i === d.slots) {
+                slots.push(`<button type="button" class="gear-slot buy" id="gear-buyslot"><i>🔒</i><span><b>Comprar slot</b><small>◈ ${Artifacts.slotPrice().toLocaleString("pt-BR")}</small></span></button>`);
+              } else slots.push(`<div class="gear-slot locked"><i>🔒</i><span><b>Slot ${i + 1}</b><small>Bloqueado</small></span></div>`);
+            }
+            const sum = Object.entries(tot).filter(([, v]) => v > 0);
+            $("gear-slots").innerHTML = `<h4>Equipados</h4>${slots.join("")}<h4>Bônus total</h4><div class="gear-total">${sum.length ? sum.map(([k, v]) => `<span><b>+${String(Math.round(v * 10) / 10).replace(".", ",")}${Artifacts.STAT[k][1]}</b>${Artifacts.STAT[k][0]}</span>`).join("") : "<small>Nenhum artefato equipado</small>"}</div>`;
+            // centre: filter chips + collection grid
+            const chips = [["all", "Todos"], ...Artifacts.TIERS.map((t, i) => [String(i), t.name]), ["6", "Secretos"]];
+            const ids = Artifacts.ids().filter((id) => this.filter === "all" || String(Artifacts.info(id).tier) === this.filter);
+            const owned = Artifacts.ids().filter((id) => Artifacts.count(id) > 0).length;
+            $("gear-grid").innerHTML = `<div class="gear-chips">${chips.map(([k, n]) => `<button type="button" data-gear-filter="${k}" class="${this.filter === k ? "on" : ""}">${n}</button>`).join("")}<em>${owned}/${Artifacts.ids().length}</em></div>
+              <div class="gear-cards">${ids.map((id) => {
+                const a = Artifacts.info(id), n = Artifacts.count(id), has = n > 0;
+                return `<button type="button" class="gear-card ${has ? "" : "unowned"} ${eq.includes(id) ? "equipped" : ""} ${this.sel === id ? "sel" : ""}" data-gear-pick="${id}" style="--rc:${a.rarity.color}"><i>${has || !a.secret ? a.icon : "?"}</i><b>${has || !a.secret ? a.name : "???"}</b><small>${a.rarity.name}</small>${n > 1 ? `<em>×${n}</em>` : ""}</button>`;
+              }).join("")}</div>`;
+            // right: detail + secret crafting
+            const s = this.sel && Artifacts.info(this.sel);
+            let det = `<h4>Detalhes</h4><p class="gear-hint">Toque num artefato para ver os atributos. Artefatos caem nos <b>Challenges</b> de cada mapa; quanto maior a dificuldade, mais raros.</p>`;
+            if (s) {
+              const n = Artifacts.count(s.id), on = eq.includes(s.id), hide = s.secret && !n;
+              det = `<h4>Detalhes</h4><div class="gear-detail" style="--rc:${s.rarity.color}"><i>${hide ? "?" : s.icon}</i><em>${s.rarity.name.toUpperCase()}</em><b>${hide ? "Artefato secreto" : s.name}</b>
+                <ul>${Object.entries(s.stats).map(([k, v]) => `<li><span>${Artifacts.STAT[k][0]}</span><b>+${String(v).replace(".", ",")}${Artifacts.STAT[k][1]}</b></li>`).join("")}</ul>
+                ${n ? `<button type="button" id="gear-equip" class="${on ? "off" : ""}">${on ? "DESEQUIPAR" : "EQUIPAR"}</button>` : `<small>${s.secret ? `Monte com ${Artifacts.PIECES} peças de ${maps[s.map].name}.` : "Ainda não conseguido."}</small>`}</div>`;
+            }
+            const secrets = Object.keys(Artifacts.SECRETS).map((id) => {
+              const a = Artifacts.info(id), p = Artifacts.pieces(id), ok = p >= Artifacts.PIECES;
+              return `<div class="gear-secret ${ok ? "ready" : ""}"><i>${Artifacts.count(id) ? a.icon : "?"}</i><span><b>${Artifacts.count(id) ? a.name : `${maps[a.map].name} · ${id.endsWith("a") ? "I" : "II"}`}</b><small><span class="pbar"><u style="width:${Math.min(100, (p / Artifacts.PIECES) * 100)}%"></u></span>${Math.min(p, Artifacts.PIECES)}/${Artifacts.PIECES}</small></span>${ok ? `<button type="button" data-gear-craft="${id}">MONTAR</button>` : ""}</div>`;
+            }).join("");
+            $("gear-side").innerHTML = `${det}<h4>Secretos · peças</h4><div class="gear-secrets">${secrets}</div>`;
+            // wiring
+            document.querySelectorAll("#gearscreen [data-gear-pick]").forEach((b) => (b.onclick = () => { this.sel = b.dataset.gearPick; this.render(); }));
+            document.querySelectorAll("#gearscreen [data-gear-filter]").forEach((b) => (b.onclick = () => { this.filter = b.dataset.gearFilter; this.render(); }));
+            document.querySelectorAll("#gearscreen [data-gear-craft]").forEach((b) => (b.onclick = async () => { b.disabled = true; await Artifacts.craft(b.dataset.gearCraft); this.sel = b.dataset.gearCraft; this.render(); }));
+            if ($("gear-buyslot")) $("gear-buyslot").onclick = async () => { await Artifacts.buySlot(); this.render(); };
+            if ($("gear-equip")) $("gear-equip").onclick = async () => { $("gear-equip").disabled = true; await Artifacts.equip(this.sel); this.render(); };
+          },
+        };
         // ── World map (JOGAR) ─────────────────────────────────────────────────────────────────
-        // One screen: a horizontal row of map cards (art, name, completion, rewards). Tapping a
-        // map opens its stage panel: level list (1–10, ∞ Infinity, ⏱ Contra o tempo) on the left,
-        // the stage (difficulty, threats, rewards, JOGAR / MULTIPLAYER) in the middle and the
-        // star missions on the right. Map first, then the stage — nothing else in between.
+        // One screen: a horizontal row of map cards. Tapping a map opens its panel with exactly
+        // three modes as tabs — História (levels 1–10), Challenges (5, drop artifacts) and
+        // Infinito — each played on Fácil/Normal/Difícil/Hardcore. Map first, then the mode.
         const WorldUI = {
-          map: 0, stage: 1,
+          map: 0, tab: "story", stage: 1, chal: 1,
           diffs: ["easy", "medium", "hard", "nightmare"],
           diffColor: { easy: "#5fbf5a", medium: "#e3b341", hard: "#e0673a", nightmare: "#d8262e" },
           async open() {
             AudioManager.init();
-            try { await StoryMode.load(); } catch {}
+            try { await Promise.all([StoryMode.load(), Artifacts.load()]); } catch {}
             this.render();
             UIManager.screen("worldscreen");
             this.close();
@@ -31339,11 +31617,12 @@ body.netgame #revivetouch{display:flex}
             track.innerHTML = maps.map((m, i) => {
               const st = this.starsOn(i), pct = Math.round((st / 30) * 100), boss = WaveManager.mapRosters?.[i] || [];
               const bossName = WaveManager.bossRoster?.[boss[2]]?.name || WaveManager.bossRoster?.[boss[0]]?.name || "Chefe";
+              const ch = [1, 2, 3, 4, 5].filter((n) => Artifacts.clears(i, n) > 0).length;
               return `<button type="button" class="world-card" data-world-map="${i}" style="--accent:${m.color || "#8a2a22"}">
                 <span class="world-art"><img src="textures/maps/map${i}.jpg" alt="" draggable="false"></span>
                 <b class="world-name">${m.name}</b>
                 <span class="world-prog"><i style="width:${pct}%"></i><em>Progresso</em><strong>${pct}%</strong></span>
-                <span class="world-loot"><span class="loot coin" title="Moedas">◈</span><span class="loot ticket" title="Tickets">🎟</span><span class="loot star" title="Estrelas">★ ${st}/30</span><span class="loot boss" title="${bossName}">☠</span></span>
+                <span class="world-loot"><span class="loot star" title="Estrelas">★ ${st}/30</span><span class="loot chal" title="Challenges">⚔ ${ch}/5</span><span class="loot art" title="Artefatos">✦</span><span class="loot boss" title="${bossName}">☠</span></span>
               </button>`;
             }).join("");
             track.querySelectorAll("[data-world-map]").forEach((b) => (b.onclick = () => this.pick(Number(b.dataset.worldMap))));
@@ -31353,70 +31632,97 @@ body.netgame #revivetouch{display:flex}
             // first open: the first level without stars (or the last unlocked one)
             let lv = 1; for (let l = 1; l <= 10; l++) { if (!this.unlocked(l)) break; lv = l; if (!(StoryMode.row(i, l, difficulty)?.stars)) break; }
             this.stage = lv;
+            let c = 1; for (let n = 1; n <= 5; n++) { if (!Challenges.unlocked(i, n)) break; c = n; if (!Artifacts.clears(i, n)) break; }
+            this.chal = c;
             this.renderStage();
             $("stagemodal").classList.remove("hidden");
           },
           close() { $("stagemodal")?.classList.add("hidden"); },
           unlocked(l) { return l === 1 || (StoryMode.row(this.map, l - 1, difficulty)?.stars || 0) >= 1; },
-          stageMode() { return this.stage === "inf" ? "infinite" : this.stage === "timed" ? "timed" : "classic"; },
+          stageMode() { return this.tab === "infinite" ? "infinite" : this.tab === "challenge" ? "challenge" : "classic"; },
           renderStage() {
-            const m = maps[this.map], st = this.stage, md = this.stageMode(), story = md === "classic";
+            const m = maps[this.map], md = this.stageMode(), story = md === "classic", chal = md === "challenge";
             selectedMap = this.map;
-            if (story) storyLevel = st;
+            if (story) storyLevel = this.stage;
+            $("stage-tabs").innerHTML = [["story", "História"], ["challenge", "Challenges"], ["infinite", "Infinito"]]
+              .map(([k, n]) => `<button type="button" data-stage-tab="${k}" class="${this.tab === k ? "on" : ""}">${n}</button>`).join("");
+            $("stage-tabs").querySelectorAll("[data-stage-tab]").forEach((b) => (b.onclick = () => { this.tab = b.dataset.stageTab; this.renderStage(); }));
             const list = $("stage-list");
-            list.innerHTML = Array.from({ length: 10 }, (_, k) => {
-              const l = k + 1, ok = this.unlocked(l), s = StoryMode.row(this.map, l, difficulty)?.stars || 0;
-              return `<button type="button" class="stage-btn ${st === l ? "on" : ""}" data-stage="${l}" ${ok ? "" : "disabled"}><b>${ok ? l : "🔒"}</b><span>${"★".repeat(s)}${"☆".repeat(3 - s)}</span></button>`;
-            }).join("") + `<button type="button" class="stage-btn mode ${st === "inf" ? "on" : ""}" data-stage="inf"><b>∞</b><span>Infinity</span></button><button type="button" class="stage-btn mode ${st === "timed" ? "on" : ""}" data-stage="timed"><b>⏱</b><span>5 min</span></button>`;
-            list.querySelectorAll("[data-stage]").forEach((b) => (b.onclick = () => { const v = b.dataset.stage; this.stage = v === "inf" || v === "timed" ? v : Number(v); this.renderStage(); }));
-            const title = story ? `${m.name} · Nível ${st}` : `${m.name} · ${modeConfig[md].label}`;
-            const sub = story ? "Modo História · 20 waves" : md === "infinite" ? "Sem fim · a horda só cresce" : "5 minutos de pressão máxima";
+            list.classList.toggle("hidden", md === "infinite");
+            if (story) {
+              list.innerHTML = Array.from({ length: 10 }, (_, k) => {
+                const l = k + 1, ok = this.unlocked(l), s = StoryMode.row(this.map, l, difficulty)?.stars || 0;
+                return `<button type="button" class="stage-btn ${this.stage === l ? "on" : ""}" data-stage="${l}" ${ok ? "" : "disabled"}><b>${ok ? l : "🔒"}</b><span>${"★".repeat(s)}${"☆".repeat(3 - s)}</span></button>`;
+              }).join("");
+              list.querySelectorAll("[data-stage]").forEach((b) => (b.onclick = () => { this.stage = Number(b.dataset.stage); this.renderStage(); }));
+            } else if (chal) {
+              list.innerHTML = [1, 2, 3, 4, 5].map((n) => {
+                const ok = Challenges.unlocked(this.map, n), done = Artifacts.clears(this.map, n, difficulty) > 0;
+                return `<button type="button" class="stage-btn chal ${this.chal === n ? "on" : ""}" data-chal="${n}" ${ok ? "" : "disabled"}><b>${ok ? n : "🔒"}</b><span>${done ? "✔" : "⚔"}</span></button>`;
+              }).join("");
+              list.querySelectorAll("[data-chal]").forEach((b) => (b.onclick = () => { this.chal = Number(b.dataset.chal); this.renderStage(); }));
+            } else list.innerHTML = "";
+            const c = Challenges.get(this.map, this.chal);
+            const title = story ? `${m.name} · Nível ${this.stage}` : chal ? `${c.n}. ${c.name}` : `${m.name} · Infinito`;
+            const sub = story ? "Modo História · 20 waves" : chal ? `${m.name} · ${Challenges.WAVES} waves · ${c.rule}` : "Sem fim · a horda só cresce";
             const threats = story
-              ? (st < 3 ? [["🧟", "Horda"], ["⚡", "Especiais"]] : st < 5 ? [["🧟", "Horda"], ["☠", "Mini-boss a cada 5 waves"]] : [["☠", "Boss na wave 10"], ["☠☠", "Boss II na wave 20"], ["🔥", "Elites"]])
-              : md === "infinite" ? [["♾", "Waves sem fim"], ["☠", "Chefes a cada 5 waves"], ["🌊", "Horda gigante"]] : [["⏱", "5:00"], ["💨", "Zumbis mais rápidos"], ["💥", "Dano alto"]];
-            const mult = (diff[difficulty]?.coins || 1) * modeConfig[md].coins, rw = StoryMode.levelReward(st === "inf" || st === "timed" ? 1 : st, difficulty);
+              ? (this.stage < 3 ? [["🧟", "Horda"], ["⚡", "Especiais"]] : this.stage < 5 ? [["🧟", "Horda"], ["☠", "Mini-boss a cada 5 waves"]] : [["☠", "Boss na wave 10"], ["☠☠", "Boss II na wave 20"], ["🔥", "Elites"]])
+              : chal ? [["⚔", c.rule], ["☠", "Chefe na wave 5 e 10"]] : [["♾", "Waves sem fim"], ["☠", "Chefes a cada 5 waves"], ["🌊", "Horda gigante"]];
+            const mult = (diff[difficulty]?.coins || 1) * modeConfig[md].coins, rw = StoryMode.levelReward(story ? this.stage : 1, difficulty);
+            const drops = Artifacts.DROPS[difficulty] || Artifacts.DROPS.easy, best = drops.reduce((b, w, i) => (w > 0 ? i : b), 0);
             const rewards = story
               ? [["◈", `${rw.each.toLocaleString("pt-BR")}`, "por estrela"], ["🎟", "+1", "3ª estrela"], ["✦", "XP", "temporada"]]
+              : chal ? [["✦", "Artefato", `até ${Artifacts.TIERS[best].name}`], ["🧩", `${Artifacts.PIECE_CHANCE[difficulty] + this.chal - 1}%`, "peça secreta"], ["◈", `×${String(mult).replace(".", ",")}`, "moedas"]]
               : [["◈", `×${String(mult).replace(".", ",")}`, "moedas"], ["✦", "XP", "temporada"], ["☠", "+500", "por chefe"]];
+            const locked = (story && !this.unlocked(this.stage)) || (chal && !Challenges.unlocked(this.map, this.chal));
             $("stage-main").innerHTML = `
-              <div class="stage-hero"><img src="textures/maps/map${this.map}.jpg" alt=""><div class="stage-title"><small>${story ? "HISTÓRIA" : "SOBREVIVÊNCIA"}</small><h3>${title}</h3><em>${sub}</em></div></div>
+              <div class="stage-hero"><img src="textures/maps/map${this.map}.jpg" alt=""><div class="stage-title"><small>${story ? "HISTÓRIA" : chal ? "CHALLENGE" : "INFINITO"}</small><h3>${title}</h3><em>${sub}</em></div></div>
               <h4>Dificuldade</h4>
               <div class="stage-diffs">${this.diffs.map((k) => `<button type="button" class="stage-diff ${k === difficulty ? "on" : ""}" data-stage-diff="${k}" style="--dc:${this.diffColor[k]}"><span>☠</span><b>${diff[k].label}</b><small>×${String(diff[k].coins).replace(".", ",")}</small></button>`).join("")}</div>
               <h4 class="stage-threats">Ameaças</h4>
               <div class="stage-chips stage-threats">${threats.map(([i, t]) => `<span class="chip"><i>${i}</i>${t}</span>`).join("")}</div>
               <h4>Recompensas</h4>
               <div class="stage-rewards">${rewards.map(([i, v, t]) => `<span class="rw"><i>${i}</i><b>${v}</b><small>${t}</small></span>`).join("")}</div>
-              <div class="stage-actions"><button type="button" id="stage-play" class="stage-play">JOGAR</button><button type="button" id="stage-mp" class="stage-mp">MULTIPLAYER</button></div>`;
+              <div class="stage-actions ${chal ? "solo" : ""}"><button type="button" id="stage-play" class="stage-play" ${locked ? "disabled" : ""}>JOGAR</button>${chal ? "" : `<button type="button" id="stage-mp" class="stage-mp">MULTIPLAYER</button>`}</div>`;
             $("stage-main").querySelectorAll("[data-stage-diff]").forEach((b) => (b.onclick = () => { difficulty = b.dataset.stageDiff; $("difficulty").value = difficulty; if (story && !this.unlocked(this.stage)) this.stage = 1; this.renderStage(); this.render(); }));
             $("stage-play").onclick = () => this.play();
-            $("stage-mp").onclick = () => this.multiplayer();
-            // right column: star missions for a story level, rules for the survival modes
+            if ($("stage-mp")) $("stage-mp").onclick = () => this.multiplayer();
+            // right column: star missions (História), drop table (Challenges) or rules (Infinito)
             if (story) {
-              const r = StoryMode.row(this.map, st, difficulty), stars = r?.stars || 0, best = r?.best || {}, o = StoryMode.objectives(this.map, st), vals = { ...best, wavesCleared: stars ? 20 : 0 };
+              const r = StoryMode.row(this.map, this.stage, difficulty), stars = r?.stars || 0, bestRun = r?.best || {}, o = StoryMode.objectives(this.map, this.stage), vals = { ...bestRun, wavesCleared: stars ? 20 : 0 };
               $("stage-side").innerHTML = `<h4>Missões de estrela</h4>${o.map((x, i) => { const done = i < stars, v = Math.min(StoryMode.value(vals, x.type), x.target); return `<div class="mission ${done ? "done" : ""}"><span>${x.label} <small>(${v.toLocaleString("pt-BR")}/${x.target.toLocaleString("pt-BR")})</small></span><i>${done ? "★" : "☆"}</i></div>`; }).join("")}
                 <h4>Prêmios por estrela</h4><div class="star-rw">${[1, 2, 3].map((n) => `<span class="${n <= stars ? "got" : ""}"><b>◈ ${rw.each.toLocaleString("pt-BR")}</b>${n === 3 ? "<small>+1 Normal</small>" : ""}<em>${"★".repeat(n)}${"☆".repeat(3 - n)}</em></span>`).join("")}</div>
-                <div class="stage-stat"><span>Estrelas neste mapa</span><b>${this.starsOn(this.map)}/30</b></div><div class="stage-stat"><span>Melhor: eliminações</span><b>${(best.kills || 0).toLocaleString("pt-BR")}</b></div>`;
+                <div class="stage-stat"><span>Estrelas neste mapa</span><b>${this.starsOn(this.map)}/30</b></div><div class="stage-stat"><span>Melhor: eliminações</span><b>${(bestRun.kills || 0).toLocaleString("pt-BR")}</b></div>`;
+            } else if (chal) {
+              const sa = `secret_${this.map}a`, sb = `secret_${this.map}b`;
+              $("stage-side").innerHTML = `<h4>Chance de raridade · ${diff[difficulty].label}</h4><div class="drop-table">${Artifacts.TIERS.map((t, i) => `<span class="${drops[i] ? "" : "off"}" style="--rc:${t.color}"><b>${t.name}</b><em>${drops[i]}%</em></span>`).join("")}</div>
+                <h4>Secretos deste mapa</h4>${[sa, sb].map((id) => { const a = Artifacts.info(id), p = Artifacts.pieces(id), own = Artifacts.count(id) > 0; return `<div class="mission secret"><span>${own ? a.name : "Artefato secreto"} <small>(${Math.min(p, Artifacts.PIECES)}/${Artifacts.PIECES} peças)</small></span><i>${own ? a.icon : "?"}</i></div>`; }).join("")}
+                <div class="stage-stat"><span>Vitórias neste challenge</span><b>${Artifacts.clears(this.map, this.chal)}</b></div><div class="stage-stat"><span>Challenges concluídos</span><b>${[1, 2, 3, 4, 5].filter((n) => Artifacts.clears(this.map, n) > 0).length}/5</b></div>`;
             } else {
-              const lines = md === "infinite" ? ["A vida dos zumbis cresce a cada wave", "Chefe ou mini-boss a cada 5 waves", "Horda gigante a cada 9 waves", "Moedas ×1,5 da dificuldade"] : ["Partida de 5 minutos", "Mais inimigos e mais rápidos", "Ataques bem mais perigosos", "Moedas ×2,5 da dificuldade"];
+              const lines = ["A vida dos zumbis cresce a cada wave", "Chefe ou mini-boss a cada 5 waves", "Horda gigante a cada 9 waves", "Moedas ×1,5 da dificuldade"];
               $("stage-side").innerHTML = `<h4>Regras</h4>${lines.map((t) => `<div class="mission"><span>${t}</span><i>•</i></div>`).join("")}<div class="stage-stat"><span>Multiplicador de moedas</span><b>×${String(mult).replace(".", ",")}</b></div>`;
             }
           },
           async play() {
             const md = this.stageMode();
             if (md === "classic" && !this.unlocked(this.stage)) return;
+            if (md === "challenge" && !Challenges.unlocked(this.map, this.chal)) return;
             $("mode").value = md; mode = md; $("difficulty").value = difficulty; selectedMap = this.map;
             if (md === "classic") storyLevel = this.stage;
+            if (md === "challenge") Challenges.current = this.chal;
             this.close();
             await deployPreparedRun();
           },
           multiplayer() {
             const md = this.stageMode();
+            if (md === "challenge") return;
             DR.pendingLobby = { map: this.map, difficulty, mode: md };
             this.close();
             DR.LobbyUI.openMultiplayer();
           },
         };
-
+        $("gear-back").onclick = () => UIManager.screen("menu");
+        document.querySelectorAll("[data-custom-tab]").forEach((b) => (b.onclick = () => (b.dataset.customTab === "gear" ? GearUI.open() : Armory.openCustomize())));
         $("world-back").onclick = () => { WorldUI.close(); UIManager.screen("menu"); };
         $("world-mp").onclick = () => { DR.pendingLobby = null; DR.LobbyUI.openMultiplayer(); };
         $("world-arenas").onclick = () => $("arenabtn").click();
@@ -32455,6 +32761,7 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            Artifacts, RunMods, Challenges, GearUI, WorldUI,
             PropKit,
             MapKit,
             Viewmodel,
