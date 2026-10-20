@@ -31409,7 +31409,7 @@ body.netgame #revivetouch{display:flex}
             return d;
           },
           show() { const d = this.el(); d.querySelector("small").textContent = maps[selectedMap]?.name || ""; d.classList.remove("hidden"); return performance.now(); },
-          frames() { return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); },
+          frames() { return new Promise((r) => { requestAnimationFrame(() => requestAnimationFrame(r)); setTimeout(r, 80); }); }, // timeout: rAF pauses in background tabs
           hide() { setTimeout(() => this.el().classList.add("hidden"), 120); },
         };
         // ── Static batching ─────────────────────────────────────────────────────────────────────
