@@ -17,12 +17,13 @@ try{
   for(const name of names){
     const def=W.weapons[byName(name)],w={...def};W.equip(w);W.buildModel?.();W.current().ammo=999;
     const hit=(x,z)=>{T.ZombieManager.clear();const q=T.ZombieManager.spawn(0,null,new V(x,0,z));q.hp=q.maxhp=1e6;q.speed=0;q.group.position.set(x,0,z);T.scene.updateMatrixWorld(true);T.setTime(T.time+5);const hp=q.hp;P.shoot();return +(hp-q.hp).toFixed(3);};
-    rows.push({name,cone:def.cone,range:def.range,center:hit(0,6),side:hit(2.1,6),far:hit(0,12-(def.range+1.2))});
+    const rise=()=>{const L=(T.FlameStream?.live||[]).slice(-4);return L.length?Math.max(...L.map(q=>q.vel.clone().normalize().y)):0;};const close=hit(0,10.8),closeRise=rise();
+    rows.push({name,cone:def.cone,range:def.range,center:hit(0,6),side:hit(2.1,6),far:hit(0,12-(def.range+1.2)),close,closeRise:+closeRise.toFixed(2)});
   }
   const balance={};for(const n of ['Wraith M4A1','Cerberus Laser','Quantum Annihilator','Dawn Spear','Heavenfall Bazooka','Demonic Fury','Angelic Specter']){const w=W.weapons[byName(n)];balance[n]={damage:w.damage,rate:w.rate};}
   return {rows,balance};
  });
- for(const r of out.rows){assert.ok(r.center>0,r.name+' center must hit');assert.equal(r.side,0,r.name+' lateral hitbox');assert.equal(r.far,0,r.name+' hard range');assert.ok(r.cone<=0.16,r.name+' cone');}
+ for(const r of out.rows){assert.ok(r.center>0,r.name+' center must hit');assert.equal(r.side,0,r.name+' lateral hitbox');assert.equal(r.far,0,r.name+' hard range');assert.ok(r.cone<=0.16,r.name+' cone');assert.ok(r.close>0,r.name+' must hit a zombie 1.2 m away');assert.ok(r.closeRise<0.3,r.name+' stream must not veer up at close range: '+r.closeRise);}
  assert.deepEqual(out.balance,{'Wraith M4A1':{damage:20,rate:0.115},'Cerberus Laser':{damage:13,rate:0.24},'Quantum Annihilator':{damage:15,rate:0.6},'Dawn Spear':{damage:62,rate:0.5},'Heavenfall Bazooka':{damage:125,rate:1},'Demonic Fury':{damage:54,rate:0.55},'Angelic Specter':{damage:44,rate:0.38}});
  assert.deepEqual(errs,[]);console.log(JSON.stringify(out));console.log('PASS stream hit volumes and balance');
 }finally{await b.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exit(1);});

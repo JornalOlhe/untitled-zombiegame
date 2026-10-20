@@ -58,7 +58,7 @@ const server = http.createServer((q,r)=>{
     assert.ok(r.revived && r.chanceGone, 'Segunda Chance revives once and is consumed');
     assert.ok(Object.values(r.variants).every(Boolean), 'all four variants dress');
     assert.ok(r.blood && r.bloodClass && r.remaining > 30, 'every 7th wave is a bigger blood wave');
-    assert.ok(r.shopOpen && r.cards === 13 && r.closed, 'shop opens, lists 13 offers and resumes the match');
+    assert.ok(r.shopOpen && r.cards === 18 && r.closed, 'shop opens, lists 18 offers (8 perks, PaP, 3 mods, 4 supplies, mystery box, airstrike) and resumes the match');
     assert.deepEqual(errors, []);
     console.log('PASS match shop / variants / blood wave');
   } finally { await browser.close(); server.close(); }

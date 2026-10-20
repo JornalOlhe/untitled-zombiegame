@@ -51,8 +51,8 @@ p { color: var(--dim); }
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .4 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
-  animation: grain 1.2s steps(6) infinite;
 }
+/* (the grain no longer animates: a full-screen blended layer repainting every frame cost menus FPS on phones) */
 .screen > * { position: relative; z-index: 1; }
 /* The grain moves its background, never its box: a translated overlay inside a backdrop-filter
    screen (which becomes its containing block) grew the scroll area and made dialogs jump. */
@@ -1308,3 +1308,20 @@ body.horde-wave #hud::after { content: ""; position: fixed; inset: 0; pointer-ev
 .loadfx b { font-family: var(--display, inherit); font-size: 28px; letter-spacing: .14em; color: #fff; }
 .loadfx small { font-family: var(--mono, monospace); font-size: 12px; letter-spacing: .2em; color: #ff8a7a; text-transform: uppercase; }
 @keyframes loadSpin { to { transform: rotate(360deg); } }
+
+/* v59 · home: the live 3D map shows through on the right; feature cards */
+#menu.screen { background: linear-gradient(90deg, rgba(9,8,7,.92) 0%, rgba(9,8,7,.6) 36%, rgba(9,8,7,.08) 68%, rgba(9,8,7,.25) 100%), linear-gradient(0deg, rgba(9,8,7,.75) 0%, transparent 28%); }
+.home-feature { gap: 10px; }
+.feature-card { position: relative; display: grid; gap: 4px; text-align: left; padding: 14px 16px; text-transform: none; letter-spacing: 0; background: linear-gradient(135deg, rgba(120,12,18,.85), rgba(19,15,13,.75)); border: 1px solid #ff4a3f66; }
+.feature-card em { font-style: normal; font-family: var(--mono); font-size: 10px; letter-spacing: .24em; color: #ffd166; }
+.feature-card b { font-family: var(--display); font-weight: 400; font-size: clamp(20px, 3.6vh, 30px); letter-spacing: .05em; color: #fff; }
+.feature-card small { font-family: var(--mono); font-size: 11px; color: #f2d5cf; }
+.feature-card > span:last-child:not(.feature-icons) { font-family: var(--display); font-size: 16px; color: #fff; justify-self: end; }
+.feature-card.gear { background: linear-gradient(135deg, rgba(30,34,44,.9), rgba(19,15,13,.75)); border-color: #8a96aa66; }
+.feature-icons { display: flex; gap: 6px; }
+.feature-icons i { font-style: normal; width: 30px; height: 30px; display: grid; place-items: center; font-size: 16px; color: var(--rc, #888); background: #0008; border: 1px solid color-mix(in srgb, var(--rc, #888) 60%, transparent); }
+.feature-icons i.empty { color: #666; border-style: dashed; border-color: #555; }
+@media (max-width: 760px), (max-height: 520px) {
+  .home-feature { grid-column: 2; grid-row: 2; align-self: center; }
+  .feature-card { padding: 8px 10px; } .feature-card small { font-size: 10px; }
+}

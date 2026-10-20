@@ -2706,6 +2706,7 @@ body.netgame #revivetouch{display:flex}
           <button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button>
         </div>
       </nav>
+      <aside id="home-side" class="home-side home-feature" aria-label="Destaques"></aside>
       <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
     <section id="seasonscreen" class="screen hidden">
@@ -3809,7 +3810,7 @@ body.netgame #revivetouch{display:flex}
         flashlight.intensity = 2;
         flashlight.distance = 25;
         flashlight.angle = Math.PI / 6;
-        flashlight.penumbra = 0.92;
+        flashlight.penumbra = 1; // fully soft edge: a crisp oval on the ground read as a puddle
         const muzzleLight = new THREE.PointLight(0xffba64, 0, 8, 2);
         muzzleLight.position.set(0.3, -0.25, -0.7);
         camera.add(muzzleLight);
@@ -8999,7 +9000,7 @@ body.netgame #revivetouch{display:flex}
               const c = new THREE.Color(p.color ?? 0xfff2d8), big = Math.max(p.w, p.d);
               p.inst = [];
               p.inst.push(["pool", pools.length]);
-              pools.push({ x: p.x, z: p.z, sx: big * 1.35 + 2.4, sz: Math.min(p.w, p.d) * 1.35 + 2.4 + big * 0.35, c: c.clone().multiplyScalar(0.22 * (p.gain ?? 1)) });
+              pools.push({ x: p.x, z: p.z, sx: big * 1.6 + 3.2, sz: Math.min(p.w, p.d) * 1.6 + 3.2 + big * 0.4, c: c.clone().multiplyScalar(0.085 * (p.gain ?? 1)) }); // faint + wide: the real lights already light the floor; a bright oval read as a puddle
               // walls within reach: axis rays against the collider boxes at scallop height
               const hy = y0 - 1.4;
               for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -9011,7 +9012,7 @@ body.netgame #revivetouch{display:flex}
                 }
                 if (best < 5.2) {
                   p.inst.push(["wash", washes.length]);
-                  washes.push({ x: p.x + dx * (best - 0.03), z: p.z + dz * (best - 0.03), ry: dx ? -dx * Math.PI / 2 : dz > 0 ? Math.PI : 0, y: y0 - 1.2, c: c.clone().multiplyScalar(0.3 * (1 - best / 6.5) * (p.gain ?? 1)) });
+                  washes.push({ x: p.x + dx * (best - 0.03), z: p.z + dz * (best - 0.03), ry: dx ? -dx * Math.PI / 2 : dz > 0 ? Math.PI : 0, y: y0 - 1.2, c: c.clone().multiplyScalar(0.16 * (1 - best / 6.5) * (p.gain ?? 1)) });
                 }
               }
             }
@@ -9106,7 +9107,7 @@ body.netgame #revivetouch{display:flex}
           buildStreetLamps(g, list) {
             const tex = VisualArt.texture("glow");
             const halo = (this._lampHalo ||= new THREE.SpriteMaterial({ map: tex, color: 0xffb060, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
-            const poolMat = (this._lampPool ||= new THREE.MeshBasicMaterial({ map: tex, color: 0xffa050, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2 }));
+            const poolMat = (this._lampPool ||= new THREE.MeshBasicMaterial({ map: tex, color: 0xffa050, transparent: true, opacity: 0.09, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2 }));
             const plane = (this._lampPlane ||= new THREE.PlaneGeometry(1, 1));
             const coverGeo = (this._lampCover ||= new THREE.BoxGeometry(0.36, 0.06, 0.76));
             for (const [x, z, ry] of list) {
@@ -9309,10 +9310,10 @@ body.netgame #revivetouch{display:flex}
                 // weak battery: steady with an occasional brown-out dip
                 o.t += dt;
                 const k = 0.82 + 0.18 * Math.sin(o.t * 0.7) * Math.sin(o.t * 1.9) - (Math.sin(o.t * 0.31) > 0.985 ? 0.6 : 0);
-                o.pool.material.opacity = 0.6 * k;
+                o.pool.material.opacity = 0.32 * k;
                 for (const b of o.beams) b.visible = k > 0.4;
                 o.lens.color.setScalar(Math.max(0.3, k));
-                if (o.tail) { o.tail.color.setRGB(Math.max(0.3, k), 0.16 * k, 0.1 * k); o.glows[0].opacity = 0.55 * k; o.redPool.material.opacity = 0.35 * k; }
+                if (o.tail) { o.tail.color.setRGB(Math.max(0.3, k), 0.16 * k, 0.1 * k); o.glows[0].opacity = 0.55 * k; o.redPool.material.opacity = 0.18 * k; }
                 if (o.bar) {
                   // classic double-flash pattern, sides alternating
                   const ph = (o.t * 1.6) % 1;
@@ -9320,7 +9321,7 @@ body.netgame #revivetouch{display:flex}
                     const local = (ph + i * 0.5) % 1, on = (local < 0.1 || (local > 0.16 && local < 0.26)) ? 1 : 0.08;
                     b.m.color.copy(b.col).multiplyScalar(0.25 + 0.75 * on);
                     b.sp.material.opacity = 0.9 * on;
-                    b.wash.material.opacity = 0.32 * on;
+                    b.wash.material.opacity = 0.2 * on;
                   });
                 }
                 continue;
@@ -16321,13 +16322,13 @@ body.netgame #revivetouch{display:flex}
                 map: VisualArt.texture("glow"),
                 color: 0x000000,
                 transparent: true,
-                opacity: 0.38,
+                opacity: 0.55,
                 depthWrite: false,
               }),
             );
             shadow.rotation.x = -Math.PI / 2;
             shadow.position.y = 0.028;
-            shadow.scale.set(0.9 * size, 0.65 * size, 1);
+            shadow.scale.set(1.05 * size, 0.8 * size, 1); // stronger contact shadow: without real shadows (phones) zombies looked like they floated
             g.add(shadow);
             z.contact = shadow;
             if (!boss) { HordeEvent.dress(z); if (!z.swarm) ZombieVariants.roll(z); }
@@ -20688,10 +20689,11 @@ body.netgame #revivetouch{display:flex}
                 } else if (k < 0.4) { // supply drop: crate + jerry can
                   S2("crate", [x, 0.1, z], [0.4, 0.2, 0.32], ry); const [px, pz] = at(0.55, 0.1); S(pick(["barrel", "toxic"]), [px, 0.09, pz], [0.13, 0.18, 0.09], ry + 0.4);
                 } else if (k < 0.55) { // abandoned camp: dead fire ring
-                  S2("charcoal", [x, 0.015, z], [0.38, 0.03, 0.38], ry);
+                  // charred logs instead of a flat black slab (a square decal on the ground read as a puddle)
+                  for (let i = 0; i < 3; i++) S2("bark", [x, 0.05, z], [0.5, 0.07, 0.07], ry + i * 1.05);
                   for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; S2("stone", [x + Math.cos(a) * 0.5, 0.035, z + Math.sin(a) * 0.5], [0.1, 0.07, 0.09], a); }
                 } else if (k < 0.68) { // tipped barrel + spill
-                  S2("barrel", [x, 0.14, z], [0.28, 0.28, 0.42], ry); const [px, pz] = at(0.1, 0.65); S(snow ? "ice" : "toxic", [px, 0.012, pz], [0.45, 0.01, 0.35], ry);
+                  S2("barrel", [x, 0.14, z], [0.28, 0.28, 0.42], ry); // (no flat "spill" slab: it looked like a random puddle)
                 } else if (k < 0.8) { // bones / remains
                   S2("bone", [x, 0.02, z], [0.35, 0.04, 0.06], ry); const [px, pz] = at(0.2, 0.25); S2("bone", [px, 0.04, pz], [0.12, 0.08, 0.1], ry + 1);
                 } else if (k < 0.9) { // tire + rubble
@@ -21791,6 +21793,8 @@ body.netgame #revivetouch{display:flex}
             { id: "toque", name: "Toque Duplo", icon: "⁑", color: "#ff9a3c", base: 3000, desc: "Atira 15% mais rápido" },
             { id: "mira", name: "Mira Mortal", icon: "◎", color: "#b07bff", base: 2500, desc: "Tiros na cabeça causam +25% de dano" },
             { id: "chance", name: "Segunda Chance", icon: "✚", color: "#6dff92", base: 4000, desc: "Uma vez por partida, volta com 35% da vida" },
+            { id: "vampiro", name: "Vampirismo", icon: "♥", color: "#ff3b5c", base: 3000, desc: "Cada abate devolve 4 de vida" },
+            { id: "sorte", name: "Pé de Coelho", icon: "✤", color: "#7dffcf", base: 2000, desc: "+25% de essência em tudo" },
           ],
           MODS: {
             fire: { name: "Munição Incendiária", icon: "🔥", color: "#ff6a2a", desc: "Chance de incendiar o alvo" },
@@ -21798,9 +21802,10 @@ body.netgame #revivetouch{display:flex}
             shock: { name: "Munição Elétrica", icon: "⚡", color: "#ffe84a", desc: "Chance de dar choque em até 2 inimigos próximos" },
           },
           MOD_PRICE: 3000, ARMOR_PRICE: 1200, GRENADE_PRICE: 900, AMMO_PRICE: 1000, PAP_PRICE: [5000, 10000],
+          BOX_PRICE: 2500, HEAL_PRICE: 800, STRIKE_PRICE: 4500, strikes: [],
           essence: 0, owned: new Set(), procLock: false,
           get open() { const el = document.getElementById("matchshop"); return !!el && !el.classList.contains("hidden"); },
-          reset() { this.essence = 0; this.owned = new Set(); this.close(true); },
+          reset() { this.essence = 0; this.owned = new Set(); this.strikes = []; this.close(true); },
           has(id) { return this.owned.has(id); },
           mult(key) {
             if (key === "maxHp" && this.has("couraca")) return 1.25;
@@ -21813,7 +21818,7 @@ body.netgame #revivetouch{display:flex}
           papMult(w) { return 1 + 0.35 * (w?.pap || 0) + 0.05 * Math.max(0, (w?.pap || 0) - 1); },
           earn(n, pos = null) {
             if (!n || !player) return;
-            n = Math.round(n * (WaveManager.blood ? 2 : 1));
+            n = Math.round(n * (WaveManager.blood ? 2 : 1) * (this.has("sorte") ? 1.25 : 1));
             this.essence += n;
             if (pos) UIManager.number(`+${n} ✦`, pos, "#c58bff");
           },
@@ -21860,6 +21865,50 @@ body.netgame #revivetouch{display:flex}
             AmmoCrates.refillAll("Munição comprada");
             this.celebrate("#ffd24a", "Reserva de munição cheia");
             return true;
+          },
+          // Caixa misteriosa: a random weapon (Comum → Mítico, weighted) replaces the one in your hands
+          // for this match only. The reveal shows the rarity colour.
+          buyBox() {
+            const cur = WeaponSystem.current();
+            if (!cur || !this.spend(this.BOX_PRICE)) return false;
+            const W = [30, 28, 22, 13, 6, 1], roll = Math.random() * 100;
+            let tier = 0; for (let a = 0, i = 0; i < W.length; i++) { a += W[i]; if (roll < a) { tier = i; break; } }
+            let pool = WeaponSystem.weapons.map((w, id) => ({ w, id })).filter((e) => e.w.tier === tier && e.w.name !== cur.name);
+            if (!pool.length) pool = WeaponSystem.weapons.map((w, id) => ({ w, id })).filter((e) => e.w.tier <= 5 && e.w.name !== cur.name);
+            const pick = pool[(Math.random() * pool.length) | 0], nw = WeaponSystem.create(pick.id);
+            RunMods.ammo([nw]);
+            player.inventory[player.slot] = nw;
+            WeaponSystem.buildModel();
+            this.celebrate(rarityColors[pick.w.tier] || "#ffffff", `Caixa misteriosa: ${pick.w.name} (${rarityNames[pick.w.tier]})`);
+            return true;
+          },
+          buyHeal() {
+            if (player.hp >= player.maxhp || !this.spend(this.HEAL_PRICE)) return false;
+            player.hp = Math.max(player.hp, player.maxhp);
+            this.celebrate("#6dff92", "Vida cheia");
+            return true;
+          },
+          // Ataque aéreo: six blasts walk across the nearest zombies over ~2 s (bosses take a share).
+          buyStrike() {
+            const L = ZombieManager.list.filter((z) => !z.dead && !z.remote && !z.dropping).sort((a, b) => a.group.position.distanceToSquared(player.pos) - b.group.position.distanceToSquared(player.pos)).slice(0, 6);
+            if (!L.length) { UIManager.toast("Nenhum alvo para o ataque aéreo agora."); return false; }
+            if (!this.spend(this.STRIKE_PRICE)) return false;
+            L.forEach((z, i) => this.strikes.push({ at: simulationTime + 0.6 + i * 0.3, z }));
+            AudioManager.tone(220, 0.8, "sawtooth", 0.12, 90);
+            this.celebrate("#ff8a3a", "Ataque aéreo a caminho!");
+            return true;
+          },
+          tick() {
+            if (!this.strikes.length || state !== GameState.PLAYING) return;
+            for (let i = this.strikes.length - 1; i >= 0; i--) {
+              const s = this.strikes[i];
+              if (simulationTime < s.at) continue;
+              this.strikes.splice(i, 1);
+              const pos = s.z && !s.z.dead ? s.z.group.position.clone() : null;
+              if (!pos || pos.distanceTo(player.pos) < 3.2) continue; // never on top of the player
+              pos.y = 0.2;
+              explosion(pos, 4.2, 600 + 70 * (WaveManager.wave || 1), false, 0xff8a3a);
+            }
           },
           buyGrenades() {
             if (!this.spend(this.GRENADE_PRICE)) return false;
@@ -21931,10 +21980,14 @@ body.netgame #revivetouch{display:flex}
             const mods = Object.entries(this.MODS).map(([k, m]) => this.card(`data-shop="mod" data-id="${k}"`, m.icon, m.color, m.name, m.desc, this.MOD_PRICE, w?.mod === k ? "owned" : can(this.MOD_PRICE))).join("");
             const extra = this.card(`data-shop="armor"`, "▣", "#9fd2ff", "Placa de armadura", "+50 de vida extra (máx. 100)", this.ARMOR_PRICE, player.bonus >= 100 ? "max" : can(this.ARMOR_PRICE)) +
               this.card(`data-shop="grenades"`, "◉", "#ffb24a", "Granadas", "+2 granadas", this.GRENADE_PRICE, can(this.GRENADE_PRICE)) +
-              this.card(`data-shop="ammo"`, "▤", "#ffd24a", "Caixa de munição", "Enche a reserva de todas as armas", this.AMMO_PRICE, AmmoCrates.needs() || player.inventory.some((x) => x && x.reserve != null && x.reserve < x.reserveMax) ? can(this.AMMO_PRICE) : "max");
+              this.card(`data-shop="ammo"`, "▤", "#ffd24a", "Caixa de munição", "Enche a reserva de todas as armas", this.AMMO_PRICE, AmmoCrates.needs() || player.inventory.some((x) => x && x.reserve != null && x.reserve < x.reserveMax) ? can(this.AMMO_PRICE) : "max") +
+              this.card(`data-shop="heal"`, "✚", "#6dff92", "Kit médico", "Vida cheia na hora", this.HEAL_PRICE, player.hp >= player.maxhp ? "max" : can(this.HEAL_PRICE));
+            const special = this.card(`data-shop="box"`, "?", "#c58bff", "Caixa misteriosa", "Troca a arma da mão por uma aleatória (até Mítico)", this.BOX_PRICE, can(this.BOX_PRICE)) +
+              this.card(`data-shop="strike"`, "✈", "#ff8a3a", "Ataque aéreo", "6 explosões nos zumbis mais próximos", this.STRIKE_PRICE, can(this.STRIKE_PRICE));
             el.innerHTML = `<h3>Perks <span>o preço sobe a cada perk comprado</span></h3><div class="shop-grid">${perks}</div>
               <h3>Arma atual <span>${w?.name || ""}</span></h3><div class="shop-grid">${pap}${mods}</div>
-              <h3>Suprimentos</h3><div class="shop-grid">${extra}</div>`;
+              <h3>Suprimentos</h3><div class="shop-grid">${extra}</div>
+              <h3>Especiais</h3><div class="shop-grid">${special}</div>`;
           },
           click(btn) {
             const k = btn.dataset.shop, id = btn.dataset.id;
@@ -21944,6 +21997,9 @@ body.netgame #revivetouch{display:flex}
             else if (k === "armor") this.buyArmor();
             else if (k === "grenades") this.buyGrenades();
             else if (k === "ammo") this.buyAmmo();
+            else if (k === "heal") this.buyHeal();
+            else if (k === "box") this.buyBox();
+            else if (k === "strike") this.buyStrike();
           },
           perkIcons() {
             return [...this.owned].map((id) => { const p = this.PERKS.find((x) => x.id === id); return `<i style="--c:${p.color}" title="${p.name}">${p.icon}</i>`; }).join("");
@@ -22681,7 +22737,13 @@ body.netgame #revivetouch{display:flex}
               origin = isFinite(muzzle.x + muzzle.y + muzzle.z) && muzzle.distanceTo(eye) < 3 ? muzzle : eye,
               kind = w.kind === "cryo" ? "cryo" : "fire",
               cone = Math.max(0.06, w.cone || 0.12);
-            aim.copy(aimTarget(w.range).sub(origin).normalize());
+            // Converge on what the crosshair sees, but never closer than 5 m: with a zombie right in
+            // front, the muzzle (below/right of the eye) aimed steeply UP at a point 1 m away and the
+            // whole stream went over its head. Past 5 m the line from the muzzle stays near the view.
+            {
+              const eyeDir = aimDir(), tgt = aimTarget(w.range), dist = Math.max(5, tgt.distanceTo(eye));
+              aim.copy(eye.clone().addScaledVector(eyeDir, Math.min(dist, w.range)).sub(origin).normalize());
+            }
             // One physical stream volume drives both visuals and damage. The first wall clamps
             // the stream, so flames/ice and their hit volume end at the same surface.
             raycaster.set(origin, aim);
@@ -22700,18 +22762,21 @@ body.netgame #revivetouch{display:flex}
               AudioManager.noise?.(0.14, kind === "fire" ? 0.18 : 0.12);
             }
             syncHitMatrices();
+            // The hit volume starts at the eye, along the view: the muzzle sits ~1 m ahead of the
+            // eye, so a zombie hugging the player was BEHIND the stream origin and never burned.
+            const hitFrom = eye.clone(), hitDir = aimDir().clone().normalize(), hitReach = Math.min(w.range, reach + origin.distanceTo(eye));
             for (const z of ZombieManager.list) {
               if (z.dead) continue;
               const size = Math.min(2, z.size || 1),
                 c = zombieBodyPoint(z),
-                to = c.clone().sub(origin),
-                axial = to.dot(aim);
-              if (axial <= 0.08 || axial > reach) continue;
+                to = c.clone().sub(hitFrom),
+                axial = to.dot(hitDir);
+              if (axial <= 0.05 || axial > hitReach) continue;
               const lateralSq = Math.max(0, to.lengthSq() - axial * axial),
-                bodyRadius = Math.min(0.42, 0.18 + size * 0.09),
+                bodyRadius = Math.min(0.42, 0.18 + size * 0.09) + (axial < 2.5 ? 0.35 : 0), // up close the stream covers the torso and legs
                 allowedRadius = Math.tan(cone) * axial + bodyRadius;
               if (lateralSq > allowedRadius * allowedRadius) continue;
-              if (!canReachZombie(origin, z, 0.03)) continue;
+              if (!canReachZombie(hitFrom, z, 0.03)) continue;
               const falloff = 1 - 0.3 * (axial / Math.max(0.01, w.range));
               ZombieManager.hit(z, damage * falloff, false, c, w);
             }
@@ -25027,6 +25092,7 @@ body.netgame #revivetouch{display:flex}
             if (id === "pausescreen") this.pauseMenu();
             // The lobby wallet chip must reflect coins earned during the run that just ended.
             if (id === "menu" && DR.ProfileUI?.game) DR.ProfileUI.chip();
+            if (id === "menu") try { HomeSide.render(); } catch {}
             const active = document.activeElement;
             for (const el of document.querySelectorAll(".screen")) {
               const hidden = el.id !== id;
@@ -25855,6 +25921,7 @@ body.netgame #revivetouch{display:flex}
             KillCam.stop(true);
           },
           onKill(z, head, w, overkill) {
+            if (MatchShop.has("vampiro") && player && player.hp > 0) player.hp = Math.min(player.maxhp + (player.bonus || 0), player.hp + 4);
             const now = performance.now() / 1000;
             this.streak = now - this.lastKill < 1.6 ? this.streak + 1 : 1;
             this.lastKill = now;
@@ -31425,6 +31492,20 @@ body.netgame #revivetouch{display:flex}
           frames() { return new Promise((r) => { requestAnimationFrame(() => requestAnimationFrame(r)); setTimeout(r, 80); }); }, // timeout: rAF pauses in background tabs
           hide() { setTimeout(() => this.el().classList.add("hidden"), 120); },
         };
+        // Home: two live cards on the right — what's new (straight into the Challenges of a map) and
+        // the equipped artifacts with their total bonus (straight into Equipamentos).
+        const HomeSide = {
+          render() {
+            const el = $("home-side"); if (!el) return;
+            const d = Artifacts.data(), eq = (d.equipped || []).filter((id) => Artifacts.count(id) > 0), tot = Artifacts.totals();
+            const bonus = Object.entries(tot).filter(([, v]) => v > 0).slice(0, 3).map(([k, v]) => `+${String(Math.round(v * 10) / 10).replace(".", ",")}${Artifacts.STAT[k][1]} ${Artifacts.STAT[k][0].toLowerCase()}`).join(" · ");
+            const icons = eq.map((id) => { const a = Artifacts.info(id); return `<i style="--rc:${a.rarity.color}">${a.icon}</i>`; }).join("") + Array.from({ length: Math.max(0, d.slots - eq.length) }, () => `<i class="empty">+</i>`).join("");
+            el.innerHTML = `<button type="button" class="feature-card" id="feature-chal"><em>NOVO</em><b>Challenges</b><small>5 desafios por mapa · artefatos até Divino</small><span>JOGAR ›</span></button>
+              <button type="button" class="feature-card gear" id="feature-gear"><em>EQUIPAMENTOS</em><b>${eq.length}/${d.slots} artefatos</b><span class="feature-icons">${icons}</span><small>${bonus || "Nenhum bônus ativo"}</small></button>`;
+            $("feature-chal").onclick = async () => { await WorldUI.open(); WorldUI.tab = "challenge"; };
+            $("feature-gear").onclick = () => GearUI.open();
+          },
+        };
         // ── Static batching ─────────────────────────────────────────────────────────────────────
         // Maps are assembled from hundreds of small meshes (window boxes, door frames, trims) and
         // each one was its own draw call (~400 per frame in the City). ~1.2 s after a map is built,
@@ -32753,6 +32834,7 @@ body.netgame #revivetouch{display:flex}
           lastFrame = now;
           menuTime += dt;
           StaticBatch.tick(dt);
+          MatchShop.tick();
           GamepadInput.update(dt);
           fpsFrames++;
           fpsTime += wallDt;
@@ -32998,7 +33080,7 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
-            ColorFilter, TexQuality, SettingsManager, StaticBatch,
+            ColorFilter, TexQuality, SettingsManager, StaticBatch, FlameStream,
             get previewModel() { return typeof previewModel !== "undefined" ? previewModel : null; },
             Artifacts, RunMods, Challenges, GearUI, WorldUI,
             PropKit,
