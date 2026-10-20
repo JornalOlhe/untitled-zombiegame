@@ -1297,3 +1297,5 @@ body.horde-wave #hud::after { content: ""; position: fixed; inset: 0; pointer-ev
 .loot-card em { display: block; font-style: normal; font-size: 10px; letter-spacing: .16em; color: var(--rc); } .loot-card b { display: block; font-size: 15px; } .loot-card small { font-size: 11px; color: #cfd6e0; }
 @keyframes lootPop { from { transform: scale(.7); } to { transform: none; } }
 #classscreen.customize-mode .armory-section-label { visibility: hidden; }
+
+#world { filter: var(--world-filter, none); }

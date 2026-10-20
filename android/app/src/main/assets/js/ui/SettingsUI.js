@@ -127,11 +127,15 @@
         ${this.select("graphics", "Predefinição", [["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Ajusta sombras, partículas e distância juntos")}
         ${this.select("shadows", "Sombras", [["off", "Desligadas"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"]])}
         ${this.select("vfx", "Partículas e efeitos", [["off", "Desligados"], ["low", "Baixo"], ["high", "Alto"]])}
+        ${this.select("texFilter", "Filtro de textura", [[1, "Bilinear"], [2, "Anisotrópico 2×"], [4, "Anisotrópico 4×"], [8, "Anisotrópico 8×"], [16, "Anisotrópico 16×"]], "Deixa chão e paredes nítidos à distância")}
         ${this.select("reflections", "Reflexos", [["off", "Desligados"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["ultra", "Ultra"]], "Baixo: ambiente capturado uma vez. Médio: poças com espelho real. Alto/Ultra: também chão polido refletindo luzes, zumbis e paredes em tempo real")}
       </div><div class="set-group"><h3>Tela</h3>
         ${this.range("resolution", "Escala de resolução", 0.5, 1.5, 0.05, pct, "Abaixo de 100% ganha desempenho")}
         ${this.range("drawDistance", "Distância de visão", 0.6, 1.4, 0.05, pct)}
         ${this.range("brightness", "Brilho", 70, 140, 1, undefined, "Ajuste até enxergar bem as áreas escuras")}
+        ${this.range("contrast", "Contraste", 80, 130, 1, (v) => v + "%")}
+        ${this.range("saturation", "Saturação das cores", 50, 150, 1, (v) => v + "%", "Abaixo de 100% deixa o mundo mais sombrio")}
+        ${this.select("colorblind", "Modo daltônico", [["none", "Desligado"], ["protan", "Protanopia (vermelho)"], ["deutan", "Deuteranopia (verde)"], ["tritan", "Tritanopia (azul)"]], "Corrige as cores do jogo para destacar o que fica parecido")}
         ${this.select("fpsCap", "Limite de FPS", [[0, "Sem limite"], [30, "30"], [60, "60"], [90, "90"], [120, "120"], [144, "144"]], "Limitar economiza bateria e esquenta menos")}
         ${canFullscreen ? `<label class="set-row set-check"><span class="set-name">Tela cheia</span><input type="checkbox" data-fullscreen ${document.fullscreenElement ? "checked" : ""} /></label>` : ""}
       </div>`;
@@ -201,7 +205,7 @@
     change(el) {
       const s = this.s,
         k = el.dataset.setting;
-      s[k] = el.type === "checkbox" ? el.checked : el.type === "range" || k === "fpsCap" ? Number(el.value) : el.value;
+      s[k] = el.type === "checkbox" ? el.checked : el.type === "range" || k === "fpsCap" || k === "texFilter" ? Number(el.value) : el.value;
       if (k === "profile") {
         if (s.profile !== "custom") this.hooks.profile?.(s.profile);
         this.render();
@@ -232,7 +236,7 @@
       const d = DR.Settings.defaults,
         s = this.s;
       const keysOf = {
-        graphics: ["profile", "graphics", "shadows", "vfx", "reflections", "resolution", "drawDistance", "brightness", "fpsCap"],
+        graphics: ["profile", "graphics", "shadows", "vfx", "reflections", "texFilter", "resolution", "drawDistance", "brightness", "contrast", "saturation", "colorblind", "fpsCap"],
         hud: ["crossStyle", "crossColor", "crossSize", "crossThick", "crossOpacity", "crossOutline", "crossDynamic", "hudScale", "minimap", "numbers", "autoFire", "fps"],
         audio: ["master", "music", "ambient", "weapons", "sfx", "ui", "voice", "voiceSubs"],
         camera: ["sensitivity", "adsSensitivity", "padSensitivity", "fov", "shake", "viewBob", "invert"],

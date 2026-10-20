@@ -3261,7 +3261,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.50.0";
+        const GAME_VERSION = "0.51.0";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -3489,6 +3489,59 @@ body.netgame #revivetouch{display:flex}
             rating: "●○○",
           },
         ];
+        // Colour accessibility on the 3D view: saturation, contrast and a colour-blind correction
+        // (daltonize: D = I + E·(I − S), S = Machado simulation, E shifts the lost channel's error
+        // into the ones still seen). Pure CSS on the canvas, no shader or render cost.
+        const ColorFilter = {
+          SIM: {
+            protan: [[0.152, 1.053, -0.205], [0.115, 0.786, 0.099], [-0.004, -0.048, 1.052]],
+            deutan: [[0.367, 0.861, -0.228], [0.280, 0.673, 0.047], [-0.012, 0.043, 0.969]],
+            tritan: [[1.256, -0.077, -0.179], [-0.078, 0.931, 0.148], [0.005, 0.691, 0.304]],
+          },
+          E: { protan: [[0, 0, 0], [0.7, 1, 0], [0.7, 0, 1]], deutan: [[1, 0.7, 0], [0, 0, 0], [0, 0.7, 1]], tritan: [[1, 0, 0.7], [0, 1, 0.7], [0, 0, 0]] },
+          matrix(kind) {
+            const S = this.SIM[kind], E = this.E[kind], D = [];
+            for (let r = 0; r < 3; r++) { D.push([]); for (let c = 0; c < 3; c++) { let v = r === c ? 1 : 0; for (let k = 0; k < 3; k++) v += E[r][k] * ((k === c ? 1 : 0) - S[k][c]); D[r].push(+v.toFixed(4)); } }
+            return D;
+          },
+          ensure() {
+            if (document.getElementById("cb-filters")) return;
+            const rows = (m) => m.map((r) => `${r.join(" ")} 0 0`).join(" ") + " 0 0 0 1 0";
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.id = "cb-filters"; svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
+            svg.style.position = "absolute";
+            svg.innerHTML = ["protan", "deutan", "tritan"].map((k) => `<filter id="cb-${k}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${rows(this.matrix(k))}"/></filter>`).join("");
+            document.body.appendChild(svg);
+          },
+          apply() {
+            const s = SettingsManager.data, parts = [];
+            if (s.saturation !== 100) parts.push(`saturate(${s.saturation / 100})`);
+            if (s.contrast !== 100) parts.push(`contrast(${s.contrast / 100})`);
+            if (s.colorblind && s.colorblind !== "none") { this.ensure(); parts.push(`url(#cb-${s.colorblind})`); }
+            document.documentElement.style.setProperty("--world-filter", parts.join(" ") || "none");
+          },
+        };
+        // Texture filtering: every mipmapped texture in the world gets the chosen anisotropy (sharp
+        // floors and walls at grazing angles); the crisp nearest-filtered voxel art is left alone.
+        const TexQuality = {
+          applied: new WeakMap(),
+          level() { return Math.max(1, Math.min(SettingsManager.data.texFilter || 4, renderer?.capabilities?.getMaxAnisotropy?.() || 1)); },
+          apply(root = scene) {
+            if (!root || !renderer) return 0;
+            const lv = this.level(); let n = 0;
+            root.traverse((o) => {
+              if (!o.material) return;
+              for (const m of Array.isArray(o.material) ? o.material : [o.material])
+                for (const key of ["map", "normalMap", "roughnessMap", "emissiveMap", "aoMap", "bumpMap"]) {
+                  const t = m[key];
+                  if (!t || t.isRenderTargetTexture || t.minFilter === THREE.NearestFilter || t.minFilter === THREE.LinearFilter || t.generateMipmaps === false) continue;
+                  if (this.applied.get(t) === lv && t.anisotropy === lv) continue;
+                  t.anisotropy = lv; this.applied.set(t, lv); t.needsUpdate = true; n++;
+                }
+            });
+            return n;
+          },
+        };
         // SettingsManager: validated local preferences. Storage may be blocked on file://.
         // HUD / accessibility preferences that are pure presentation: crosshair look, HUD scale,
         // minimap, brightness. Applied on load and whenever a setting changes.
@@ -3506,6 +3559,8 @@ body.netgame #revivetouch{display:flex}
             document.documentElement.style.setProperty("--hud-zoom", String(s.hudScale / 100));
             document.body.classList.toggle("no-minimap", !s.minimap);
             try { if (MapManager.baseExposure) renderer.toneMappingExposure = MapManager.baseExposure * s.brightness / 100; } catch {}
+            ColorFilter.apply();
+            try { TexQuality.apply(); } catch {}
           },
           // One-click profiles. They only touch presentation/performance settings, never controls.
           profiles: {
@@ -3561,6 +3616,10 @@ body.netgame #revivetouch{display:flex}
             crossOutline: true,
             crossDynamic: true,
             profile: "custom",
+            texFilter: window.DeadRecoilRuntime?.platform === "android" ? 4 : 8,
+            saturation: 100,
+            contrast: 100,
+            colorblind: "none",
           },
           data: {},
           load() {
@@ -3614,6 +3673,8 @@ body.netgame #revivetouch{display:flex}
               ["padSensitivity", 0.3, 2.5],
               ["drawDistance", 0.6, 1.4],
               ["resolution", 0.5, 1.5],
+              ["saturation", 50, 150],
+              ["contrast", 80, 130],
             ])
               this.data[k] = clamp(this.data[k], a, b);
             for (const [k, opts] of [
@@ -3627,6 +3688,8 @@ body.netgame #revivetouch{display:flex}
             ])
               if (!opts.includes(this.data[k])) this.data[k] = this.defaults[k];
             if (![0, 30, 60, 90, 120, 144].includes(this.data.fpsCap)) this.data.fpsCap = 0;
+            if (![1, 2, 4, 8, 16].includes(this.data.texFilter)) this.data.texFilter = this.defaults.texFilter;
+            if (!["none", "protan", "deutan", "tritan"].includes(this.data.colorblind)) this.data.colorblind = "none";
           },
           save() {
             try {
@@ -13105,7 +13168,7 @@ body.netgame #revivetouch{display:flex}
             ambient.color.setHex([0xb0c8dd, 0xbecbb1, 0xa8b8bb, 0xa8bed8, 0xd2e7f0][index]);
             ambient.groundColor.setHex([0x303a36, 0x36392b, 0x272f25, 0x282c3b, 0x505d65][index]);
             sun.color.setHex([0xc4daf1, 0xe9d4a0, 0xa8c6d1, 0xa9bde4, 0xe1efff][index]);
-            this.baseExposure = index === 2 ? 1.08 : index === 4 ? 0.93 : 1.04;
+            this.baseExposure = index === 2 ? 1.08 : index === 4 ? 0.93 : index === 1 ? 0.9 : 1.04;
             renderer.toneMappingExposure = this.baseExposure * (SettingsManager.data.brightness ?? 100) / 100;
             ambient.intensity = index === 4 ? 0.54 : 0.4;
             sun.intensity = index === 4 ? 0.8 : index === 2 ? 0.26 : 0.42;
@@ -23712,6 +23775,7 @@ body.netgame #revivetouch{display:flex}
               ladderReleaseUntil: 0,
             };
             RunMods.begin();
+            try { TexQuality.apply(); } catch {}
             MatchShop.reset(); HordeEvent.end();
             MapObjectives.start();
             WaveManager.blood = false;
@@ -32761,6 +32825,7 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
+            ColorFilter, TexQuality, SettingsManager,
             Artifacts, RunMods, Challenges, GearUI, WorldUI,
             PropKit,
             MapKit,
