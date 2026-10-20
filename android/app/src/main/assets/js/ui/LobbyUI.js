@@ -14,7 +14,7 @@
       $("solo").onclick = () => this.game.startSolo();
       $("multiplayer").onclick = () => this.openMultiplayer();
       $("quickplay").onclick = () => this.act(() => DR.LobbyManager.quickPlay(), "Procurando partida…");
-      $("createlobby").onclick = () => this.act(() => DR.LobbyManager.create({ map: 0, difficulty: "medium", mode: "classic", isPublic: $("lobby-public").checked }), "Criando lobby…");
+      $("createlobby").onclick = () => this.act(() => DR.LobbyManager.create({ map: 0, difficulty: "medium", mode: "classic", ...(DR.pendingLobby || {}), isPublic: $("lobby-public").checked }), "Criando lobby…");
       $("join-form").onsubmit = (e) => {
         e.preventDefault();
         this.act(() => DR.LobbyManager.join($("join-code").value), "Entrando…");
@@ -29,6 +29,8 @@
       DR.LobbyManager.on((type, data) => this.onLobby(type, data));
     },
     openPlay() {
+      // JOGAR is the world map now; the old play hub stays only as a fallback
+      if (this.game.openWorld) return this.game.openWorld();
       this.game.screen("playscreen");
       const mpOk = DR.LobbyManager.local || (this.game.signedIn() && DR.Backend.isOnline());
       $("multiplayer").classList.toggle("locked", !mpOk);

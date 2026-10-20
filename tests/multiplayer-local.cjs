@@ -47,13 +47,13 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     console.log('step:', 'Lobby: host creates, guest joins with the code.');
     // Lobby: host creates, guest joins with the code.
     await host.click('#play');
-    await host.click('#multiplayer');
+    await host.click('#world-mp');
     await host.click('#createlobby');
     await host.locator('#lobbyscreen:not(.hidden)').waitFor();
     const code = (await host.locator('#lobby-code').textContent()).trim();
     assert.match(code, /^[A-Z0-9]{6}$/, 'lobby code');
     await guest.click('#play');
-    await guest.click('#multiplayer');
+    await guest.click('#world-mp');
     await guest.fill('#join-code', 'ZZZZZZ');
     await guest.click('#join-form button');
     await guest.waitForFunction(() => /não encontrado/i.test(document.getElementById('mp-msg').textContent));

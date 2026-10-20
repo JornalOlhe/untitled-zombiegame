@@ -2865,6 +2865,17 @@ body.netgame #revivetouch{display:flex}
         </aside>
       </div>
     </section>
+    <section id="worldscreen" class="screen hidden world-screen">
+      <header class="world-ribbon"><span>JOGAR</span><small id="world-diff"></small></header>
+      <div id="world-track" class="world-track" aria-label="Mapas"></div>
+      <footer class="world-foot"><button id="world-back" class="world-back" type="button">‹ Voltar</button><div class="world-extra"><button id="world-mp" type="button">Multiplayer</button><button id="world-arenas" type="button">Arenas</button></div></footer>
+      <div id="stagemodal" class="stage-modal hidden" role="dialog" aria-modal="true">
+        <div class="stage-box">
+          <header class="stage-head"><span>ESCOLHA O NÍVEL</span><button id="stage-close" type="button" aria-label="Fechar">✕</button></header>
+          <div class="stage-body"><nav id="stage-list" class="stage-list"></nav><section id="stage-main" class="stage-main"></section><aside id="stage-side" class="stage-side"></aside></div>
+        </div>
+      </div>
+    </section>
     <section id="mpscreen" class="screen hidden panel-screen">
       <header class="panel-head"><button class="back-btn" id="mp-back" type="button">‹ VOLTAR</button><h2>MULTIPLAYER</h2></header>
       <div class="mp-grid">
@@ -31211,10 +31222,7 @@ body.netgame #revivetouch{display:flex}
           UIManager.settings();
           UIManager.screen("settingsscreen");
         }
-        $("play").onclick = () => {
-          AudioManager.init();
-          DR.LobbyUI.openPlay();
-        };
+        $("play").onclick = () => WorldUI.open();
         DevMode.attachLogo();
         $("spin-buy").onclick = () => Armory.buySpinsInfo();
         $("spin-vfx").onclick = () => {
@@ -31308,6 +31316,112 @@ body.netgame #revivetouch{display:flex}
         const deployPreparedRun=async()=>{if($("deploy").disabled||$("story-deploy").disabled)return;$("deploy").disabled=$("story-deploy").disabled=true;const full=enterFullscreen();mode=$("mode").value;difficulty=$("difficulty").value;try{await Promise.all([full,Account.begin()])}catch(e){UIManager.toast(e.message);$("deploy").disabled=$("story-deploy").disabled=false;return}$("deploy").disabled=$("story-deploy").disabled=false;WeaponSystem.model.visible=true;PlayerController.start()};
         $("deploy").onclick=async()=>{mode=$("mode").value;difficulty=$("difficulty").value;if(mode==="classic"){await StoryMode.open();return}await deployPreparedRun()};
         $("story-deploy").onclick=()=>deployPreparedRun();
+        // ── World map (JOGAR) ─────────────────────────────────────────────────────────────────
+        // One screen: a horizontal row of map cards (art, name, completion, rewards). Tapping a
+        // map opens its stage panel: level list (1–10, ∞ Infinity, ⏱ Contra o tempo) on the left,
+        // the stage (difficulty, threats, rewards, JOGAR / MULTIPLAYER) in the middle and the
+        // star missions on the right. Map first, then the stage — nothing else in between.
+        const WorldUI = {
+          map: 0, stage: 1,
+          diffs: ["easy", "medium", "hard", "nightmare"],
+          diffColor: { easy: "#5fbf5a", medium: "#e3b341", hard: "#e0673a", nightmare: "#d8262e" },
+          async open() {
+            AudioManager.init();
+            try { await StoryMode.load(); } catch {}
+            this.render();
+            UIManager.screen("worldscreen");
+            this.close();
+          },
+          starsOn(map, d = difficulty) { let s = 0; for (let l = 1; l <= 10; l++) s += StoryMode.row(map, l, d)?.stars || 0; return s; },
+          render() {
+            const track = $("world-track");
+            $("world-diff").textContent = `Dificuldade: ${diff[difficulty]?.label || difficulty}`;
+            track.innerHTML = maps.map((m, i) => {
+              const st = this.starsOn(i), pct = Math.round((st / 30) * 100), boss = WaveManager.mapRosters?.[i] || [];
+              const bossName = WaveManager.bossRoster?.[boss[2]]?.name || WaveManager.bossRoster?.[boss[0]]?.name || "Chefe";
+              return `<button type="button" class="world-card" data-world-map="${i}" style="--accent:${m.color || "#8a2a22"}">
+                <span class="world-art"><img src="textures/maps/map${i}.jpg" alt="" draggable="false"></span>
+                <b class="world-name">${m.name}</b>
+                <span class="world-prog"><i style="width:${pct}%"></i><em>Progresso</em><strong>${pct}%</strong></span>
+                <span class="world-loot"><span class="loot coin" title="Moedas">◈</span><span class="loot ticket" title="Tickets">🎟</span><span class="loot star" title="Estrelas">★ ${st}/30</span><span class="loot boss" title="${bossName}">☠</span></span>
+              </button>`;
+            }).join("");
+            track.querySelectorAll("[data-world-map]").forEach((b) => (b.onclick = () => this.pick(Number(b.dataset.worldMap))));
+          },
+          pick(i) {
+            this.map = i; selectedMap = i;
+            // first open: the first level without stars (or the last unlocked one)
+            let lv = 1; for (let l = 1; l <= 10; l++) { if (!this.unlocked(l)) break; lv = l; if (!(StoryMode.row(i, l, difficulty)?.stars)) break; }
+            this.stage = lv;
+            this.renderStage();
+            $("stagemodal").classList.remove("hidden");
+          },
+          close() { $("stagemodal")?.classList.add("hidden"); },
+          unlocked(l) { return l === 1 || (StoryMode.row(this.map, l - 1, difficulty)?.stars || 0) >= 1; },
+          stageMode() { return this.stage === "inf" ? "infinite" : this.stage === "timed" ? "timed" : "classic"; },
+          renderStage() {
+            const m = maps[this.map], st = this.stage, md = this.stageMode(), story = md === "classic";
+            selectedMap = this.map;
+            if (story) storyLevel = st;
+            const list = $("stage-list");
+            list.innerHTML = Array.from({ length: 10 }, (_, k) => {
+              const l = k + 1, ok = this.unlocked(l), s = StoryMode.row(this.map, l, difficulty)?.stars || 0;
+              return `<button type="button" class="stage-btn ${st === l ? "on" : ""}" data-stage="${l}" ${ok ? "" : "disabled"}><b>${ok ? l : "🔒"}</b><span>${"★".repeat(s)}${"☆".repeat(3 - s)}</span></button>`;
+            }).join("") + `<button type="button" class="stage-btn mode ${st === "inf" ? "on" : ""}" data-stage="inf"><b>∞</b><span>Infinity</span></button><button type="button" class="stage-btn mode ${st === "timed" ? "on" : ""}" data-stage="timed"><b>⏱</b><span>5 min</span></button>`;
+            list.querySelectorAll("[data-stage]").forEach((b) => (b.onclick = () => { const v = b.dataset.stage; this.stage = v === "inf" || v === "timed" ? v : Number(v); this.renderStage(); }));
+            const title = story ? `${m.name} · Nível ${st}` : `${m.name} · ${modeConfig[md].label}`;
+            const sub = story ? "Modo História · 20 waves" : md === "infinite" ? "Sem fim · a horda só cresce" : "5 minutos de pressão máxima";
+            const threats = story
+              ? (st < 3 ? [["🧟", "Horda"], ["⚡", "Especiais"]] : st < 5 ? [["🧟", "Horda"], ["☠", "Mini-boss a cada 5 waves"]] : [["☠", "Boss na wave 10"], ["☠☠", "Boss II na wave 20"], ["🔥", "Elites"]])
+              : md === "infinite" ? [["♾", "Waves sem fim"], ["☠", "Chefes a cada 5 waves"], ["🌊", "Horda gigante"]] : [["⏱", "5:00"], ["💨", "Zumbis mais rápidos"], ["💥", "Dano alto"]];
+            const mult = (diff[difficulty]?.coins || 1) * modeConfig[md].coins, rw = StoryMode.levelReward(st === "inf" || st === "timed" ? 1 : st, difficulty);
+            const rewards = story
+              ? [["◈", `${rw.each.toLocaleString("pt-BR")}`, "por estrela"], ["🎟", "+1", "3ª estrela"], ["✦", "XP", "temporada"]]
+              : [["◈", `×${String(mult).replace(".", ",")}`, "moedas"], ["✦", "XP", "temporada"], ["☠", "+500", "por chefe"]];
+            $("stage-main").innerHTML = `
+              <div class="stage-hero"><img src="textures/maps/map${this.map}.jpg" alt=""><div class="stage-title"><small>${story ? "HISTÓRIA" : "SOBREVIVÊNCIA"}</small><h3>${title}</h3><em>${sub}</em></div></div>
+              <h4>Dificuldade</h4>
+              <div class="stage-diffs">${this.diffs.map((k) => `<button type="button" class="stage-diff ${k === difficulty ? "on" : ""}" data-stage-diff="${k}" style="--dc:${this.diffColor[k]}"><span>☠</span><b>${diff[k].label}</b><small>×${String(diff[k].coins).replace(".", ",")}</small></button>`).join("")}</div>
+              <h4 class="stage-threats">Ameaças</h4>
+              <div class="stage-chips stage-threats">${threats.map(([i, t]) => `<span class="chip"><i>${i}</i>${t}</span>`).join("")}</div>
+              <h4>Recompensas</h4>
+              <div class="stage-rewards">${rewards.map(([i, v, t]) => `<span class="rw"><i>${i}</i><b>${v}</b><small>${t}</small></span>`).join("")}</div>
+              <div class="stage-actions"><button type="button" id="stage-play" class="stage-play">JOGAR</button><button type="button" id="stage-mp" class="stage-mp">MULTIPLAYER</button></div>`;
+            $("stage-main").querySelectorAll("[data-stage-diff]").forEach((b) => (b.onclick = () => { difficulty = b.dataset.stageDiff; $("difficulty").value = difficulty; if (story && !this.unlocked(this.stage)) this.stage = 1; this.renderStage(); this.render(); }));
+            $("stage-play").onclick = () => this.play();
+            $("stage-mp").onclick = () => this.multiplayer();
+            // right column: star missions for a story level, rules for the survival modes
+            if (story) {
+              const r = StoryMode.row(this.map, st, difficulty), stars = r?.stars || 0, best = r?.best || {}, o = StoryMode.objectives(this.map, st), vals = { ...best, wavesCleared: stars ? 20 : 0 };
+              $("stage-side").innerHTML = `<h4>Missões de estrela</h4>${o.map((x, i) => { const done = i < stars, v = Math.min(StoryMode.value(vals, x.type), x.target); return `<div class="mission ${done ? "done" : ""}"><span>${x.label} <small>(${v.toLocaleString("pt-BR")}/${x.target.toLocaleString("pt-BR")})</small></span><i>${done ? "★" : "☆"}</i></div>`; }).join("")}
+                <h4>Prêmios por estrela</h4><div class="star-rw">${[1, 2, 3].map((n) => `<span class="${n <= stars ? "got" : ""}"><b>◈ ${rw.each.toLocaleString("pt-BR")}</b>${n === 3 ? "<small>+1 Normal</small>" : ""}<em>${"★".repeat(n)}${"☆".repeat(3 - n)}</em></span>`).join("")}</div>
+                <div class="stage-stat"><span>Estrelas neste mapa</span><b>${this.starsOn(this.map)}/30</b></div><div class="stage-stat"><span>Melhor: eliminações</span><b>${(best.kills || 0).toLocaleString("pt-BR")}</b></div>`;
+            } else {
+              const lines = md === "infinite" ? ["A vida dos zumbis cresce a cada wave", "Chefe ou mini-boss a cada 5 waves", "Horda gigante a cada 9 waves", "Moedas ×1,5 da dificuldade"] : ["Partida de 5 minutos", "Mais inimigos e mais rápidos", "Ataques bem mais perigosos", "Moedas ×2,5 da dificuldade"];
+              $("stage-side").innerHTML = `<h4>Regras</h4>${lines.map((t) => `<div class="mission"><span>${t}</span><i>•</i></div>`).join("")}<div class="stage-stat"><span>Multiplicador de moedas</span><b>×${String(mult).replace(".", ",")}</b></div>`;
+            }
+          },
+          async play() {
+            const md = this.stageMode();
+            if (md === "classic" && !this.unlocked(this.stage)) return;
+            $("mode").value = md; mode = md; $("difficulty").value = difficulty; selectedMap = this.map;
+            if (md === "classic") storyLevel = this.stage;
+            this.close();
+            await deployPreparedRun();
+          },
+          multiplayer() {
+            const md = this.stageMode();
+            DR.pendingLobby = { map: this.map, difficulty, mode: md };
+            this.close();
+            DR.LobbyUI.openMultiplayer();
+          },
+        };
+
+        $("world-back").onclick = () => { WorldUI.close(); UIManager.screen("menu"); };
+        $("world-mp").onclick = () => { DR.pendingLobby = null; DR.LobbyUI.openMultiplayer(); };
+        $("world-arenas").onclick = () => $("arenabtn").click();
+        $("stage-close").onclick = () => WorldUI.close();
+        $("stagemodal").addEventListener("click", (e) => { if (e.target.id === "stagemodal") WorldUI.close(); });
         $("resume").onclick = resume;
         $("fallback").onclick = () => {
           resume();
@@ -31944,6 +32058,7 @@ body.netgame #revivetouch{display:flex}
             await Account.logout();
           },
           // HISTÓRIA goes straight to the level list (map and difficulty are picked right there).
+          openWorld() { WorldUI.open(); },
           startSolo() {
             AudioManager.init();
             $("mode").value = "classic"; mode = "classic";
