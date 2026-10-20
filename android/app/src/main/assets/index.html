@@ -29375,7 +29375,7 @@ body.netgame #revivetouch{display:flex}
           plan() {
             const M = MapManager, S = M.playerStart || [0, 10], ceil = M.ceilingAt?.() ?? 99;
             const y0 = Math.min(3.0, ceil - 0.8);
-            let best = null;
+            let best = null; const cands = [];
             for (let k = 0; k < 24; k++) {
               const a = (k / 24) * Math.PI * 2, dx = Math.sin(a), dz = Math.cos(a);
               let d = 0;
@@ -29386,19 +29386,23 @@ body.netgame #revivetouch{display:flex}
               }
               // prefer long, open lines; a slight bias to keep variety between maps
               const score = d + Math.sin(k * 1.7 + this.map) * 0.6;
-              if (!best || score > best.score) best = { score, d, dx, dz };
+              cands.push({ score, d, dx, dz });
             }
+            // several open lines, each shot takes the next one (no map rebuild in the menu: building
+            // a map costs seconds on phones and kept every map's textures in memory)
+            cands.sort((a, b) => b.score - a.score);
+            const picks = cands.filter((c, i) => i === 0 || cands.slice(0, i).every((o) => o.dx * c.dx + o.dz * c.dz < 0.8)).slice(0, 4);
+            best = picks[(this.variant || 0) % picks.length];
             const len = Math.max(0, Math.min(14, best.d - 3));
             this.path = { sx: S[0], sz: S[1], dx: best.dx, dz: best.dz, len, h: y0, look: best.d };
             this.group = M.group;
           },
           update(dt) {
-            const home = !$("menu")?.classList.contains("hidden") && state === GameState.MENU;
+            const home = (!$("menu")?.classList.contains("hidden") || !$("worldscreen")?.classList.contains("hidden")) && state === GameState.MENU;
             if (home) this.t += dt;
             if (this.group !== MapManager.group || !this.path) { this.map = MapManager.currentMap ?? 0; this.plan(); this.t = 0; }
             if (home && this.t > this.DUR) {
-              this.map = (this.map + 1) % maps.length;
-              MapManager.build(this.map);
+              this.variant = (this.variant || 0) + 1;
               this.plan(); this.t = 0;
             }
             const P = this.path, k = clamp(this.t / this.DUR, 0, 1), e = k * k * (3 - 2 * k);
@@ -31393,9 +31397,159 @@ body.netgame #revivetouch{display:flex}
         $("backdifficulty").onclick=()=>DR.LobbyUI.openPlay();
         $("survivalbtn").onclick=()=>{AudioManager.init();if($("mode").value==="classic"){$("mode").value="infinite";mode="infinite";}openModeSelect()};
         document.querySelectorAll("[data-choice]").forEach(button=>{button.onclick=()=>{const group=button.dataset.choice;$(group).value=button.dataset.value;if(group==="mode")mode=button.dataset.value;if(group==="difficulty")difficulty=button.dataset.value;document.querySelectorAll(`[data-choice="${group}"]`).forEach(o=>o.setAttribute("aria-pressed",String(o===button)));updatePrepSummary()}});
-        const deployPreparedRun=async()=>{if($("deploy").disabled||$("story-deploy").disabled)return;$("deploy").disabled=$("story-deploy").disabled=true;const full=enterFullscreen();mode=$("mode").value;difficulty=$("difficulty").value;try{await Promise.all([full,Account.begin()])}catch(e){UIManager.toast(e.message);$("deploy").disabled=$("story-deploy").disabled=false;return}$("deploy").disabled=$("story-deploy").disabled=false;WeaponSystem.model.visible=true;PlayerController.start()};
+        const deployPreparedRun=async()=>{if($("deploy").disabled||$("story-deploy").disabled)return;$("deploy").disabled=$("story-deploy").disabled=true;const full=enterFullscreen();mode=$("mode").value;difficulty=$("difficulty").value;try{await Promise.all([full,Account.begin()])}catch(e){UIManager.toast(e.message);$("deploy").disabled=$("story-deploy").disabled=false;return}$("deploy").disabled=$("story-deploy").disabled=false;WeaponSystem.model.visible=true;const lf=LoadFX.show();await LoadFX.frames();try{PlayerController.start()}finally{LoadFX.hide(lf)}};
         $("deploy").onclick=async()=>{mode=$("mode").value;difficulty=$("difficulty").value;if(mode==="classic"){await StoryMode.open();return}await deployPreparedRun()};
         $("story-deploy").onclick=()=>deployPreparedRun();
+        // Short "loading" card while a match is being built, so the freeze of building a map never
+        // looks like a crash. Two animation frames let it paint before the main thread is busy.
+        const LoadFX = {
+          el() {
+            let d = document.getElementById("loadfx");
+            if (!d) { d = document.createElement("div"); d.id = "loadfx"; d.className = "loadfx hidden"; d.innerHTML = `<div><i></i><b>CARREGANDO</b><small></small></div>`; document.body.appendChild(d); }
+            return d;
+          },
+          show() { const d = this.el(); d.querySelector("small").textContent = maps[selectedMap]?.name || ""; d.classList.remove("hidden"); return performance.now(); },
+          frames() { return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); },
+          hide() { setTimeout(() => this.el().classList.add("hidden"), 120); },
+        };
+        // ── Static batching ─────────────────────────────────────────────────────────────────────
+        // Maps are assembled from hundreds of small meshes (window boxes, door frames, trims) and
+        // each one was its own draw call (~400 per frame in the City). ~1.2 s after a map is built,
+        // every mesh that is provably static (plain material, no gameplay userData on it or its
+        // ancestors, and it did not move or blink during that time) is merged per material into one
+        // mesh per 24 m cell. Originals stay in the scene, hidden, so raycasts and references keep
+        // working; the merged copies never raycast. Material animations (flicker, emissive pulses)
+        // still apply because the merged mesh shares the original material object.
+        const StaticBatch = {
+          CELL: 24, MIN: 3, pending: null, merged: 0, removed: 0,
+          ALLOWED: new Set(["disposableGeometry", "disposableMaterial", "strength"]),
+          staticData(o, root) {
+            for (let q = o; q && q !== root; q = q.parent) {
+              for (const k of Object.keys(q.userData)) if (!this.ALLOWED.has(k)) return false;
+              if (q.name && /door|gen|fan|light|lamp|sign|flag|fire|water|puddle|blink|anim|spin|rot/i.test(q.name)) return false;
+            }
+            return true;
+          },
+          candidate(o, root) {
+            if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.geometry || !o.material || Array.isArray(o.material)) return false;
+            const m = o.material;
+            if (m.isShaderMaterial || m.transparent || m.alphaTest > 0 || m.wireframe || o.morphTargetInfluences) return false;
+            if (o.onBeforeRender && o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender && o.onBeforeRender.toString().length > 20) return false;
+            if (!o.geometry.attributes.position || o.geometry.attributes.position.count > 20000) return false;
+            return this.staticData(o, root);
+          },
+          schedule(root) {
+            if (!root) return;
+            const list = [];
+            root.updateMatrixWorld(true);
+            root.traverse((o) => { if (this.candidate(o, root)) list.push({ o, m: o.matrixWorld.clone(), v: this.shown(o, root), c: o.material.color?.getHex(), e: o.material.emissive?.getHex() }); });
+            this.pending = { root, list, t: 0 };
+          },
+          shown(o, root) { for (let q = o; q && q !== root; q = q.parent) if (!q.visible) return false; return true; },
+          tick(dt) {
+            const P = this.pending;
+            if (!P) return;
+            if (P.root !== MapManager.group) { this.pending = null; return; }
+            P.t += dt;
+            if (P.t < 1.2) return;
+            this.pending = null;
+            try { this.run(P); } catch (e) { console.warn("StaticBatch", e); }
+          },
+          // Plain unlit colours (window boxes, signs) are often one material object per mesh; equal
+          // ones can share a draw call. Everything else merges only with its own material object.
+          matKey(m) {
+            if (m.isMeshBasicMaterial && !m.map && !m.alphaMap && !m.transparent && !m.vertexColors)
+              return `basicVC:${m.side}:${m.fog ? 1 : 0}:${m.toneMapped ? 1 : 0}:${m.depthTest ? 1 : 0}:${m.depthWrite ? 1 : 0}`;
+            return m.uuid;
+          },
+          sig(g) { return Object.keys(g.attributes).filter((k) => ["position", "normal", "uv", "color"].includes(k)).sort().join(","); },
+          run(P) {
+            const root = P.root, inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), groups = new Map(), tmp = new THREE.Vector3();
+            root.updateMatrixWorld(true);
+            for (const { o, m, v, c, e: em } of P.list) {
+              if (!o.parent || !o.matrixWorld.equals(m) || this.shown(o, root) !== v || !v || o.material.color?.getHex() !== c || o.material.emissive?.getHex() !== em) continue;
+              const g = o.geometry, sig = this.sig(g);
+              if (!sig.includes("position") || !sig.includes("normal")) continue;
+              o.getWorldPosition(tmp);
+              const key = `${this.matKey(o.material)}|${o.castShadow ? 1 : 0}${o.receiveShadow ? 1 : 0}|${o.renderOrder}|${o.layers.mask}|${sig}|${Math.floor(tmp.x / this.CELL)},${Math.floor(tmp.z / this.CELL)}`;
+              let e = groups.get(key); if (!e) groups.set(key, (e = { mat: o.material, cast: o.castShadow, recv: o.receiveShadow, order: o.renderOrder, layers: o.layers.mask, sig, items: [] }));
+              e.items.push(o);
+              e.vc = key.startsWith("basicVC");
+            }
+            let merged = 0, removed = 0;
+            const mtx = new THREE.Matrix4(), nm = new THREE.Matrix3();
+            for (const e of groups.values()) {
+              if (e.items.length < this.MIN) continue;
+              const names = e.sig.split(","), sizes = {}, chunks = {};
+              let vCount = 0, iCount = 0;
+              for (const n of names) { chunks[n] = []; }
+              for (const o of e.items) {
+                const g = o.geometry, pc = g.attributes.position.count;
+                for (const n of names) sizes[n] = g.attributes[n].itemSize;
+                vCount += pc; iCount += g.index ? g.index.count : pc;
+              }
+              if (vCount > 65000 * 8) continue;
+              const out = {}; for (const n of names) out[n] = new Float32Array(vCount * sizes[n]);
+              if (e.vc) { out.color = new Float32Array(vCount * 3); sizes.color = 3; }
+              const index = vCount > 65535 ? new Uint32Array(iCount) : new Uint16Array(iCount);
+              let vo = 0, io = 0;
+              const p = new THREE.Vector3(), nrm = new THREE.Vector3();
+              for (const o of e.items) {
+                const g = o.geometry, pc = g.attributes.position.count;
+                mtx.multiplyMatrices(inv, o.matrixWorld); nm.getNormalMatrix(mtx);
+                const pa = g.attributes.position, na = g.attributes.normal;
+                for (let i = 0; i < pc; i++) {
+                  p.fromBufferAttribute(pa, i).applyMatrix4(mtx); out.position.set([p.x, p.y, p.z], (vo + i) * 3);
+                  nrm.fromBufferAttribute(na, i).applyMatrix3(nm).normalize(); out.normal.set([nrm.x, nrm.y, nrm.z], (vo + i) * 3);
+                }
+                for (const n of names) {
+                  if (n === "position" || n === "normal") continue;
+                  const a = g.attributes[n], sz = sizes[n];
+                  for (let i = 0; i < pc; i++) for (let c = 0; c < sz; c++) out[n][(vo + i) * sz + c] = a.array[(a.isInterleavedBufferAttribute ? a.data.stride * i + a.offset : i * a.itemSize) + c];
+                }
+                if (e.vc) { const col = o.material.color; for (let i = 0; i < pc; i++) out.color.set([col.r, col.g, col.b], (vo + i) * 3); }
+                if (g.index) for (let i = 0; i < g.index.count; i++) index[io++] = g.index.array[i] + vo;
+                else for (let i = 0; i < pc; i++) index[io++] = vo + i;
+                vo += pc;
+              }
+              const geo = new THREE.BufferGeometry();
+              for (const n of names) geo.setAttribute(n, new THREE.BufferAttribute(out[n], sizes[n]));
+              if (e.vc) geo.setAttribute("color", new THREE.BufferAttribute(out.color, 3));
+              geo.setIndex(new THREE.BufferAttribute(index, 1));
+              geo.computeBoundingSphere(); geo.computeBoundingBox();
+              const m0 = e.mat, mat = e.vc ? new THREE.MeshBasicMaterial({ vertexColors: true, side: m0.side, fog: m0.fog, toneMapped: m0.toneMapped, depthTest: m0.depthTest, depthWrite: m0.depthWrite }) : m0;
+              const mesh = new THREE.Mesh(geo, mat);
+              if (e.vc) mesh.userData.disposableMaterial = true;
+              mesh.castShadow = e.cast; mesh.receiveShadow = e.recv; mesh.renderOrder = e.order; mesh.layers.mask = e.layers;
+              mesh.name = "StaticBatch"; mesh.userData.disposableGeometry = true; mesh.raycast = () => {};
+              mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+              root.add(mesh);
+              const entry = { mesh, items: e.items };
+              for (const o of e.items) { this.hide(o, entry); removed++; }
+              merged++;
+            }
+            this.merged = merged; this.removed = removed;
+          },
+          // A hidden original that the game shows again (power coming back, a prop toggled on)
+          // splits its batch back into the originals, so nothing is ever drawn twice or missing.
+          hidden: new WeakMap(),
+          hide(o, entry) {
+            this.hidden.set(o, entry);
+            o.__sbv = false;
+            Object.defineProperty(o, "visible", { configurable: true, enumerable: true,
+              get() { return this.__sbv; },
+              set: (v) => { if (v && this.hidden.has(o)) this.unmerge(this.hidden.get(o)); else o.__sbv = v; } });
+          },
+          unmerge(entry) {
+            if (!entry.mesh) return;
+            entry.mesh.parent?.remove(entry.mesh); entry.mesh.geometry.dispose(); entry.mesh = null;
+            for (const o of entry.items) { this.hidden.delete(o); delete o.visible; o.visible = true; delete o.__sbv; }
+          },
+        };
+        {
+          const build = MapManager.build;
+          MapManager.build = function (...args) { const r = build.apply(this, args); StaticBatch.schedule(this.group); return r; };
+        }
         // ── Artefatos ─────────────────────────────────────────────────────────────────────────
         // Equipment won in Challenges. Five families (vida, fortuna, munição, vento, seiva) × six
         // rarities, plus 2 secret artifacts per map crafted from 5 pieces. Stats are the same rule
@@ -31700,6 +31854,11 @@ body.netgame #revivetouch{display:flex}
             this.chal = c;
             this.renderStage();
             $("stagemodal").classList.remove("hidden");
+            // The menu background switches to the chosen map (and its textures get warm, so JOGAR
+            // starts much faster). Deferred so the panel paints first.
+            if (MapManager.currentMap !== i) setTimeout(() => {
+              if (this.map === i && state === GameState.MENU && !$("stagemodal").classList.contains("hidden") && MapManager.currentMap !== i) { MapManager.build(i); MenuFlyby.variant = 0; }
+            }, 120);
           },
           close() { $("stagemodal")?.classList.add("hidden"); },
           unlocked(l) { return l === 1 || (StoryMode.row(this.map, l - 1, difficulty)?.stars || 0) >= 1; },
@@ -32580,6 +32739,7 @@ body.netgame #revivetouch{display:flex}
           const perfT0 = performance.now();
           lastFrame = now;
           menuTime += dt;
+          StaticBatch.tick(dt);
           GamepadInput.update(dt);
           fpsFrames++;
           fpsTime += wallDt;
@@ -32720,7 +32880,7 @@ body.netgame #revivetouch{display:flex}
                   previewCamera.position.set(0,1.08,distance);previewCamera.lookAt(0,.95,0);
                 }
                 previewCamera.updateProjectionMatrix();
-                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=Armory.mode==="customize"?previewYaw:(rolling?-.38+Math.sin(menuTime*1.15)*.07:-.22+Math.sin(menuTime*.23)*.12);Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);
+                const rolling=!!Armory.roll&&!Armory.hudActive;previewModel.rotation.y=Armory.mode==="customize"?previewYaw:(rolling?-.72+Math.sin(menuTime*1.15)*.07:-.68+Math.sin(menuTime*.23)*.1);Survivor.animate(previewModel,dt,menuTime,rolling?1.1:0,false,0,rolling?.12:99,false);
                 const shop=Armory.mode==="customize",rig=previewModel.userData.rig;rig.gun.visible=!shop;
                 if(shop){rig.arms.forEach((a,i)=>a.rotation.set(0,0,i?-.08:.08));rig.elbows.forEach(e=>e.rotation.set(0,0,0));}
                 Armory.update(dt);
@@ -32825,7 +32985,8 @@ body.netgame #revivetouch{display:flex}
         // Opt-in test hook; absent in ordinary play. Useful for deterministic mechanic checks.
         if (new URLSearchParams(location.search).has("test"))
           window.DeadRecoilTest = {
-            ColorFilter, TexQuality, SettingsManager,
+            ColorFilter, TexQuality, SettingsManager, StaticBatch,
+            get previewModel() { return typeof previewModel !== "undefined" ? previewModel : null; },
             Artifacts, RunMods, Challenges, GearUI, WorldUI,
             PropKit,
             MapKit,
