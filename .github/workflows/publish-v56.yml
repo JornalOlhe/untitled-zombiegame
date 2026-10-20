@@ -74,7 +74,7 @@ jobs:
           "$BT/apksigner" verify --print-certs "$APK" | head -5
           BADGING=$("$BT/aapt" dump badging "$ANDROID_APK")
           echo "$BADGING" | grep -q "package: name='com.deadrecoil.game'"
-          echo "$BADGING" | grep -q "versionCode='55'"
+          echo "$BADGING" | grep -q "versionCode='56'"
           echo "$BADGING" | grep -q "versionName='0.51.0'"
           python3 - <<'PY'
           import os, zipfile
@@ -163,7 +163,7 @@ jobs:
           $package = Get-Content desktop/package.json | ConvertFrom-Json
           if ($package.version -ne "0.51.0") { throw "Expected desktop 0.51.0" }
           $gradle = Get-Content android/app/build.gradle -Raw
-          if ($gradle -notmatch "versionCode\s+55" -or $gradle -notmatch "versionName\s+'0\.50\.0'") {
+          if ($gradle -notmatch "versionCode\s+56" -or $gradle -notmatch "versionName\s+'0\.51\.0'") {
             throw "Android source version is not v56 / 0.51.0"
           }
       - name: Install dependencies

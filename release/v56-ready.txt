@@ -1,1 +1,2 @@
 Dead Recoil v56 / 0.51.0 Alpha ready for gated publication after the full gameplay regression, Android real boot smoke and Windows installer smoke.
+Gate retry: workflow version checks corrected for v56.
