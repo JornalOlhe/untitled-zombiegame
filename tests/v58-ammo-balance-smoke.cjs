@@ -52,12 +52,12 @@ const server = http.createServer((q, r) => {
       return out;
     });
     console.log(JSON.stringify(r));
-    assert.deepEqual(r.ak, { mag: 30, reserve: 108, max: 180 });
+    assert.deepEqual(r.ak, { mag: 30, reserve: 180, max: 180 }); // v59: matches start with a full reserve
     assert.ok(r.infinite, 'melee and bows keep infinite ammo');
-    assert.deepEqual(r.afterReload, { ammo: 30, reserve: 78, used: 30 });
+    assert.deepEqual(r.afterReload, { ammo: 30, reserve: 150, used: 30 });
     assert.equal(r.dry, 0, 'no reserve → cannot reload'); assert.ok(r.switched, 'dry weapon auto-switches');
     assert.ok(r.crateBuilt, 'golden crate model');
-    assert.deepEqual(r.afterCrate, { ammo: 30, reserve: 180, crates: 0 });
+    assert.deepEqual({ ammo: r.afterCrate.ammo, reserve: r.afterCrate.reserve }, { ammo: 30, reserve: 180 }); assert.ok(r.afterCrate.crates <= 1, 'at most the rescue crate dropped when every gun went dry');
     assert.equal(r.maxAmmo.reserve, 180); assert.equal(r.maxAmmo.ammo, 30); assert.equal(r.maxAmmo.label, 'MUNIÇÃO MÁXIMA');
     assert.ok(r.buy && r.afterBuy === 180 && r.essence === 4000, 'shop ammo');
     assert.equal(r.perks.couraca, 1.25);

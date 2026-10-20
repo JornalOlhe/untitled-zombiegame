@@ -3261,7 +3261,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.51.0";
+        const GAME_VERSION = "0.51.1";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -3764,6 +3764,9 @@ body.netgame #revivetouch{display:flex}
         }
         renderer.setSize(innerWidth, innerHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
+        // Shader error checks read the program/shader info logs after every link, which forces a
+        // synchronous compile (a visible hitch whenever a new effect appears). Kept on only in tests.
+        if (!/[?&]test=1/.test(location.search)) renderer.debug.checkShaderErrors = false;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 0.98;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -13534,9 +13537,12 @@ body.netgame #revivetouch{display:flex}
               .filter((entry) => !this.collides(entry.p[0], entry.p[1], 0.8))
               .sort((a, b) => b.d - a.d);
             if (!ranked.length) return [0, -(this.half - 5)];
-            const safe = ranked.filter((entry) => entry.d > 12);
-            const pool = safe.length ? safe : ranked;
-            const choice = pool[this.spawnCursor++ % Math.min(2, pool.length)];
+            // Pacing: spawn in a ring 16–40 m away (out of reach, close enough that the horde arrives
+            // in seconds). The farthest points made every wave a 40 s walk across the map.
+            const band = ranked.filter((entry) => entry.d > 16 && entry.d < 40);
+            const safe = ranked.filter((entry) => entry.d > 12).reverse();
+            const pool = band.length >= 2 ? band : safe.length ? safe.slice(0, 3) : ranked;
+            const choice = pool[this.spawnCursor++ % pool.length];
             return choice.p;
           },
           DIRS8: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]],
@@ -14136,7 +14142,7 @@ body.netgame #revivetouch{display:flex}
             if (Number.isFinite(w.mag) && w.mag > 0 && w.kind !== "melee") {
               const mags = { auto: 6, shotgun: 7, antimaterial: 5, rail: 4, missile: 3, laser: 4, quantum: 4, fire: 3, cryo: 3, double: 6 }[w.kind] ?? 5;
               w.reserveMax = Math.max(w.mag * 2, Math.round(w.mag * mags));
-              w.reserve = Math.round(w.reserveMax * 0.6);
+              w.reserve = w.reserveMax; // start full: running dry in wave 2 made the first match feel broken
             }
             return w;
           },
@@ -15934,6 +15940,11 @@ body.netgame #revivetouch{display:flex}
                   new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 }),
                   new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }),
                 ]) this.samples.add(new THREE.Mesh(plane, m));
+                // Sprites (damage numbers, glows) were compiled on the first kill: a 1–3 s hitch on phones.
+                const dot = new THREE.CanvasTexture(Object.assign(document.createElement("canvas"), { width: 4, height: 4 }));
+                for (const sm of [new THREE.SpriteMaterial({ transparent: true, depthWrite: false }), new THREE.SpriteMaterial({ map: dot, transparent: true, depthWrite: false }), new THREE.SpriteMaterial({ map: dot, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })])
+                  this.samples.add(new THREE.Sprite(sm));
+                this.samples.add(new THREE.Mesh(plane, new THREE.MeshBasicMaterial({ map: dot, transparent: true, depthWrite: false })));
                 scene.add(this.samples);
               }
               const t = performance.now();
@@ -21572,7 +21583,7 @@ body.netgame #revivetouch{display:flex}
             if (!player || state !== GameState.PLAYING) return;
             const now = this.now();
             if (now >= this.nextAt) {
-              this.nextAt = now + rand(32, 50);
+              this.nextAt = now + (this.needs() ? rand(14, 22) : rand(32, 50));
               if (this.items.length < 2 && (this.needs() || Math.random() < 0.4)) this.spawn();
             }
             const feet = (player.ground || 0) + (player.jump || 0);
@@ -23890,6 +23901,8 @@ body.netgame #revivetouch{display:flex}
               }
               if (simulationTime - (this.dryAt || -9) > 1.2) {
                 this.dryAt = simulationTime;
+                // Every gun dry and no crate on the map: drop one now instead of making the player wait.
+                if (!AmmoCrates.items.length && !player.inventory.some((x) => x && (x.mag === Infinity || x.ammo > 0 || (x.reserve || 0) > 0))) AmmoCrates.spawn();
                 AudioManager.tone(900, 0.04, "square", 0.08, 700, "weapons");
                 UIManager.toast("Sem munição de reserva — procure uma caixa dourada!");
               }
@@ -31698,7 +31711,7 @@ body.netgame #revivetouch{display:flex}
             for (const w of inv || []) {
               if (!w || !Number.isFinite(w.mag) || w.kind === "melee") continue;
               w.mag = Math.max(1, Math.round(w.mag * mag)); w.ammo = w.mag;
-              if (w.reserve != null) { w.reserveMax = Math.max(w.mag, Math.round(w.reserveMax * reserve)); w.reserve = Math.round(w.reserveMax * 0.6); }
+              if (w.reserve != null) { w.reserveMax = Math.max(w.mag, Math.round(w.reserveMax * reserve)); w.reserve = w.reserveMax; }
             }
           },
           regen(dt) {
