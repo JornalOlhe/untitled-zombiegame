@@ -201,6 +201,10 @@
     challengeResult: (runId) => Backend.rpc("challenge_result", { p_run: runId }),
   };
 
+  const PerfRepository = {
+    report: (r) => Backend.rpc("perf_report", { p_report: r }, { timeout: 6000 }),
+  };
+
   const SeasonRepository = {
     state: () => Backend.rpc("season_state"),
     claim: (tier, requestId = uuid()) => Backend.rpc("season_claim", { p_tier: tier, p_request: requestId }),
@@ -277,6 +281,7 @@
   DR.StoryRepository = StoryRepository;
   DR.SeasonRepository = SeasonRepository;
   DR.ArtifactRepository = ArtifactRepository;
+  DR.PerfRepository = PerfRepository;
   DR.MissionRepository = MissionRepository;
   DR.LobbyRepository = LobbyRepository;
   DR.OfflineQueue = OfflineQueue;

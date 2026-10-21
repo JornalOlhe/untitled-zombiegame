@@ -2873,7 +2873,7 @@ body.netgame #revivetouch{display:flex}
     <section id="worldscreen" class="screen hidden world-screen">
       <header class="world-ribbon"><span>JOGAR</span><small id="world-diff"></small></header>
       <div id="world-track" class="world-track" aria-label="Mapas"></div>
-      <footer class="world-foot"><button id="world-back" class="world-back" type="button">‹ Voltar</button><div class="world-extra"><button id="world-mp" type="button">Multiplayer</button><button id="world-arenas" type="button">Arenas</button></div></footer>
+      <footer class="world-foot"><button id="world-back" class="world-back" type="button">‹ Voltar</button></footer>
       <div id="stagemodal" class="stage-modal hidden" role="dialog" aria-modal="true">
         <div class="stage-box">
           <header class="stage-head"><nav id="stage-tabs" class="stage-tabs" aria-label="Modo"></nav><button id="stage-close" type="button" aria-label="Fechar">✕</button></header>
@@ -16409,7 +16409,7 @@ body.netgame #revivetouch{display:flex}
             // Damage-over-time ticks (hell pool) are "quiet": no stagger, blood, thud, hit marker or
             // floating number every 0.25 s — the pool's own glow and embers show the burn.
             const quiet = this.quietHits;
-            if (!quiet) z.stagger = Math.min(0.65, (damage / z.maxhp) * 1.5);
+            if (!quiet) z.stagger = Math.max(z.stagger || 0, Math.min(0.65, Math.max(0.16, (damage / z.maxhp) * 1.5))); // every hit shows at least a small flinch
             const hitPoint =
               point || z.group.position.clone().add(new V(0, 1, 0));
             if (quiet) { if (Math.random() < 0.15) ParticleSystem.emit(hitPoint, 0xff4a14, 2, 1.2); }
@@ -21871,7 +21871,7 @@ body.netgame #revivetouch{display:flex}
           buyBox() {
             const cur = WeaponSystem.current();
             if (!cur || !this.spend(this.BOX_PRICE)) return false;
-            const W = [30, 28, 22, 13, 6, 1], roll = Math.random() * 100;
+            const wv = WaveManager.wave || 1, W = [Math.max(8, 30 - wv), Math.max(14, 28 - wv * 0.5), 22, 13 + Math.min(10, wv * 0.5), 6 + Math.min(8, wv * 0.4), wv >= 10 ? 1 + Math.min(3, (wv - 10) * 0.2) : 0], roll = Math.random() * W.reduce((a, b) => a + b, 0); // better odds as the waves climb; Mítico only from wave 10
             let tier = 0; for (let a = 0, i = 0; i < W.length; i++) { a += W[i]; if (roll < a) { tier = i; break; } }
             let pool = WeaponSystem.weapons.map((w, id) => ({ w, id })).filter((e) => e.w.tier === tier && e.w.name !== cur.name);
             if (!pool.length) pool = WeaponSystem.weapons.map((w, id) => ({ w, id })).filter((e) => e.w.tier <= 5 && e.w.name !== cur.name);
@@ -21982,7 +21982,7 @@ body.netgame #revivetouch{display:flex}
               this.card(`data-shop="grenades"`, "◉", "#ffb24a", "Granadas", "+2 granadas", this.GRENADE_PRICE, can(this.GRENADE_PRICE)) +
               this.card(`data-shop="ammo"`, "▤", "#ffd24a", "Caixa de munição", "Enche a reserva de todas as armas", this.AMMO_PRICE, AmmoCrates.needs() || player.inventory.some((x) => x && x.reserve != null && x.reserve < x.reserveMax) ? can(this.AMMO_PRICE) : "max") +
               this.card(`data-shop="heal"`, "✚", "#6dff92", "Kit médico", "Vida cheia na hora", this.HEAL_PRICE, player.hp >= player.maxhp ? "max" : can(this.HEAL_PRICE));
-            const special = this.card(`data-shop="box"`, "?", "#c58bff", "Caixa misteriosa", "Troca a arma da mão por uma aleatória (até Mítico)", this.BOX_PRICE, can(this.BOX_PRICE)) +
+            const special = this.card(`data-shop="box"`, "?", "#c58bff", "Caixa misteriosa", (WaveManager.wave || 1) >= 10 ? "Arma aleatória · Mítico liberado" : "Arma aleatória · melhora a cada onda (Mítico na 10)", this.BOX_PRICE, can(this.BOX_PRICE)) +
               this.card(`data-shop="strike"`, "✈", "#ff8a3a", "Ataque aéreo", "6 explosões nos zumbis mais próximos", this.STRIKE_PRICE, can(this.STRIKE_PRICE));
             el.innerHTML = `<h3>Perks <span>o preço sobe a cada perk comprado</span></h3><div class="shop-grid">${perks}</div>
               <h3>Arma atual <span>${w?.name || ""}</span></h3><div class="shop-grid">${pap}${mods}</div>
@@ -23858,6 +23858,7 @@ body.netgame #revivetouch{display:flex}
               ladderReleaseUntil: 0,
             };
             RunMods.begin();
+            PerfTelemetry.reset();
             try { TexQuality.apply(); } catch {}
             MatchShop.reset(); HordeEvent.end();
             MapObjectives.start();
@@ -24747,6 +24748,7 @@ body.netgame #revivetouch{display:flex}
             let storyStars = 0;
             if (reason === "story") storyStars = StoryMode.finishRun({ ...RunStats.report(), result: "win" });
             const runRef = Account.run;
+            try { PerfTelemetry.send(); } catch {}
             const finalReport = Account.checkpoint(true, timed ? "win" : "loss");
             state = GameState.GAMEOVER;
             mouse.down = false;
@@ -25932,6 +25934,7 @@ body.netgame #revivetouch{display:flex}
             const now = performance.now() / 1000;
             this.streak = now - this.lastKill < 1.6 ? this.streak + 1 : 1;
             this.lastKill = now;
+            if (this.streak === 5 && now - (this.slowAt || -99) > 20 && !z.boss) { this.slowAt = now; TimeFX.slow(0.4, 0.35); } // brief "massacre" slow-motion
             if (z.boss) VoiceLines.say("bossdown");
             else if (this.streak >= 3) VoiceLines.say("streak", 0.7);
             else if (head) VoiceLines.say("headshot", 0.25);
@@ -31513,6 +31516,57 @@ body.netgame #revivetouch{display:flex}
             $("feature-gear").onclick = () => GearUI.open();
           },
         };
+        // Auto quality (once per device): the first real match is measured for ~20 s after an 8 s
+        // settle; if it averages under 26 FPS the preset steps down one level and the player is told
+        // where to change it. Never raises quality and never runs again after it has decided.
+        const AutoQuality = {
+          KEY: "deadrecoil.autoQuality.v1", t: 0, frames: 0, time: 0, done: null,
+          isDone() { if (this.done == null) { try { this.done = !!localStorage.getItem(this.KEY); } catch { this.done = true; } } return this.done; },
+          finish(v) { this.done = true; try { localStorage.setItem(this.KEY, v); } catch {} },
+          sample(wallDt) {
+            if (this.isDone() || state !== GameState.PLAYING || window.__manual || DevMode.active || /[?&]test=1/.test(location.search)) { if (state !== GameState.PLAYING) this.t = 0; return; }
+            this.t += wallDt;
+            if (this.t < 8) return;
+            this.frames++; this.time += wallDt;
+            if (this.time < 20) return;
+            const fps = this.frames / this.time, s = SettingsManager.data, order = ["low", "medium", "high", "ultra"], i = order.indexOf(s.graphics);
+            if (fps < 26 && i > 0) {
+              s.graphics = order[i - 1];
+              s.shadows = { low: "off", medium: "low", high: "medium", ultra: "high" }[s.graphics];
+              s.vfx = s.graphics === "low" ? "low" : "high";
+              s.reflections = { low: "off", medium: "low", high: "medium", ultra: "high" }[s.graphics];
+              s.profile = "custom";
+              SettingsManager.save(); SettingsManager.apply();
+              UIManager.toast(`Qualidade ajustada para ${({ low: "Baixo", medium: "Médio", high: "Alto" })[s.graphics]} (${Math.round(fps)} FPS). Dá para mudar em Configurações.`);
+              this.finish("down:" + Math.round(fps));
+            } else this.finish("ok:" + Math.round(fps));
+          },
+        };
+        // Match performance telemetry: frame times of the real (vsync) loop while PLAYING. Sent once
+        // at the end of a match for signed-in players (server rate-limits); never blocks anything.
+        const PerfTelemetry = {
+          ft: [], max: 0, hitches: 0, errors: 0, calls: 0, n: 0,
+          reset() { this.ft.length = 0; this.max = 0; this.hitches = 0; this.errors = 0; this.calls = 0; this.n = 0; },
+          sample(wallDt) {
+            if (state !== GameState.PLAYING || window.__manual) return;
+            const ms = wallDt * 1000;
+            if (this.ft.length < 36000) this.ft.push(ms);
+            if (ms > this.max) this.max = ms;
+            if (ms > 100) this.hitches++;
+            this.calls += renderer.info.render.calls; this.n++;
+          },
+          send() {
+            const f = this.ft;
+            if (f.length < 120 || !Account.user || !DR.Backend?.isOnline?.()) return this.reset();
+            const sorted = [...f].sort((a, b) => b - a), avg = f.reduce((a, b) => a + b, 0) / f.length, p95 = sorted[Math.floor(sorted.length * 0.05)];
+            const r = { version: GAME_VERSION, platform: window.DeadRecoilRuntime?.platform || (touchMode ? "web-touch" : "web"), quality: SettingsManager.data.graphics,
+              map: Number(selectedMap), mode, wave: WaveManager.wave || 0, seconds: Math.round(f.reduce((a, b) => a + b, 0) / 1000),
+              fpsAvg: +(1000 / avg).toFixed(1), fpsLow: +(1000 / p95).toFixed(1), frameMaxMs: Math.round(this.max), calls: Math.round(this.calls / Math.max(1, this.n)), errors: this.errors, hitches: this.hitches };
+            this.reset();
+            DR.PerfRepository?.report(r).catch(() => {});
+          },
+        };
+        window.addEventListener("error", () => { PerfTelemetry.errors++; });
         // ── Static batching ─────────────────────────────────────────────────────────────────────
         // Maps are assembled from hundreds of small meshes (window boxes, door frames, trims) and
         // each one was its own draw call (~400 per frame in the City). ~1.2 s after a map is built,
@@ -32048,8 +32102,6 @@ body.netgame #revivetouch{display:flex}
         $("gear-back").onclick = () => UIManager.screen("menu");
         document.querySelectorAll("[data-custom-tab]").forEach((b) => (b.onclick = () => (b.dataset.customTab === "gear" ? GearUI.open() : Armory.openCustomize())));
         $("world-back").onclick = () => { WorldUI.close(); UIManager.screen("menu"); };
-        $("world-mp").onclick = () => { DR.pendingLobby = null; DR.LobbyUI.openMultiplayer(); };
-        $("world-arenas").onclick = () => $("arenabtn").click();
         $("stage-close").onclick = () => WorldUI.close();
         $("stagemodal").addEventListener("click", (e) => { if (e.target.id === "stagemodal") WorldUI.close(); });
         $("resume").onclick = resume;
@@ -32841,6 +32893,8 @@ body.netgame #revivetouch{display:flex}
           lastFrame = now;
           menuTime += dt;
           StaticBatch.tick(dt);
+          AutoQuality.sample(wallDt);
+          PerfTelemetry.sample(wallDt);
           MatchShop.tick();
           GamepadInput.update(dt);
           fpsFrames++;

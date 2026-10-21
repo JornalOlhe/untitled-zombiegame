@@ -302,6 +302,7 @@ const server = http.createServer((req, res) => {
       // JOGAR: map carousel first, then the stage panel (levels, ∞, ⏱, difficulty, play)
       await page.locator('#play').click();
       await page.locator('#worldscreen:not(.hidden)').waitFor({state:'visible'});
+      assert.equal(await page.locator('#worldscreen .world-foot button').count(), 1, 'world screen footer has only Voltar (multiplayer lives in the map panel)');
       const cards = await page.locator('#world-track [data-world-map]').evaluateAll(items => items.map(el => ({top:el.offsetTop,width:el.offsetWidth})));
       assert.equal(cards.length,5,'world screen lists the 5 maps');
       assert.ok(cards.every(c => Math.abs(c.top-cards[0].top)<2 && c.width>=140), 'Maps must remain in one horizontal row');
