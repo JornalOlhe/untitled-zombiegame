@@ -22748,9 +22748,16 @@ body.netgame #revivetouch{display:flex}
             // the stream, so flames/ice and their hit volume end at the same surface.
             raycaster.set(origin, aim);
             raycaster.far = w.range;
-            const wall = WallCast.hits(raycaster)[0],
-              propHit = raycaster.intersectObjects(PhysicsProps.meshes())[0],
-              propBeforeWall = propHit && (!wall || propHit.distance < wall.distance),
+            const wall = WallCast.hits(raycaster)[0];
+            // Props (barrels, crates): whichever is hit first by the stream or by the view ray from
+            // the eye — up close the muzzle line passes over a barrel the player is looking at.
+            let propHit = raycaster.intersectObjects(PhysicsProps.meshes())[0];
+            {
+              const rc2 = new THREE.Raycaster(eye.clone(), aimDir().clone().normalize(), 0, w.range), ph2 = rc2.intersectObjects(PhysicsProps.meshes())[0];
+              if (ph2 && ph2.distance < 5 && (!propHit || ph2.distance < propHit.distance)) propHit = ph2;
+              raycaster.set(origin, aim); raycaster.far = w.range;
+            }
+            const propBeforeWall = propHit && (!wall || propHit.distance < wall.distance),
               reach = Math.max(0, Math.min(w.range, propBeforeWall ? propHit.distance : wall ? wall.distance - 0.04 : w.range));
             if (propBeforeWall && propHit.distance <= w.range)
               PhysicsProps.shove(propHit.object.userData.prop, aim, propHit.point, damage);
