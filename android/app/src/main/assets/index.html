@@ -1858,7 +1858,7 @@
     </style>
   
 <style id="armory-spin-v3">
-#classscreen.armory-screen{--armory-blue:#07102b;--armory-panel:#0a1230;--armory-line:#ffffff24;--armory-text:#f7f5ee;background:radial-gradient(circle at 52% 45%,#14256a 0,#0b1746 24%,#070d2d 52%,#040713 82%);color:var(--armory-text);overflow:hidden;padding:0!important}
+#classscreen.armory-screen{--armory-blue:#07102b;--armory-panel:#0a1230;--armory-line:#ffffff24;--armory-text:#f7f5ee;background:radial-gradient(circle at 52% 45%,#4a070b 0,#2a0507 24%,#120304 52%,#060101 82%);color:var(--armory-text);overflow:hidden;padding:0!important}
 #classscreen.armory-screen:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,#09103688 0,transparent 18%,transparent 72%,#02040b99 100%),radial-gradient(ellipse at center,#253a9b20,transparent 55%);mix-blend-mode:screen}
 .armory-header{position:relative;z-index:4;height:74px;padding:14px 28px;display:grid;grid-template-columns:170px 1fr 320px;align-items:center;border-bottom:0;background:linear-gradient(180deg,#050a20e8,transparent);gap:18px}
 .armory-back-btn{justify-self:start;min-width:128px;padding:11px 15px;border:1px solid #ffffff34;background:#10173ddd;font-weight:900;letter-spacing:1.4px}
@@ -2688,25 +2688,19 @@ body.netgame #revivetouch{display:flex}
     <main id="menu" class="screen hidden home">
       <header class="home-top">
         <div class="brand-lockup">
-          <span class="brand-kicker">UNTITLED ZOMBIE GAME</span>
-          <h1 class="brand">DEAD <br />RECOIL</h1>
+          <h1 class="brand"><i class="brand-claw" aria-hidden="true"></i>DEAD <span class="brand-red">RECOIL</span></h1>
           <p class="brand-sub">A cidade caiu. Você ainda não.</p>
         </div>
-        <button id="profilechip" class="profile-chip" type="button" aria-label="Abrir perfil"></button>
+        <div class="home-tr"><button id="profilechip" class="profile-chip" type="button" aria-label="Abrir perfil"></button><button id="settingsbtn" class="home-gear" type="button" title="Configurações" aria-label="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.5 7.5 0 000-2l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1L15 3.5h-4l-.4 2.5a7 7 0 00-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.4 2.5h4l.4-2.5a7 7 0 001.7-1l2.4 1 2-3.4zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg></button></div>
       </header>
       <nav class="home-nav" aria-label="Menu principal">
-        <button id="play" class="home-item primary" type="button"><b>JOGAR</b><small>História, sobrevivência ou multiplayer</small><i>›</i></button>
-        <button id="loadoutbtn" class="home-item" type="button"><b>LOADOUT</b><small>Armas e classes</small><i>›</i></button>
-        <button id="customizebtn" class="home-item" type="button"><b>PERSONALIZAR</b><small>Skins e equipamentos</small><i>›</i></button>
-        <div class="home-minor home-icons">
-          <button id="missionsbtn" type="button" title="Missões"><span>MISSÕES</span><small id="missionsbadge" hidden></small></button>
-          <button id="seasonbtn" type="button" title="Passe de temporada"><span>PASSE</span><small id="seasonbadge" hidden></small></button>
-          <button id="indexbtn" type="button" title="Índice"><span>ÍNDICE</span><small id="indexbadge" hidden></small></button>
-          <button id="settingsbtn" type="button" title="Configurações"><span>CONFIG.</span></button>
-          <button id="helpbtn" type="button">Como jogar</button><button id="exitbtn" type="button">Sair</button>
-        </div>
+        <button id="play" class="home-item primary" type="button"><svg class="hi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg><b>JOGAR</b><small>História, challenges e infinito</small><i>›</i></button>
+        <button id="loadoutbtn" class="home-item" type="button"><svg class="hi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h13l2-2h3v4h-3l-1 1v3h-3v-3H9l-2 5H4l2-5H3z"/></svg><b>LOADOUT</b><small>Armas, classe e equipamento</small><i>›</i></button>
+        <button id="indexbtn" class="home-item" type="button"><svg class="hi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="2"/></svg><b>ÍNDICE</b><small>Zumbis, chefes e armas descobertos</small><small class="hi-badge" id="indexbadge" hidden></small><i>›</i></button>
+        <button id="customizebtn" class="home-item" type="button"><svg class="hi-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 21c0-5 4-8 8-8s8 3 8 8z"/></svg><b>PERSONALIZAR</b><small>Skins e artefatos</small><i>›</i></button>
+        <button id="missionsbtn" class="home-item" type="button"><svg class="hi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z"/></svg><b>MISSÕES</b><small>Diárias, semanais e únicas</small><small class="hi-badge" id="missionsbadge" hidden></small><i>›</i></button>
       </nav>
-      <aside id="home-side" class="home-side home-feature" aria-label="Destaques"></aside>
+      <aside class="home-mode" id="home-mode" aria-label="Último modo"><small>MODO</small><b id="home-mode-name">SOBREVIVÊNCIA</b><small>MAPA</small><b id="home-mode-map">CIDADE</b></aside>
       <footer class="home-foot"><span id="netstatus" data-state="offline"><i></i><b>OFFLINE</b></span><span class="home-version" id="home-version"></span></footer>
     </main>
     <section id="seasonscreen" class="screen hidden">
@@ -2867,7 +2861,7 @@ body.netgame #revivetouch{display:flex}
       </div>
     </section>
     <section id="gearscreen" class="screen hidden gear-screen">
-      <header class="gear-head"><button id="gear-back" type="button">‹ Voltar</button><nav class="custom-tabs" aria-label="Personalizar"><button type="button" data-custom-tab="skins">SKINS</button><button type="button" class="on" data-custom-tab="gear">EQUIPAMENTOS</button></nav><strong id="gear-bank"></strong></header>
+      <header class="gear-head"><button id="gear-back" type="button">‹ Voltar</button><nav class="custom-tabs" aria-label="Personalizar"><button type="button" data-custom-tab="skins">SKIN</button><button type="button" class="on" data-custom-tab="gear">ARTEFATOS</button></nav><strong id="gear-bank"></strong></header>
       <div class="gear-body"><aside id="gear-slots" class="gear-col"></aside><section id="gear-grid" class="gear-col"></section><aside id="gear-side" class="gear-col"></aside></div>
     </section>
     <section id="worldscreen" class="screen hidden world-screen">
@@ -2919,7 +2913,7 @@ body.netgame #revivetouch{display:flex}
           <p>Spins, arsenal e loadout.</p>
         </div>
         <div id="bank"></div>
-        <nav id="custom-tabs" class="custom-tabs hidden" aria-label="Personalizar"><button type="button" class="on" data-custom-tab="skins">SKINS</button><button type="button" data-custom-tab="gear">EQUIPAMENTOS</button></nav>
+        <nav id="custom-tabs" class="custom-tabs hidden" aria-label="Personalizar"><button type="button" class="on" data-custom-tab="skins">SKIN</button><button type="button" data-custom-tab="gear">ARTEFATOS</button></nav>
       </header>
       <div class="armory-layout">
         <aside class="armory-inventory">
@@ -3051,20 +3045,23 @@ body.netgame #revivetouch{display:flex}
     <section id="settingsscreen" class="screen modal hidden">
       <div class="dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <header class="settings-head">
-          <div><span class="eyebrow">SISTEMA</span><h2 id="settings-title">CONFIGURAÇÕES</h2></div>
-          <nav class="settings-tabs" role="tablist" aria-label="Categorias">
-            <button type="button" role="tab" data-settings-tab="graphics">Gráficos</button>
-            <button type="button" role="tab" data-settings-tab="audio">Áudio</button>
-            <button type="button" role="tab" data-settings-tab="camera">Câmera</button>
-            <button type="button" role="tab" data-settings-tab="hud">Interface</button>
-            <button type="button" role="tab" data-settings-tab="controls">Controles</button>
-          </nav>
+          <button id="settingsclose" class="back-btn" type="button">‹ VOLTAR</button>
+          <h2 id="settings-title">CONFIGURAÇÕES</h2>
         </header>
-        <div id="settingsfields" class="settings-body" role="tabpanel"></div>
+        <div class="settings-main">
+          <nav class="settings-tabs" role="tablist" aria-label="Categorias">
+            <button type="button" role="tab" data-settings-tab="graphics"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2"/></svg><span>Gráficos</span></button>
+            <button type="button" role="tab" data-settings-tab="audio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8a5 5 0 010 8M18.5 5.5a8.5 8.5 0 010 13" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Áudio</span></button>
+            <button type="button" role="tab" data-settings-tab="camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-2h4l2 2h4v12H4z"/><circle cx="12" cy="13" r="3.5" fill="#000"/></svg><span>Câmera</span></button>
+            <button type="button" role="tab" data-settings-tab="hud"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 8h6M6 11h9M6 14h4" stroke="currentColor" stroke-width="2"/></svg><span>Interface</span></button>
+            <button type="button" role="tab" data-settings-tab="controls"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a5 5 0 015 5v1a3 3 0 01-5.5 1.7L15 14H9l-1.5 1.7A3 3 0 012 14v-1a5 5 0 015-5z"/><path d="M7 10v4M5 12h4" stroke="#000" stroke-width="1.6"/></svg><span>Controles</span></button>
+          </nav>
+          <div id="settingsfields" class="settings-body" role="tabpanel"></div>
+        </div>
         <footer class="settings-foot">
+          <button id="resetsettings" type="button">↺ Restaurar padrão</button>
           <p id="settings-msg" role="status"></p>
-          <button id="resetsettings" type="button">Restaurar aba</button>
-          <button id="settingsback" class="primary" type="button">Concluir</button>
+          <button id="settingsback" class="primary" type="button">✓ Aplicar</button>
         </footer>
       </div>
     </section>
@@ -3262,7 +3259,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.51.2";
+        const GAME_VERSION = "0.51.3";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -5175,6 +5172,16 @@ body.netgame #revivetouch{display:flex}
           // Scripted, eased death performances. Pivot conventions: root.rotation.x > 0 tips the body
           // forward (face down), < 0 backward; root.rotation.z tips it sideways. root.position.y
           // lifts the pivot by half the torso thickness as it lies down so nothing sinks into the floor.
+          // Low, quiet zombie growl for a random subset of deaths; global cooldown keeps it rare.
+          _growlAt: -9,
+          growl(P, chance) {
+            const now = performance.now() / 1000;
+            if (now - this._growlAt < 1.4 || Math.random() > chance) return;
+            const near = clamp(1 - P.distanceTo(player.pos) / 26, 0, 1);
+            if (near < 0.08) return;
+            this._growlAt = now;
+            MonsterAudio.play("roar", { volume: 0.16 + 0.14 * near, rate: 0.62 + Math.random() * 0.16 });
+          },
           deathPose(c, r, dt) {
             const t = (c.t += dt), g = (a, b) => { const x = clamp((t - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); },
               fallIn = (a, b) => { const x = clamp((t - a) / (b - a), 0, 1); return x * x; },
@@ -5184,7 +5191,11 @@ body.netgame #revivetouch{display:flex}
               c.landed = true;
               ParticleSystem.emit(P.clone().add(new V(0, 0.12, 0)), 0x6a5a4a, Math.round(12 * big), 2 + big);
               BloodFX.emit(P.clone().add(new V(0, 0.15, 0)), Math.round(6 * big));
-              MonsterAudio.play("land", { volume: 0.35 + 0.35 * big, rate: 1.25 - 0.2 * big });
+              // A soft body-fall thud (the old "land" sample read as an explosion on every kill) and,
+              // for only some of them, a low growl — throttled so a big wave never turns into noise.
+              const near = clamp(1 - P.distanceTo(player.pos) / 30, 0, 1);
+              if (near > 0.05) AudioManager.tone(78 - 10 * big, 0.12, "sine", 0.05 * near * big, 40, "effects");
+              this.growl(P, 0.32);
               if (big > 1 && P.distanceTo(player.pos) < 14) shake = Math.max(shake, 0.25);
             };
             const lie = (ax, az) => {
@@ -5245,7 +5256,7 @@ body.netgame #revivetouch{display:flex}
                 r.legs[1].rotation.x = -0.45 * buckle * (1 - fall);
                 r.body.position.y = hipY * (1 - 0.4 * buckle * (1 - fall));
                 az = L * c.side * fall; ax = 0.15 * fall;
-                if (!c.cried && t > 0.05) { c.cried = true; MonsterAudio.play("roar", { volume: 0.45, rate: 1.9 }); }
+                if (!c.cried && t > 0.05) { c.cried = true; this.growl(P, 0.6); }
                 if (fall >= 1) impact(1);
                 break;
               }
@@ -5258,7 +5269,7 @@ body.netgame #revivetouch{display:flex}
                 r.arms[0].rotation.set(-0.5 * stag - 0.15 * knee - 2.2 * flat, 0, -0.3 * knee);
                 r.arms[1].rotation.set(-0.5 * stag + 0.1 * knee - 2.0 * flat, 0, 0.3 * knee);
                 r.neck.rotation.x = 0.5 * knee - 0.4 * flat;
-                if (!c.knelt && knee >= 1) { c.knelt = true; ParticleSystem.emit(P.clone().add(new V(0, 0.1, 0)), 0x6a5a4a, 10, 2); MonsterAudio.play("land", { volume: 0.6, rate: 0.9 }); }
+                if (!c.knelt && knee >= 1) { c.knelt = true; ParticleSystem.emit(P.clone().add(new V(0, 0.1, 0)), 0x6a5a4a, 10, 2); AudioManager.tone(70, 0.1, "sine", 0.05, 40, "effects"); }
                 ax = L * fall; az = 0.1 * c.side * fall;
                 if (fall >= 1) impact(2);
                 break;
@@ -5882,7 +5893,7 @@ body.netgame #revivetouch{display:flex}
             // Irelia-style: the five artifacts form a fan around the survivor, not one weapon held
             // in front of the chest.
             specter: { fp: { r: null, l: null }, tp: { hold: [0, 0.18, -0.16], grip: [0, 0, 0], rot: [0, Math.PI, 0], mode: "conduct" } },
-            bow: { fp: null, tp: { hold: [-0.22, 0.3, 0.15], grip: [0, 0, -0.5], rot: [0, Math.PI, 0], mode: "bow" } },
+            bow: { fp: null, tp: { hold: [-0.2, 0.3, 0.02], grip: [0, 0, -0.5], rot: [0, Math.PI, 0], mode: "bow" } },
             firearm: { fp: null, tp: { hold: [-0.08, 0.33, 0.45], grip: [0.05, -0.16, 0.01], leftGrip: [-0.02, -0.08, -0.22], scale: 0.86, rot: [0, Math.PI, 0], mode: "rifle" } },
           },
           get(w) {
@@ -5897,7 +5908,7 @@ body.netgame #revivetouch{display:flex}
             if (g === "staff") return 1.5;
             if (g === "scythe") return null; // authored size already reads right; longer collides with the off hand
             if (g === "spear") return 1.9;
-            if (g === "bow") return 1.3;
+            if (g === "bow") return 1.12;
             return { auto: /mp5|smg|uzi|vector/i.test(n) ? 0.72 : 0.92, shotgun: 1.02, antimaterial: 1.45, rail: 1.25, laser: 0.95, fire: 1.0, cryo: 1.0, quantum: 1.0, missile: 1.3, double: 1.0 }[w.kind] ?? null;
           },
         };
@@ -9709,7 +9720,8 @@ body.netgame #revivetouch{display:flex}
             brand.dataset.dev = "1";
             this.css();
             // Each letter of "DEAD" becomes its own click target; the look is unchanged.
-            brand.innerHTML = `<span class="dev-l" data-l="D0">D</span><span class="dev-l" data-l="E">E</span><span class="dev-l" data-l="A">A</span><span class="dev-l" data-l="D1">D</span> <br />RECOIL`;
+            brand.innerHTML = `<span class="dev-l" data-l="D0">D</span><span class="dev-l" data-l="E">E</span><span class="dev-l" data-l="A">A</span><span class="dev-l" data-l="D1">D</span> <span class="brand-red">RECOIL</span>`;
+            brand.prepend(Object.assign(document.createElement("i"), { className: "brand-claw", ariaHidden: "true" }));
             brand.addEventListener("click", (e) => {
               const el = e.target?.closest?.("[data-l]");
               if (el) this.hop(el);
@@ -24770,8 +24782,7 @@ body.netgame #revivetouch{display:flex}
             $("endstats").innerHTML =
               `<div><strong>${WaveManager.wave}</strong><span>Onda alcançada</span></div><div><strong>${player.kills}</strong><span>Eliminações</span></div><div><strong>${player.headshots}</strong><span>Headshots</span></div>`;
             if (reason === "challenge") Challenges.reward(runRef, finalReport);
-            const seasonXp = SeasonPass.localGain(player.kills * 6 + WaveManager.wave * 40 + Object.values(RunStats.bosses || {}).reduce((a, n) => a + (Number(n) || 0), 0) * 150);
-            if (seasonXp) $("endsub").textContent += ` +${seasonXp} XP no Passe de Temporada.`;
+            SeasonPass.localGain(player.kills * 6 + WaveManager.wave * 40 + Object.values(RunStats.bosses || {}).reduce((a, n) => a + (Number(n) || 0), 0) * 150);
             if (Account.user) return;
             let scores = [];
             try {
@@ -25101,7 +25112,7 @@ body.netgame #revivetouch{display:flex}
             if (id === "pausescreen") this.pauseMenu();
             // The lobby wallet chip must reflect coins earned during the run that just ended.
             if (id === "menu" && DR.ProfileUI?.game) DR.ProfileUI.chip();
-            if (id === "menu") try { HomeSide.render(); } catch {}
+            if (id === "menu") try { HomeMode.render(); } catch {}
             const active = document.activeElement;
             for (const el of document.querySelectorAll(".screen")) {
               const hidden = el.id !== id;
@@ -29391,7 +29402,7 @@ body.netgame #revivetouch{display:flex}
               // Reach limit: a strike may push the socket past arm's length — then the weapon is
               // pulled back along the hand→shoulder line so the grip never floats off the hands.
               const axis = r.spearHold ? new V(0, 1, 0).applyEuler(r.gun.rotation) : null;
-              const holds = r.spearHold ? (r.throwArm ? [[0, -0.02]] : [[0, -0.02], [1, 0.42]]) : [];
+              const holds = r.spearHold ? (r.throwArm ? [[0, -0.02]] : [[0, -0.02], [1, 0.42]]) : r.bowHold ? [[0, 0]] : [];
               const reach = () => {
                 let worst = 0, pull = null;
                 for (const [h, off] of holds) {
@@ -29403,7 +29414,7 @@ body.netgame #revivetouch{display:flex}
               // Long melee weapons never pass through the torso: sample the weapon's long axis and
               // slide it sideways out of the chest/hip volume; the hands follow through the IK.
               // Two passes so the reach limit and the body clearance settle together.
-              const clear = !r.specterWeapon;
+              const clear = !r.specterWeapon && !r.bowHold; // the nocked arrow points back at the chest by design
               for (let pass = 0; pass < (r.weapon?.kind === "melee" && clear ? (r.weapon?.scythe ? 4 : 3) : 1); pass++) {
                 reach();
                 if (clear && r.spearHold) r.bodyPen = this.clearBody(g, r, false, axis);
@@ -29933,7 +29944,7 @@ body.netgame #revivetouch{display:flex}
               const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
               g.lineCap = g.lineJoin = "round";
               for (let pass = 0; pass < 2; pass++) {
-                g.strokeStyle = pass ? "rgba(70,80,255,.06)" : "rgba(0,0,14,.3)";
+                g.strokeStyle = pass ? "rgba(255,60,50,.06)" : "rgba(14,0,0,.35)";
                 seed = 7;
                 for (let n = 0; n < 70; n++) {
                   let x = rnd() * c.width, y = rnd() * c.height, a = rnd() * Math.PI * 2;
@@ -30848,7 +30859,7 @@ body.netgame #revivetouch{display:flex}
             g.name = "SpinStage3D";
             scene.add(g);
             const U = (this.u = { uTime: { value: 0 }, uFlash: { value: 0 }, uCol: { value: this.col }, uAura: { value: this.aura } });
-            // backdrop: inside of a sphere — deep navy smoke drifting, brighter behind the character
+            // backdrop: inside of a sphere — dark blood-red smoke drifting, brighter behind the character
             this.back = new THREE.Mesh(new THREE.SphereGeometry(9, 40, 24), new THREE.ShaderMaterial({
               uniforms: U, side: THREE.BackSide, depthWrite: false,
               vertexShader: "varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
@@ -30856,7 +30867,7 @@ body.netgame #revivetouch{display:flex}
                 "void main(){ vec3 d = normalize(vP); vec2 q = vec2(atan(d.x,-d.z)*2.2, d.y*3.0);" +
                 " float sm = fbm(q*1.6 + vec2(uTime*.03, uTime*.05)); float sm2 = fbm(q*3.4 - vec2(uTime*.04, 0.));" +
                 " float center = exp(-pow(length(vec2(d.x*1.2, d.y-0.08)),2.0)*3.0) * step(d.z,0.2);" +
-                " vec3 base = mix(vec3(.012,.016,.06), vec3(.05,.07,.26), center*.9 + sm*.35);" +
+                " vec3 base = mix(vec3(.012,.006,.006), vec3(.24,.02,.025), center*.9 + sm*.35);" +
                 " base += uAura * (.10*center + .05*sm2*center);" +
                 " base = mix(base, uCol*1.3, uFlash*(.35 + .65*center));" +
                 " float vig = smoothstep(1.25, .2, length(vec2(d.x, d.y*1.3)));" +
@@ -31199,7 +31210,7 @@ body.netgame #revivetouch{display:flex}
             contact.rotation.x = -Math.PI / 2;
             contact.position.y = 0.035;
             previewScene.add(contact);
-            const stageRing = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.018, 6, 64), new THREE.MeshBasicMaterial({ color: 0x5d7080, transparent: true, opacity: 0.45 }));
+            const stageRing = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.018, 6, 64), new THREE.MeshBasicMaterial({ color: 0x8a1a1e, transparent: true, opacity: 0.45 }));
             stageRing.rotation.x = Math.PI / 2; stageRing.position.y = 0.05; previewScene.add(stageRing);
             const rim = new THREE.PointLight(0x789dff, 0.85, 7); rim.position.set(2.2, 2.7, -1.4); previewScene.add(rim);
             const back = new THREE.Mesh(
@@ -31432,7 +31443,6 @@ body.netgame #revivetouch{display:flex}
           Armory.open();
         };
         $("missionsbtn").onclick = () => DR.MissionUI.open();
-        $("seasonbtn").onclick = () => SeasonPass.open();
         ArenaEditor.bind();
         $("season-back").onclick = () => UIManager.screen("menu");
         $("season-track").addEventListener("click", (e) => { const b = e.target.closest("[data-tier]"); if (b && !b.disabled) SeasonPass.claim(Number(b.dataset.tier)); });
@@ -31502,18 +31512,14 @@ body.netgame #revivetouch{display:flex}
           frames() { return new Promise((r) => { requestAnimationFrame(() => requestAnimationFrame(r)); setTimeout(r, 80); }); }, // timeout: rAF pauses in background tabs
           hide() { setTimeout(() => this.el().classList.add("hidden"), 120); },
         };
-        // Home: two live cards on the right — what's new (straight into the Challenges of a map) and
-        // the equipped artifacts with their total bonus (straight into Equipamentos).
-        const HomeSide = {
+        // Home: small "last played" card (bottom-right) — mode + map; click goes straight to the map screen.
+        const HomeMode = {
           render() {
-            const el = $("home-side"); if (!el) return;
-            const d = Artifacts.data(), eq = (d.equipped || []).filter((id) => Artifacts.count(id) > 0), tot = Artifacts.totals();
-            const bonus = Object.entries(tot).filter(([, v]) => v > 0).slice(0, 3).map(([k, v]) => `+${String(Math.round(v * 10) / 10).replace(".", ",")}${Artifacts.STAT[k][1]} ${Artifacts.STAT[k][0].toLowerCase()}`).join(" · ");
-            const icons = eq.map((id) => { const a = Artifacts.info(id); return `<i style="--rc:${a.rarity.color}">${a.icon}</i>`; }).join("") + Array.from({ length: Math.max(0, d.slots - eq.length) }, () => `<i class="empty">+</i>`).join("");
-            el.innerHTML = `<button type="button" class="feature-card" id="feature-chal"><em>NOVO</em><b>Challenges</b><small>5 desafios por mapa · artefatos até Divino</small><span>JOGAR ›</span></button>
-              <button type="button" class="feature-card gear" id="feature-gear"><em>EQUIPAMENTOS</em><b>${eq.length}/${d.slots} artefatos</b><span class="feature-icons">${icons}</span><small>${bonus || "Nenhum bônus ativo"}</small></button>`;
-            $("feature-chal").onclick = async () => { await WorldUI.open(); WorldUI.tab = "challenge"; };
-            $("feature-gear").onclick = () => GearUI.open();
+            const el = $("home-mode"); if (!el) return;
+            const t = { story: "HISTÓRIA", challenge: "CHALLENGE", infinite: "INFINITO" }[WorldUI.tab] || "HISTÓRIA";
+            $("home-mode-name").textContent = t;
+            $("home-mode-map").textContent = String(maps[selectedMap]?.name || maps[0]?.name || "").toUpperCase();
+            el.onclick = () => WorldUI.open();
           },
         };
         // Auto quality (once per device): the first real match is measured for ~20 s after an 8 s
@@ -31999,6 +32005,23 @@ body.netgame #revivetouch{display:flex}
               </button>`;
             }).join("");
             track.querySelectorAll("[data-world-map]").forEach((b) => (b.onclick = () => this.pick(Number(b.dataset.worldMap))));
+            // Mouse wheel scrolls the map row sideways (no need to drag the scrollbar).
+            if (!track.dataset.wheel) {
+              track.dataset.wheel = "1";
+              track.addEventListener("wheel", (e) => {
+                if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+                e.preventDefault();
+                const max = track.scrollWidth - track.clientWidth;
+                track._to = Math.max(0, Math.min(max, (track._to ?? track.scrollLeft) + e.deltaY * 1.4));
+                if (track._raf) return;
+                const step = () => {
+                  const d = track._to - track.scrollLeft;
+                  if (Math.abs(d) < 1) { track.scrollLeft = track._to; track._raf = 0; track._to = null; return; }
+                  track.scrollLeft += d * 0.22; track._raf = requestAnimationFrame(step);
+                };
+                track._raf = requestAnimationFrame(step);
+              }, { passive: false });
+            }
           },
           pick(i) {
             this.map = i; selectedMap = i;
@@ -32125,16 +32148,15 @@ body.netgame #revivetouch{display:flex}
           helpReturn = "pausescreen";
           UIManager.screen("helpscreen");
         };
-        $("settingsback").onclick = () => UIManager.screen(settingsReturn);
+        $("settingsback").onclick = $("settingsclose").onclick = () => UIManager.screen(settingsReturn);
         let helpReturn = null;
-        $("helpbtn").onclick = () => {
+        if ($("helpbtn")) $("helpbtn").onclick = () => {
           helpReturn = null;
           $("helpcontrols").innerHTML = DR.SettingsUI.helpHtml();
           UIManager.screen("helpscreen");
         };
         // The desktop build (desktop/preload.js) really closes the app; say so on the button.
-        if (window.deadRecoilNative?.quit) $("exitbtn").textContent = "Sair para a área de trabalho";
-        $("exitbtn").onclick = () => {
+        if ($("exitbtn")) $("exitbtn").onclick = () => {
           if (window.DeadRecoilNative?.quit) { window.DeadRecoilNative.quit(); return; }
           if (window.deadRecoilNative?.quit) { window.deadRecoilNative.quit(); return; }
           UIManager.screen(null);
@@ -33047,7 +33069,7 @@ body.netgame #revivetouch{display:flex}
                   if (hudL) Armory.light.position.set(0.4, 1.7, 2.4); else Armory.light.position.set(-1, 2, -1);
                   Armory.light.intensity += ((hudL ? 1.2 : 2) - Armory.light.intensity) * Math.min(1, dt * (hudL ? 7 : 3));
                   Armory.light.color.lerp(Armory.baseLightColor || (Armory.baseLightColor = new THREE.Color()), Math.min(1, dt * (hudL ? 6 : 2)));
-                  Armory.baseLightColor.set(hudL ? 0x4a58ff : 0x9fbbc5);
+                  Armory.baseLightColor.set(hudL ? 0xff4a3a : 0x9fbbc5);
                 }
                 if (SpinStage3D.built) { SpinStage3D.group.visible = !!Armory.hudActive; if (Armory.hudActive) SpinStage3D.update(dt); }
                 previewRenderer.render(previewScene, previewCamera);

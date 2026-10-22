@@ -96,16 +96,18 @@
         state = m.claimed ? "claimed" : m.completed ? "done" : "open";
       const flag = m.claimed ? '<span class="mission-flag claimed">RESGATADA</span>' : m.completed ? '<span class="mission-flag">CONCLUÍDA</span>' : "";
       const action = m.claimed
-        ? '<span class="claimed-note">✓ Recompensa recebida</span>'
+        ? '<span class="claimed-note" title="Recompensa recebida">✓</span>'
         : m.completed
           ? `<button class="claim-btn" data-claim="${m.id}" type="button">RESGATAR</button>`
-          : `<span class="mission-pct">${Math.floor(m.pct)}%</span>`;
-      return `<article class="mission-card ${state} ${m.final ? "final" : ""}" style="--rarity:${m.color}">
-        <header><span class="mission-icon">${m.icon}</span><span class="mission-rarity">${m.final ? "RECOMPENSA FINAL" : m.rarityName}</span>${flag}</header>
-        <h3>${esc(m.title)}</h3>
+          : `<span class="mission-pct" aria-label="${Math.floor(m.pct)}%">›</span>`;
+      const sub = m.final ? `Complete todas as missões ${this.tab === "weekly" ? "semanais" : "diárias"}` : `${m.rarityName}${m.claimed ? " · resgatada" : m.completed ? " · concluída" : ""}`;
+      return `<article class="mission-card mrow ${state} ${m.final ? "final" : ""}" style="--rarity:${m.color}">
+        <span class="mission-icon">${m.icon}</span>
+        <span class="mr-text">${m.final ? '<em class="mr-final">RECOMPENSA FINAL</em>' : ""}<h3>${esc(m.title)}</h3><small>${esc(sub)}</small></span>
         <div class="mission-progress"><i style="width:${m.claimed ? 100 : m.pct}%"></i></div>
-        <div class="mission-meta"><b>${esc(m.progressText)}</b><span class="mission-rewards">${rewardChips(m)}</span></div>
-        <footer class="mission-foot">${action}</footer>
+        <b class="mr-count">${esc(m.progressText)}</b>
+        <span class="mission-rewards">${rewardChips(m)}</span>
+        <span class="mission-foot">${action}</span>
       </article>`;
     },
     render() {
