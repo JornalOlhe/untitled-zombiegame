@@ -3259,7 +3259,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.51.6";
+        const GAME_VERSION = "0.51.7";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -8085,9 +8085,12 @@ body.netgame #revivetouch{display:flex}
             this.mat = new THREE.ShaderMaterial({
               uniforms: { uTime: { value: 0 } },
               transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
-              vertexShader: `varying vec2 vUv; varying float vSeed; attribute float seed;
-                void main(){ vUv=uv; vSeed=seed; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-              fragmentShader: `uniform float uTime; varying vec2 vUv; varying float vSeed;
+              vertexShader: `varying vec2 vUv; varying float vSeed; varying float vFace; attribute float seed;
+                void main(){ vUv=uv; vSeed=seed; vec4 mv=modelViewMatrix*vec4(position,1.);
+                  // cards seen edge-on fade out, so the crossed planes never read as flat sheets
+                  vFace=abs(dot(normalize(normalMatrix*normal), normalize(-mv.xyz)));
+                  gl_Position=projectionMatrix*mv; }`,
+              fragmentShader: `uniform float uTime; varying vec2 vUv; varying float vSeed; varying float vFace;
                 float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
                 float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
                   return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
@@ -8101,10 +8104,12 @@ body.netgame #revivetouch{display:flex}
                   float body=1.-smoothstep(.0,1.,abs(x)/(1.05-uv.y*.95));
                   float tongues=fbm(vec2(uv.x*5.+vSeed, uv.y*4.-t*1.4));
                   float a=body*smoothstep(1.,.25,uv.y+ (tongues-.5)*.55)*smoothstep(0.,.08,uv.y);
-                  a=clamp(a*1.7,0.,1.);
-                  vec3 c=mix(vec3(.75,.12,.02),vec3(1.,.55,.12),smoothstep(.05,.45,a));
-                  c=mix(c,vec3(1.,.93,.7),smoothstep(.6,.95,a)*(1.-uv.y));
-                  gl_FragColor=vec4(c*a*1.35,a);
+                  a=clamp(a*1.55,0.,1.)*smoothstep(.12,.55,vFace);
+                  // deep red rim -> orange body -> warm yellow core (no white blob)
+                  vec3 c=mix(vec3(.55,.06,.01),vec3(1.,.42,.06),smoothstep(.05,.5,a));
+                  c=mix(c,vec3(1.,.78,.32),smoothstep(.62,.98,a)*(1.-uv.y)*.75);
+                  float flick=.88+.12*fbm(vec2(t*2.,vSeed*9.));
+                  gl_FragColor=vec4(c*a*1.15*flick,a*.92);
                 }`,
             });
             const cv = document.createElement("canvas"); cv.width = cv.height = 64;
@@ -8121,11 +8126,15 @@ body.netgame #revivetouch{display:flex}
             const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g);
             const w = size * 0.74, seed = Math.random();
             const geo = new THREE.PlaneGeometry(w, size, 1, 1); geo.translate(0, size / 2, 0);
-            for (let i = 0; i < 3; i++) {
+            // 5 crossed tongues at different heights/offsets: a fuller, less "paper cone" flame
+            for (let i = 0; i < 5; i++) {
               const gg = geo.clone();
               gg.setAttribute("seed", new THREE.Float32BufferAttribute(new Array(4).fill(seed + i * 0.31), 1));
-              const m = new THREE.Mesh(gg, this.mat); m.rotation.y = (i * Math.PI) / 3; m.renderOrder = 3; m.frustumCulled = true;
-              m.scale.setScalar(i ? 0.78 : 1); m.userData.disposableGeometry = true;
+              const m = new THREE.Mesh(gg, this.mat); m.rotation.y = (i * Math.PI) / 5; m.renderOrder = 3; m.frustumCulled = true;
+              const sc = [1, 0.82, 0.68, 0.9, 0.6][i];
+              m.scale.set(sc, sc * (0.92 + 0.16 * Math.random()), sc);
+              m.position.set(Math.cos(i * 2.4) * w * 0.08, 0, Math.sin(i * 2.4) * w * 0.08);
+              m.userData.disposableGeometry = true; m.userData.tongue = sc;
               g.add(m);
             }
             const E = 22, pos = new Float32Array(E * 3), ember = [];
@@ -8136,7 +8145,8 @@ body.netgame #revivetouch{display:flex}
             const nS = opts.smoke || 5;
             for (let i = 0; i < nS; i++) { const s = new THREE.Sprite(this.smokeMat.clone()); if (opts.dark) { s.material.color.set(0x141210); s.material.opacity = 0.55; } s.userData.disposableMaterial = true; g.add(s); smoke.push({ s, life: i / nS }); }
             if (size >= 1.2 && size < 2) {
-              const bed = new THREE.Mesh(new THREE.CircleGeometry(size * 0.38, 12), new THREE.MeshBasicMaterial({ color: 0xff5a14, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+              // embers bed: soft-edged glow (the old hard orange disc read as a painted patch)
+              const bed = new THREE.Mesh(new THREE.CircleGeometry(size * 0.3, 16), new THREE.MeshBasicMaterial({ map: VisualArt.texture("glow"), color: 0xff4a10, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }));
               bed.rotation.x = -Math.PI / 2; bed.position.y = 0.03; bed.userData.disposableMaterial = bed.userData.disposableGeometry = true; g.add(bed);
             }
             const fx = { g, size, ember, pos, pg, smoke, light, base: light ? light.intensity : 0, seed };
@@ -8145,6 +8155,7 @@ body.netgame #revivetouch{display:flex}
           },
           step(fx, dt, t) {
             const S = fx.size;
+            for (const c of fx.g.children) if (c.userData.tongue) { const sc = c.userData.tongue; c.scale.y = sc * (0.9 + 0.1 * Math.sin(t * 6.3 + c.rotation.y * 7 + fx.seed * 5) + 0.06 * Math.sin(t * 13.1 + c.rotation.y * 3)); }
             for (let i = 0; i < fx.ember.length; i++) {
               const e = fx.ember[i];
               e.life += dt * (0.45 + e.sp);
@@ -8553,7 +8564,7 @@ body.netgame #revivetouch{display:flex}
                     const fx2 = FireFX.create(g, x + Math.cos(a0 + k) * r, k > 4 ? 0.2 : 0.8, z + Math.sin(a0 + k) * r, h, null, { smoke: 2, dark: true });
                     this.decor.push({ type: "fire", light: null, fx: fx2 });
                   }
-                  const scorch = new THREE.Mesh(new THREE.CircleGeometry(2.6, 20), new THREE.MeshBasicMaterial({ color: 0xff4a10, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+                  const scorch = new THREE.Mesh(new THREE.CircleGeometry(2.6, 20), new THREE.MeshBasicMaterial({ map: VisualArt.texture("glow"), color: 0xff4a10, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
                   scorch.rotation.x = -Math.PI / 2; scorch.position.set(x, 0.03, z); scorch.userData.disposableMaterial = scorch.userData.disposableGeometry = true; g.add(scorch);
                 }
               }
@@ -8703,7 +8714,9 @@ body.netgame #revivetouch{display:flex}
           buildWeatherPuddles(g, map) {
             if (this.weatherPuddles?.parent) this.weatherPuddles.parent.remove(this.weatherPuddles);
             this.weatherPuddles = null;
-            if (map !== 0 && map !== 2) return;
+            // Only the paved city gets rain puddles: on the forest dirt they read as spilled fuel
+            // glowing in the firelight.
+            if (map !== 0 || !SettingsManager.data.puddles) return; // off by default: they read as random dark blots
             const mat = this.puddleMaterial();
             const count = map === 0 ? 26 : 18,
               mesh = new THREE.InstancedMesh(VisualArt.geometries.plane, mat, count),
@@ -11921,7 +11934,6 @@ body.netgame #revivetouch{display:flex}
           for (let x = -H + 1; x < H - 1; x += 2.4) {
             const z = road(x),
               ry = Math.atan(Math.cos(x * 0.06) * 0.3);
-            K.decal("dirt", x, z, 3.4, 6.2, ry, 0.012);
             for (const s of [-1.1, 1.1]) K.decal("rut", x, z + s, 4.2, 0.55, ry, 0.016);
           }
           // Terrain: low mounds (terraced, walkable) and small hollows (dark mud patches), leaf litter.
@@ -11938,7 +11950,6 @@ body.netgame #revivetouch{display:flex}
             K.col(x, z, r * 1.2, r, Math.min(h, 0.45));
           };
           for (const [x, z, r, h] of [[-30, -12, 4, 0.9], [18, -30, 5, 1.2], [36, 8, 3.5, 0.6], [-14, 34, 4, 0.9], [-40, 16, 3, 0.6], [30, -8, 3, 0.9]]) mound(x, z, r, h);
-          for (let i = 0; i < 22; i++) K.decal(K.pick(["mud", "mossy", "mud"]), K.r(-H + 4, H - 4), K.r(-H + 4, H - 4), K.r(1.6, 3.4), K.r(1.4, 2.8), K.r(0, 3));
           // Survivors' camp: three cabins around a campfire, logs to sit on, a tent, crates.
           // Small abandoned log cabins: plank walls on a stone footing, a proper A-frame roof with
           // overhang and filled gables, a stone chimney, a porch with posts, a boarded window and a
@@ -12169,7 +12180,7 @@ body.netgame #revivetouch{display:flex}
             }
           M.lights.push(
             [-30, -30, 0xdfe8ff, 2.2, 36, "stutter"], [30, -30, 0xdfe8ff, 2.2, 36], [-30, 30, 0xdfe8ff, 2.0, 36], [30, 30, 0xdfe8ff, 2.2, 36, "stutter"],
-            [0, -40, 0xff3020, 2.4, 30, "alarm"], [0, 42, 0xdfe8ff, 2.0, 34], [-42, 0, 0xb060ff, 2.0, 30], [42, 0, 0x40d0ff, 2.0, 30, "stutter"], [0, 14, 0xdfe8ff, 1.6, 26],
+            [0, -40, 0xff3020, 2.4, 30, "alarm"], [0, 42, 0xdfe8ff, 2.0, 34], [-42, 0, 0xcfe4ff, 1.8, 30], [42, 0, 0x40d0ff, 2.0, 30, "stutter"], [0, 14, 0xdfe8ff, 1.6, 26],
           );
           // ---- Central capsule (visual meshes are built in WorldArt; here: base, cables, collision).
           for (let i = 0; i < 8; i++) {
@@ -12282,7 +12293,7 @@ body.netgame #revivetouch{display:flex}
           }
           // Spills: green / purple / yellow puddles near storage, servers and the capsule.
           // (organic glossy puddles with a faint glow, built in WorldArt.buildPuddles)
-          M.puddles = [[-18, -30, 0x4dff7a, 2.6], [4, -31, 0xffd24a, 1.8], [24, -8, 0xff4a3a, 1.6], [-10, 20, 0x4dff7a, 2.2], [12, 24, 0xffd24a, 1.4], [-26, 8, 0x4dff7a, 1.8], [-6, -24, 0xff4a3a, 1.2], [-20, -29, 0x4ae8ff, 1.9], [16, 12, 0x4ae8ff, 1.5]].map((q) => [...q, K.r(0, 6)]);
+          M.puddles = []; // v63: the glowing coloured spills read as random puddles — removed
           // Open-floor cover: workbenches, crates, overturned carts (combat space around the ring).
           for (const [x, z, ry] of [[-24, -14, 0.3], [22, 22, -0.4], [-20, 22, 0.8], [14, -20, 1.2], [-30, -4, 0], [28, 36, 0.2]]) {
             K.hard("white", [x, 0.9, z], [3, 0.12, 1.2], [0, ry, 0]);
