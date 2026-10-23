@@ -3259,7 +3259,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.51.4";
+        const GAME_VERSION = "0.51.5";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -6617,6 +6617,8 @@ body.netgame #revivetouch{display:flex}
         // → "Fúria Ancestral": 20 s of insta-kill + infinite ammo and a big Essência bonus.
         const MapObjectives = {
           gens: [], relics: [], group: null, done: false, secret: false,
+          // Same mechanic everywhere, told the way each map would tell it.
+          TEXT: [["Religue os geradores", "Energia restaurada"], ["Ligue a energia de emergência", "Hospital com energia"], ["Acenda os geradores do acampamento", "Acampamento iluminado"], ["Reative os núcleos do laboratório", "Laboratório reativado"], ["Descongele os geradores da base", "Base aquecida"]],
           rng(seed) { let x = seed * 2654435761 % 4294967296 || 1; return () => ((x = (x * 1664525 + 1013904223) % 4294967296) / 4294967296); },
           pickSpots(n, seed, minFromStart, minApart) {
             const M = MapManager, R = this.rng(seed), out = [], H = M.half - 4, start = player.pos;
@@ -6699,7 +6701,7 @@ body.netgame #revivetouch{display:flex}
             if (!el) return;
             const on = this.gens.filter((g) => g.on).length;
             el.classList.toggle("hidden", !this.gens.length);
-            el.innerHTML = this.gens.length ? `<div class="obj ${this.done ? "done" : ""}"><b>MISSÃO</b> ${this.done ? "Energia restaurada ✓" : `Religue os geradores ${on}/3 <small>(segure E)</small>`}</div><div class="obj ${this.secret ? "done" : ""}"><b>SEGREDO</b> ${this.secret ? "Fúria Ancestral desbloqueada ✓" : this.found ? `Relíquias ${this.found}/3` : "???"}</div>` : "";
+            el.innerHTML = this.gens.length ? `<div class="obj ${this.done ? "done" : ""}"><b>MISSÃO</b> ${(() => { const M = this.TEXT[selectedMap] || this.TEXT[0]; return this.done ? M[1] + " ✓" : `${M[0]} ${on}/3 <small>(segure ${touchMode ? "o botão" : "E"})</small>`; })()}</div><div class="obj ${this.secret ? "done" : ""}"><b>SEGREDO</b> ${this.secret ? "Fúria Ancestral desbloqueada ✓" : this.found ? `Relíquias ${this.found}/3` : "???"}</div>` : "";
           },
           update(dt) {
             if (!this.group || state !== GameState.PLAYING) return;
@@ -12578,7 +12580,7 @@ body.netgame #revivetouch{display:flex}
             const base = new THREE.Color(frozen ? 0x6f7f7c : 0x142510), tip = new THREE.Color(frozen ? 0xcfdde2 : 0x3f5c26);
             for (let b = 0; b < 7; b++) {
               const a = rand(0, Math.PI * 2), r = rand(0, 0.14), cx = Math.cos(a) * r, cz = Math.sin(a) * r;
-              const H = rand(0.28, frozen ? 0.4 : 0.62), W = rand(0.035, 0.055), face = rand(0, Math.PI * 2), lean = rand(0.05, 0.25);
+              const H = rand(0.24, frozen ? 0.4 : 0.5), W = rand(0.035, 0.055), face = rand(0, Math.PI * 2), lean = rand(0.05, 0.25);
               const fx = Math.cos(face), fz = Math.sin(face), lx = Math.cos(a) * lean, lz = Math.sin(a) * lean;
               const o = pos.length / 3;
               for (const [t, w] of [[0, W], [0.55, W * 0.7], [1, 0]]) {
@@ -12707,7 +12709,7 @@ body.netgame #revivetouch{display:flex}
             };
             this.plants = [];
             const gm = this.plantMat(1.0), fm = this.plantMat(0.7);
-            this.scatter(this.plants, this.grassGeo(frozen), gm, Math.round((frozen ? 2600 : 9000) * q), test(0.3), frozen ? [0.7, 1.1] : [0.8, 1.5]);
+            this.scatter(this.plants, this.grassGeo(frozen), gm, Math.round((frozen ? 2600 : 9000) * q), test(0.3), frozen ? [0.7, 1.1] : [0.75, 1.25]);
             // (no ferns in the snowfield: frozen fern fronds read as white birds lying on the snow)
             if (!frozen) this.scatter(this.plants, this.fernGeo(frozen), fm, Math.round(900 * q), test(0.4), [0.8, 1.6]);
             // leaf litter / twigs on the forest floor (flat, no wind)
@@ -14484,9 +14486,11 @@ body.netgame #revivetouch{display:flex}
             if (heldMelee) target.set(w.scythe ? 0.3 : 0.2, w.scythe ? -0.08 : -0.15, w.scythe ? -0.78 : -0.5);
             if (w.kind === "bow" && !aiming) {
               // Keep the bow on the right but facing forward; sideways carry blocked too much view.
-              target.x += 0.1;
-              target.y += 0.06;
-              target.z -= 0.16;
+              // v61: canted hunter's carry, lower and a bit further — the top limb no longer fills
+              // the right half of the screen and the arrow points at the crosshair.
+              target.x += 0.07;
+              target.y -= 0.05;
+              target.z -= 0.24;
             }
             // Combo counter: every new strike advances to the next move of the weapon's set.
             if (lastShot !== this.comboShot) {
@@ -14539,8 +14543,8 @@ body.netgame #revivetouch{display:flex}
             );
             if (w.kind === "bow") {
               // Vertical bow, limbs ahead of the player; only a tiny cant keeps the string readable.
-              this.model.rotation.y += aiming ? 0.02 : 0.08;
-              this.model.rotation.z += aiming ? 0.02 : 0.04;
+              this.model.rotation.y += aiming ? 0.02 : 0.1;
+              this.model.rotation.z += aiming ? 0.02 : 0.3;
             }
             if (heldMelee) {
               // held pose: tip tilted forward and leaning in toward the crosshair
@@ -22268,7 +22272,7 @@ body.netgame #revivetouch{display:flex}
               2.5,
             );
             AudioManager.tone(180, 0.8, "triangle", 0.4, 60);
-            if (this.wave === 1) VoiceLines.reset();
+            if (this.wave === 1) { VoiceLines.reset(); try { ControlsHint.show(); } catch {} }
             VoiceLines.say(this.bossPending ? "boss" : "wave", this.bossPending ? 1 : 0.7);
             RunStats.waveStarted();
             NetGame.hostEvent("wave", { n: this.wave, mut: MutationManager.current?.id || null });
@@ -22326,9 +22330,12 @@ body.netgame #revivetouch{display:flex}
           rankFor(wave) {
             const storyRank = this.storyRankFor(wave);
             if (storyRank !== null) return storyRank;
+            // Infinite: a boss is an event, not every wave — minibosses on 5s (and every 3rd wave
+            // after 10), big bosses on 10s and 20s.
             if (wave % 20 === 0) return 4;
             if (wave % 10 === 0) return 3;
-            return Math.floor(wave / 10) % 2 === 0 ? 1 : 2;
+            if (wave % 5 === 0 || (wave > 10 && wave % 3 === 0)) return Math.floor(wave / 10) % 2 === 0 ? 1 : 2;
+            return 0;
           },
           bossFor(wave, map = selectedMap) {
             const rank = this.rankFor(wave);
@@ -25381,7 +25388,7 @@ body.netgame #revivetouch{display:flex}
               Z = (z) => (z - pz + R) * k,
               inside = (x, z, m = 0) => Math.abs(x - px) < R + m && Math.abs(z - pz) < R + m;
             c.clearRect(0, 0, n, n);
-            c.fillStyle = "#75889655";
+            c.fillStyle = "#b8a49c66";
             for (const o of MapManager.obstacles)
               if (inside(o.x, o.z, o.w + o.d)) c.fillRect(X(o.x - o.w), Z(o.z - o.d), o.w * 2 * k, o.d * 2 * k);
             c.font = "11px Arial";
@@ -31512,6 +31519,25 @@ body.netgame #revivetouch{display:flex}
           frames() { return new Promise((r) => { requestAnimationFrame(() => requestAnimationFrame(r)); setTimeout(r, 80); }); }, // timeout: rAF pauses in background tabs
           hide() { setTimeout(() => this.el().classList.add("hidden"), 120); },
         };
+        // First matches: a short controls card (real key bindings) so nobody has to look for a
+        // help screen. Shown on the first 3 matches of a device, fades after ~9 s or on Esc.
+        const ControlsHint = {
+          KEY: "deadrecoil.hints.v1",
+          show(force = false) {
+            if (!force && (/[?&]test=1/.test(location.search) || NetGame.active)) return;
+            let n = 0; try { n = +localStorage.getItem(this.KEY) || 0; } catch {}
+            if (n >= 3 && !force) return;
+            try { localStorage.setItem(this.KEY, String(n + 1)); } catch {}
+            let el = $("controlshint");
+            if (!el) { el = document.createElement("div"); el.id = "controlshint"; document.body.append(el); }
+            const K = DR.Keybinds, k = (id) => `<kbd>${K.label(K.code(id))}</kbd>`;
+            el.innerHTML = touchMode
+              ? `<b>CONTROLES</b><span><kbd>Esquerda</kbd> mover</span><span><kbd>Arrastar</kbd> mirar</span><span><kbd>Botão vermelho</kbd> atirar</span><span><kbd>Q</kbd> habilidade</span><span><kbd>🛒</kbd> loja</span>`
+              : `<b>CONTROLES</b><span>${k("forward")}${k("left")}${k("back")}${k("right")} mover</span><span><kbd>Clique</kbd> atirar</span><span>${k("reload")} recarregar</span><span>${k("sprint")} correr</span><span>${k("ability")} habilidade</span><span>${k("grenade")} granada</span><span><kbd>B</kbd> loja</span>`;
+            el.className = "on";
+            clearTimeout(this.t); this.t = setTimeout(() => el.classList.remove("on"), 9000);
+          },
+        };
         // Home: small "last played" card (bottom-right) — mode + map; click goes straight to the map screen.
         const HomeMode = {
           render() {
@@ -33187,6 +33213,7 @@ body.netgame #revivetouch{display:flex}
             StreetBreak,
             MapObjectives, HordeEvent, ArenaEditor, AmmoCrates,
             SeasonPass,
+            ControlsHint,
             MatchShop,
             ZombieVariants,
             BloodWave,

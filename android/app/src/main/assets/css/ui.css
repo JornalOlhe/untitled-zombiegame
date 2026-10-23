@@ -327,7 +327,7 @@ form.busy { opacity: .7; }
 #slotshud .slot.empty .ammo { color: #ff3b30; animation: pulse .7s infinite; }
 #slotshud .slot .reload { display: block; height: 2px; margin-top: 5px; background: #ffffff1a; }
 #slotshud .slot .reload i { display: block; height: 100%; background: #f3ede4; }
-@media (hover: hover) and (pointer: fine) and (min-width: 720px) {
+@media (hover: hover) and (pointer: fine) {
   /* Desktop: centre of the screen stays clear for the gun; weapons sit bottom-right next to the ability. */
   .hud-bottom .slots { margin-left: auto; align-items: flex-end; }
   #slotshud .slot { min-width: 0; max-width: none; padding: 6px 10px; opacity: .7; }
@@ -1504,3 +1504,14 @@ body.horde-wave #hud::after { content: ""; position: fixed; inset: 0; pointer-ev
 #shop-body h3 { color: #f0e6dc !important; }
 .shop-card.owned em, .shop-card.max em { color: #5ee36f !important; }
 body.touch-ui #touch #shoptouch { color: #5ee36f !important; }
+/* v61: the weapon card never stretches to the health block's height */
+.hud-bottom .slots { align-self: flex-end; }
+#slotshud .slot { align-self: flex-end; }
+#controlshint { position: fixed; left: 50%; bottom: 22%; transform: translate(-50%, 12px); z-index: 30; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 14px; max-width: min(92vw, 820px);
+  padding: 10px 16px; background: rgba(10,8,8,.82); border: 1px solid #b3141b77; border-left: 3px solid #e3151d; font: 500 13px/1.3 var(--head); color: #e7ddd0; pointer-events: none; opacity: 0; transition: opacity .4s, transform .4s; }
+#controlshint.on { opacity: 1; transform: translate(-50%, 0); }
+#controlshint b { font-weight: 700; letter-spacing: .16em; color: #ff5a4a; font-size: 12px; }
+#controlshint kbd { display: inline-block; min-width: 18px; margin-right: 3px; padding: 1px 5px; font: 600 11px/1.4 var(--mono); text-align: center; color: #fff; background: #1d1414; border: 1px solid #ffffff2e; border-bottom-width: 2px; }
+/* v61: wave banner sits above the crosshair, never on it */
+#announcement { top: 17%; }
+#announcement strong { font-size: clamp(36px, 6vw, 76px); }
