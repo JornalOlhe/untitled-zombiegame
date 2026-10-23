@@ -4,6 +4,7 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 
 ## Estado atual
 
+- v65 (0.51.9 Alpha): sem missão de geradores/segredo e sem lista de abates nas partidas; 14 armas de fogo refeitas em 3D com volume (tools/blender/firearms_hd.py); Android usa `versionCode 65` / `0.51.9` e Windows usa `0.51.9`.
 - v64 (0.51.8 Alpha): multiplayer igual ao solo — missão/segredo do mapa para todos, power-ups da equipe, Essência e +1 pente de fim de onda para o convidado, ataque aéreo do convidado funcionando; Android usa `versionCode 64` / `0.51.8` e Windows usa `0.51.8`.
 - v63 (0.51.7 Alpha): limpeza gráfica — sem poças/manchas falsas na cidade, floresta e laboratório, fogo refeito (sem miolo branco nem disco no chão); Android usa `versionCode 63` / `0.51.7` e Windows usa `0.51.7`.
 - v62 (0.51.6 Alpha): +1 pente por arma ao limpar cada onda, floresta menos escura, semáforos da cidade em lote (~100 draw calls a menos) e aquecimento de shaders dos zumbis especiais; Android usa `versionCode 62` / `0.51.6` e Windows usa `0.51.6`.

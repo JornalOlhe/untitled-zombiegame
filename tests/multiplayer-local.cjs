@@ -155,11 +155,7 @@ const shots = process.env.MONSTER_SHOTS !== '0';
     await T(guest, () => window.DR.LobbyManager.transport.setOffline(false));
     await guest.waitForFunction(() => document.getElementById('netoverlay').classList.contains('hidden'));
 
-    console.log('step:', 'Shared map mission, secret relics and power-ups (same as solo, for everyone).');
-    const spots = await Promise.all([host, guest].map(pg => T(pg, () => DeadRecoilTest.MapObjectives.gens.map(g => [Math.round(g.x), Math.round(g.z)]).join(';'))));
-    assert.ok(spots[0] && spots[0] === spots[1], 'client has the same generators as the host');
-    await T(guest, () => { const O = DeadRecoilTest.MapObjectives; O.powerOn(O.gens[0]); DeadRecoilTest.NetGame.objective('gen', O.gens[0].i); O.takeRelic(O.relics[0]); });
-    await host.waitForFunction(() => DeadRecoilTest.MapObjectives.gens[0].on && DeadRecoilTest.MapObjectives.found === 1, null, { timeout: 20000 });
+    console.log('step:', 'Team power-ups: dropped by one player, seen and shared by everyone.');
     await T(guest, () => { const p = DeadRecoilTest.player.pos; DeadRecoilTest.PowerUps.enabled = true; DeadRecoilTest.PowerUps.spawn('damage', p.x + 6, p.z); });
     await host.waitForFunction(() => DeadRecoilTest.PowerUps.items.length >= 1, null, { timeout: 20000 });
     await T(host, () => { const it = DeadRecoilTest.PowerUps.items[0]; DeadRecoilTest.player.pos.set(it.group.position.x, 1.7, it.group.position.z); });

@@ -48,7 +48,6 @@ const server = http.createServer((q, r) => {
       S.owned.add('couraca'); out.perks.couraca = S.mult('maxHp'); S.owned.clear();
       out.cls = Object.fromEntries(['archdemon', 'archangel', 'voidwalker', 'deathless', 'berserker'].map(k => [k, T.classes.find(c => c.key === k).effects.damage]));
       out.berserker = T.classes.find(c => c.key === 'berserker').burst;
-      out.gen = T.MapObjectives.gens.length && T.MapObjectives.gens[0].g.children.length;
       return out;
     });
     console.log(JSON.stringify(r));
@@ -63,7 +62,6 @@ const server = http.createServer((q, r) => {
     assert.equal(r.perks.couraca, 1.25);
     assert.ok(r.cls.archdemon <= 2 && r.cls.archangel <= 1.75 && r.cls.voidwalker <= 1.45 && r.cls.deathless <= 1.6 && r.cls.berserker <= 1.15, JSON.stringify(r.cls));
     assert.ok(r.berserker.instantReload && !r.berserker.infiniteAmmo, 'berserker no longer has infinite ammo');
-    assert.ok(r.gen > 15, 'detailed generator model');
     assert.deepEqual(errors, []);
     console.log('PASS v58 ammo + balance');
   } finally { await browser.close(); server.close(); }

@@ -1515,3 +1515,5 @@ body.touch-ui #touch #shoptouch { color: #5ee36f !important; }
 /* v61: wave banner sits above the crosshair, never on it */
 #announcement { top: 17%; }
 #announcement strong { font-size: clamp(36px, 6vw, 76px); }
+/* v65: no kill feed ("Zumbi · MP5") and no map mission tracker during matches */
+#feed, #objtracker, #objhold { display: none !important; }

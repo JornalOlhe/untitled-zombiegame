@@ -3259,7 +3259,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.51.8";
+        const GAME_VERSION = "0.51.9";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -6616,7 +6616,7 @@ body.netgame #revivetouch{display:flex}
         // at fixed, seeded spots per map (they always sit in the same places, so they can be learned)
         // → "Fúria Ancestral": 20 s of insta-kill + infinite ammo and a big Essência bonus.
         const MapObjectives = {
-          gens: [], relics: [], group: null, done: false, secret: false,
+          gens: [], relics: [], group: null, done: false, secret: false, ENABLED: false,
           // Same mechanic everywhere, told the way each map would tell it.
           TEXT: [["Religue os geradores", "Energia restaurada"], ["Ligue a energia de emergência", "Hospital com energia"], ["Acenda os geradores do acampamento", "Acampamento iluminado"], ["Reative os núcleos do laboratório", "Laboratório reativado"], ["Descongele os geradores da base", "Base aquecida"]],
           rng(seed) { let x = seed * 2654435761 % 4294967296 || 1; return () => ((x = (x * 1664525 + 1013904223) % 4294967296) / 4294967296); },
@@ -6678,6 +6678,10 @@ body.netgame #revivetouch{display:flex}
           start() {
             this.clear();
             this.done = false; this.secret = false; this.found = 0;
+            // v65: generator mission and relic secret removed from matches (player feedback);
+            // the code stays for a possible future mode.
+            this.hud();
+            if (!this.ENABLED) return;
             // Multiplayer: every client builds the same generators/relics (seeded spots, built
             // before the per-player spawn offset) and any player can use them; NetGame "ob"
             // packets keep their state in sync.

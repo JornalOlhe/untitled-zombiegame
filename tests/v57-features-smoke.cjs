@@ -34,13 +34,11 @@ const server = http.createServer((q, r) => {
         const c = T.classes.find(x => x.key === k);
         out.cls[k] = { eff: c.effects, drawback: /Desvantagem:/.test(c.desc) };
       }
-      // Map mission + secret on the city.
+      // v65: the map mission + secret were removed from matches.
       T.setMode('infinite'); T.setMap(0); P.start(); T.setPlaying(); T.ZombieManager.clear();
       const O = T.MapObjectives;
       out.gens = O.gens.length; out.relics = O.relics.length;
-      for (const g of O.gens) O.powerOn(g);
-      for (const rl of O.relics) O.takeRelic(rl);
-      out.done = O.done; out.secret = O.secret; out.insta = T.PowerUps.on('instakill');
+      out.tracker = getComputedStyle(document.getElementById('objtracker')).display;
       T.ZombieManager.clear();
       // Giant horde on wave 9: 2.2× count, one-sided front, swarmers, cleared → state reset.
       W.wave = 8; W.start();
@@ -106,7 +104,7 @@ const server = http.createServer((q, r) => {
     assert.equal(r.cls.scout.eff.maxHp, 0.9); assert.equal(r.cls.juggernaut.eff.speed, 0.88); assert.equal(r.cls.reaper.eff.maxHp, 0.8);
     assert.equal(r.cls.voidwalker.eff.maxHp, 0.75); assert.equal(r.cls.archdemon.eff.damageTaken, 0.8);
     for (const k of Object.keys(r.cls)) assert.ok(r.cls[k].drawback, k + ' shows its drawback');
-    assert.equal(r.gens, 3); assert.equal(r.relics, 3); assert.ok(r.done && r.secret && r.insta, 'mission + secret');
+    assert.equal(r.gens, 0); assert.equal(r.relics, 0); assert.equal(r.tracker, 'none', 'v65: no generator mission / relic secret in matches');
     assert.ok(r.horde.on && r.horde.active && r.horde.front >= 1, 'horde wave 9');
     assert.ok(r.horde.total >= 60 && r.horde.cap > 85, 'bigger horde and cap');
     assert.ok(r.horde.swarm >= 10 && r.horde.swarm === r.horde.alive, 'swarmers spawn fast');
