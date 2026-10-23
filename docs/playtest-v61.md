@@ -23,3 +23,9 @@ Bot jogando História nível 1 nos 5 mapas (640×360 e 960×540), Infinito na ci
 - Floresta continua muito escura para alguns monitores (há controle de brilho nas Configurações).
 - Desenho do mapa: a cidade passa de 450 draw calls em alguns ângulos — candidato a otimização futura.
 - Um travamento longo no início da onda 3 apareceu duas vezes no ambiente de teste (renderização por software), mas não se repetiu numa terceira rodada isolada; não confirmado.
+
+## Aplicado na v62
+- Munição: +1 pente por arma ao limpar cada onda.
+- Floresta: mais luz ambiente/lua.
+- Cidade: semáforos em lote, ~550 → ~450 chamadas de desenho no ângulo medido.
+- Travada da onda 3: não reproduzida isolada; o aquecimento de shaders agora inclui os zumbis especiais, a causa mais provável.

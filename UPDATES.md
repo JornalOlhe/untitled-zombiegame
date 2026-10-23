@@ -4,6 +4,7 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 
 ## Estado atual
 
+- v62 (0.51.6 Alpha): +1 pente por arma ao limpar cada onda, floresta menos escura, semáforos da cidade em lote (~100 draw calls a menos) e aquecimento de shaders dos zumbis especiais; Android usa `versionCode 62` / `0.51.6` e Windows usa `0.51.6`.
 - v61 (0.51.5 Alpha): correções do playtest — chefes do Infinito só em ondas marcadas, HUD da arma compacto, aviso de onda acima da mira, arco em 1ª pessoa menor, missão com nome por mapa, controles na tela nas 3 primeiras partidas, grama da floresta mais baixa e minimapa mais legível; Android usa `versionCode 61` / `0.51.5` e Windows usa `0.51.5`.
 - v60 (0.51.4 Alpha): paleta única vermelho/preto com realces verdes em todas as telas (hover vermelho nos mapas, loja da partida, painel do mapa, HUD da habilidade, palco do Personalizar); Android usa `versionCode 60` / `0.51.4` e Windows usa `0.51.4`.
 - v59 (0.51.3 Alpha): menu com 5 botões grandes (Jogar, Loadout, Índice, Personalizar, Missões) sem Passe/Como jogar/Sair, visual vermelho/preto/verde em Missões, Configurações (uma opção por linha, lateral com ícones), Personalizar (SKIN/ARTEFATOS) e Loadout, arco nas mãos no Loadout, roda do mouse rolando os mapas, hover nos mapas e rugido baixo ocasional no lugar do estouro na morte dos zumbis; Android usa `versionCode 59` / `0.51.3` e Windows usa `0.51.3`.
