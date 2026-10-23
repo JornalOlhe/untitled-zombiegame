@@ -3259,7 +3259,7 @@ body.netgame #revivetouch{display:flex}
       (async () => {
         if (!window.THREE) return;
         const DR = (window.DR = window.DR || {});
-        const GAME_VERSION = "0.51.7";
+        const GAME_VERSION = "0.51.8";
         const $ = (id) => document.getElementById(id),
           clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
           rand = (a, b) => a + Math.random() * (b - a),
@@ -6678,7 +6678,9 @@ body.netgame #revivetouch{display:flex}
           start() {
             this.clear();
             this.done = false; this.secret = false; this.found = 0;
-            if (NetGame.active && !NetGame.host) return;
+            // Multiplayer: every client builds the same generators/relics (seeded spots, built
+            // before the per-player spawn offset) and any player can use them; NetGame "ob"
+            // packets keep their state in sync.
             this.group = new THREE.Group(); scene.add(this.group);
             const glow = VisualArt.texture("glow");
             for (const [i, p] of this.pickSpots(3, 101 + selectedMap * 7, 16, 14).entries()) {
@@ -6729,7 +6731,7 @@ body.netgame #revivetouch{display:flex}
                 if (Math.random() < dt * (3 + g.hold * 3)) SoftSmoke.arc(new V(g.x, 1.3, g.z), 0.55, 0xbfe6ff);
                 if (Math.random() < dt * 2) SoftSmoke.puff(new V(g.x + rand(-0.3, 0.3), 1.6, g.z + rand(-0.3, 0.3)), { color: 0x5a5550, size: 0.25, grow: 1.2, life: 1.2, rise: 0.8, opacity: 0.3 });
               }
-              if (g.hold >= 3) this.powerOn(g);
+              if (g.hold >= 3) { this.powerOn(g); NetGame.objective("gen", g.i); }
             }
             const canUse = this.gens.some((g) => !g.on && Math.hypot(p.x - g.x, p.z - g.z) < 2.4);
             if (canUse !== this.canUse) { this.canUse = canUse; document.body.classList.toggle("can-use", canUse); if (!canUse) this.touchHold = false; }
@@ -6738,6 +6740,7 @@ body.netgame #revivetouch{display:flex}
             if (bar) { bar.style.opacity = prog > 0.05 ? 1 : 0; bar.firstElementChild.firstElementChild.style.width = `${Math.min(100, (prog / 3) * 100)}%`; }
           },
           powerOn(g) {
+            if (g.on) return;
             g.on = true; g.hold = 0;
             g.lampMat.color.setHex(0x4aff7a); g.beamMat.color.setHex(0x4aff7a); g.halo.material.color.setHex(0x4aff7a);
             AudioManager.tone(220, 0.6, "sawtooth", 0.15, 660); setTimeout(() => AudioManager.tone(880, 0.25, "triangle", 0.12, 1320), 300);
@@ -6750,7 +6753,7 @@ body.netgame #revivetouch{display:flex}
             const n = this.gens.filter((x) => x.on).length;
             UIManager.announce(`GERADOR ${n}/3`, n < 3 ? "O barulho atraiu a horda!" : "Energia restaurada · suprimentos a caminho", 2.2);
             // the noise pulls a small horde toward the generator
-            for (let k = 0; k < 4 + 2 * n; k++) { const a = Math.random() * 6.28; ZombieManager.spawn(WaveManager.spawnPool?.length ? pick(WaveManager.spawnPool) : 0, null, new V(g.x + Math.cos(a) * 14, 0, g.z + Math.sin(a) * 14)); }
+            if (!NetGame.active || NetGame.host) for (let k = 0; k < 4 + 2 * n; k++) { const a = Math.random() * 6.28; ZombieManager.spawn(WaveManager.spawnPool?.length ? pick(WaveManager.spawnPool) : 0, null, new V(g.x + Math.cos(a) * 14, 0, g.z + Math.sin(a) * 14)); }
             if (n === 3) this.complete();
             this.hud();
           },
@@ -6764,7 +6767,9 @@ body.netgame #revivetouch{display:flex}
             UIManager.toast("Missão do mapa concluída: +2500 ✦, armadura, munição e granadas.");
             RunStats.mapMission = true;
           },
-          takeRelic(r) {
+          takeRelic(r, remote = false) {
+            if (r.taken) return;
+            if (!remote) NetGame.objective("relic", r.i);
             r.taken = true; r.g.visible = false; this.found++;
             AudioManager.tone(1320, 0.3, "sine", 0.14, 1760); setTimeout(() => AudioManager.tone(1760, 0.3, "sine", 0.12, 2200), 160);
             ParticleSystem.emit(r.g.position.clone(), 0xffd24a, 30, 3);
@@ -21703,14 +21708,17 @@ body.netgame #revivetouch{display:flex}
           dispose(it) { it.mesh.geometry?.dispose?.(); it.mesh.material.dispose(); it.halo.material.dispose(); MapManager.group.remove(it.group); },
           // Random drop from a regular kill; spaced out so they stay special.
           onKill(z) {
-            if (!this.enabled || z.boss || z.remote) return;
+            // the killer's client rolls the drop (also for puppets in multiplayer) and shares it
+            if (!this.enabled || z.boss) return;
             const now = this.now();
             if (now - this.lastDrop < 28 || this.items.length >= 2 || Math.random() > 0.035) return;
             this.lastDrop = now;
             this.spawn(pick(Object.keys(this.kinds)), z.group.position.x, z.group.position.z);
           },
-          spawn(kind, x, z) {
+          spawn(kind, x, z, id = null) {
             const k = this.kinds[kind]; if (!k) return null;
+            if (id == null) { id = `${NetGame.me || "p"}:${(this.seq = (this.seq || 0) + 1)}`; NetGame.share("pu", { k: kind, x: +x.toFixed(2), z: +z.toFixed(2), id }); }
+            else if (this.items.some((q) => q.id === id)) return null;
             const y = MapManager.groundAt(x, z, 0.3, 0);
             const group = new THREE.Group(); group.position.set(x, y, z);
             const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), new THREE.MeshBasicMaterial({ color: k.hex, toneMapped: false }));
@@ -21720,7 +21728,7 @@ body.netgame #revivetouch{display:flex}
             const beam = new THREE.Mesh(VisualArt.geometries.cylinder, new THREE.MeshBasicMaterial({ color: k.hex, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }));
             beam.scale.set(0.3, 9, 0.3); beam.position.y = 4.5; beam.userData.disposableMaterial = true;
             group.add(mesh, halo, beam); MapManager.group.add(group);
-            const it = { kind, group, mesh, halo, born: this.now(), life: 22 };
+            const it = { kind, group, mesh, halo, born: this.now(), life: 22, id };
             this.items.push(it);
             UIManager.toast(`${k.label} caiu no mapa!`);
             AudioManager.tone(880, 0.16, "triangle", 0.12, 1320);
@@ -21736,6 +21744,11 @@ body.netgame #revivetouch{display:flex}
             this.paint();
           },
           on(kind) { return (this.active[kind] || 0) > this.now(); },
+          remoteTake(id) {
+            const i = this.items.findIndex((q) => q.id === id);
+            const it = i >= 0 ? this.items[i] : null;
+            if (it) { this.dispose(it); this.items.splice(i, 1); this.grant(it.kind); }
+          },
           // Damage multiplier applied in ZombieManager.hit.
           scale(z, damage) {
             if (this.on("instakill")) damage = z.boss ? damage * 1.5 : Math.max(damage, z.hp + 1);
@@ -21753,7 +21766,8 @@ body.netgame #revivetouch{display:flex}
               it.group.visible = left > 5 || Math.sin(t * 16) > -0.2; // blink when about to vanish
               const d = Math.hypot(player.pos.x - it.group.position.x, player.pos.z - it.group.position.z);
               if (left <= 0) { this.dispose(it); this.items.splice(i, 1); continue; }
-              if (d < 1.3) { this.grant(it.kind); this.dispose(it); this.items.splice(i, 1); }
+              // power-ups are team-wide (as in co-op zombies): the picker tells everyone, all get it
+              if (d < 1.3) { NetGame.share("puTake", { id: it.id }); this.grant(it.kind); this.dispose(it); this.items.splice(i, 1); }
             }
             for (const k in this.active) if (this.active[k] && this.active[k] <= now) { delete this.active[k]; dirty = true; }
             if (dirty || Object.keys(this.active).length) this.paint();
@@ -21931,7 +21945,7 @@ body.netgame #revivetouch{display:flex}
           },
           // Ataque aéreo: six blasts walk across the nearest zombies over ~2 s (bosses take a share).
           buyStrike() {
-            const L = ZombieManager.list.filter((z) => !z.dead && !z.remote && !z.dropping).sort((a, b) => a.group.position.distanceToSquared(player.pos) - b.group.position.distanceToSquared(player.pos)).slice(0, 6);
+            const L = ZombieManager.list.filter((z) => !z.dead && !z.dropping).sort((a, b) => a.group.position.distanceToSquared(player.pos) - b.group.position.distanceToSquared(player.pos)).slice(0, 6);
             if (!L.length) { UIManager.toast("Nenhum alvo para o ataque aéreo agora."); return false; }
             if (!this.spend(this.STRIKE_PRICE)) return false;
             L.forEach((z, i) => this.strikes.push({ at: simulationTime + 0.6 + i * 0.3, z }));
@@ -21948,7 +21962,8 @@ body.netgame #revivetouch{display:flex}
               const pos = s.z && !s.z.dead ? s.z.group.position.clone() : null;
               if (!pos || pos.distanceTo(player.pos) < 3.2) continue; // never on top of the player
               pos.y = 0.2;
-              explosion(pos, 4.2, 600 + 70 * (WaveManager.wave || 1), false, 0xff8a3a);
+              NetGame.striking = true;
+              try { explosion(pos, 4.2, 600 + 70 * (WaveManager.wave || 1), false, 0xff8a3a); } finally { NetGame.striking = false; }
             }
           },
           buyGrenades() {
@@ -22352,6 +22367,15 @@ body.netgame #revivetouch{display:flex}
             if (wave === 20) return 4;
             return 0;
           },
+          resupply() {
+            let added = 0;
+            for (const w of player.inventory || []) {
+              if (!w || w.reserve == null || !w.mag || w.ammo === Infinity) continue;
+              const add = Math.min(w.mag, Math.max(0, (w.reserveMax ?? w.reserve) - w.reserve));
+              w.reserve += add; added += add;
+            }
+            return added;
+          },
           rankFor(wave) {
             const storyRank = this.storyRankFor(wave);
             if (storyRank !== null) return storyRank;
@@ -22459,12 +22483,7 @@ body.netgame #revivetouch{display:flex}
                 if (AmmoCrates.needs() && AmmoCrates.items.length < 2) AmmoCrates.spawn();
                 // Resupply between waves: every firearm gets one magazine back into its reserve
                 // (never above the cap) so a slightly wasteful player is not dry by wave 3-4.
-                let resupplied = 0;
-                for (const w of player.inventory || []) {
-                  if (!w || w.reserve == null || !w.mag || w.ammo === Infinity) continue;
-                  const add = Math.min(w.mag, Math.max(0, (w.reserveMax ?? w.reserve) - w.reserve));
-                  w.reserve += add; resupplied += add;
-                }
+                const resupplied = this.resupply();
                 UIManager.announce(`ONDA ${this.wave} LIMPA`, `+${waveCoins} moedas · +${essence} ✦${resupplied ? " · +1 pente" : ""} · B abre a loja`, 2.4);
                 VoiceLines.say("clear", 0.8);
                 AudioManager.coin();
@@ -27434,6 +27453,7 @@ body.netgame #revivetouch{display:flex}
               else if (type === "fx") this.onFx(msg);
               else if (type === "sh") this.onShot(msg);
               else if (type === "rv") this.onRevive(msg);
+              else if (type === "ob") this.onObjective(msg);
             }
           },
 
@@ -27740,6 +27760,17 @@ body.netgame #revivetouch{display:flex}
             let b = this.hitBudget.get(m.from);
             if (!b) this.hitBudget.set(m.from, (b = { spent: 0, cap: dps }));
             b.cap = Math.max(b.cap, dps);
+            // Bought air strike (Loja B): a few big blasts per player, rate-limited by the host.
+            if (m.s) {
+              const now = performance.now(), sb = (b.strikes ||= []).filter((t) => now - t < 25000);
+              b.strikes = sb;
+              if (sb.length < 14) {
+                sb.push(now);
+                this.attacker = m.from;
+                try { ZombieManager.hit(z, Math.min(Number(m.d) || 0, 600 + 70 * (WaveManager.wave || 1)), false, null, null, true); } finally { this.attacker = null; }
+                return;
+              }
+            }
             const dmg = Math.min(Number(m.d) || 0, perShot * (m.x ? 2.5 : 1));
             if (dmg <= 0 || b.spent + dmg > b.cap * 1.5) return;
             if (r && r.pos.distanceTo(z.group.position) > (w?.range || 80) + 12) return;
@@ -27754,7 +27785,7 @@ body.netgame #revivetouch{display:flex}
           },
           requestHit(z, damage, head, point, w) {
             if (!z.netId) return;
-            this.queue("hit", { id: z.netId, d: Math.round(damage * 10) / 10, h: head ? 1 : 0, w: w?.id ?? 0, x: w?.kind === "missile" || !w ? 1 : 0, p: point ? [+point.x.toFixed(2), +point.y.toFixed(2), +point.z.toFixed(2)] : null });
+            this.queue("hit", { id: z.netId, d: Math.round(damage * 10) / 10, h: head ? 1 : 0, w: w?.id ?? 0, x: w?.kind === "missile" || !w ? 1 : 0, ...(this.striking ? { s: 1 } : {}), p: point ? [+point.x.toFixed(2), +point.y.toFixed(2), +point.z.toFixed(2)] : null });
           },
           broadcastKill(z, head, overkill, w, by) {
             if (!this.active || !this.host || !z.netId) return;
@@ -27880,6 +27911,21 @@ body.netgame #revivetouch{display:flex}
             }
           },
 
+          // Map mission / secret shared by the team: whoever powers a generator or takes a relic
+          // tells everyone; receivers apply it idempotently (rewards are per player).
+          objective(a, i) {
+            if (this.active) this.queue("ob", { a, i });
+          },
+          share(a, data) {
+            if (this.active) this.queue("ob", { a, ...data });
+          },
+          onObjective(m) {
+            const O = MapObjectives;
+            if (m.a === "gen") { const g = O.gens.find((q) => q.i === m.i); if (g && !g.on) O.powerOn(g); }
+            else if (m.a === "relic") { const r = O.relics.find((q) => q.i === m.i); if (r && !r.taken) O.takeRelic(r, true); }
+            else if (m.a === "pu") PowerUps.spawn(m.k, m.x, m.z, m.id);
+            else if (m.a === "puTake") PowerUps.remoteTake(m.id);
+          },
           // ── Global events ──
           hostEvent(k, data = {}) {
             if (this.active && this.host) this.queue("ev", { k, ...data });
@@ -27958,7 +28004,11 @@ body.netgame #revivetouch{display:flex}
             };
             if (!silent && WaveManager.wave > 0) {
               const coins = RunStats.waveCleared(WaveManager.wave, true);
-              if (coins) UIManager.toast(`ONDA ${WaveManager.wave} LIMPA · +${coins} moedas`);
+              // same wave-clear rewards as solo / the host: Essência and one magazine back
+              const essence = 80 + 15 * WaveManager.wave;
+              MatchShop.essence += essence;
+              const mags = WaveManager.resupply();
+              UIManager.announce(`ONDA ${WaveManager.wave} LIMPA`, `+${coins || 0} moedas · +${essence} ✦${mags ? " · +1 pente" : ""} · B abre a loja`, 2.4);
             }
             try {
               WaveManager.wave = n - 1;

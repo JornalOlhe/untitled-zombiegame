@@ -4,6 +4,7 @@ Android e Windows consultam as releases de `JornalOlhe/untitled-zombiegame` quan
 
 ## Estado atual
 
+- v64 (0.51.8 Alpha): multiplayer igual ao solo — missão/segredo do mapa para todos, power-ups da equipe, Essência e +1 pente de fim de onda para o convidado, ataque aéreo do convidado funcionando; Android usa `versionCode 64` / `0.51.8` e Windows usa `0.51.8`.
 - v63 (0.51.7 Alpha): limpeza gráfica — sem poças/manchas falsas na cidade, floresta e laboratório, fogo refeito (sem miolo branco nem disco no chão); Android usa `versionCode 63` / `0.51.7` e Windows usa `0.51.7`.
 - v62 (0.51.6 Alpha): +1 pente por arma ao limpar cada onda, floresta menos escura, semáforos da cidade em lote (~100 draw calls a menos) e aquecimento de shaders dos zumbis especiais; Android usa `versionCode 62` / `0.51.6` e Windows usa `0.51.6`.
 - v61 (0.51.5 Alpha): correções do playtest — chefes do Infinito só em ondas marcadas, HUD da arma compacto, aviso de onda acima da mira, arco em 1ª pessoa menor, missão com nome por mapa, controles na tela nas 3 primeiras partidas, grama da floresta mais baixa e minimapa mais legível; Android usa `versionCode 61` / `0.51.5` e Windows usa `0.51.5`.
